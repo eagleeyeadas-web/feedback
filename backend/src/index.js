@@ -6,6 +6,7 @@ import config from './config.js';
 import feedbackRoutes from './routes/feedback.js';
 import adminRoutes from './routes/admin.js';
 import quotationRoutes from './routes/quotation.js';
+import { runQuotationCleanup } from './services/quotationCleanupService.js';
 
 const app = express();
 
@@ -14,7 +15,7 @@ app.use(helmet());
 app.use(cors({
   origin: config.cors.origin,
   methods: ['GET', 'POST', 'DELETE', 'PUT', 'PATCH'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-cron-secret'],
   credentials: true,
 }));
 
@@ -58,6 +59,19 @@ app.use((err, req, res, _next) => {
 app.listen(config.port, '0.0.0.0', () => {
   console.log(`Eagle Eye Feedback API running on port ${config.port}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+
+  // Automated 10-day quotation cleanup background task (Runs every 6 hours)
+  const CLEANUP_INTERVAL_MS = 6 * 60 * 60 * 1000;
+  
+  // Initial check 10 seconds after startup
+  setTimeout(() => {
+    runQuotationCleanup().catch(err => console.error('Initial startup quotation cleanup error:', err));
+  }, 10000);
+
+  // Set recurring schedule
+  setInterval(() => {
+    runQuotationCleanup().catch(err => console.error('Scheduled quotation cleanup error:', err));
+  }, CLEANUP_INTERVAL_MS);
 });
 
 export default app;

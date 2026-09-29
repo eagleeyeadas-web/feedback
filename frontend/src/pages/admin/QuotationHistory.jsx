@@ -134,50 +134,77 @@ export default function QuotationHistory() {
                   <th className="p-3">Date</th>
                   <th className="p-3">Customer Name</th>
                   <th className="p-3">Contact Person</th>
+                  <th className="p-3">Retention / Expiry</th>
                   <th className="p-3 text-right">Net Amount</th>
                   <th className="p-3 text-center">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {quotations.map((q) => (
-                  <tr key={q.id} className="hover:bg-gray-50 transition">
-                    <td className="p-3 font-mono font-bold text-blue-900">{q.quotation_number}</td>
-                    <td className="p-3 text-gray-600">{q.quotation_date}</td>
-                    <td className="p-3 font-semibold text-gray-900">{q.customer_name}</td>
-                    <td className="p-3 text-gray-600">{q.contact_person || '-'}</td>
-                    <td className="p-3 text-right font-mono font-bold text-gray-900">
-                      ₹{parseFloat(q.net_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                    </td>
-                    <td className="p-3 text-center">
-                      <div className="flex items-center justify-center gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => handleViewDetail(q.id)}
-                          className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition"
-                          title="View Details"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDownload(q.id, q.quotation_number)}
-                          className="p-1.5 text-green-600 hover:bg-green-50 rounded-lg transition"
-                          title="Download PDF"
-                        >
-                          <Download className="w-4 h-4" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setDeleteTarget(q)}
-                          className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition"
-                          title="Delete Quotation"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                {quotations.map((q) => {
+                  const expDate = q.expires_at ? new Date(q.expires_at) : null;
+                  const isExpired = expDate ? expDate <= new Date() : false;
+                  const diffDays = expDate ? Math.ceil((expDate - new Date()) / (1000 * 60 * 60 * 24)) : 10;
+
+                  return (
+                    <tr key={q.id} className="hover:bg-gray-50 transition">
+                      <td className="p-3 font-mono font-bold text-blue-900">{q.quotation_number}</td>
+                      <td className="p-3 text-gray-600">{q.quotation_date}</td>
+                      <td className="p-3 font-semibold text-gray-900">{q.customer_name}</td>
+                      <td className="p-3 text-gray-600">{q.contact_person || '-'}</td>
+                      <td className="p-3">
+                        {isExpired ? (
+                          <span className="px-2 py-0.5 bg-red-100 text-red-700 rounded-full text-[10px] font-bold">
+                            Expired (Cleanup Pending)
+                          </span>
+                        ) : diffDays <= 2 ? (
+                          <span className="px-2 py-0.5 bg-amber-100 text-amber-800 rounded-full text-[10px] font-bold">
+                            {diffDays} day{diffDays > 1 ? 's' : ''} left
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 bg-green-50 text-green-700 rounded-full text-[10px] font-semibold">
+                            {diffDays} days left
+                          </span>
+                        )}
+                      </td>
+                      <td className="p-3 text-right font-mono font-bold text-gray-900">
+                        ₹{parseFloat(q.net_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                      </td>
+                      <td className="p-3 text-center">
+                        <div className="flex items-center justify-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => handleViewDetail(q.id)}
+                            className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition"
+                            title="View Details"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
+                            disabled={isExpired}
+                            onClick={() => !isExpired && handleDownload(q.id, q.quotation_number)}
+                            className={`p-1.5 rounded-lg transition ${
+                              isExpired
+                                ? 'text-gray-300 cursor-not-allowed'
+                                : 'text-green-600 hover:bg-green-50'
+                            }`}
+                            title={isExpired ? 'Quotation Expired' : 'Download PDF'}
+                          >
+                            <Download className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setDeleteTarget(q)}
+                            className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition"
+                            title="Delete Quotation"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

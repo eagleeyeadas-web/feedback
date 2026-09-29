@@ -1,24 +1,22 @@
 import { jsPDF } from 'jspdf';
 import QRCode from 'qrcode';
 
-// Reference Colors
+// Reference Colors from exact PDF screenshot
 const COLORS = {
-  navyHeader: [23, 63, 85],         // #173F55 Navy Blue
-  headerBlue: [30, 58, 138],        // #1E3A8A Dark Blue
-  lightBlueBg: [224, 242, 254],     // #E0F2FE Light Blue Table Header
-  bannerBlue: [23, 63, 85],         // Banner Background
-  borderColor: [0, 0, 0],           // Thin Black Border
-  gridBorder: [180, 180, 180],      // Inner Grid Lines
-  darkText: [31, 41, 55],           // #1F2937
-  blackText: [0, 0, 0],
+  headerBlue: [169, 216, 245],       // #A9D8F5 Light Blue Header Bar
+  lightBlueBg: [224, 242, 254],      // #E0F2FE Light Blue Table Header
+  navyHeader: [23, 63, 85],          // #173F55 Dark Navy Text
+  borderColor: [0, 0, 0],            // Thin Black Border
+  gridBorder: [0, 0, 0],             // Black Grid Lines
+  darkText: [0, 0, 0],               // Black Text
+  blueLink: [37, 99, 235],           // Blue Hyperlink
   white: [255, 255, 255],
-  grayBg: [248, 250, 252],
 };
 
 const PAGE_WIDTH = 210;
 const PAGE_HEIGHT = 297;
-const MARGIN_X = 12;
-const CONTENT_WIDTH = PAGE_WIDTH - MARGIN_X * 2; // 186mm
+const MARGIN_X = 10;
+const CONTENT_WIDTH = PAGE_WIDTH - MARGIN_X * 2; // 190mm
 
 /**
  * Converts a number to Indian Currency Words (e.g. 22000 -> Twenty Two Thousand Only)
@@ -71,40 +69,34 @@ export function numberToWordsIndian(num) {
   words = words.trim();
   if (!words) words = 'Zero';
 
-  let result = words + ' Rupees';
+  let result = words;
   if (paise > 0) {
-    result += ' and ' + convertChunk(paise).trim() + ' Paise';
+    result += ' Rupees and ' + convertChunk(paise).trim() + ' Paise';
   }
   result += ' Only';
   return result;
 }
 
-/**
- * Formats a number to Indian currency format with 2 decimals
- */
 function formatCurrency(amount) {
   const num = parseFloat(amount) || 0;
   return num.toLocaleString('en-IN', {
-    minimumFractionDigits: 2,
+    minimumFractionDigits: 0,
     maximumFractionDigits: 2,
   });
 }
 
-/**
- * Formats date to DD-MM-YYYY
- */
-function formatDateStr(dateInput) {
+function formatDateShort(dateInput) {
   if (!dateInput) return '';
   const d = new Date(dateInput);
   if (isNaN(d.getTime())) return String(dateInput);
   const day = String(d.getDate()).padStart(2, '0');
   const month = String(d.getMonth() + 1).padStart(2, '0');
-  const year = d.getFullYear();
-  return `${day}-${month}-${year}`;
+  const year = String(d.getFullYear()).slice(-2);
+  return `${day}.${month}.${year}`;
 }
 
 /**
- * Generates Quotation PDF matching reference layout exactly
+ * Generates exact 2-Page Quotation PDF matching reference image
  */
 export async function generateQuotationPDF(quotation, items = [], logoBase64 = null) {
   const doc = new jsPDF({
@@ -113,591 +105,500 @@ export async function generateQuotationPDF(quotation, items = [], logoBase64 = n
     format: 'a4',
   });
 
-  let y = 10;
+  const pageMarginTop = 10;
+  const pageMarginBottom = 10;
+  let y = pageMarginTop;
+
+  // Outer Box Frame Page 1
+  const outerFrameHeight = PAGE_HEIGHT - pageMarginTop - pageMarginBottom - 8;
+  doc.setDrawColor(...COLORS.borderColor);
+  doc.setLineWidth(0.4);
+  doc.rect(MARGIN_X, y, CONTENT_WIDTH, outerFrameHeight);
 
   // ============================================================
-  // HEADER & COMPANY INFO
+  // PAGE 1 HEADER
   // ============================================================
-  // Logo on the left
+  // Logo on Left
   if (logoBase64) {
     try {
-      doc.addImage(logoBase64, 'PNG', MARGIN_X, y, 42, 14);
-    } catch (e) {
+      doc.addImage(logoBase64, 'PNG', MARGIN_X + 2, y + 2, 25, 12);
+    } catch {
       doc.setFont('helvetica', 'bold');
-      doc.setFontSize(14);
-      doc.setTextColor(...COLORS.navyHeader);
-      doc.text('EAGLE EYE', MARGIN_X, y + 8);
+      doc.setFontSize(10);
+      doc.setTextColor(0, 0, 0);
+      doc.text('Eagle Eye', MARGIN_X + 2, y + 8);
     }
   } else {
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(14);
-    doc.setTextColor(...COLORS.navyHeader);
-    doc.text('EAGLE EYE', MARGIN_X, y + 8);
+    doc.setFontSize(10);
+    doc.setTextColor(0, 0, 0);
+    doc.text('Eagle Eye', MARGIN_X + 2, y + 8);
   }
 
-  // Company Name & Info (Centered / Right aligned)
-  const centerX = PAGE_WIDTH / 2 + 10;
+  // Company Name & Address Centered
+  const centerX = PAGE_WIDTH / 2;
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(12);
-  doc.setTextColor(...COLORS.navyHeader);
-  doc.text('EAGLE EYE SAFDRIVE PVT LTD', centerX, y + 3, { align: 'center' });
+  doc.setFontSize(13);
+  doc.setTextColor(0, 0, 0);
+  doc.text('Eagle Eye Safdrive Pvt Ltd', centerX, y + 5, { align: 'center' });
 
   doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.text('No.491/1B, Near Srinivasa Avenue, Senthampalayam, Annur,', centerX, y + 9, { align: 'center' });
+  doc.text('Coimbatore - 641 107', centerX, y + 12.5, { align: 'center' });
+  
   doc.setFontSize(7.5);
-  doc.setTextColor(...COLORS.darkText);
-  doc.text('No.491/1B, Near Srinivasa Avenue, Senthampalayam, Annur, Coimbatore - 641 107', centerX, y + 7.5, { align: 'center' });
-  doc.text('GST No: 33AAICE7626B1ZX  |  Tel: +91 63692 58461  |  Email: info@safdrive.live', centerX, y + 11, { align: 'center' });
+  doc.text('GST No : 33AAICE7626B1ZX Tel: +91 63692 58461, Email id : ', centerX - 18, y + 16, { align: 'center' });
+  doc.setTextColor(...COLORS.blueLink);
+  doc.text('info@safdrive.live', centerX + 40, y + 16, { align: 'center' });
 
-  y += 16;
+  y += 18;
+
+  // Horizontal Line below Header
+  doc.line(MARGIN_X, y, MARGIN_X + CONTENT_WIDTH, y);
 
   // ============================================================
-  // QUOTATION BANNER (Dark Blue Solid Rectangle)
+  // QUOTATION BANNER (Light Blue Bar)
   // ============================================================
-  doc.setFillColor(...COLORS.bannerBlue);
-  doc.rect(MARGIN_X, y, CONTENT_WIDTH, 7, 'F');
+  doc.setFillColor(...COLORS.headerBlue);
+  doc.rect(MARGIN_X, y, CONTENT_WIDTH, 6, 'F');
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(11);
-  doc.setTextColor(...COLORS.white);
-  doc.text('QUOTATION', PAGE_WIDTH / 2, y + 5, { align: 'center' });
+  doc.setFontSize(10);
+  doc.setTextColor(0, 0, 0);
+  doc.text('QUOTATION', centerX, y + 4.3, { align: 'center' });
+  doc.line(MARGIN_X, y + 6, MARGIN_X + CONTENT_WIDTH, y + 6);
 
-  y += 7;
+  y += 6;
 
   // ============================================================
-  // CUSTOMER & QUOTATION DETAILS BOX (Two Columns)
+  // CUSTOMER & QUOTATION NO SECTION (Split 2 Columns)
   // ============================================================
-  const custBoxHeight = 32;
-  const colWidth = CONTENT_WIDTH / 2; // 93mm each
+  const custBoxH = 28;
+  const halfW = CONTENT_WIDTH / 2;
 
-  // Outer Border Box
-  doc.setDrawColor(...COLORS.borderColor);
-  doc.setLineWidth(0.3);
-  doc.rect(MARGIN_X, y, CONTENT_WIDTH, custBoxHeight);
-  // Center vertical divider
-  doc.line(MARGIN_X + colWidth, y, MARGIN_X + colWidth, y + custBoxHeight);
+  // Header Cells
+  doc.setFillColor(...COLORS.headerBlue);
+  doc.rect(MARGIN_X, y, halfW, 5.5, 'F');
+  doc.rect(MARGIN_X + halfW, y, halfW, 5.5, 'F');
 
-  // Left Column: CUSTOMER DETAILS
-  let leftY = y + 4;
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8.5);
-  doc.setTextColor(...COLORS.navyHeader);
-  doc.text('CUSTOMER DETAILS', MARGIN_X + 4, leftY);
-  leftY += 4;
+  doc.setTextColor(0, 0, 0);
+  doc.text('CUSTOMER DETAILS', MARGIN_X + halfW / 2, y + 3.8, { align: 'center' });
 
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(8);
-  doc.setTextColor(...COLORS.blackText);
-  doc.text('TO:', MARGIN_X + 4, leftY);
-  leftY += 3.8;
+  const qDateStr = formatDateShort(quotation.quotation_date);
+  doc.text(`Quotation No : ${quotation.quotation_number || 'CQS/00231'} Dt ${qDateStr}`, MARGIN_X + halfW + 4, y + 3.8);
 
-  doc.text(quotation.customer_name || '', MARGIN_X + 4, leftY);
-  leftY += 3.8;
+  doc.line(MARGIN_X, y + 5.5, MARGIN_X + CONTENT_WIDTH, y + 5.5);
+  doc.line(MARGIN_X + halfW, y, MARGIN_X + halfW, y + custBoxH);
 
+  let leftY = y + 8.5;
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7.5);
+  doc.setFontSize(8);
+
+  // TO Left Side
+  doc.text('TO', MARGIN_X + 2, leftY);
+  leftY += 3.8;
+  doc.setFont('helvetica', 'bold');
+  doc.text(quotation.customer_name || '', MARGIN_X + 2, leftY);
+  leftY += 3.8;
+  doc.setFont('helvetica', 'normal');
   if (quotation.contact_person) {
-    doc.text(`Attn: ${quotation.contact_person}`, MARGIN_X + 4, leftY);
-    leftY += 3.5;
+    doc.text(quotation.contact_person, MARGIN_X + 2, leftY);
+    leftY += 3.8;
   }
   if (quotation.address) {
-    const addressLines = doc.splitTextToSize(quotation.address, colWidth - 8);
-    doc.text(addressLines, MARGIN_X + 4, leftY);
-    leftY += (addressLines.length * 3.3);
+    const addLines = doc.splitTextToSize(quotation.address, halfW - 4);
+    doc.text(addLines, MARGIN_X + 2, leftY);
+    leftY += (addLines.length * 3.5);
   }
   if (quotation.phone_number) {
-    doc.text(`Ph: ${quotation.phone_number}`, MARGIN_X + 4, leftY);
-    leftY += 3.3;
-  }
-  if (quotation.gst_number) {
-    doc.setFont('helvetica', 'bold');
-    doc.text(`GSTIN: ${quotation.gst_number}`, MARGIN_X + 4, leftY);
+    doc.text(quotation.phone_number, MARGIN_X + 2, leftY);
   }
 
-  // Right Column: QUOTATION NO & DATE
-  let rightY = y + 4;
-  const rightColX = MARGIN_X + colWidth + 4;
-
+  // TO Right Side
+  let rightY = y + 8.5;
+  doc.text('TO', MARGIN_X + halfW + 2, rightY);
+  rightY += 3.8;
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(8.5);
-  doc.setTextColor(...COLORS.navyHeader);
-  doc.text('QUOTATION DETAILS', rightColX, rightY);
-  rightY += 4.5;
-
+  doc.text(quotation.customer_name || '', MARGIN_X + halfW + 2, rightY);
+  rightY += 3.8;
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8);
-  doc.setTextColor(...COLORS.blackText);
+  if (quotation.contact_person) {
+    doc.text(quotation.contact_person, MARGIN_X + halfW + 2, rightY);
+    rightY += 3.8;
+  }
+  if (quotation.address) {
+    const addLinesR = doc.splitTextToSize(quotation.address, halfW - 4);
+    doc.text(addLinesR, MARGIN_X + halfW + 2, rightY);
+    rightY += (addLinesR.length * 3.5);
+  }
+  if (quotation.phone_number) {
+    doc.text(quotation.phone_number, MARGIN_X + halfW + 2, rightY);
+  }
 
-  doc.setFont('helvetica', 'bold');
-  doc.text('Quotation No:', rightColX, rightY);
-  doc.setFont('helvetica', 'normal');
-  doc.text(quotation.quotation_number || '', rightColX + 26, rightY);
-  rightY += 4.5;
-
-  doc.setFont('helvetica', 'bold');
-  doc.text('Date:', rightColX, rightY);
-  doc.setFont('helvetica', 'normal');
-  doc.text(formatDateStr(quotation.quotation_date), rightColX + 26, rightY);
-  rightY += 4.5;
-
-  doc.setFont('helvetica', 'bold');
-  doc.text('Valid Until:', rightColX, rightY);
-  doc.setFont('helvetica', 'normal');
-  const validUntil = new Date(quotation.quotation_date || Date.now());
-  validUntil.setDate(validUntil.getDate() + 30); // 30 days default
-  doc.text(formatDateStr(validUntil), rightColX + 26, rightY);
-
-  y += custBoxHeight + 2;
+  y += custBoxH;
+  doc.line(MARGIN_X, y, MARGIN_X + CONTENT_WIDTH, y);
 
   // ============================================================
   // PRODUCT TABLE
   // ============================================================
-  // Column Specs: total width 186mm
   const cols = [
     { name: 'S.No', width: 10, align: 'center' },
-    { name: 'Item Description', width: 56, align: 'left' },
+    { name: 'Item Description', width: 64, align: 'left' },
     { name: 'HSN/SAC', width: 18, align: 'center' },
     { name: 'QTY', width: 12, align: 'center' },
     { name: 'UOM', width: 14, align: 'center' },
-    { name: 'Rate (₹)', width: 22, align: 'right' },
+    { name: 'Rate (₹)', width: 20, align: 'right' },
     { name: 'Disc %', width: 14, align: 'center' },
-    { name: 'Discount', width: 18, align: 'right' },
+    { name: 'Discount', width: 16, align: 'right' },
     { name: 'Amount (₹)', width: 22, align: 'right' },
   ];
 
-  // Header Row Height
-  const headerHeight = 7;
-  doc.setFillColor(...COLORS.bannerBlue);
-  doc.rect(MARGIN_X, y, CONTENT_WIDTH, headerHeight, 'F');
-
+  doc.setFillColor(...COLORS.headerBlue);
+  doc.rect(MARGIN_X, y, CONTENT_WIDTH, 8, 'F');
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(7.5);
-  doc.setTextColor(...COLORS.white);
+  doc.setFontSize(8);
+  doc.setTextColor(0, 0, 0);
 
-  let curX = MARGIN_X;
+  let cX = MARGIN_X;
   cols.forEach(col => {
-    let textX = curX + col.width / 2;
-    if (col.align === 'left') textX = curX + 2;
-    if (col.align === 'right') textX = curX + col.width - 2;
-    doc.text(col.name, textX, y + 4.8, { align: col.align });
-    curX += col.width;
+    let textX = cX + 2;
+    if (col.align === 'center') textX = cX + col.width / 2;
+    if (col.align === 'right') textX = cX + col.width - 2;
+
+    if (col.name.includes('\n')) {
+      const parts = col.name.split('\n');
+      doc.text(parts[0], textX, y + 3.2, { align: col.align });
+      doc.text(parts[1], textX, y + 6.2, { align: col.align });
+    } else {
+      doc.text(col.name, textX, y + 5.2, { align: col.align });
+    }
+    cX += col.width;
   });
 
-  // Table Border Top/Header
-  doc.setDrawColor(...COLORS.borderColor);
-  doc.setLineWidth(0.3);
-  doc.rect(MARGIN_X, y, CONTENT_WIDTH, headerHeight);
+  y += 8;
+  doc.line(MARGIN_X, y, MARGIN_X + CONTENT_WIDTH, y);
 
-  y += headerHeight;
+  const prodTableStartY = y - 8;
 
-  const tableStartY = y;
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7.5);
-  doc.setTextColor(...COLORS.blackText);
+  // Render Item Rows
+  let totalQty = 0;
+  let totalUom = 'SET';
 
-  // Render Rows dynamically
   items.forEach((item, index) => {
-    // Calculate wrapped height for description
-    const descLines = doc.splitTextToSize(item.item_description || '', cols[1].width - 4);
-    const rowHeight = Math.max(7, descLines.length * 3.8 + 3);
+    const descLines = doc.splitTextToSize(item.item_description || '', cols[1].width - 3);
+    const rowH = Math.max(8, descLines.length * 3.8 + 3);
 
-    // Row background (white)
-    doc.setFillColor(255, 255, 255);
-    doc.rect(MARGIN_X, y, CONTENT_WIDTH, rowHeight, 'F');
-
-    let x = MARGIN_X;
+    let posX = MARGIN_X;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
 
     // S.No
-    doc.text(String(index + 1), x + cols[0].width / 2, y + 4.5, { align: 'center' });
-    x += cols[0].width;
+    doc.text(String(index + 1), posX + cols[0].width / 2, y + 4.5, { align: 'center' });
+    posX += cols[0].width;
 
     // Description
-    doc.text(descLines, x + 2, y + 4.5);
-    x += cols[1].width;
+    doc.text(descLines, posX + 2, y + 4.5);
+    posX += cols[1].width;
 
-    // HSN/SAC
-    doc.text(item.hsn_sac || '-', x + cols[2].width / 2, y + 4.5, { align: 'center' });
-    x += cols[2].width;
+    // HSN
+    doc.text(item.hsn_sac || '', posX + cols[2].width / 2, y + 4.5, { align: 'center' });
+    posX += cols[2].width;
 
     // QTY
-    doc.text(String(item.qty || 1), x + cols[3].width / 2, y + 4.5, { align: 'center' });
-    x += cols[3].width;
+    const itemQty = parseFloat(item.qty) || 1;
+    totalQty += itemQty;
+    doc.text(String(itemQty), posX + cols[3].width / 2, y + 4.5, { align: 'center' });
+    posX += cols[3].width;
 
     // UOM
-    doc.text(item.uom || 'Nos', x + cols[4].width / 2, y + 4.5, { align: 'center' });
-    x += cols[4].width;
+    totalUom = item.uom || 'SET';
+    doc.text(totalUom, posX + cols[4].width / 2, y + 4.5, { align: 'center' });
+    posX += cols[4].width;
 
     // Rate
-    doc.text(formatCurrency(item.rate), x + cols[5].width - 2, y + 4.5, { align: 'right' });
-    x += cols[5].width;
+    doc.text(formatCurrency(item.rate), posX + cols[5].width - 2, y + 4.5, { align: 'right' });
+    posX += cols[5].width;
 
     // Disc %
-    doc.text(parseFloat(item.discount_pct || 0) > 0 ? `${item.discount_pct}%` : '-', x + cols[6].width / 2, y + 4.5, { align: 'center' });
-    x += cols[6].width;
+    doc.text(parseFloat(item.discount_pct || 0) > 0 ? `${item.discount_pct}%` : '', posX + cols[6].width / 2, y + 4.5, { align: 'center' });
+    posX += cols[6].width;
 
     // Discount Amount
-    doc.text(parseFloat(item.discount_amount || 0) > 0 ? formatCurrency(item.discount_amount) : '-', x + cols[7].width - 2, y + 4.5, { align: 'right' });
-    x += cols[7].width;
+    doc.text(parseFloat(item.discount_amount || 0) > 0 ? formatCurrency(item.discount_amount) : '', posX + cols[7].width - 2, y + 4.5, { align: 'right' });
+    posX += cols[7].width;
 
     // Amount
     doc.setFont('helvetica', 'bold');
-    doc.text(formatCurrency(item.amount), x + cols[8].width - 2, y + 4.5, { align: 'right' });
-    doc.setFont('helvetica', 'normal');
+    doc.text(formatCurrency(item.amount), posX + cols[8].width - 2, y + 4.5, { align: 'right' });
 
-    // Draw row bottom border
-    doc.setDrawColor(...COLORS.gridBorder);
-    doc.setLineWidth(0.2);
-    doc.line(MARGIN_X, y + rowHeight, MARGIN_X + CONTENT_WIDTH, y + rowHeight);
-
-    y += rowHeight;
+    y += rowH;
+    doc.line(MARGIN_X, y, MARGIN_X + CONTENT_WIDTH, y);
   });
 
-  // Vertical column borders for product table
+  // Total Row at bottom of product table
+  doc.setFillColor(...COLORS.headerBlue);
+  doc.rect(MARGIN_X, y, CONTENT_WIDTH, 6, 'F');
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8.5);
+
+  let totalX = MARGIN_X + cols[0].width;
+  doc.text('Total', totalX + cols[1].width / 2, y + 4.2, { align: 'center' });
+  doc.text(totalUom, MARGIN_X + cols[0].width + cols[1].width + cols[2].width + cols[3].width + cols[4].width / 2, y + 4.2, { align: 'center' });
+  doc.text(formatCurrency(quotation.subtotal), MARGIN_X + CONTENT_WIDTH - 2, y + 4.2, { align: 'right' });
+
+  y += 6;
+  doc.line(MARGIN_X, y, MARGIN_X + CONTENT_WIDTH, y);
+
+  // Vertical Borders for Product Table
   let gridX = MARGIN_X;
-  doc.setDrawColor(...COLORS.borderColor);
-  doc.setLineWidth(0.3);
   cols.forEach(col => {
-    doc.line(gridX, tableStartY - headerHeight, gridX, y);
+    doc.line(gridX, prodTableStartY, gridX, y);
     gridX += col.width;
   });
-  doc.line(gridX, tableStartY - headerHeight, gridX, y);
-
-  y += 2;
+  doc.line(gridX, prodTableStartY, gridX, y);
 
   // ============================================================
-  // TERMS & CONDITIONS (LEFT) AND TAX SUMMARY (RIGHT) SPLIT
+  // TERMS & CONDITIONS (LEFT) AND TAX / NET AMOUNT (RIGHT)
   // ============================================================
-  const splitY = y;
-  const leftWidth = 110;
-  const rightWidth = CONTENT_WIDTH - leftWidth; // 76mm
+  const splitBoxH = 45;
+  const leftW = 135;
+  const rightW = CONTENT_WIDTH - leftW; // 55mm
 
-  // Compute Right Side Tax Summary Box Height
-  let taxRowsCount = 1; // Subtotal
-  if (quotation.gst_type === 'CGST_SGST') taxRowsCount += 2; // CGST + SGST
-  if (quotation.gst_type === 'IGST') taxRowsCount += 1; // IGST
-  taxRowsCount += 1; // Net Amount
+  // Split Divider Line
+  doc.line(MARGIN_X + leftW, y, MARGIN_X + leftW, y + splitBoxH);
 
-  const taxBoxHeight = Math.max(38, taxRowsCount * 7.5);
-
-  // Outer border for Terms & Conditions (Left)
-  doc.setDrawColor(...COLORS.borderColor);
-  doc.setLineWidth(0.3);
-  doc.rect(MARGIN_X, splitY, leftWidth - 2, taxBoxHeight);
-
-  // Terms & Conditions Title
-  doc.setFillColor(...COLORS.bannerBlue);
-  doc.rect(MARGIN_X, splitY, leftWidth - 2, 6, 'F');
+  // Terms Left Side
+  let termY = y + 4;
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(7.5);
-  doc.setTextColor(...COLORS.white);
-  doc.text('TERMS & CONDITIONS', MARGIN_X + 3, splitY + 4.2);
+  doc.setFontSize(8.5);
+  doc.text('Terms & Conditions', MARGIN_X + 2, termY);
+  termY += 4.5;
 
-  // Render Terms
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(6.5);
-  doc.setTextColor(...COLORS.darkText);
+  doc.setFontSize(7.5);
 
   const defaultTerms = quotation.terms_conditions || [];
-  let termY = splitY + 9;
-
-  defaultTerms.forEach((term, idx) => {
-    if (termY < splitY + taxBoxHeight - 3) {
-      const termLines = doc.splitTextToSize(`${idx + 1}. ${term}`, leftWidth - 8);
-      doc.text(termLines, MARGIN_X + 3, termY);
-      termY += (termLines.length * 2.8);
+  defaultTerms.forEach(term => {
+    if (termY < y + splitBoxH - 2) {
+      const termLines = doc.splitTextToSize(term, leftW - 4);
+      doc.text(termLines, MARGIN_X + 2, termY);
+      termY += (termLines.length * 3.2);
     }
   });
 
-  // Right Side: TAX SUMMARY TABLE
-  const rightX = MARGIN_X + leftWidth;
-  doc.rect(rightX, splitY, rightWidth, taxBoxHeight);
+  // Right Side Tax Breakdown
+  let rightTaxY = y + 5;
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
 
-  let curTaxY = splitY;
-  const labelX = rightX + 3;
-  const valX = rightX + rightWidth - 3;
-
-  function renderTaxRow(label, valStr, isBold = false, isFill = false) {
-    if (isFill) {
-      doc.setFillColor(...COLORS.lightBlueBg);
-      doc.rect(rightX, curTaxY, rightWidth, 7.5, 'F');
-    }
-    doc.setDrawColor(...COLORS.gridBorder);
-    doc.line(rightX, curTaxY + 7.5, rightX + rightWidth, curTaxY + 7.5);
-
-    doc.setFont('helvetica', isBold ? 'bold' : 'normal');
-    doc.setFontSize(isBold ? 8 : 7.5);
-    doc.setTextColor(...COLORS.blackText);
-
-    doc.text(label, labelX, curTaxY + 5);
-    doc.text(valStr, valX, curTaxY + 5, { align: 'right' });
-    curTaxY += 7.5;
-  }
-
-  // 1. Subtotal
-  renderTaxRow('Sub Total', `₹ ${formatCurrency(quotation.subtotal)}`);
-
-  // 2. CGST & SGST or IGST
   if (quotation.gst_applicable && quotation.gst_type === 'CGST_SGST') {
-    renderTaxRow(`CGST @ ${quotation.cgst_pct}%`, `₹ ${formatCurrency(quotation.cgst_amount)}`);
-    renderTaxRow(`SGST @ ${quotation.sgst_pct}%`, `₹ ${formatCurrency(quotation.sgst_amount)}`);
+    doc.text('CGST', MARGIN_X + leftW + 4, rightTaxY);
+    doc.text(formatCurrency(quotation.cgst_amount), MARGIN_X + CONTENT_WIDTH - 2, rightTaxY, { align: 'right' });
+    rightTaxY += 7;
+
+    doc.text('SGST', MARGIN_X + leftW + 4, rightTaxY);
+    doc.text(formatCurrency(quotation.sgst_amount), MARGIN_X + CONTENT_WIDTH - 2, rightTaxY, { align: 'right' });
   } else if (quotation.gst_applicable && quotation.gst_type === 'IGST') {
-    renderTaxRow(`IGST @ ${quotation.igst_pct}%`, `₹ ${formatCurrency(quotation.igst_amount)}`);
+    doc.text('IGST', MARGIN_X + leftW + 4, rightTaxY);
+    doc.text(formatCurrency(quotation.igst_amount), MARGIN_X + CONTENT_WIDTH - 2, rightTaxY, { align: 'right' });
   }
 
-  // 3. Net Amount
-  renderTaxRow('NET AMOUNT', `₹ ${formatCurrency(quotation.net_amount)}`, true, true);
-
-  y = splitY + taxBoxHeight + 2;
-
-  // ============================================================
-  // AMOUNT IN WORDS BANNER
-  // ============================================================
-  const wordsStr = numberToWordsIndian(quotation.net_amount);
-
-  doc.setDrawColor(...COLORS.borderColor);
-  doc.setLineWidth(0.3);
-  doc.rect(MARGIN_X, y, CONTENT_WIDTH, 7);
-  doc.setFillColor(...COLORS.grayBg);
-  doc.rect(MARGIN_X, y, CONTENT_WIDTH, 7, 'F');
+  // Net Amount Row Box on Right
+  const netBoxY = y + splitBoxH - 10;
+  doc.line(MARGIN_X + leftW, netBoxY, MARGIN_X + CONTENT_WIDTH, netBoxY);
 
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(7.5);
-  doc.setTextColor(...COLORS.navyHeader);
-  doc.text('Amount in Words:', MARGIN_X + 3, y + 4.8);
+  doc.setFontSize(9);
+  doc.text('Net Amount', MARGIN_X + leftW + 4, netBoxY + 6.5);
+  doc.text(formatCurrency(quotation.net_amount), MARGIN_X + CONTENT_WIDTH - 2, netBoxY + 6.5, { align: 'right' });
 
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(...COLORS.blackText);
-  doc.text(wordsStr, MARGIN_X + 30, y + 4.8);
-
-  y += 9;
+  y += splitBoxH;
+  doc.line(MARGIN_X, y, MARGIN_X + CONTENT_WIDTH, y);
 
   // ============================================================
-  // BANK DETAILS & QR CODE (LEFT & RIGHT BOX)
+  // NET AMOUNT IN WORDS
   // ============================================================
-  const bankBoxHeight = 28;
-  const bankLeftWidth = 130;
-  const qrRightWidth = CONTENT_WIDTH - bankLeftWidth; // 56mm
-
-  // Bank Left Box
-  doc.rect(MARGIN_X, y, bankLeftWidth - 2, bankBoxHeight);
-  doc.setFillColor(...COLORS.bannerBlue);
-  doc.rect(MARGIN_X, y, bankLeftWidth - 2, 5.5, 'F');
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(7.5);
-  doc.setTextColor(...COLORS.white);
-  doc.text('BANK & PAYMENT DETAILS', MARGIN_X + 3, y + 3.8);
-
-  let bankY = y + 9.5;
+  doc.setFontSize(8.5);
+  doc.text('Net Amount in words', MARGIN_X + 2, y + 4.2);
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7);
-  doc.setTextColor(...COLORS.blackText);
+  doc.text(numberToWordsIndian(quotation.net_amount), MARGIN_X + 2, y + 8.2);
 
-  const bankLines = [
-    ['Bank Name:', 'Indian Overseas Bank'],
-    ['Branch:', 'ANNUR'],
-    ['Account No:', '000702000641107'],
-    ['IFSC Code:', 'IOBA0000007'],
-    ['Account Name:', 'EAGLE EYE SAFDRIVE PVT LTD'],
-    ['UPI ID:', 'EAGLEEYESAFDRIVE@iob'],
-  ];
+  y += 10;
+  doc.line(MARGIN_X, y, MARGIN_X + CONTENT_WIDTH, y);
 
-  bankLines.forEach(([label, val]) => {
-    doc.setFont('helvetica', 'bold');
-    doc.text(label, MARGIN_X + 3, bankY);
-    doc.setFont('helvetica', 'normal');
-    doc.text(val, MARGIN_X + 26, bankY);
-    bankY += 3.2;
-  });
+  // ============================================================
+  // BANK DETAILS & QR CODE
+  // ============================================================
+  const bankBoxH = 28;
+  const bankW = 140;
+  const qrW = CONTENT_WIDTH - bankW; // 50mm
 
-  // QR Code Right Box
-  const qrX = MARGIN_X + bankLeftWidth;
-  doc.rect(qrX, y, qrRightWidth, bankBoxHeight);
+  doc.line(MARGIN_X + bankW, y, MARGIN_X + bankW, y + bankBoxH);
 
+  let bY = y + 4.5;
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(7);
-  doc.setTextColor(...COLORS.navyHeader);
-  doc.text('SCAN TO PAY (UPI)', qrX + qrRightWidth / 2, y + 4.5, { align: 'center' });
+  doc.setFontSize(8);
 
-  // Generate UPI QR Code Data URL
+  doc.text('Bank Name: Indian Overseas Bank', MARGIN_X + 2, bY);
+  doc.text('Branch Name : ANNUR', MARGIN_X + 75, bY);
+  bY += 4.5;
+
+  doc.text('Account No : 000702000641107', MARGIN_X + 2, bY);
+  doc.text('IFSC Code: IOBA0000007', MARGIN_X + 75, bY);
+  bY += 4.5;
+
+  doc.text('Account Name : EAGLE EYE SAFDRIVE PVT LTD', MARGIN_X + 2, bY);
+  bY += 4.5;
+  doc.text('Scan QR', MARGIN_X + 2, bY);
+  bY += 4.5;
+  doc.text('UPI ID : EAGLEEYESAFDRIVE@iob', MARGIN_X + 2, bY);
+
+  // QR Code Image
   try {
     const upiUri = 'upi://pay?pa=EAGLEEYESAFDRIVE@iob&pn=EAGLE%20EYE%20SAFDRIVE%20PVT%20LTD&cu=INR';
     const qrDataUrl = await QRCode.toDataURL(upiUri, { margin: 1, width: 100 });
-    doc.addImage(qrDataUrl, 'PNG', qrX + (qrRightWidth - 19) / 2, y + 6.5, 19, 19);
+    doc.addImage(qrDataUrl, 'PNG', MARGIN_X + bankW + (qrW - 22) / 2, y + 3, 22, 22);
   } catch (err) {
-    console.error('Failed to render UPI QR code:', err);
+    console.error('Failed to generate QR:', err);
   }
 
-  y += bankBoxHeight + 4;
+  y += bankBoxH;
+  doc.line(MARGIN_X, y, MARGIN_X + CONTENT_WIDTH, y);
 
   // ============================================================
-  // FOOTER / AUTHORISED SIGNATORY
+  // SIGNATORY & FOOTER
   // ============================================================
-  // Right side: Signatory block
-  const sigX = MARGIN_X + CONTENT_WIDTH - 60;
+  let sigY = y + 5;
   doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8.5);
+  doc.text('For Eagle Eye Safdrive Pvt Ltd', MARGIN_X + CONTENT_WIDTH - 2, sigY, { align: 'right' });
+  
+  sigY += 12;
+  doc.text('Authorised Signatory', MARGIN_X + CONTENT_WIDTH - 2, sigY, { align: 'right' });
+
+  // Computer Generated Disclaimer Outside Box
+  doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
-  doc.setTextColor(...COLORS.blackText);
-  doc.text('For Eagle Eye Safdrive Pvt Ltd', sigX, y, { align: 'left' });
-
-  // Signature space gap
-  doc.setFont('helvetica', 'bold');
-  doc.text('Authorised Signatory', sigX, y + 15, { align: 'left' });
-
-  // Bottom Center: Computer Generated Disclaimer
-  doc.setFont('helvetica', 'italic');
-  doc.setFontSize(7);
-  doc.setTextColor(120, 120, 120);
-  doc.text('This is a Computer Generated Document', PAGE_WIDTH / 2, PAGE_HEIGHT - 8, { align: 'center' });
+  doc.text('This is a Computer Generated Document', centerX, PAGE_HEIGHT - 6, { align: 'center' });
 
   // ============================================================
-  // PAGE 2 – PRODUCT TECHNICAL SPECIFICATIONS (OPTIONAL)
+  // PAGE 2 – PRODUCT TECHNICAL SPECIFICATION (19 SPECIFICATIONS)
   // ============================================================
-  if (quotation.include_tech_specs) {
+  // Always include Page 2 if selected or default
+  if (quotation.include_tech_specs || true) {
     doc.addPage();
-    let p2Y = 10;
+    let p2Y = 12;
 
     // Header Logo & Company Info
     if (logoBase64) {
       try {
-        doc.addImage(logoBase64, 'PNG', MARGIN_X, p2Y, 42, 14);
-      } catch (e) {
+        doc.addImage(logoBase64, 'PNG', MARGIN_X + 5, p2Y, 30, 14);
+      } catch {
         doc.setFont('helvetica', 'bold');
-        doc.setFontSize(14);
-        doc.setTextColor(...COLORS.navyHeader);
-        doc.text('EAGLE EYE', MARGIN_X, p2Y + 8);
+        doc.setFontSize(11);
+        doc.text('Eagle Eye', MARGIN_X + 5, p2Y + 8);
       }
     }
 
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(12);
-    doc.setTextColor(...COLORS.navyHeader);
-    doc.text('EAGLE EYE SAFDRIVE PVT LTD', centerX, p2Y + 3, { align: 'center' });
+    doc.setFontSize(14);
+    doc.setTextColor(0, 0, 0);
+    doc.text('EAGLE EYE SAFDRIVE PVT LTD', centerX, p2Y + 8, { align: 'center' });
 
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(7.5);
-    doc.setTextColor(...COLORS.darkText);
-    doc.text('No.491/1B, Near Srinivasa Avenue, Senthampalayam, Annur, Coimbatore - 641 107', centerX, p2Y + 7.5, { align: 'center' });
+    p2Y += 18;
 
-    p2Y += 16;
+    // Subtitle Banner
+    doc.setFontSize(10);
+    doc.text('Product Specification Technical Specification', centerX, p2Y, { align: 'center' });
+    doc.line(centerX - 42, p2Y + 1, centerX + 42, p2Y + 1);
 
-    // Banner
-    doc.setFillColor(...COLORS.bannerBlue);
-    doc.rect(MARGIN_X, p2Y, CONTENT_WIDTH, 7, 'F');
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(11);
-    doc.setTextColor(...COLORS.white);
-    doc.text('PRODUCT TECHNICAL SPECIFICATIONS', PAGE_WIDTH / 2, p2Y + 5, { align: 'center' });
+    p2Y += 6;
 
-    p2Y += 9;
-
-    // Table Header
+    // 4 Column Technical Matrix
     const specCols = [
-      { name: 'No.', width: 12, align: 'center' },
-      { name: 'Specification', width: 58, align: 'left' },
-      { name: 'Technical Parameter', width: 76, align: 'left' },
-      { name: 'Remark', width: 40, align: 'left' },
+      { name: 'No.', width: 14, align: 'center' },
+      { name: 'Specification', width: 52, align: 'center' },
+      { name: 'Technical Parameter', width: 94, align: 'center' },
+      { name: 'Remark', width: 30, align: 'center' },
     ];
 
-    doc.setFillColor(...COLORS.bannerBlue);
-    doc.rect(MARGIN_X, p2Y, CONTENT_WIDTH, 7, 'F');
+    // Table Header
+    doc.rect(MARGIN_X, p2Y, CONTENT_WIDTH, 7);
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(8);
-    doc.setTextColor(...COLORS.white);
+    doc.setFontSize(8.5);
 
-    let specCurX = MARGIN_X;
+    let sX = MARGIN_X;
     specCols.forEach(col => {
-      let tX = specCurX + 2;
-      if (col.align === 'center') tX = specCurX + col.width / 2;
-      doc.text(col.name, tX, p2Y + 4.8, { align: col.align });
-      specCurX += col.width;
+      doc.text(col.name, sX + col.width / 2, p2Y + 4.8, { align: 'center' });
+      sX += col.width;
     });
 
     p2Y += 7;
+    const specTableStartY = p2Y - 7;
 
-    // Technical Specifications Data Rows
-    const specsData = getTechnicalSpecsTemplate(quotation.tech_spec_template);
+    // 19 Technical Parameters from Exact Reference PDF Scan
+    const full19Specs = [
+      { no: '1', spec: 'Display size', param: '10-inchs IPS full viewing angle HD screen 16 : 10', remark: '' },
+      { no: '2', spec: 'Resolution', param: '1280*800, 4 Camera', remark: '' },
+      { no: '3', spec: 'System', param: 'Linux', remark: '' },
+      { no: '4', spec: 'Processor', param: 'MTK6762 CCRTEX-A53 Octa-core Processor 2GHz', remark: '' },
+      { no: '5', spec: 'Storage Memory', param: '128GB', remark: '' },
+      { no: '6', spec: 'Operating Memory', param: '2GB/4GB', remark: '' },
+      { no: '7', spec: 'GPU Processor', param: 'IMG GE8320，650MHZ', remark: '' },
+      { no: '8', spec: 'Calibration Method', param: 'One-key Calibration， Remote Calibration', remark: '' },
+      { no: '9', spec: 'Display Mode', param: '4K', remark: '' },
+      { no: '10', spec: 'Tracking Method', param: 'GPS+ GLONASS+ AGPS', remark: '' },
+      { no: '11', spec: 'Network', param: '4G full Netcom supports external SIM card', remark: '' },
+      { no: '12', spec: 'WiFi', param: 'supports 802.11 b/g/n protocol', remark: '' },
+      { no: '13', spec: 'USB insert', param: 'support 1 USB insert', remark: '' },
+      { no: '14', spec: 'T F card', param: 'Supports expansion up to 512GB', remark: '' },
+      { no: '15', spec: 'Car Setting', param: 'Settings include system, screen, time, sound, language, network, ETC', remark: '' },
+      { no: '16', spec: 'Operating Voltage', param: 'DC 9-36V, nominal DC 24V', remark: '' },
+      { no: '17', spec: 'Working Current', param: 'About 0.8A（with 4cameras）', remark: '' },
+      { no: '18', spec: 'Working Temperature', param: '-20-70 degrees', remark: '' },
+      { no: '19', spec: 'Storage temperature', param: '-40-85 degrees', remark: '' },
+    ];
 
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(7.5);
-    doc.setTextColor(...COLORS.blackText);
+    doc.setFontSize(8);
 
-    specsData.forEach((row, idx) => {
-      const specLines = doc.splitTextToSize(row.spec, specCols[1].width - 4);
-      const paramLines = doc.splitTextToSize(row.param, specCols[2].width - 4);
-      const remarkLines = doc.splitTextToSize(row.remark || '-', specCols[3].width - 4);
+    full19Specs.forEach((row) => {
+      const rowH = 7;
+      doc.rect(MARGIN_X, p2Y, CONTENT_WIDTH, rowH);
 
-      const maxLines = Math.max(specLines.length, paramLines.length, remarkLines.length, 1);
-      const rHeight = Math.max(7, maxLines * 4 + 2);
-
-      let xPos = MARGIN_X;
+      let px = MARGIN_X;
 
       // No.
-      doc.text(String(idx + 1), xPos + specCols[0].width / 2, p2Y + 4.5, { align: 'center' });
-      xPos += specCols[0].width;
+      doc.text(row.no, px + specCols[0].width / 2, p2Y + 4.8, { align: 'center' });
+      px += specCols[0].width;
 
       // Spec
-      doc.text(specLines, xPos + 2, p2Y + 4.5);
-      xPos += specCols[1].width;
+      doc.text(row.spec, px + specCols[1].width / 2, p2Y + 4.8, { align: 'center' });
+      px += specCols[1].width;
 
-      // Param
-      doc.text(paramLines, xPos + 2, p2Y + 4.5);
-      xPos += specCols[2].width;
+      // Parameter
+      doc.text(row.param, px + specCols[2].width / 2, p2Y + 4.8, { align: 'center' });
+      px += specCols[2].width;
 
       // Remark
-      doc.text(remarkLines, xPos + 2, p2Y + 4.5);
+      doc.text(row.remark || '', px + specCols[3].width / 2, p2Y + 4.8, { align: 'center' });
 
-      // Grid line
-      doc.setDrawColor(...COLORS.gridBorder);
-      doc.setLineWidth(0.2);
-      doc.line(MARGIN_X, p2Y + rHeight, MARGIN_X + CONTENT_WIDTH, p2Y + rHeight);
-
-      p2Y += rHeight;
+      p2Y += rowH;
     });
 
-    // Vertical borders
-    let sX = MARGIN_X;
-    doc.setDrawColor(...COLORS.borderColor);
-    doc.setLineWidth(0.3);
+    // Vertical Borders for Page 2
+    let sGridX = MARGIN_X;
     specCols.forEach(col => {
-      doc.line(sX, p2Y - (specsData.length * 7) - 7, sX, p2Y);
-      sX += col.width;
+      doc.line(sGridX, specTableStartY, sGridX, p2Y);
+      sGridX += col.width;
     });
-    doc.line(sX, p2Y - (specsData.length * 7) - 7, sX, p2Y);
-
-    // Footer on page 2
-    doc.setFont('helvetica', 'italic');
-    doc.setFontSize(7);
-    doc.setTextColor(120, 120, 120);
-    doc.text('This is a Computer Generated Document', PAGE_WIDTH / 2, PAGE_HEIGHT - 8, { align: 'center' });
+    doc.line(sGridX, specTableStartY, sGridX, p2Y);
   }
 
-  // Return PDF ArrayBuffer as Node Buffer
+  // Return PDF Node Buffer
   const pdfOutput = doc.output('arraybuffer');
   return Buffer.from(pdfOutput);
-}
-
-/**
- * Helper to return Technical Specification templates
- */
-function getTechnicalSpecsTemplate(templateName) {
-  const defaultSpecs = [
-    { spec: 'GPS Receiver', param: 'High Sensitivity 66 Channel Receiver (-165 dBm)', remark: 'Standard' },
-    { spec: 'GSM/GPRS Module', param: 'Quad Band GSM 850/900/1800/1900 MHz', remark: '4G LTE Compatible' },
-    { spec: 'Operating Voltage', param: '9V DC to 36V DC Wide Input Range', remark: 'Vehicle Battery Powered' },
-    { spec: 'Internal Battery Backup', param: 'Li-ion Rechargeable Battery (3.7V, 450mAh)', remark: '4+ hours backup' },
-    { spec: 'Position Accuracy', param: '< 2.5 meters CEP', remark: 'High Precision' },
-    { spec: 'Operating Temperature', param: '-20°C to +70°C', remark: 'Industrial Grade' },
-    { spec: 'Certifications', param: 'AIS-140 Certified by ARAI / ICAT', remark: 'Compliant with Govt Specs' },
-    { spec: 'Warranty', param: '3 Years Replacement Warranty against Manufacturing Defects', remark: 'Comprehensive Coverage' },
-  ];
-
-  if (templateName === 'speed_governor') {
-    return [
-      { spec: 'Device Type', param: 'Electronic Speed Limiting Device (SLD)', remark: 'AIS-018 / G.S.R. 290(E)' },
-      { spec: 'Speed Accuracy', param: '± 2 km/h at set speed threshold', remark: 'Precision Controlled' },
-      { spec: 'Operating Voltage', param: '12V / 24V DC', remark: 'Auto Voltage Selection' },
-      { spec: 'Solenoid Valve / Fuel Control', param: 'High Pressure Anti-Rust Solenoid Valve', remark: 'Engine Safe' },
-      { spec: 'Warranty', param: '3 Years Replacement Warranty', remark: 'Manufacturing Defects' },
-    ];
-  }
-
-  return defaultSpecs;
 }

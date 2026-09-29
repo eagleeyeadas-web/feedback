@@ -2,11 +2,43 @@ import { Router } from 'express';
 import { z } from 'zod';
 import supabase from '../services/supabase.js';
 import { generateQuotationPDF } from '../services/quotationPdfGenerator.js';
+import { runQuotationCleanup } from '../services/quotationCleanupService.js';
 import { requireAdmin } from '../middleware/auth.js';
 
 const router = Router();
 
-// Require admin authentication for all quotation endpoints
+/**
+ * POST /api/admin/quotations/cleanup
+ * Cron job endpoint for cleaning up quotations older than 10 days
+ * Protected by secret header `x-cron-secret` or Admin Bearer Token
+ */
+router.post('/cleanup', async (req, res) => {
+  try {
+    const secret = req.headers['x-cron-secret'] || req.query.secret;
+    const expectedSecret = process.env.CRON_SECRET || 'eagleeye_quotation_cleanup_secret';
+
+    const authHeader = req.headers.authorization;
+    let isAdmin = false;
+
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.split(' ')[1];
+      const { data: { user } } = await supabase.auth.getUser(token);
+      if (user) isAdmin = true;
+    }
+
+    if (secret !== expectedSecret && !isAdmin) {
+      return res.status(401).json({ error: 'Unauthorized cleanup request' });
+    }
+
+    const result = await runQuotationCleanup();
+    return res.json({ message: 'Quotation cleanup executed successfully', result });
+  } catch (err) {
+    console.error('Cleanup route error:', err);
+    return res.status(500).json({ error: 'Cleanup execution failed' });
+  }
+});
+
+// Require admin authentication for remaining quotation endpoints
 router.use(requireAdmin);
 
 // Zod Validation Schema for Item
@@ -161,6 +193,9 @@ router.post('/', async (req, res) => {
       ? data.terms_conditions
       : defaultTerms;
 
+    const createdAt = new Date();
+    const expiresAt = new Date(createdAt.getTime() + (10 * 24 * 60 * 60 * 1000)); // Exactly 10 days in the future
+
     const quotationRecord = {
       quotation_number: quotationNo,
       customer_name: data.customer_name,
@@ -183,6 +218,8 @@ router.post('/', async (req, res) => {
       include_tech_specs: data.include_tech_specs,
       tech_spec_template: data.tech_spec_template,
       created_by: req.user ? req.user.id : null,
+      created_at: createdAt.toISOString(),
+      expires_at: expiresAt.toISOString(),
     };
 
     // 5. Generate PDF Buffer
