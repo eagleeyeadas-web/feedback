@@ -234,6 +234,9 @@ export async function generateQuotationPDF(quotation, items = [], logoBase64 = n
   // Horizontal Line below Header
   doc.line(MARGIN_X, y, MARGIN_X + CONTENT_WIDTH, y);
 
+  // 15mm Blank Vertical Gap between Company Header and QUOTATION section
+  y += 15;
+
   // ============================================================
   // QUOTATION BANNER (Light Blue Bar)
   // ============================================================
