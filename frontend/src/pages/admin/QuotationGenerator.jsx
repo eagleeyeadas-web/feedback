@@ -3,6 +3,15 @@ import { useAuth } from '../../hooks/useAuth';
 import { getNextQuotationNumber, createQuotation, downloadQuotationPDF } from '../../lib/api';
 import { Plus, Trash2, Download, RefreshCw, FileText, CheckCircle2, AlertCircle, ShieldCheck } from 'lucide-react';
 
+export const PRODUCT_OPTIONS = [
+  '2 Channel Live',
+  '2 Channel Recording',
+  '4 Channel Live',
+  '4 Channel Recording',
+  '8 Channel Live',
+  '8 Channel Recording',
+];
+
 const DEFAULT_TERMS = [
   '100% payment in advance is required along with a valid Purchase Order (PO) to confirm the order.',
   'Payments are non-refundable once the order has been confirmed and processing has begun.',
@@ -34,8 +43,8 @@ export default function QuotationGenerator() {
   const [items, setItems] = useState([
     {
       id: '1',
-      item_description: 'Eagle Eye AIS-140 GPS Tracking Device with 3 Years Subscription',
-      hsn_sac: '8526',
+      item_description: '2 Channel Live',
+      hsn_sac: '852589',
       qty: 1,
       uom: 'Nos',
       rate: 22000,
@@ -78,8 +87,8 @@ export default function QuotationGenerator() {
       ...items,
       {
         id: String(Date.now()),
-        item_description: '',
-        hsn_sac: '8526',
+        item_description: '2 Channel Live',
+        hsn_sac: '852589',
         qty: 1,
         uom: 'Nos',
         rate: 0,
@@ -265,8 +274,8 @@ export default function QuotationGenerator() {
     setItems([
       {
         id: String(Date.now()),
-        item_description: 'Eagle Eye AIS-140 GPS Tracking Device with 3 Years Subscription',
-        hsn_sac: '8526',
+        item_description: '2 Channel Live',
+        hsn_sac: '852589',
         qty: 1,
         uom: 'Nos',
         rate: 22000,
@@ -480,14 +489,24 @@ export default function QuotationGenerator() {
                       <td className="p-2 text-center font-bold text-gray-500">{index + 1}</td>
                       
                       <td className="p-2">
-                        <input
-                          type="text"
-                          placeholder="Product description..."
+                        <select
                           value={item.item_description}
                           onChange={(e) => updateItem(index, 'item_description', e.target.value)}
                           required
-                          className="w-full px-2 py-1 border rounded text-xs focus:ring-1 focus:ring-blue-500"
-                        />
+                          className="w-full px-2.5 py-1.5 border border-gray-300 rounded-md text-xs font-semibold text-gray-800 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 cursor-pointer shadow-xs"
+                        >
+                          <option value="" disabled>-- Select Product --</option>
+                          {PRODUCT_OPTIONS.map((prod) => (
+                            <option key={prod} value={prod}>
+                              {prod}
+                            </option>
+                          ))}
+                          {item.item_description && !PRODUCT_OPTIONS.includes(item.item_description) && (
+                            <option value={item.item_description}>
+                              {item.item_description}
+                            </option>
+                          )}
+                        </select>
                       </td>
 
                       <td className="p-2">
