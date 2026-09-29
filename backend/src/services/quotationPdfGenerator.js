@@ -19,6 +19,26 @@ const MARGIN_X = 10;
 const CONTENT_WIDTH = PAGE_WIDTH - MARGIN_X * 2; // 190mm
 
 /**
+ * Draws a clean vector Rupee symbol (₹) inline with text
+ */
+function drawRupeeSymbolInline(doc, x, y, size = 2.4) {
+  doc.setLineWidth(0.3);
+  doc.setDrawColor(0, 0, 0);
+
+  const topY = y - size * 0.7;
+  const midY = y - size * 0.35;
+  const botY = y + size * 0.3;
+  const w = size * 0.6;
+
+  doc.line(x, topY, x + w, topY);
+  doc.line(x, midY, x + w * 0.9, midY);
+  doc.line(x + 0.2, topY, x + 0.2, midY + 0.4);
+  doc.line(x + 0.2, midY + 0.4, x + w * 0.7, midY + 0.4);
+  doc.line(x + w * 0.7, midY + 0.4, x + 0.2, y);
+  doc.line(x + 0.3, y - 0.2, x + w, botY);
+}
+
+/**
  * Sanitizes PDF text strings to remove fullwidth Asian punctuation (，：（）)
  * and non-WinAnsi characters that corrupt jsPDF font encoding.
  */
@@ -270,14 +290,14 @@ export async function generateQuotationPDF(quotation, items = [], logoBase64 = n
   // ============================================================
   const cols = [
     { name: 'S.No', width: 10, align: 'center' },
-    { name: 'Item Description', width: 62, align: 'left' },
+    { name: 'Item Description', width: 56, align: 'left' },
     { name: 'HSN/SAC', width: 18, align: 'center' },
     { name: 'QTY', width: 12, align: 'center' },
     { name: 'UOM', width: 14, align: 'center' },
-    { name: 'Rate\n(₹)', width: 22, align: 'right' },
-    { name: 'Disc\n%', width: 14, align: 'center' },
+    { name: 'Rate (', width: 24, align: 'right', isRate: true },
+    { name: 'Disc %', width: 14, align: 'center' },
     { name: 'Discount', width: 16, align: 'right' },
-    { name: 'Amount\n(₹)', width: 22, align: 'right' },
+    { name: 'Amount (', width: 26, align: 'right', isAmount: true },
   ];
 
   doc.setFillColor(...COLORS.headerBlue);
@@ -292,12 +312,20 @@ export async function generateQuotationPDF(quotation, items = [], logoBase64 = n
     if (col.align === 'center') textX = cX + col.width / 2;
     if (col.align === 'right') textX = cX + col.width - 2;
 
-    if (col.name.includes('\n')) {
-      const parts = col.name.split('\n');
-      doc.text(parts[0], textX, y + 3.0, { align: col.align });
-      doc.text(parts[1], textX, y + 6.0, { align: col.align });
+    if (col.isRate) {
+      // Single line 'Rate (₹)' right aligned inside 24mm header cell
+      const cellRight = cX + col.width - 2;
+      doc.text('Rate (', cellRight - 12.8, y + 5.2);
+      drawRupeeSymbolInline(doc, cellRight - 3.6, y + 5.2, 2.2);
+      doc.text(')', cellRight - 1.2, y + 5.2);
+    } else if (col.isAmount) {
+      // Single line 'Amount (₹)' right aligned inside 26mm header cell
+      const cellRight = cX + col.width - 2;
+      doc.text('Amount (', cellRight - 16.2, y + 5.2);
+      drawRupeeSymbolInline(doc, cellRight - 3.6, y + 5.2, 2.2);
+      doc.text(')', cellRight - 1.2, y + 5.2);
     } else {
-      doc.text(col.name, textX, y + 5.0, { align: col.align });
+      doc.text(col.name, textX, y + 5.2, { align: col.align });
     }
     cX += col.width;
   });
