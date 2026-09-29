@@ -137,3 +137,15 @@ export async function deleteQuotation(token, id) {
   return res.json();
 }
 
+export async function exportQuotationCSV(token, params = {}) {
+  const query = new URLSearchParams(params).toString();
+  const res = await fetch(`${API_BASE}/admin/quotations/export?${query}`, {
+    headers: adminHeaders(token),
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.error || 'Failed to export quotation CSV');
+  }
+  return res.blob();
+}
+

@@ -8,6 +8,7 @@ import {
   fetchAdminFeedback,
   downloadAdminPDF,
   exportCSV,
+  exportQuotationCSV,
 } from '../../lib/api';
 import {
   BarChart3,
@@ -93,6 +94,24 @@ export default function Dashboard() {
       URL.revokeObjectURL(url);
     } catch (err) {
       console.error('Export failed:', err);
+    }
+  };
+
+  const handleExportQuotationCSV = async () => {
+    try {
+      const blob = await exportQuotationCSV(token);
+      const todayStr = new Date().toISOString().split('T')[0];
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Eagle_Eye_Quotations_${todayStr}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      URL.revokeObjectURL(url);
+      a.remove();
+    } catch (err) {
+      console.error('Quotation export failed:', err);
+      alert(err.message || 'Failed to export quotation CSV');
     }
   };
 
@@ -222,6 +241,16 @@ export default function Dashboard() {
             {activeTab === 'feedback' && (
               <button
                 onClick={handleExportCSV}
+                className="flex items-center gap-1.5 text-xs font-medium text-navy hover:bg-navy/5
+                           px-3 py-1.5 rounded-lg transition-colors cursor-pointer border border-navy/20"
+              >
+                <FileDown size={14} />
+                <span className="hidden sm:inline">Export CSV</span>
+              </button>
+            )}
+            {activeTab === 'quotation_history' && (
+              <button
+                onClick={handleExportQuotationCSV}
                 className="flex items-center gap-1.5 text-xs font-medium text-navy hover:bg-navy/5
                            px-3 py-1.5 rounded-lg transition-colors cursor-pointer border border-navy/20"
               >

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../hooks/useAuth';
-import { fetchAdminQuotations, downloadQuotationPDF, deleteQuotation, fetchQuotationDetail } from '../../lib/api';
-import { Search, Download, Trash2, Eye, FileText, ChevronLeft, ChevronRight, AlertTriangle, X } from 'lucide-react';
+import { fetchAdminQuotations, downloadQuotationPDF, deleteQuotation, fetchQuotationDetail, exportQuotationCSV } from '../../lib/api';
+import { Search, Download, Trash2, Eye, FileText, ChevronLeft, ChevronRight, AlertTriangle, X, FileDown } from 'lucide-react';
 
 export default function QuotationHistory() {
   const { session } = useAuth();
@@ -38,6 +38,24 @@ export default function QuotationHistory() {
       console.error('Failed to load quotation history:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleExportCSV = async () => {
+    try {
+      const blob = await exportQuotationCSV(token, { search });
+      const todayStr = new Date().toISOString().split('T')[0];
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Eagle_Eye_Quotations_${todayStr}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      a.remove();
+    } catch (err) {
+      console.error('Export CSV error:', err);
+      alert(err.message || 'Failed to export quotation CSV records');
     }
   };
 
@@ -98,19 +116,30 @@ export default function QuotationHistory() {
           </p>
         </div>
 
-        {/* Search Bar */}
-        <div className="relative w-full sm:w-72">
-          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Search customer name or quotation #..."
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setPage(1);
-            }}
-            className="w-full pl-9 pr-4 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
+        {/* Search Bar & Export CSV */}
+        <div className="flex items-center gap-3 w-full sm:w-auto">
+          <div className="relative w-full sm:w-72">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Search customer name or quotation #..."
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(1);
+              }}
+              className="w-full pl-9 pr-4 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          <button
+            type="button"
+            onClick={handleExportCSV}
+            className="flex items-center gap-1.5 text-xs font-semibold text-navy hover:bg-navy/5 px-3.5 py-2.5 rounded-lg border border-navy/20 transition cursor-pointer shadow-xs whitespace-nowrap"
+          >
+            <FileDown className="w-4 h-4" />
+            <span>Export CSV</span>
+          </button>
         </div>
       </div>
 
