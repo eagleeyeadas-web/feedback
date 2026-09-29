@@ -174,10 +174,20 @@ export async function generateQuotationPDF(quotation, items = [], logoBase64 = n
   // ============================================================
   // PAGE 1 HEADER
   // ============================================================
-  // Logo on Left
+  // Logo on Left with proportional contain-scaling
   if (effectiveLogo) {
     try {
-      doc.addImage(effectiveLogo, 'PNG', MARGIN_X + 2, y + 2, 28, 14);
+      const imgProps = doc.getImageProperties(effectiveLogo);
+      const maxH = 16;
+      const maxW = 25;
+      let imgH = maxH;
+      let imgW = imgH * (imgProps.width / imgProps.height);
+      if (imgW > maxW) {
+        imgW = maxW;
+        imgH = imgW / (imgProps.width / imgProps.height);
+      }
+      const logoY = y + 2 + (maxH - imgH) / 2;
+      doc.addImage(effectiveLogo, 'PNG', MARGIN_X + 3, logoY, imgW, imgH);
     } catch {
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(10);
@@ -595,7 +605,16 @@ export async function generateQuotationPDF(quotation, items = [], logoBase64 = n
   // Header Logo & Company Info
   if (effectiveLogo) {
     try {
-      doc.addImage(effectiveLogo, 'PNG', MARGIN_X + 2, p2Y, 28, 14);
+      const imgProps = doc.getImageProperties(effectiveLogo);
+      const maxH = 15;
+      const maxW = 25;
+      let imgH = maxH;
+      let imgW = imgH * (imgProps.width / imgProps.height);
+      if (imgW > maxW) {
+        imgW = maxW;
+        imgH = imgW / (imgProps.width / imgProps.height);
+      }
+      doc.addImage(effectiveLogo, 'PNG', MARGIN_X + 3, p2Y, imgW, imgH);
     } catch {
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(11);
