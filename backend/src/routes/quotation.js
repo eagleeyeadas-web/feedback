@@ -109,23 +109,23 @@ router.post('/', async (req, res) => {
     // 2. Atomically generate & reserve next quotation number upon save
     const quotationNo = await generateAndReserveQuotationNumber(data.quotation_number);
 
-    // 3. Backend Totals & Taxes Calculation
-    let subtotal = 0;
+    // 3. Backend Totals & Taxes Calculation (GST-Inclusive Rate Model)
+    let totalInclusive = 0;
     const processedItems = data.items.map((item, index) => {
       const qty = parseFloat(item.qty) || 1;
-      const rate = parseFloat(item.rate) || 0;
+      const rate = parseFloat(item.rate) || 0; // GST-Inclusive Rate
       const discPct = parseFloat(item.discount_pct) || 0;
       
       const rawTotal = qty * rate;
       const discountAmount = Math.round((rawTotal * (discPct / 100)) * 100) / 100;
       const lineAmount = Math.round((rawTotal - discountAmount) * 100) / 100;
 
-      subtotal += lineAmount;
+      totalInclusive += lineAmount;
 
       return {
         sno: index + 1,
         item_description: item.item_description,
-        hsn_sac: item.hsn_sac || '',
+        hsn_sac: item.hsn_sac || '852589',
         qty,
         uom: item.uom || 'Nos',
         rate,
@@ -135,8 +135,9 @@ router.post('/', async (req, res) => {
       };
     });
 
-    subtotal = Math.round(subtotal * 100) / 100;
+    totalInclusive = Math.round(totalInclusive * 100) / 100;
 
+    let subtotal = totalInclusive;
     let cgstAmount = 0;
     let sgstAmount = 0;
     let igstAmount = 0;
@@ -146,17 +147,28 @@ router.post('/', async (req, res) => {
 
     if (data.gst_applicable) {
       if (data.gst_type === 'CGST_SGST') {
-        cgstPct = parseFloat(data.cgst_pct) || 0;
-        sgstPct = parseFloat(data.sgst_pct) || 0;
-        cgstAmount = Math.round((subtotal * (cgstPct / 100)) * 100) / 100;
-        sgstAmount = Math.round((subtotal * (sgstPct / 100)) * 100) / 100;
+        cgstPct = parseFloat(data.cgst_pct) || 9;
+        sgstPct = parseFloat(data.sgst_pct) || 9;
+        const totalGstRate = (cgstPct + sgstPct) / 100; // 0.18
+        
+        // Extract Taxable Subtotal from GST-Inclusive Total
+        subtotal = Math.round((totalInclusive / (1 + totalGstRate)) * 100) / 100;
+        const totalGst = Math.round((totalInclusive - subtotal) * 100) / 100;
+        
+        cgstAmount = Math.round((totalGst / 2) * 100) / 100;
+        sgstAmount = Math.round((totalGst - cgstAmount) * 100) / 100;
       } else if (data.gst_type === 'IGST') {
-        igstPct = parseFloat(data.igst_pct) || 0;
-        igstAmount = Math.round((subtotal * (igstPct / 100)) * 100) / 100;
+        igstPct = parseFloat(data.igst_pct) || 18;
+        const totalGstRate = igstPct / 100; // 0.18
+        
+        subtotal = Math.round((totalInclusive / (1 + totalGstRate)) * 100) / 100;
+        igstAmount = Math.round((totalInclusive - subtotal) * 100) / 100;
       }
     }
 
-    const netAmount = Math.round((subtotal + cgstAmount + sgstAmount + igstAmount) * 100) / 100;
+    const netAmount = data.gst_applicable
+      ? Math.round((subtotal + cgstAmount + sgstAmount + igstAmount) * 100) / 100
+      : totalInclusive;
 
     // 4. Default Terms & Conditions fallback
     const defaultTerms = [

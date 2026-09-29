@@ -113,7 +113,7 @@ export default function QuotationGenerator() {
     setItems(updated);
   };
 
-  // Calculations
+  // Calculations (GST-Inclusive Rate Model)
   const calculateRowTotal = (item) => {
     const qty = parseFloat(item.qty) || 0;
     const rate = parseFloat(item.rate) || 0;
@@ -126,22 +126,30 @@ export default function QuotationGenerator() {
     };
   };
 
-  const subtotal = items.reduce((sum, item) => sum + calculateRowTotal(item).amount, 0);
+  const totalInclusive = items.reduce((sum, item) => sum + calculateRowTotal(item).amount, 0);
 
+  let subtotal = totalInclusive;
   let cgstAmount = 0;
   let sgstAmount = 0;
   let igstAmount = 0;
 
   if (gstApplicable) {
     if (gstType === 'CGST_SGST') {
-      cgstAmount = subtotal * ((parseFloat(cgstPct) || 0) / 100);
-      sgstAmount = subtotal * ((parseFloat(sgstPct) || 0) / 100);
+      const totalGstRate = ((parseFloat(cgstPct) || 0) + (parseFloat(sgstPct) || 0)) / 100;
+      subtotal = Math.round((totalInclusive / (1 + totalGstRate)) * 100) / 100;
+      const totalGst = Math.round((totalInclusive - subtotal) * 100) / 100;
+      cgstAmount = Math.round((totalGst / 2) * 100) / 100;
+      sgstAmount = Math.round((totalGst - cgstAmount) * 100) / 100;
     } else if (gstType === 'IGST') {
-      igstAmount = subtotal * ((parseFloat(igstPct) || 0) / 100);
+      const totalGstRate = (parseFloat(igstPct) || 0) / 100;
+      subtotal = Math.round((totalInclusive / (1 + totalGstRate)) * 100) / 100;
+      igstAmount = Math.round((totalInclusive - subtotal) * 100) / 100;
     }
   }
 
-  const netAmount = subtotal + cgstAmount + sgstAmount + igstAmount;
+  const netAmount = gstApplicable
+    ? Math.round((subtotal + cgstAmount + sgstAmount + igstAmount) * 100) / 100
+    : totalInclusive;
 
   // Amount in Words (Client-side helper)
   const numberToWordsClient = (num) => {
@@ -474,7 +482,7 @@ export default function QuotationGenerator() {
                   <th className="p-2.5 w-24">HSN/SAC</th>
                   <th className="p-2.5 w-20 text-center">QTY</th>
                   <th className="p-2.5 w-20 text-center">UOM</th>
-                  <th className="p-2.5 w-28 text-right">Rate (₹)</th>
+                  <th className="p-2.5 w-32 text-right">Rate (₹ Incl. GST)</th>
                   <th className="p-2.5 w-20 text-center">Disc %</th>
                   <th className="p-2.5 w-28 text-right">Discount (₹)</th>
                   <th className="p-2.5 w-28 text-right">Amount (₹)</th>
@@ -692,7 +700,7 @@ export default function QuotationGenerator() {
 
             <div className="space-y-2 text-sm">
               <div className="flex justify-between text-gray-600">
-                <span>Sub Total:</span>
+                <span>Taxable Sub Total:</span>
                 <span className="font-mono font-semibold">₹{subtotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
               </div>
 

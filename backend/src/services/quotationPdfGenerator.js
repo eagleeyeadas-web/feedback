@@ -438,7 +438,7 @@ export async function generateQuotationPDF(quotation, items = [], logoBase64 = n
   let totalX = MARGIN_X + cols[0].width;
   doc.text('Total', totalX + cols[1].width / 2, y + 4.2, { align: 'center' });
   doc.text(totalUom, MARGIN_X + cols[0].width + cols[1].width + cols[2].width + cols[3].width + cols[4].width / 2, y + 4.2, { align: 'center' });
-  doc.text(formatCurrency(quotation.subtotal), MARGIN_X + CONTENT_WIDTH - 2, y + 4.2, { align: 'right' });
+  doc.text(formatCurrency(quotation.net_amount), MARGIN_X + CONTENT_WIDTH - 2, y + 4.2, { align: 'right' });
 
   y += 6;
   doc.line(MARGIN_X, y, MARGIN_X + CONTENT_WIDTH, y);
