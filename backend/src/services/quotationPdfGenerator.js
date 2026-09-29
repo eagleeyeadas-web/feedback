@@ -631,9 +631,9 @@ export async function generateQuotationPDF(quotation, items = [], logoBase64 = n
   doc.text('This is a Computer Generated Document', centerX, PAGE_HEIGHT - 6, { align: 'center' });
 
   // ============================================================
-  // PAGE 2 – PRODUCT TECHNICAL SPECIFICATION (CONDITIONALLY APPENDED)
+  // PAGE 2 – PRODUCT TECHNICAL SPECIFICATION (INCLUDED BY DEFAULT)
   // ============================================================
-  if (quotation.include_tech_specs) {
+  if (quotation.include_tech_specs !== false) {
     doc.addPage();
     let p2Y = 12;
 

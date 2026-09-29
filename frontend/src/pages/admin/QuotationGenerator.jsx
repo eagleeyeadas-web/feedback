@@ -61,7 +61,7 @@ export default function QuotationGenerator() {
 
   // Terms & Specs
   const [terms, setTerms] = useState(DEFAULT_TERMS);
-  const [includeTechSpecs, setIncludeTechSpecs] = useState(false);
+  const [includeTechSpecs, setIncludeTechSpecs] = useState(true);
   const [techSpecTemplate, setTechSpecTemplate] = useState('default');
   const [displaySize, setDisplaySize] = useState('10-inch'); // '7-inch' | '10-inch'
 
@@ -298,7 +298,7 @@ export default function QuotationGenerator() {
     setSgstPct(9);
     setIgstPct(18);
     setTerms(DEFAULT_TERMS);
-    setIncludeTechSpecs(false);
+    setIncludeTechSpecs(true);
     setDisplaySize('10-inch');
     setSuccessMsg('');
     setErrorMsg('');
