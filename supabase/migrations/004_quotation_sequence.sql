@@ -5,7 +5,7 @@
 -- 1. Create permanent sequence counter table
 CREATE TABLE IF NOT EXISTS quotation_sequence (
   id          INTEGER PRIMARY KEY DEFAULT 1,
-  last_value  BIGINT NOT NULL DEFAULT 231,
+  last_value  BIGINT NOT NULL DEFAULT 238,
   updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   CONSTRAINT single_row_check CHECK (id = 1)
 );
@@ -24,9 +24,9 @@ BEGIN
     END
   ) INTO max_seq FROM quotations;
 
-  -- Default offset baseline is 231 if max existing is smaller
-  IF max_seq IS NULL OR max_seq < 231 THEN
-    max_seq := 231;
+  -- Default offset baseline is 238 if max existing is smaller
+  IF max_seq IS NULL OR max_seq < 238 THEN
+    max_seq := 238;
   END IF;
 
   -- Upsert sequence counter row
@@ -51,7 +51,7 @@ BEGIN
 
   IF next_val IS NULL THEN
     INSERT INTO quotation_sequence (id, last_value, updated_at)
-    VALUES (1, 232, NOW())
+    VALUES (1, 239, NOW())
     RETURNING last_value INTO next_val;
   END IF;
 
@@ -67,7 +67,7 @@ DECLARE
 BEGIN
   SELECT last_value INTO curr_val FROM quotation_sequence WHERE id = 1;
   IF curr_val IS NULL THEN
-    curr_val := 231;
+    curr_val := 238;
   END IF;
   RETURN 'CQS/' || LPAD((curr_val + 1)::TEXT, 5, '0');
 END;

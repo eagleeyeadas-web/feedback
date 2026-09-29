@@ -43,7 +43,7 @@ function readLocalSequence() {
   } catch (err) {
     console.warn('Could not read local sequence file:', err.message);
   }
-  return 230; // Default baseline (so next is CQS/00231)
+  return 238; // Default baseline (so next is CQS/00239)
 }
 
 /**
@@ -70,7 +70,7 @@ async function getMaxSequenceFromQuotationsTable() {
       .from('quotations')
       .select('quotation_number');
 
-    let maxVal = 230;
+    let maxVal = 238;
 
     if (quotations && quotations.length > 0) {
       for (const q of quotations) {
@@ -88,7 +88,7 @@ async function getMaxSequenceFromQuotationsTable() {
     return maxVal;
   } catch (err) {
     console.warn('Error reading quotations table max sequence:', err.message);
-    return 230;
+    return 238;
   }
 }
 
@@ -117,7 +117,7 @@ export async function getHighestSequenceValue() {
       // Table may not exist yet
     }
 
-    const highest = Math.max(localVal, dbMaxVal, dbSeqVal, 230);
+    const highest = Math.max(localVal, dbMaxVal, dbSeqVal, 238);
     return highest;
   } finally {
     releaseLock();
@@ -159,7 +159,7 @@ export async function generateAndReserveQuotationNumber(userSubmittedNo = null) 
       // Ignore
     }
 
-    let highest = Math.max(localVal, dbMaxVal, dbSeqVal, 230);
+    let highest = Math.max(localVal, dbMaxVal, dbSeqVal, 238);
     let nextVal = highest + 1;
 
     // If user passed a valid CQS/ number, check if it pushes sequence further
