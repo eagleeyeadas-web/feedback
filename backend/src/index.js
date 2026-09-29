@@ -1,3 +1,6 @@
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -7,6 +10,9 @@ import feedbackRoutes from './routes/feedback.js';
 import adminRoutes from './routes/admin.js';
 import quotationRoutes from './routes/quotation.js';
 import { runQuotationCleanup } from './services/quotationCleanupService.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 
@@ -42,7 +48,17 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/admin/quotations', quotationRoutes);
 app.use('/api/admin/quotation', quotationRoutes);
 
-// 404 handler
+// Serve built static frontend files if present (fixes 404 on refresh)
+const frontendDistPath = path.resolve(__dirname, '../../frontend/dist');
+if (fs.existsSync(frontendDistPath)) {
+  app.use(express.static(frontendDistPath));
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api')) return next();
+    res.sendFile(path.join(frontendDistPath, 'index.html'));
+  });
+}
+
+// 404 handler for API routes or unhandled requests
 app.use((req, res) => {
   res.status(404).json({ error: 'Not found' });
 });
