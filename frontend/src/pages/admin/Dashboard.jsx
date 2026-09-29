@@ -471,7 +471,7 @@ export default function Dashboard() {
                           {new Date(item.submitted_at).toLocaleDateString('en-IN')}
                         </td>
                         <td>
-                          <div className="flex items-center gap-1">
+                          <div className="flex items-center gap-1.5">
                             <button
                               onClick={() => handleViewDetail(item)}
                               className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 hover:text-navy transition-colors cursor-pointer"
@@ -479,13 +479,22 @@ export default function Dashboard() {
                             >
                               <Eye size={16} />
                             </button>
-                            <button
-                              onClick={() => handleDownloadPDF(item.feedback_id)}
-                              className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 hover:text-navy transition-colors cursor-pointer"
-                              title="Download PDF"
-                            >
-                              <Download size={16} />
-                            </button>
+                            {(!item.pdf_path || (item.pdf_expires_at && new Date(item.pdf_expires_at) <= new Date())) ? (
+                              <span
+                                className="px-2 py-0.5 rounded text-[11px] font-medium bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed select-none"
+                                title="PDF expired after 10-day retention window"
+                              >
+                                PDF Expired
+                              </span>
+                            ) : (
+                              <button
+                                onClick={() => handleDownloadPDF(item.feedback_id)}
+                                className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 hover:text-navy transition-colors cursor-pointer"
+                                title="Download PDF"
+                              >
+                                <Download size={16} />
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -560,9 +569,18 @@ function FeedbackDetailDrawer({ feedback, onClose, onDownloadPDF }) {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={onDownloadPDF} className="btn-secondary flex items-center gap-1.5 cursor-pointer">
-              <Download size={14} /> PDF
-            </button>
+            {(!f.pdf_path || (f.pdf_expires_at && new Date(f.pdf_expires_at) <= new Date())) ? (
+              <span
+                className="px-2.5 py-1 rounded-lg text-xs font-medium bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed select-none"
+                title="PDF expired after 10-day retention window"
+              >
+                PDF Expired
+              </span>
+            ) : (
+              <button onClick={onDownloadPDF} className="btn-secondary flex items-center gap-1.5 cursor-pointer">
+                <Download size={14} /> PDF
+              </button>
+            )}
             <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 cursor-pointer">
               <X size={20} />
             </button>

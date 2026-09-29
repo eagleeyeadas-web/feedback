@@ -138,7 +138,7 @@ function formatDateShort(dateInput) {
 }
 
 /**
- * Generates exact 2-Page Quotation PDF matching reference image
+ * Generates exact Quotation PDF matching reference layout image
  */
 export async function generateQuotationPDF(quotation, items = [], logoBase64 = null) {
   const doc = new jsPDF({
@@ -161,12 +161,12 @@ export async function generateQuotationPDF(quotation, items = [], logoBase64 = n
     }
   }
 
-  const pageMarginTop = 10;
-  const pageMarginBottom = 10;
+  const pageMarginTop = 8;
+  const pageMarginBottom = 13;
   let y = pageMarginTop;
 
-  // Outer Box Frame Page 1
-  const outerFrameHeight = PAGE_HEIGHT - pageMarginTop - pageMarginBottom - 8;
+  // Outer Box Frame Page 1 (from y=8 to y=284, height 276mm)
+  const outerFrameHeight = PAGE_HEIGHT - pageMarginTop - pageMarginBottom; // 276mm
   doc.setDrawColor(...COLORS.borderColor);
   doc.setLineWidth(0.4);
   doc.rect(MARGIN_X, y, CONTENT_WIDTH, outerFrameHeight);
@@ -204,23 +204,22 @@ export async function generateQuotationPDF(quotation, items = [], logoBase64 = n
   // Company Name & Address Centered
   const centerX = PAGE_WIDTH / 2;
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(13);
+  doc.setFontSize(13.5);
   doc.setTextColor(0, 0, 0);
   doc.text('Eagle Eye Safdrive Pvt Ltd', centerX, y + 5.2, { align: 'center' });
 
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8);
+  doc.setFontSize(8.2);
   doc.text('No.491/1B, Near Srinivasa Avenue, Senthampalayam, Annur,', centerX, y + 9.5, { align: 'center' });
   doc.text('Coimbatore - 641 107', centerX, y + 13.2, { align: 'center' });
   
-  doc.setFontSize(7.5);
+  doc.setFontSize(7.8);
   doc.setTextColor(0, 0, 0);
 
   // Single continuous contact line: GST No, Tel, Email
   const part1 = 'GST No: 33AAICE7626B1ZX    Tel: +91 63692 58461    Email: ';
   const part2 = 'info@safdrive.live';
   
-  // Calculate exact string widths for clean centering
   const w1 = doc.getTextWidth(part1);
   const w2 = doc.getTextWidth(part2);
   const startX = centerX - (w1 + w2) / 2;
@@ -234,16 +233,13 @@ export async function generateQuotationPDF(quotation, items = [], logoBase64 = n
   // Horizontal Line below Header
   doc.line(MARGIN_X, y, MARGIN_X + CONTENT_WIDTH, y);
 
-  // 15mm Blank Vertical Gap between Company Header and QUOTATION section
-  y += 15;
-
   // ============================================================
   // QUOTATION BANNER (Light Blue Bar)
   // ============================================================
   doc.setFillColor(...COLORS.headerBlue);
   doc.rect(MARGIN_X, y, CONTENT_WIDTH, 6, 'F');
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(10);
+  doc.setFontSize(10.5);
   doc.setTextColor(0, 0, 0);
   doc.text('QUOTATION', centerX, y + 4.3, { align: 'center' });
   doc.line(MARGIN_X, y + 6, MARGIN_X + CONTENT_WIDTH, y + 6);
@@ -353,13 +349,11 @@ export async function generateQuotationPDF(quotation, items = [], logoBase64 = n
     if (col.align === 'right') textX = cX + col.width - 2;
 
     if (col.isRate) {
-      // Single line 'Rate (₹)' right aligned inside 24mm header cell
       const cellRight = cX + col.width - 2;
       doc.text('Rate (', cellRight - 12.8, y + 5.2);
       drawRupeeSymbolInline(doc, cellRight - 3.6, y + 5.2, 2.2);
       doc.text(')', cellRight - 1.2, y + 5.2);
     } else if (col.isAmount) {
-      // Single line 'Amount (₹)' right aligned inside 26mm header cell
       const cellRight = cX + col.width - 2;
       doc.text('Amount (', cellRight - 16.2, y + 5.2);
       drawRupeeSymbolInline(doc, cellRight - 3.6, y + 5.2, 2.2);
@@ -377,7 +371,7 @@ export async function generateQuotationPDF(quotation, items = [], logoBase64 = n
 
   // Render Item Rows
   let totalQty = 0;
-  let totalUom = 'SET';
+  let totalUom = 'Nos';
 
   items.forEach((item, index) => {
     const cleanDesc = sanitizePdfText(item.item_description || '');
@@ -396,7 +390,7 @@ export async function generateQuotationPDF(quotation, items = [], logoBase64 = n
     doc.text(descLines, posX + 2, y + 4.5);
     posX += cols[1].width;
 
-    // HSN/SAC (Always defaults to fixed 852589)
+    // HSN/SAC
     const hsnValue = sanitizePdfText(item.hsn_sac || '852589');
     doc.text(hsnValue, posX + cols[2].width / 2, y + 4.5, { align: 'center' });
     posX += cols[2].width;
@@ -408,7 +402,7 @@ export async function generateQuotationPDF(quotation, items = [], logoBase64 = n
     posX += cols[3].width;
 
     // UOM
-    totalUom = sanitizePdfText(item.uom || 'SET');
+    totalUom = sanitizePdfText(item.uom || 'Nos');
     doc.text(totalUom, posX + cols[4].width / 2, y + 4.5, { align: 'center' });
     posX += cols[4].width;
 
@@ -455,78 +449,110 @@ export async function generateQuotationPDF(quotation, items = [], logoBase64 = n
   doc.line(gridX, prodTableStartY, gridX, y);
 
   // ============================================================
-  // TERMS & CONDITIONS (LEFT) AND TAX / NET AMOUNT (RIGHT)
+  // TERMS & CONDITIONS (LEFT 70% / 133mm) AND GST SUMMARY (RIGHT 30% / 57mm)
   // ============================================================
-  const splitBoxH = 50;
-  const leftW = 135;
-  const rightW = CONTENT_WIDTH - leftW; // 55mm
+  const splitBoxH = 68; // Significantly enlarged height matching reference image
+  const leftW = 133;
+  const rightW = CONTENT_WIDTH - leftW; // 57mm
 
-  // Split Divider Line
+  // Split Vertical Divider Line
   doc.line(MARGIN_X + leftW, y, MARGIN_X + leftW, y + splitBoxH);
 
-  // Terms Left Side
-  let termY = y + 4.5;
+  // --- TERMS & CONDITIONS (LEFT SIDE) ---
+  let termY = y + 5.5;
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(8.5);
+  doc.setFontSize(10);
   doc.setTextColor(0, 0, 0);
   doc.text('Terms & Conditions', MARGIN_X + 3, termY);
-  termY += 5;
-
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7.2);
-  doc.setTextColor(0, 0, 0);
+  termY += 6.5;
 
   const exactDefaultTerms = [
-    '1. 100% payment in advance is required along with a valid Purchase Order (PO) to confirm the order.',
-    '2. Payments are non-refundable once the order has been confirmed and processing has begun.',
-    '3. SIM card procurement, activation, and recharge/data charges shall be under the customer\'s scope.',
-    '4. Delivery timelines are estimates only and subject to stock availability.',
-    '5. Products/services provided are subject to a 3-year replacement warranty against manufacturing defects.',
-    '6. This warranty does not cover normal wear and tear, misuse, or damage caused by improper handling.',
+    '100% payment in advance is required along with a valid Purchase Order (PO) to confirm the order.',
+    'Payments are non-refundable once the order has been confirmed and processing has begun.',
+    'SIM card procurement, activation, and recharged/data charges shall be under the customer\'s scope.',
+    'Delivery timelines are estimates only and subject to stock availability.',
+    'Products/services provided are subject to a 3-year replacement warranty against manufacturing defects.',
+    'This warranty does not cover normal wear and tear, misuse, or damage caused by improper handling.',
   ];
 
   const rawTerms = (quotation.terms_conditions && quotation.terms_conditions.length > 0)
     ? quotation.terms_conditions
     : exactDefaultTerms;
 
-  const termsToRender = rawTerms.map((t, idx) => {
-    const clean = sanitizePdfText(t);
-    return /^\d+\./.test(clean) ? clean : `${idx + 1}. ${clean}`;
-  });
-
-  termsToRender.forEach(term => {
-    if (termY < y + splitBoxH - 2) {
-      const termLines = doc.splitTextToSize(term, leftW - 6);
-      doc.text(termLines, MARGIN_X + 3, termY);
-      termY += (termLines.length * 3.0 + 1.0);
+  rawTerms.forEach((rawTerm, idx) => {
+    if (termY < y + splitBoxH - 3) {
+      const cleanTerm = sanitizePdfText(rawTerm.replace(/^\d+\.\s*/, ''));
+      const numPrefix = `${idx + 1}.  `;
+      
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8.2);
+      doc.text(numPrefix, MARGIN_X + 3, termY);
+      
+      const numWidth = doc.getTextWidth(numPrefix);
+      const textWidthMax = leftW - 6 - numWidth;
+      
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8.2);
+      const textLines = doc.splitTextToSize(cleanTerm, textWidthMax);
+      
+      doc.text(textLines[0], MARGIN_X + 3 + numWidth, termY);
+      
+      if (textLines.length > 1) {
+        for (let l = 1; l < textLines.length; l++) {
+          termY += 4.0;
+          doc.text(textLines[l], MARGIN_X + 3 + numWidth, termY);
+        }
+      }
+      termY += 5.2; // Generous line spacing between terms
     }
   });
 
-  // Right Side Tax Breakdown
-  let rightTaxY = y + 5.5;
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(8.5);
+  // --- GST & NET AMOUNT BREAKDOWN (RIGHT SIDE) ---
+  const rx = MARGIN_X + leftW;
+  const netRowH = 13;
+  const gstSectionH = splitBoxH - netRowH; // 55mm
 
   if (quotation.gst_applicable && quotation.gst_type === 'CGST_SGST') {
-    doc.text('CGST', MARGIN_X + leftW + 4, rightTaxY);
-    doc.text(formatCurrency(quotation.cgst_amount), MARGIN_X + CONTENT_WIDTH - 2, rightTaxY, { align: 'right' });
-    rightTaxY += 7.5;
+    const rowH = gstSectionH / 3; // ~18.3mm per row (CGST, SGST, blank/extra)
 
-    doc.text('SGST', MARGIN_X + leftW + 4, rightTaxY);
-    doc.text(formatCurrency(quotation.sgst_amount), MARGIN_X + CONTENT_WIDTH - 2, rightTaxY, { align: 'right' });
+    // Row 1: CGST
+    let ry1 = y;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.text('CGST', rx + 4, ry1 + rowH / 2 + 1.5);
+    doc.text(formatCurrency(quotation.cgst_amount), MARGIN_X + CONTENT_WIDTH - 3, ry1 + rowH / 2 + 1.5, { align: 'right' });
+    doc.line(rx, ry1 + rowH, MARGIN_X + CONTENT_WIDTH, ry1 + rowH);
+
+    // Row 2: SGST
+    let ry2 = ry1 + rowH;
+    doc.text('SGST', rx + 4, ry2 + rowH / 2 + 1.5);
+    doc.text(formatCurrency(quotation.sgst_amount), MARGIN_X + CONTENT_WIDTH - 3, ry2 + rowH / 2 + 1.5, { align: 'right' });
+    doc.line(rx, ry2 + rowH, MARGIN_X + CONTENT_WIDTH, ry2 + rowH);
+
   } else if (quotation.gst_applicable && quotation.gst_type === 'IGST') {
-    doc.text('IGST', MARGIN_X + leftW + 4, rightTaxY);
-    doc.text(formatCurrency(quotation.igst_amount), MARGIN_X + CONTENT_WIDTH - 2, rightTaxY, { align: 'right' });
+    const rowH = gstSectionH / 2;
+    let ry1 = y;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.text('IGST', rx + 4, ry1 + rowH / 2 + 1.5);
+    doc.text(formatCurrency(quotation.igst_amount), MARGIN_X + CONTENT_WIDTH - 3, ry1 + rowH / 2 + 1.5, { align: 'right' });
+    doc.line(rx, ry1 + rowH, MARGIN_X + CONTENT_WIDTH, ry1 + rowH);
   }
 
-  // Net Amount Row Box on Right
-  const netBoxY = y + splitBoxH - 12;
-  doc.line(MARGIN_X + leftW, netBoxY, MARGIN_X + CONTENT_WIDTH, netBoxY);
+  // Row 4: Net Amount Row at bottom of GST box (Light Blue Fill background)
+  const netBoxY = y + splitBoxH - netRowH;
+  doc.line(rx, netBoxY, MARGIN_X + CONTENT_WIDTH, netBoxY);
+
+  // Fill Light Blue background for Net Amount row
+  doc.setFillColor(...COLORS.headerBlue);
+  doc.rect(rx, netBoxY, rightW, netRowH, 'F');
+  doc.rect(rx, netBoxY, rightW, netRowH, 'S'); // border line
 
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(8.5);
-  doc.text('Net Amount', MARGIN_X + leftW + 4, netBoxY + 7.5);
-  doc.text(formatCurrency(quotation.net_amount), MARGIN_X + CONTENT_WIDTH - 2, netBoxY + 7.5, { align: 'right' });
+  doc.setFontSize(9.5);
+  doc.setTextColor(0, 0, 0);
+  doc.text('Net Amount', rx + 4, netBoxY + netRowH / 2 + 1.5);
+  doc.text(formatCurrency(quotation.net_amount), MARGIN_X + CONTENT_WIDTH - 3, netBoxY + netRowH / 2 + 1.5, { align: 'right' });
 
   y += splitBoxH;
   doc.line(MARGIN_X, y, MARGIN_X + CONTENT_WIDTH, y);
@@ -534,47 +560,50 @@ export async function generateQuotationPDF(quotation, items = [], logoBase64 = n
   // ============================================================
   // NET AMOUNT IN WORDS
   // ============================================================
+  const wordsBoxH = 14;
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(8.5);
-  doc.text('Net Amount in words', MARGIN_X + 2, y + 4.5);
+  doc.setFontSize(9);
+  doc.text('Net Amount in words', MARGIN_X + 3, y + 5.0);
   doc.setFont('helvetica', 'normal');
-  doc.text(numberToWordsIndian(quotation.net_amount), MARGIN_X + 2, y + 9.0);
+  doc.setFontSize(8.5);
+  doc.text(numberToWordsIndian(quotation.net_amount), MARGIN_X + 3, y + 10.0);
 
-  y += 12;
+  y += wordsBoxH;
   doc.line(MARGIN_X, y, MARGIN_X + CONTENT_WIDTH, y);
 
   // ============================================================
   // BANK DETAILS & QR CODE
   // ============================================================
-  const bankBoxH = 32;
+  const bankBoxH = 34;
   const bankW = 140;
   const qrW = CONTENT_WIDTH - bankW; // 50mm
 
   doc.line(MARGIN_X + bankW, y, MARGIN_X + bankW, y + bankBoxH);
 
-  let bY = y + 5.0;
+  let bY = y + 5.2;
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8.2);
 
   doc.text('Bank Name: Indian Overseas Bank', MARGIN_X + 3, bY);
   doc.text('Branch Name : ANNUR', MARGIN_X + 75, bY);
-  bY += 5.0;
+  bY += 5.2;
 
   doc.text('Account No : 000702000641107', MARGIN_X + 3, bY);
   doc.text('IFSC Code: IOBA0000007', MARGIN_X + 75, bY);
-  bY += 5.0;
+  bY += 5.2;
 
   doc.text('Account Name : EAGLE EYE SAFDRIVE PVT LTD', MARGIN_X + 3, bY);
-  bY += 5.0;
+  bY += 5.2;
   doc.text('Scan QR', MARGIN_X + 3, bY);
-  bY += 5.0;
+  bY += 5.2;
   doc.text('UPI ID : EAGLEEYESAFDRIVE@iob', MARGIN_X + 3, bY);
 
-  // QR Code Image
+  // QR Code Image (Centered inside allocated box)
   try {
     const upiUri = 'upi://pay?pa=EAGLEEYESAFDRIVE@iob&pn=EAGLE%20EYE%20SAFDRIVE%20PVT%20LTD&cu=INR';
     const qrDataUrl = await QRCode.toDataURL(upiUri, { margin: 1, width: 100 });
-    doc.addImage(qrDataUrl, 'PNG', MARGIN_X + bankW + (qrW - 24) / 2, y + 4, 24, 24);
+    const qrSize = 25;
+    doc.addImage(qrDataUrl, 'PNG', MARGIN_X + bankW + (qrW - qrSize) / 2, y + (bankBoxH - qrSize) / 2, qrSize, qrSize);
   } catch (err) {
     console.error('Failed to generate QR:', err);
   }
@@ -583,154 +612,168 @@ export async function generateQuotationPDF(quotation, items = [], logoBase64 = n
   doc.line(MARGIN_X, y, MARGIN_X + CONTENT_WIDTH, y);
 
   // ============================================================
-  // SIGNATORY & FOOTER
+  // AUTHORISED SIGNATORY AREA & FOOTER
   // ============================================================
-  const frameBottomY = pageMarginTop + outerFrameHeight;
-  let sigY = y + 7;
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(8.5);
-  doc.text('For Eagle Eye Safdrive Pvt Ltd', MARGIN_X + CONTENT_WIDTH - 3, sigY, { align: 'right' });
+  const frameBottomY = pageMarginTop + outerFrameHeight; // 284mm
+  const sigTopY = y;
   
-  // Position Authorised Signatory near the bottom of outer box frame
-  const authorisedSignatoryY = Math.max(sigY + 22, frameBottomY - 6);
-  doc.text('Authorised Signatory', MARGIN_X + CONTENT_WIDTH - 3, authorisedSignatoryY, { align: 'right' });
+  // Top right of signatory box
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9);
+  doc.text('For Eagle Eye Safdrive Pvt Ltd', MARGIN_X + CONTENT_WIDTH - 4, sigTopY + 7, { align: 'right' });
+
+  // Bottom right of signatory box
+  doc.text('Authorised Signatory', MARGIN_X + CONTENT_WIDTH - 4, frameBottomY - 7, { align: 'right' });
 
   // Computer Generated Disclaimer Outside Box
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
-  doc.text('This is a Computer Generated Document', centerX, PAGE_HEIGHT - 5, { align: 'center' });
+  doc.text('This is a Computer Generated Document', centerX, PAGE_HEIGHT - 6, { align: 'center' });
 
   // ============================================================
-  // PAGE 2 – PRODUCT TECHNICAL SPECIFICATION (EXACT 19 SPECIFICATIONS)
+  // PAGE 2 – PRODUCT TECHNICAL SPECIFICATION (CONDITIONALLY APPENDED)
   // ============================================================
-  // Always include Page 2 to guarantee exactly 2 pages
-  doc.addPage();
-  let p2Y = 12;
+  if (quotation.include_tech_specs) {
+    doc.addPage();
+    let p2Y = 12;
 
-  // Header Logo & Company Info
-  if (effectiveLogo) {
-    try {
-      const imgProps = doc.getImageProperties(effectiveLogo);
-      const maxH = 15;
-      const maxW = 25;
-      let imgH = maxH;
-      let imgW = imgH * (imgProps.width / imgProps.height);
-      if (imgW > maxW) {
-        imgW = maxW;
-        imgH = imgW / (imgProps.width / imgProps.height);
+    // Header Logo & Company Info
+    if (effectiveLogo) {
+      try {
+        const imgProps = doc.getImageProperties(effectiveLogo);
+        const maxH = 15;
+        const maxW = 25;
+        let imgH = maxH;
+        let imgW = imgH * (imgProps.width / imgProps.height);
+        if (imgW > maxW) {
+          imgW = maxW;
+          imgH = imgW / (imgProps.width / imgProps.height);
+        }
+        doc.addImage(effectiveLogo, 'PNG', MARGIN_X + 3, p2Y, imgW, imgH);
+      } catch {
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(11);
+        doc.text('Eagle Eye', MARGIN_X + 2, p2Y + 8);
       }
-      doc.addImage(effectiveLogo, 'PNG', MARGIN_X + 3, p2Y, imgW, imgH);
-    } catch {
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(11);
-      doc.text('Eagle Eye', MARGIN_X + 2, p2Y + 8);
     }
-  }
 
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(14);
-  doc.setTextColor(0, 0, 0);
-  doc.text('EAGLE EYE SAFDRIVE PVT LTD', centerX, p2Y + 8, { align: 'center' });
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(14);
+    doc.setTextColor(0, 0, 0);
+    doc.text('EAGLE EYE SAFDRIVE PVT LTD', centerX, p2Y + 8, { align: 'center' });
 
-  p2Y += 18;
+    p2Y += 18;
 
-  // Subtitle Banner
-  doc.setFontSize(10);
-  doc.text('Product Specification Technical Specification', centerX, p2Y, { align: 'center' });
-  doc.line(centerX - 42, p2Y + 1, centerX + 42, p2Y + 1);
+    // Subtitle Banner
+    doc.setFontSize(10);
+    doc.text('Product Specification Technical Specification', centerX, p2Y, { align: 'center' });
+    doc.line(centerX - 42, p2Y + 1, centerX + 42, p2Y + 1);
 
-  p2Y += 6;
+    p2Y += 6;
 
-  // 4 Column Technical Matrix (Total 190mm: 12 + 50 + 98 + 30)
-  const specCols = [
-    { name: 'No.', width: 12, align: 'center' },
-    { name: 'Specification', width: 50, align: 'center' },
-    { name: 'Technical Parameter', width: 98, align: 'center' },
-    { name: 'Remark', width: 30, align: 'center' },
-  ];
+    // 4 Column Technical Matrix (Total 190mm: 12 + 50 + 98 + 30)
+    const specCols = [
+      { name: 'No.', width: 12, align: 'center' },
+      { name: 'Specification', width: 50, align: 'center' },
+      { name: 'Technical Parameter', width: 98, align: 'center' },
+      { name: 'Remark', width: 30, align: 'center' },
+    ];
 
-  // Table Header
-  doc.rect(MARGIN_X, p2Y, CONTENT_WIDTH, 7);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(8.5);
+    // Table Header
+    doc.rect(MARGIN_X, p2Y, CONTENT_WIDTH, 7);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8.5);
 
-  let sX = MARGIN_X;
-  specCols.forEach(col => {
-    doc.text(col.name, sX + col.width / 2, p2Y + 4.8, { align: 'center' });
-    sX += col.width;
-  });
+    let sX = MARGIN_X;
+    specCols.forEach(col => {
+      doc.text(col.name, sX + col.width / 2, p2Y + 4.8, { align: 'center' });
+      sX += col.width;
+    });
 
-  p2Y += 7;
-  const specTableStartY = p2Y - 7;
+    p2Y += 7;
+    const specTableStartY = p2Y - 7;
 
-  // 19 Technical Parameters from Reference PDF (All text sanitized)
-  const full19Specs = [
-    { no: '1', spec: 'Display size', param: '10-inchs IPS full viewing angle HD screen 16 : 10', remark: '' },
-    { no: '2', spec: 'Resolution', param: '1280*800, 4 Camera', remark: '' },
-    { no: '3', spec: 'System', param: 'Linux', remark: '' },
-    { no: '4', spec: 'Processor', param: 'MTK6762 CCRTEX-A53 Octa-core Processor 2GHz', remark: '' },
-    { no: '5', spec: 'Storage Memory', param: '128GB', remark: '' },
-    { no: '6', spec: 'Operating Memory', param: '2GB/4GB', remark: '' },
-    { no: '7', spec: 'GPU Processor', param: 'IMG GE8320, 650MHZ', remark: '' },
-    { no: '8', spec: 'Calibration Method', param: 'One-key Calibration, Remote Calibration', remark: '' },
-    { no: '9', spec: 'Display Mode', param: '4K', remark: '' },
-    { no: '10', spec: 'Tracking Method', param: 'GPS+ GLONASS+ AGPS', remark: '' },
-    { no: '11', spec: 'Network', param: '4G full Netcom supports external SIM card', remark: '' },
-    { no: '12', spec: 'WiFi', param: 'supports 802.11 b/g/n protocol', remark: '' },
-    { no: '13', spec: 'USB insert', param: 'support 1 USB insert', remark: '' },
-    { no: '14', spec: 'T F card', param: 'Supports expansion up to 512GB', remark: '' },
-    { no: '15', spec: 'Car Setting', param: 'Settings include system, screen, time, sound, language, network, ETC', remark: '' },
-    { no: '16', spec: 'Operating Voltage', param: 'DC 9-36V, nominal DC 24V', remark: '' },
-    { no: '17', spec: 'Working Current', param: 'About 0.8A (with 4cameras)', remark: '' },
-    { no: '18', spec: 'Working Temperature', param: '-20-70 degrees', remark: '' },
-    { no: '19', spec: 'Storage temperature', param: '-40-85 degrees', remark: '' },
-  ];
+    // Determine dynamic camera count and display size
+    let cameraCount = 4;
+    if (items && items.length > 0) {
+      const firstDesc = items[0].item_description || items[0].description || '';
+      const match = firstDesc.match(/(\d+)\s*Channel/i);
+      if (match && match[1]) {
+        cameraCount = parseInt(match[1], 10);
+      }
+    }
 
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8);
+    const displaySize = quotation.display_size || '10-inch';
 
-  full19Specs.forEach((row) => {
-    const cleanSpec = sanitizePdfText(row.spec);
-    const cleanParam = sanitizePdfText(row.param);
-    const cleanRemark = sanitizePdfText(row.remark);
+    // 19 Technical Parameters from Reference PDF
+    const full19Specs = [
+      { no: '1', spec: 'Display size', param: `${displaySize} IPS full viewing angle HD screen 16:10`, remark: '' },
+      { no: '2', spec: 'Resolution', param: `1280*800, ${cameraCount} Camera`, remark: '' },
+      { no: '3', spec: 'System', param: 'Linux', remark: '' },
+      { no: '4', spec: 'Processor', param: 'MTK6762 CCRTEX-A53 Octa-core Processor 2GHz', remark: '' },
+      { no: '5', spec: 'Storage Memory', param: '128GB', remark: '' },
+      { no: '6', spec: 'Operating Memory', param: '2GB/4GB', remark: '' },
+      { no: '7', spec: 'GPU Processor', param: 'IMG GE8320, 650MHZ', remark: '' },
+      { no: '8', spec: 'Calibration Method', param: 'One-key Calibration, Remote Calibration', remark: '' },
+      { no: '9', spec: 'Display Mode', param: '4K', remark: '' },
+      { no: '10', spec: 'Tracking Method', param: 'GPS+ GLONASS+ AGPS', remark: '' },
+      { no: '11', spec: 'Network', param: '4G full Netcom supports external SIM card', remark: '' },
+      { no: '12', spec: 'WiFi', param: 'supports 802.11 b/g/n protocol', remark: '' },
+      { no: '13', spec: 'USB insert', param: 'support 1 USB insert', remark: '' },
+      { no: '14', spec: 'T F card', param: 'Supports expansion up to 512GB', remark: '' },
+      { no: '15', spec: 'Car Setting', param: 'Settings include system, screen, time, sound, language, network, ETC', remark: '' },
+      { no: '16', spec: 'Operating Voltage', param: 'DC 9-36V, nominal DC 24V', remark: '' },
+      { no: '17', spec: 'Working Current', param: 'About 0.8A (with 4cameras)', remark: '' },
+      { no: '18', spec: 'Working Temperature', param: '-20-70 degrees', remark: '' },
+      { no: '19', spec: 'Storage temperature', param: '-40-85 degrees', remark: '' },
+    ];
 
-    const specLines = doc.splitTextToSize(cleanSpec, specCols[1].width - 4);
-    const paramLines = doc.splitTextToSize(cleanParam, specCols[2].width - 4);
-    const remarkLines = doc.splitTextToSize(cleanRemark, specCols[3].width - 4);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
 
-    const maxLines = Math.max(specLines.length, paramLines.length, remarkLines.length, 1);
-    const rowH = Math.max(12.4, maxLines * 5.2 + 3);
+    full19Specs.forEach((row) => {
+      const cleanSpec = sanitizePdfText(row.spec);
+      const cleanParam = sanitizePdfText(row.param);
+      const cleanRemark = sanitizePdfText(row.remark);
 
-    doc.rect(MARGIN_X, p2Y, CONTENT_WIDTH, rowH);
+      const specLines = doc.splitTextToSize(cleanSpec, specCols[1].width - 4);
+      const paramLines = doc.splitTextToSize(cleanParam, specCols[2].width - 4);
+      const remarkLines = doc.splitTextToSize(cleanRemark, specCols[3].width - 4);
 
-    let px = MARGIN_X;
-    const textY = p2Y + (rowH / 2) + 1.2;
+      const maxLines = Math.max(specLines.length, paramLines.length, remarkLines.length, 1);
+      const rowH = Math.max(12.4, maxLines * 5.2 + 3);
 
-    // No.
-    doc.text(row.no, px + specCols[0].width / 2, textY, { align: 'center' });
-    px += specCols[0].width;
+      doc.rect(MARGIN_X, p2Y, CONTENT_WIDTH, rowH);
 
-    // Spec
-    doc.text(specLines, px + specCols[1].width / 2, textY, { align: 'center' });
-    px += specCols[1].width;
+      let px = MARGIN_X;
+      const textY = p2Y + (rowH / 2) + 1.2;
 
-    // Parameter
-    doc.text(paramLines, px + specCols[2].width / 2, textY, { align: 'center' });
-    px += specCols[2].width;
+      // No.
+      doc.text(row.no, px + specCols[0].width / 2, textY, { align: 'center' });
+      px += specCols[0].width;
 
-    // Remark
-    doc.text(remarkLines, px + specCols[3].width / 2, textY, { align: 'center' });
+      // Spec
+      doc.text(specLines, px + specCols[1].width / 2, textY, { align: 'center' });
+      px += specCols[1].width;
 
-    p2Y += rowH;
-  });
+      // Parameter
+      doc.text(paramLines, px + specCols[2].width / 2, textY, { align: 'center' });
+      px += specCols[2].width;
 
-  // Vertical Borders for Page 2
-  let sGridX = MARGIN_X;
-  specCols.forEach(col => {
+      // Remark
+      doc.text(remarkLines, px + specCols[3].width / 2, textY, { align: 'center' });
+
+      p2Y += rowH;
+    });
+
+    // Vertical Borders for Page 2
+    let sGridX = MARGIN_X;
+    specCols.forEach(col => {
+      doc.line(sGridX, specTableStartY, sGridX, p2Y);
+      sGridX += col.width;
+    });
     doc.line(sGridX, specTableStartY, sGridX, p2Y);
-    sGridX += col.width;
-  });
-  doc.line(sGridX, specTableStartY, sGridX, p2Y);
+  }
 
   // Return PDF Node Buffer
   const pdfOutput = doc.output('arraybuffer');

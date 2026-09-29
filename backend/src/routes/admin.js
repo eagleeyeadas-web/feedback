@@ -219,6 +219,12 @@ router.get('/feedback/:id/pdf', async (req, res) => {
       return res.status(404).json({ error: 'Feedback not found' });
     }
 
+    // Check if PDF has expired or is unavailable
+    const isExpired = !feedback.pdf_path || (feedback.pdf_expires_at && new Date(feedback.pdf_expires_at) <= new Date());
+    if (isExpired) {
+      return res.status(410).json({ error: 'Customer Feedback PDF has expired after 10-day retention window.' });
+    }
+
     // If a pre-generated PDF exists in storage, serve it directly
     if (feedback.pdf_path) {
       try {

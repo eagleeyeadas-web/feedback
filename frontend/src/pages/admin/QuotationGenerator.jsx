@@ -8,8 +8,8 @@ export const PRODUCT_OPTIONS = [
   '2 Channel Recording',
   '4 Channel Live',
   '4 Channel Recording',
+  '6 Channel Live',
   '8 Channel Live',
-  '8 Channel Recording',
 ];
 
 const DEFAULT_TERMS = [
@@ -63,6 +63,7 @@ export default function QuotationGenerator() {
   const [terms, setTerms] = useState(DEFAULT_TERMS);
   const [includeTechSpecs, setIncludeTechSpecs] = useState(false);
   const [techSpecTemplate, setTechSpecTemplate] = useState('default');
+  const [displaySize, setDisplaySize] = useState('10-inch'); // '7-inch' | '10-inch'
 
   // Load next quotation number on mount
   useEffect(() => {
@@ -228,6 +229,7 @@ export default function QuotationGenerator() {
       terms_conditions: terms.filter(t => t.trim().length > 0),
       include_tech_specs: includeTechSpecs,
       tech_spec_template: techSpecTemplate,
+      display_size: displaySize,
       items: items.map(item => ({
         item_description: item.item_description.trim(),
         hsn_sac: item.hsn_sac.trim(),
@@ -297,6 +299,7 @@ export default function QuotationGenerator() {
     setIgstPct(18);
     setTerms(DEFAULT_TERMS);
     setIncludeTechSpecs(false);
+    setDisplaySize('10-inch');
     setSuccessMsg('');
     setErrorMsg('');
     setCreatedQuotationId(null);
@@ -600,6 +603,36 @@ export default function QuotationGenerator() {
               </tbody>
             </table>
           </div>
+
+          {/* Prominent Display Size selection banner for 2-channel products */}
+          {items.some(i => i.item_description === '2 Channel Live' || i.item_description === '2 Channel Recording') && (
+            <div className="mt-4 p-4 bg-blue-50 border-2 border-blue-300 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm animate-fade-in">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-lg bg-blue-600 text-white font-bold flex items-center justify-center text-xs shadow-xs">
+                  2CH
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-navy">Display Size Selection (2-Channel Product)</h4>
+                  <p className="text-[11px] text-gray-600">Select the display screen size for the Page 2 Technical Specifications table ({displaySize} IPS full viewing angle HD screen 16:10).</p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <label htmlFor="displaySizeSelectMain" className="text-xs font-bold text-gray-700 whitespace-nowrap">
+                  Display Size:
+                </label>
+                <select
+                  id="displaySizeSelectMain"
+                  value={displaySize}
+                  onChange={(e) => setDisplaySize(e.target.value)}
+                  className="px-4 py-2 border-2 border-blue-400 rounded-lg text-xs font-bold text-blue-900 bg-white focus:ring-2 focus:ring-blue-500 cursor-pointer shadow-xs"
+                >
+                  <option value="7-inch">7-inch</option>
+                  <option value="10-inch">10-inch</option>
+                </select>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* 3. TAX & SUMMARY SECTION */}
@@ -815,6 +848,27 @@ export default function QuotationGenerator() {
                 </select>
                 <p className="text-xs text-gray-500">
                   Adds a 4-column technical matrix table (No. | Specification | Technical Parameter | Remark) to the generated PDF.
+                </p>
+              </div>
+            )}
+
+            {/* Display Size selection for 2-channel products */}
+            {items.some(i => i.item_description === '2 Channel Live' || i.item_description === '2 Channel Recording') && (
+              <div className="p-4 bg-blue-50/70 rounded-lg border border-blue-200 space-y-2">
+                <label htmlFor="displaySizeSelect" className="block text-xs font-bold text-navy">
+                  Display Size Option (2-Camera Product):
+                </label>
+                <select
+                  id="displaySizeSelect"
+                  value={displaySize}
+                  onChange={(e) => setDisplaySize(e.target.value)}
+                  className="w-full p-2.5 border border-gray-300 rounded-lg text-xs font-semibold text-gray-800 bg-white focus:ring-2 focus:ring-blue-500 cursor-pointer shadow-xs"
+                >
+                  <option value="7-inch">7-inch</option>
+                  <option value="10-inch">10-inch</option>
+                </select>
+                <p className="text-[11px] text-gray-600">
+                  Configures the Display Size parameter on Page 2 Technical Specifications table ({displaySize} IPS full viewing angle HD screen 16:10).
                 </p>
               </div>
             )}

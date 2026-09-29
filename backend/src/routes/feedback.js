@@ -59,7 +59,10 @@ router.post('/', feedbackLimiter, validate(feedbackSchema), async (req, res) => 
     }
 
     // Insert feedback record
-    const now = new Date().toISOString();
+    const nowDate = new Date();
+    const now = nowDate.toISOString();
+    const pdfExpiresAt = new Date(nowDate.getTime() + (10 * 24 * 60 * 60 * 1000)).toISOString();
+
     const feedbackRecord = {
       feedback_id: feedbackId,
       customer_name: data.customerName,
@@ -82,6 +85,7 @@ router.post('/', feedbackLimiter, validate(feedbackSchema), async (req, res) => 
       additional_comments: data.additionalComments || null,
       signature_path: signaturePath,
       submitted_at: now,
+      pdf_expires_at: pdfExpiresAt,
       ip_address: req.ip,
       user_agent: req.get('User-Agent') || null,
     };
@@ -176,10 +180,10 @@ router.get('/:feedbackId/pdf', async (req, res) => {
       return res.status(400).json({ error: 'Invalid feedback ID format' });
     }
 
-    // Get feedback record to find PDF path
+    // Get feedback record to find PDF path & expiry
     const { data: feedback, error: fetchError } = await supabase
       .from('feedback')
-      .select('pdf_path, feedback_id')
+      .select('pdf_path, pdf_expires_at, feedback_id')
       .eq('feedback_id', feedbackId)
       .single();
 
@@ -187,8 +191,8 @@ router.get('/:feedbackId/pdf', async (req, res) => {
       return res.status(404).json({ error: 'Feedback not found' });
     }
 
-    if (!feedback.pdf_path) {
-      return res.status(404).json({ error: 'PDF not available' });
+    if (!feedback.pdf_path || (feedback.pdf_expires_at && new Date(feedback.pdf_expires_at) <= new Date())) {
+      return res.status(410).json({ error: 'Customer Feedback PDF has expired after 10-day retention window.' });
     }
 
     // Download PDF from storage

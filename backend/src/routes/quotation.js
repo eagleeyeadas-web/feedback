@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import supabase from '../services/supabase.js';
 import { generateQuotationPDF, numberToWordsIndian } from '../services/quotationPdfGenerator.js';
-import { runQuotationCleanup } from '../services/quotationCleanupService.js';
+import { runFullCleanup } from '../services/quotationCleanupService.js';
 import { peekNextQuotationNumber, generateAndReserveQuotationNumber } from '../services/quotationSequenceService.js';
 import { requireAdmin } from '../middleware/auth.js';
 
@@ -10,7 +10,7 @@ const router = Router();
 
 /**
  * POST /api/admin/quotations/cleanup
- * Cron job endpoint for cleaning up quotations older than 10 days
+ * Cron job endpoint for cleaning up quotations and customer feedback PDFs older than 10 days
  * Protected by secret header `x-cron-secret` or Admin Bearer Token
  */
 router.post('/cleanup', async (req, res) => {
@@ -31,8 +31,8 @@ router.post('/cleanup', async (req, res) => {
       return res.status(401).json({ error: 'Unauthorized cleanup request' });
     }
 
-    const result = await runQuotationCleanup();
-    return res.json({ message: 'Quotation cleanup executed successfully', result });
+    const result = await runFullCleanup();
+    return res.json({ message: 'Scheduled cleanup executed successfully', result });
   } catch (err) {
     console.error('Cleanup route error:', err);
     return res.status(500).json({ error: 'Cleanup execution failed' });
@@ -70,6 +70,7 @@ const quotationSchema = z.object({
   terms_conditions: z.array(z.string()).optional(),
   include_tech_specs: z.boolean().default(false),
   tech_spec_template: z.string().optional().default('default'),
+  display_size: z.enum(['7-inch', '10-inch']).optional().default('10-inch'),
   items: z.array(quotationItemSchema).min(1, 'At least one product item is required'),
 });
 
@@ -207,6 +208,7 @@ router.post('/', async (req, res) => {
       terms_conditions: finalTerms,
       include_tech_specs: data.include_tech_specs,
       tech_spec_template: data.tech_spec_template,
+      display_size: data.display_size || '10-inch',
       created_by: req.user ? req.user.id : null,
       created_at: createdAt.toISOString(),
       expires_at: expiresAt.toISOString(),
