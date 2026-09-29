@@ -362,9 +362,9 @@ export default function QuotationGenerator() {
               <input
                 type="text"
                 value={quotationNumber}
-                onChange={(e) => setQuotationNumber(e.target.value)}
-                required
-                className="w-full px-3 py-2 border rounded-lg text-sm bg-gray-50 font-mono font-bold text-blue-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                readOnly
+                placeholder="Auto-generated (e.g. CQS/00238)"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-gray-100 font-mono font-bold text-blue-900 cursor-not-allowed select-none shadow-xs"
               />
             </div>
 

@@ -3,6 +3,7 @@ import { z } from 'zod';
 import supabase from '../services/supabase.js';
 import { generateQuotationPDF, numberToWordsIndian } from '../services/quotationPdfGenerator.js';
 import { runQuotationCleanup } from '../services/quotationCleanupService.js';
+import { peekNextQuotationNumber, generateAndReserveQuotationNumber } from '../services/quotationSequenceService.js';
 import { requireAdmin } from '../middleware/auth.js';
 
 const router = Router();
@@ -74,33 +75,17 @@ const quotationSchema = z.object({
 
 /**
  * GET /api/admin/quotations/next-number
- * Returns the next available sequential quotation number (CQS/XXXXX)
+/**
+ * GET /api/admin/quotations/next-number
+ * NON-MUTATING: Returns preview of the next sequential quotation number (CQS/XXXXX)
  */
 router.get('/next-number', async (req, res) => {
   try {
-    const { data: countData, error } = await supabase
-      .from('quotations')
-      .select('id', { count: 'exact', head: true });
-
-    let seqNum = (countData || 0) + 231; // Start from 231 (e.g. CQS/00231)
-    let nextNo = `CQS/${String(seqNum).padStart(5, '0')}`;
-
-    // Check if number already exists in DB
-    const { data: existing } = await supabase
-      .from('quotations')
-      .select('quotation_number')
-      .eq('quotation_number', nextNo)
-      .maybeSingle();
-
-    if (existing) {
-      seqNum += 1;
-      nextNo = `CQS/${String(seqNum).padStart(5, '0')}`;
-    }
-
+    const nextNo = await peekNextQuotationNumber();
     return res.json({ quotationNumber: nextNo });
   } catch (error) {
     console.error('Error fetching next quotation number:', error);
-    return res.json({ quotationNumber: `CQS/00231` });
+    return res.json({ quotationNumber: 'CQS/00231' });
   }
 });
 
@@ -121,15 +106,8 @@ router.post('/', async (req, res) => {
 
     const data = parsed.data;
 
-    // 2. Auto-generate quotation number if not provided
-    let quotationNo = data.quotation_number;
-    if (!quotationNo) {
-      const { data: countData } = await supabase
-        .from('quotations')
-        .select('id', { count: 'exact', head: true });
-      const seqNum = (countData || 0) + 231;
-      quotationNo = `CQS/${String(seqNum).padStart(5, '0')}`;
-    }
+    // 2. Atomically generate & reserve next quotation number upon save
+    const quotationNo = await generateAndReserveQuotationNumber(data.quotation_number);
 
     // 3. Backend Totals & Taxes Calculation
     let subtotal = 0;
