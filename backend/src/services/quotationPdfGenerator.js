@@ -1,5 +1,7 @@
 import { jsPDF } from 'jspdf';
 import QRCode from 'qrcode';
+import fs from 'fs';
+import path from 'path';
 
 // Reference Colors from exact PDF screenshot
 const COLORS = {
@@ -145,6 +147,20 @@ export async function generateQuotationPDF(quotation, items = [], logoBase64 = n
     format: 'a4',
   });
 
+  // Fallback to local logo asset if logoBase64 is not passed
+  let effectiveLogo = logoBase64;
+  if (!effectiveLogo) {
+    try {
+      const localLogoPath = path.resolve(process.cwd(), 'assets/logo.png');
+      if (fs.existsSync(localLogoPath)) {
+        const logoBuf = fs.readFileSync(localLogoPath);
+        effectiveLogo = `data:image/png;base64,${logoBuf.toString('base64')}`;
+      }
+    } catch (e) {
+      // Ignore
+    }
+  }
+
   const pageMarginTop = 10;
   const pageMarginBottom = 10;
   let y = pageMarginTop;
@@ -159,9 +175,9 @@ export async function generateQuotationPDF(quotation, items = [], logoBase64 = n
   // PAGE 1 HEADER
   // ============================================================
   // Logo on Left
-  if (logoBase64) {
+  if (effectiveLogo) {
     try {
-      doc.addImage(logoBase64, 'PNG', MARGIN_X + 2, y + 2, 25, 12);
+      doc.addImage(effectiveLogo, 'PNG', MARGIN_X + 2, y + 2, 28, 14);
     } catch {
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(10);
@@ -180,19 +196,30 @@ export async function generateQuotationPDF(quotation, items = [], logoBase64 = n
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(13);
   doc.setTextColor(0, 0, 0);
-  doc.text('Eagle Eye Safdrive Pvt Ltd', centerX, y + 5, { align: 'center' });
+  doc.text('Eagle Eye Safdrive Pvt Ltd', centerX, y + 5.2, { align: 'center' });
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
-  doc.text('No.491/1B, Near Srinivasa Avenue, Senthampalayam, Annur,', centerX, y + 9, { align: 'center' });
-  doc.text('Coimbatore - 641 107', centerX, y + 12.5, { align: 'center' });
+  doc.text('No.491/1B, Near Srinivasa Avenue, Senthampalayam, Annur,', centerX, y + 9.5, { align: 'center' });
+  doc.text('Coimbatore - 641 107', centerX, y + 13.2, { align: 'center' });
   
   doc.setFontSize(7.5);
-  doc.text('GST No : 33AAICE7626B1ZX Tel: +91 63692 58461, Email id : ', centerX - 18, y + 16, { align: 'center' });
-  doc.setTextColor(...COLORS.blueLink);
-  doc.text('info@safdrive.live', centerX + 40, y + 16, { align: 'center' });
+  doc.setTextColor(0, 0, 0);
 
-  y += 18;
+  // Single continuous contact line: GST No, Tel, Email
+  const part1 = 'GST No: 33AAICE7626B1ZX    Tel: +91 63692 58461    Email: ';
+  const part2 = 'info@safdrive.live';
+  
+  // Calculate exact string widths for clean centering
+  const w1 = doc.getTextWidth(part1);
+  const w2 = doc.getTextWidth(part2);
+  const startX = centerX - (w1 + w2) / 2;
+
+  doc.text(part1, startX, y + 17.2);
+  doc.setTextColor(...COLORS.blueLink);
+  doc.text(part2, startX + w1, y + 17.2);
+
+  y += 20.5;
 
   // Horizontal Line below Header
   doc.line(MARGIN_X, y, MARGIN_X + CONTENT_WIDTH, y);
@@ -566,13 +593,13 @@ export async function generateQuotationPDF(quotation, items = [], logoBase64 = n
   let p2Y = 12;
 
   // Header Logo & Company Info
-  if (logoBase64) {
+  if (effectiveLogo) {
     try {
-      doc.addImage(logoBase64, 'PNG', MARGIN_X + 5, p2Y, 30, 14);
+      doc.addImage(effectiveLogo, 'PNG', MARGIN_X + 2, p2Y, 28, 14);
     } catch {
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(11);
-      doc.text('Eagle Eye', MARGIN_X + 5, p2Y + 8);
+      doc.text('Eagle Eye', MARGIN_X + 2, p2Y + 8);
     }
   }
 
