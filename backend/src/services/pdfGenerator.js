@@ -1,5 +1,6 @@
 import { jsPDF } from 'jspdf';
 import QRCode from 'qrcode';
+import sharp from 'sharp';
 
 // Reference Color Palette (#173F55 Navy, #E31837 Red, #F3F4F6 Light Gray)
 const COLORS = {
@@ -228,37 +229,39 @@ export async function generateFeedbackPDF(feedback, logoBase64 = null) {
       const availW = sigLeftWidth - sigPadding * 2;
       const availH = sigBoxHeight - sigPadding * 2;
 
-      // Extract original pixel dimensions from the base64 PNG data URL
-      const sigDims = getImageDimensionsFromDataUrl(feedback.signatureDataUrl);
+      // Rotate the landscape signature 90° clockwise so it appears horizontal
+      // in the portrait PDF. Customers always sign in landscape on mobile.
+      const rotatedDataUrl = await rotateSignature90(feedback.signatureDataUrl);
+
+      // Extract rotated image dimensions for proportional scaling
+      const sigDims = getImageDimensionsFromDataUrl(rotatedDataUrl);
 
       let imgW, imgH;
 
       if (sigDims) {
-        const { width: origW, height: origH } = sigDims;
-        const aspectRatio = origW / origH;
+        const { width: rotW, height: rotH } = sigDims;
+        const aspectRatio = rotW / rotH;
 
         // "contain" scaling — fit within availW × availH preserving aspect ratio
         if (aspectRatio >= availW / availH) {
-          // Image is wider relative to available box → constrain by width
           imgW = availW;
           imgH = availW / aspectRatio;
         } else {
-          // Image is taller relative to available box → constrain by height
           imgH = availH;
           imgW = availH * aspectRatio;
         }
       } else {
-        // Fallback: if dimensions couldn't be read, fill the available area
         imgW = availW;
         imgH = availH;
       }
 
-      // Center the image within the available area
+      // Center the rotated image within the available area
       const imgX = MARGIN_X + sigPadding + (availW - imgW) / 2;
       const imgY = y + sigPadding + (availH - imgH) / 2;
 
-      doc.addImage(feedback.signatureDataUrl, 'PNG', imgX, imgY, imgW, imgH);
-    } catch {
+      doc.addImage(rotatedDataUrl, 'PNG', imgX, imgY, imgW, imgH);
+    } catch (sigErr) {
+      console.warn('Signature rotation/insertion failed:', sigErr.message);
       doc.setFont('helvetica', 'italic');
       doc.setFontSize(8);
       doc.setTextColor(...COLORS.lightText);
@@ -510,6 +513,25 @@ function formatTime(date) {
   hours = hours % 12;
   hours = hours ? hours : 12;
   return `${String(hours).padStart(2, '0')}:${minutes} ${ampm}`;
+}
+
+/**
+ * Rotates a base64-encoded PNG signature image 90° clockwise using sharp.
+ * Customers sign in landscape on mobile; rotating converts the signature
+ * to the correct orientation for the portrait PDF.
+ * Returns a new base64 data URL of the rotated PNG.
+ */
+async function rotateSignature90(dataUrl) {
+  const base64Data = dataUrl.replace(/^data:image\/\w+;base64,/, '');
+  const inputBuffer = Buffer.from(base64Data, 'base64');
+
+  const rotatedBuffer = await sharp(inputBuffer)
+    .rotate(90)           // 90° clockwise
+    .flatten({ background: { r: 255, g: 255, b: 255, alpha: 1 } }) // white bg for transparency
+    .png()
+    .toBuffer();
+
+  return `data:image/png;base64,${rotatedBuffer.toString('base64')}`;
 }
 
 /**
