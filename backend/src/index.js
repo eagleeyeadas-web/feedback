@@ -5,6 +5,7 @@ import rateLimit from 'express-rate-limit';
 import config from './config.js';
 import feedbackRoutes from './routes/feedback.js';
 import adminRoutes from './routes/admin.js';
+import quotationRoutes from './routes/quotation.js';
 
 const app = express();
 
@@ -12,7 +13,7 @@ const app = express();
 app.use(helmet());
 app.use(cors({
   origin: config.cors.origin,
-  methods: ['GET', 'POST'],
+  methods: ['GET', 'POST', 'DELETE', 'PUT', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true,
 }));
@@ -37,6 +38,8 @@ app.get('/api/health', (req, res) => {
 // Routes
 app.use('/api/feedback', feedbackRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/admin/quotations', quotationRoutes);
+app.use('/api/admin/quotation', quotationRoutes);
 
 // 404 handler
 app.use((req, res) => {

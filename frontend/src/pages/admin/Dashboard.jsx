@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
+import QuotationGenerator from './QuotationGenerator';
+import QuotationHistory from './QuotationHistory';
 import {
   fetchAdminStats,
   fetchAdminFeedback,
@@ -23,12 +25,16 @@ import {
   Eye,
   X,
   Menu,
+  FileText,
+  History,
+  PlusCircle,
 } from 'lucide-react';
 
 export default function Dashboard() {
   const { token, user, signOut } = useAuth();
   const navigate = useNavigate();
 
+  const [activeTab, setActiveTab] = useState('feedback'); // 'feedback' | 'quotation_generator' | 'quotation_history'
   const [stats, setStats] = useState(null);
   const [feedback, setFeedback] = useState({ data: [], pagination: {} });
   const [loading, setLoading] = useState(true);
@@ -133,20 +139,54 @@ export default function Dashboard() {
           ${showMobileSidebar ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}
       >
         <div className="p-5 border-b border-white/10">
-          <h2 className="font-bold text-lg">Eagle Eye</h2>
-          <p className="text-xs text-white/50">Admin Dashboard</p>
+          <h2 className="font-bold text-lg">Eagle Eye Safdrive</h2>
+          <p className="text-xs text-white/50">Admin Management Portal</p>
         </div>
         <nav className="p-4 space-y-1">
-          <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg bg-white/10 text-white text-sm font-medium">
+          <button
+            onClick={() => { setActiveTab('feedback'); setShowMobileSidebar(false); }}
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
+              activeTab === 'feedback'
+                ? 'bg-white/15 text-white shadow-sm font-semibold'
+                : 'text-white/70 hover:text-white hover:bg-white/5'
+            }`}
+          >
             <BarChart3 size={18} />
-            Dashboard
+            Customer Feedback
           </button>
+
+          <button
+            onClick={() => { setActiveTab('quotation_generator'); setShowMobileSidebar(false); }}
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
+              activeTab === 'quotation_generator'
+                ? 'bg-blue-600 text-white shadow-sm font-semibold'
+                : 'text-white/70 hover:text-white hover:bg-white/5'
+            }`}
+          >
+            <FileText size={18} />
+            Quotation Generator
+          </button>
+
+          <button
+            onClick={() => { setActiveTab('quotation_history'); setShowMobileSidebar(false); }}
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
+              activeTab === 'quotation_history'
+                ? 'bg-white/15 text-white shadow-sm font-semibold'
+                : 'text-white/70 hover:text-white hover:bg-white/5'
+            }`}
+          >
+            <History size={18} />
+            Quotation History
+          </button>
+
+          <div className="pt-4 border-t border-white/10 my-2" />
+
           <button
             onClick={() => navigate('/')}
             className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-white/70 hover:text-white hover:bg-white/5 text-sm font-medium transition-colors cursor-pointer"
           >
             <MessageSquare size={18} />
-            Customer Form
+            Public Feedback Form
           </button>
         </nav>
         <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-white/10">
@@ -172,30 +212,43 @@ export default function Dashboard() {
             >
               <Menu size={20} />
             </button>
-            <h1 className="text-lg font-bold text-navy">Feedback Management</h1>
+            <h1 className="text-lg font-bold text-navy">
+              {activeTab === 'feedback' && 'Customer Feedback Management'}
+              {activeTab === 'quotation_generator' && 'Quotation Generator (PDF)'}
+              {activeTab === 'quotation_history' && 'Quotation History & Records'}
+            </h1>
           </div>
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => navigate('/')}
-              className="flex items-center gap-1.5 text-xs font-medium bg-gray-100 hover:bg-gray-200 text-gray-700
-                         px-3 py-1.5 rounded-lg transition-colors cursor-pointer border border-gray-200"
-            >
-              <MessageSquare size={14} />
-              <span className="hidden sm:inline">Customer Form</span>
-            </button>
-            <button
-              onClick={handleExportCSV}
-              className="flex items-center gap-1.5 text-xs font-medium text-navy hover:bg-navy/5
-                         px-3 py-1.5 rounded-lg transition-colors cursor-pointer border border-navy/20"
-            >
-              <FileDown size={14} />
-              <span className="hidden sm:inline">Export CSV</span>
-            </button>
+            {activeTab === 'feedback' && (
+              <button
+                onClick={handleExportCSV}
+                className="flex items-center gap-1.5 text-xs font-medium text-navy hover:bg-navy/5
+                           px-3 py-1.5 rounded-lg transition-colors cursor-pointer border border-navy/20"
+              >
+                <FileDown size={14} />
+                <span className="hidden sm:inline">Export CSV</span>
+              </button>
+            )}
+            {activeTab !== 'quotation_generator' && (
+              <button
+                onClick={() => setActiveTab('quotation_generator')}
+                className="flex items-center gap-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700
+                           px-3 py-1.5 rounded-lg transition-colors cursor-pointer shadow-sm"
+              >
+                <PlusCircle size={14} />
+                <span>New Quotation</span>
+              </button>
+            )}
           </div>
         </header>
 
         <main className="p-4 lg:p-6">
-          {/* Stats Cards */}
+          {activeTab === 'quotation_generator' && <QuotationGenerator />}
+
+          {activeTab === 'quotation_history' && <QuotationHistory />}
+
+          {activeTab === 'feedback' && (
+            <>
           {stats && (
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
               <div className="stat-card">
@@ -438,6 +491,8 @@ export default function Dashboard() {
               </div>
             )}
           </div>
+          </>
+          )}
         </main>
       </div>
 

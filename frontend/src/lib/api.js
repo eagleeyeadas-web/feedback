@@ -78,3 +78,62 @@ export async function exportCSV(token, params = {}) {
   if (!res.ok) throw new Error('Failed to export CSV');
   return res.blob();
 }
+
+/**
+ * Quotation API helper functions
+ */
+export async function getNextQuotationNumber(token) {
+  const res = await fetch(`${API_BASE}/admin/quotations/next-number`, {
+    headers: adminHeaders(token),
+  });
+  if (!res.ok) throw new Error('Failed to fetch next quotation number');
+  return res.json();
+}
+
+export async function createQuotation(token, data) {
+  const res = await fetch(`${API_BASE}/admin/quotations`, {
+    method: 'POST',
+    headers: adminHeaders(token),
+    body: JSON.stringify(data),
+  });
+  const json = await res.json();
+  if (!res.ok) {
+    throw new Error(json.error || 'Failed to create quotation');
+  }
+  return json;
+}
+
+export async function fetchAdminQuotations(token, params = {}) {
+  const query = new URLSearchParams(params).toString();
+  const res = await fetch(`${API_BASE}/admin/quotations?${query}`, {
+    headers: adminHeaders(token),
+  });
+  if (!res.ok) throw new Error('Failed to fetch quotations');
+  return res.json();
+}
+
+export async function fetchQuotationDetail(token, id) {
+  const res = await fetch(`${API_BASE}/admin/quotations/${id}`, {
+    headers: adminHeaders(token),
+  });
+  if (!res.ok) throw new Error('Failed to fetch quotation detail');
+  return res.json();
+}
+
+export async function downloadQuotationPDF(token, id) {
+  const res = await fetch(`${API_BASE}/admin/quotations/${id}/pdf`, {
+    headers: adminHeaders(token),
+  });
+  if (!res.ok) throw new Error('Failed to download quotation PDF');
+  return res.blob();
+}
+
+export async function deleteQuotation(token, id) {
+  const res = await fetch(`${API_BASE}/admin/quotations/${id}`, {
+    method: 'DELETE',
+    headers: adminHeaders(token),
+  });
+  if (!res.ok) throw new Error('Failed to delete quotation');
+  return res.json();
+}
+
