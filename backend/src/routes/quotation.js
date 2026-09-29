@@ -3,7 +3,7 @@ import { z } from 'zod';
 import supabase from '../services/supabase.js';
 import { generateQuotationPDF, numberToWordsIndian } from '../services/quotationPdfGenerator.js';
 import { runFullCleanup } from '../services/quotationCleanupService.js';
-import { peekNextQuotationNumber, generateAndReserveQuotationNumber } from '../services/quotationSequenceService.js';
+import { peekNextQuotationNumber, generateAndReserveQuotationNumber, handleQuotationDeletion } from '../services/quotationSequenceService.js';
 import { requireAdmin } from '../middleware/auth.js';
 
 const router = Router();
@@ -525,28 +525,18 @@ router.delete('/:id', async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Get quotation record to check pdf_path
-    const { data: quotation } = await supabase
-      .from('quotations')
-      .select('pdf_path')
-      .eq('id', id)
-      .single();
+    const result = await handleQuotationDeletion(id);
 
-    if (quotation?.pdf_path) {
-      await supabase.storage.from('pdfs').remove([quotation.pdf_path]);
+    if (!result.success) {
+      return res.status(404).json({ error: result.error || 'Failed to delete quotation' });
     }
 
-    const { error } = await supabase
-      .from('quotations')
-      .delete()
-      .eq('id', id);
-
-    if (error) {
-      console.error('Error deleting quotation:', error);
-      return res.status(500).json({ error: 'Failed to delete quotation' });
-    }
-
-    return res.json({ message: 'Quotation deleted successfully' });
+    return res.json({
+      message: 'Quotation deleted successfully',
+      quotationNumber: result.quotationNumber,
+      reclaimed: result.reclaimed,
+      newLastValue: result.newLastValue,
+    });
   } catch (error) {
     console.error('Error deleting quotation:', error);
     return res.status(500).json({ error: 'Internal server error' });

@@ -4,7 +4,7 @@ import supabase from './supabase.js';
 
 const SEQUENCE_FILE_PATH = path.resolve(process.cwd(), 'assets/quotation_sequence.json');
 
-// In-memory mutex lock for atomic sequence increment
+// In-memory mutex lock for atomic sequence operations
 let isLockAcquired = false;
 const lockQueue = [];
 
@@ -98,30 +98,38 @@ async function getMaxSequenceFromQuotationsTable() {
 export async function getHighestSequenceValue() {
   await acquireLock();
   try {
-    const localVal = readLocalSequence();
-    const dbMaxVal = await getMaxSequenceFromQuotationsTable();
-
-    // Try fetching from quotation_sequence table in Supabase
-    let dbSeqVal = 0;
-    try {
-      const { data: seqRow } = await supabase
-        .from('quotation_sequence')
-        .select('last_value')
-        .eq('id', 1)
-        .maybeSingle();
-
-      if (seqRow && typeof seqRow.last_value === 'number') {
-        dbSeqVal = seqRow.last_value;
-      }
-    } catch {
-      // Table may not exist yet
-    }
-
-    const highest = Math.max(localVal, dbMaxVal, dbSeqVal, 238);
-    return highest;
+    return await getHighestSequenceValueInternal();
   } finally {
     releaseLock();
   }
+}
+
+async function getHighestSequenceValueInternal() {
+  const localVal = readLocalSequence();
+  const dbMaxVal = await getMaxSequenceFromQuotationsTable();
+
+  let dbSeqVal = 0;
+  try {
+    const { data: seqRow } = await supabase
+      .from('quotation_sequence')
+      .select('last_value')
+      .eq('id', 1)
+      .maybeSingle();
+
+    if (seqRow && typeof seqRow.last_value === 'number') {
+      dbSeqVal = seqRow.last_value;
+    }
+  } catch {
+    // Table may not exist yet
+  }
+
+  // If quotation_sequence DB table row exists, sync local backup with dbSeqVal
+  if (dbSeqVal > 0 && localVal !== dbSeqVal) {
+    writeLocalSequence(dbSeqVal);
+  }
+
+  const highest = Math.max(dbSeqVal > 0 ? dbSeqVal : localVal, dbMaxVal, 238);
+  return highest;
 }
 
 /**
@@ -136,30 +144,11 @@ export async function peekNextQuotationNumber() {
 
 /**
  * ATOMIC & MUTATING: Generates, reserves, and updates the sequence counter when a quotation is saved.
- * Ensures numbers are NEVER reused even after 10-day record deletions.
  */
 export async function generateAndReserveQuotationNumber(userSubmittedNo = null) {
   await acquireLock();
   try {
-    const localVal = readLocalSequence();
-    const dbMaxVal = await getMaxSequenceFromQuotationsTable();
-
-    let dbSeqVal = 0;
-    try {
-      const { data: seqRow } = await supabase
-        .from('quotation_sequence')
-        .select('last_value')
-        .eq('id', 1)
-        .maybeSingle();
-
-      if (seqRow && typeof seqRow.last_value === 'number') {
-        dbSeqVal = seqRow.last_value;
-      }
-    } catch {
-      // Ignore
-    }
-
-    let highest = Math.max(localVal, dbMaxVal, dbSeqVal, 238);
+    const highest = await getHighestSequenceValueInternal();
     let nextVal = highest + 1;
 
     // If user passed a valid CQS/ number, check if it pushes sequence further
@@ -209,6 +198,126 @@ export async function generateAndReserveQuotationNumber(userSubmittedNo = null) 
     writeLocalSequence(nextVal);
 
     return candidateNo;
+  } finally {
+    releaseLock();
+  }
+}
+
+/**
+ * ATOMIC & MUTATING: Handles quotation deletion and sequence number reclaiming.
+ * If the deleted quotation is the latest issued sequence number, decrements the sequence counter by 1.
+ * If it is an older quotation, deletes the record without decrementing the counter.
+ */
+export async function handleQuotationDeletion(quotationId) {
+  await acquireLock();
+  try {
+    // 1. Fetch quotation record to check quotation_number and pdf_path
+    const { data: quotation, error: fetchError } = await supabase
+      .from('quotations')
+      .select('id, quotation_number, pdf_path')
+      .eq('id', quotationId)
+      .maybeSingle();
+
+    if (fetchError || !quotation) {
+      return { success: false, error: 'Quotation record not found' };
+    }
+
+    const qNo = quotation.quotation_number;
+    const pdfPath = quotation.pdf_path;
+
+    // Extract numeric sequence from quotation_number (e.g. 240 from CQS/00240)
+    let deletedSeq = null;
+    if (qNo && typeof qNo === 'string') {
+      const match = qNo.match(/^CQS\/([0-9]+)$/);
+      if (match) {
+        deletedSeq = parseInt(match[1], 10);
+      }
+    }
+
+    // Attempt RPC execution for atomic PostgreSQL transaction
+    let rpcSuccess = false;
+    let reclaimed = false;
+    let newLastValue = null;
+
+    try {
+      const { data: rpcResult, error: rpcError } = await supabase.rpc('delete_quotation_and_reclaim_number', {
+        p_quotation_id: quotationId,
+      });
+
+      if (!rpcError && rpcResult && rpcResult.success) {
+        rpcSuccess = true;
+        reclaimed = rpcResult.reclaimed;
+        newLastValue = rpcResult.new_last_value;
+      }
+    } catch {
+      // Fallback to JS execution if RPC function is not installed yet
+    }
+
+    // JS Fallback execution
+    if (!rpcSuccess) {
+      let currentSeqVal = 0;
+      try {
+        const { data: seqRow } = await supabase
+          .from('quotation_sequence')
+          .select('last_value')
+          .eq('id', 1)
+          .maybeSingle();
+        if (seqRow && typeof seqRow.last_value === 'number') {
+          currentSeqVal = seqRow.last_value;
+        }
+      } catch { /* ignore */ }
+
+      if (!currentSeqVal) {
+        currentSeqVal = readLocalSequence();
+      }
+
+      // Delete quotation record from DB
+      const { error: deleteErr } = await supabase
+        .from('quotations')
+        .delete()
+        .eq('id', quotationId);
+
+      if (deleteErr) {
+        return { success: false, error: deleteErr.message };
+      }
+
+      // If deleted sequence equals current sequence counter, decrement counter
+      if (deletedSeq !== null && currentSeqVal > 0 && deletedSeq === currentSeqVal) {
+        const decremented = Math.max(currentSeqVal - 1, 238);
+        try {
+          await supabase.from('quotation_sequence').upsert({
+            id: 1,
+            last_value: decremented,
+            updated_at: new Date().toISOString(),
+          });
+        } catch { /* ignore */ }
+        reclaimed = true;
+        newLastValue = decremented;
+      } else {
+        newLastValue = currentSeqVal;
+      }
+    }
+
+    // Remove associated PDF file from Supabase storage if pdfPath exists
+    if (pdfPath) {
+      try {
+        await supabase.storage.from('pdfs').remove([pdfPath]);
+      } catch (err) {
+        console.warn('Storage removal warning during quotation delete:', err.message);
+      }
+    }
+
+    // Sync local sequence backup file
+    if (typeof newLastValue === 'number' && newLastValue > 0) {
+      writeLocalSequence(newLastValue);
+    }
+
+    return {
+      success: true,
+      quotationNumber: qNo,
+      reclaimed,
+      newLastValue,
+    };
   } finally {
     releaseLock();
   }
