@@ -623,7 +623,9 @@ export async function generateQuotationPDF(quotation, items = [], logoBase64 = n
   doc.text('For Eagle Eye Safdrive Pvt Ltd', MARGIN_X + CONTENT_WIDTH - 4, sigTopY + 7, { align: 'right' });
 
   // Bottom right of signatory box
-  doc.text('Authorised Signatory', MARGIN_X + CONTENT_WIDTH - 4, frameBottomY - 7, { align: 'right' });
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.text('This is a system-generated document. Manual signature is not required.', MARGIN_X + CONTENT_WIDTH - 4, frameBottomY - 7, { align: 'right' });
 
   // Computer Generated Disclaimer Outside Box
   doc.setFont('helvetica', 'normal');
