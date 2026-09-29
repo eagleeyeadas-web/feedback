@@ -19,6 +19,26 @@ const MARGIN_X = 10;
 const CONTENT_WIDTH = PAGE_WIDTH - MARGIN_X * 2; // 190mm
 
 /**
+ * Sanitizes PDF text strings to remove fullwidth Asian punctuation (，：（）)
+ * and non-WinAnsi characters that corrupt jsPDF font encoding.
+ */
+export function sanitizePdfText(str) {
+  if (str === null || str === undefined) return '';
+  return String(str)
+    .replace(/，/g, ', ')
+    .replace(/：/g, ': ')
+    .replace(/（/g, ' (')
+    .replace(/）/g, ')')
+    .replace(/—/g, '-')
+    .replace(/–/g, '-')
+    .replace(/“/g, '"')
+    .replace(/”/g, '"')
+    .replace(/‘/g, "'")
+    .replace(/’/g, "'")
+    .replace(/\s+/g, ' ');
+}
+
+/**
  * Converts a number to Indian Currency Words (e.g. 22000 -> Twenty Two Thousand Only)
  */
 export function numberToWordsIndian(num) {
@@ -74,7 +94,7 @@ export function numberToWordsIndian(num) {
     result += ' Rupees and ' + convertChunk(paise).trim() + ' Paise';
   }
   result += ' Only';
-  return result;
+  return sanitizePdfText(result);
 }
 
 function formatCurrency(amount) {
@@ -88,7 +108,7 @@ function formatCurrency(amount) {
 function formatDateShort(dateInput) {
   if (!dateInput) return '';
   const d = new Date(dateInput);
-  if (isNaN(d.getTime())) return String(dateInput);
+  if (isNaN(d.getTime())) return sanitizePdfText(String(dateInput));
   const day = String(d.getDate()).padStart(2, '0');
   const month = String(d.getMonth() + 1).padStart(2, '0');
   const year = String(d.getFullYear()).slice(-2);
@@ -187,7 +207,7 @@ export async function generateQuotationPDF(quotation, items = [], logoBase64 = n
   doc.text('CUSTOMER DETAILS', MARGIN_X + halfW / 2, y + 3.8, { align: 'center' });
 
   const qDateStr = formatDateShort(quotation.quotation_date);
-  doc.text(`Quotation No : ${quotation.quotation_number || 'CQS/00231'} Dt ${qDateStr}`, MARGIN_X + halfW + 4, y + 3.8);
+  doc.text(`Quotation No : ${sanitizePdfText(quotation.quotation_number || 'CQS/00231')} Dt ${qDateStr}`, MARGIN_X + halfW + 4, y + 3.8);
 
   doc.line(MARGIN_X, y + 5.5, MARGIN_X + CONTENT_WIDTH, y + 5.5);
   doc.line(MARGIN_X + halfW, y, MARGIN_X + halfW, y + custBoxH);
@@ -196,24 +216,29 @@ export async function generateQuotationPDF(quotation, items = [], logoBase64 = n
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
 
+  const sanitizedCustName = sanitizePdfText(quotation.customer_name || '');
+  const sanitizedContact = sanitizePdfText(quotation.contact_person || '');
+  const sanitizedAddress = sanitizePdfText(quotation.address || '');
+  const sanitizedPhone = sanitizePdfText(quotation.phone_number || '');
+
   // TO Left Side
   doc.text('TO', MARGIN_X + 2, leftY);
   leftY += 3.8;
   doc.setFont('helvetica', 'bold');
-  doc.text(quotation.customer_name || '', MARGIN_X + 2, leftY);
+  doc.text(sanitizedCustName, MARGIN_X + 2, leftY);
   leftY += 3.8;
   doc.setFont('helvetica', 'normal');
-  if (quotation.contact_person) {
-    doc.text(quotation.contact_person, MARGIN_X + 2, leftY);
+  if (sanitizedContact) {
+    doc.text(sanitizedContact, MARGIN_X + 2, leftY);
     leftY += 3.8;
   }
-  if (quotation.address) {
-    const addLines = doc.splitTextToSize(quotation.address, halfW - 4);
+  if (sanitizedAddress) {
+    const addLines = doc.splitTextToSize(sanitizedAddress, halfW - 4);
     doc.text(addLines, MARGIN_X + 2, leftY);
     leftY += (addLines.length * 3.5);
   }
-  if (quotation.phone_number) {
-    doc.text(quotation.phone_number, MARGIN_X + 2, leftY);
+  if (sanitizedPhone) {
+    doc.text(sanitizedPhone, MARGIN_X + 2, leftY);
   }
 
   // TO Right Side
@@ -221,44 +246,44 @@ export async function generateQuotationPDF(quotation, items = [], logoBase64 = n
   doc.text('TO', MARGIN_X + halfW + 2, rightY);
   rightY += 3.8;
   doc.setFont('helvetica', 'bold');
-  doc.text(quotation.customer_name || '', MARGIN_X + halfW + 2, rightY);
+  doc.text(sanitizedCustName, MARGIN_X + halfW + 2, rightY);
   rightY += 3.8;
   doc.setFont('helvetica', 'normal');
-  if (quotation.contact_person) {
-    doc.text(quotation.contact_person, MARGIN_X + halfW + 2, rightY);
+  if (sanitizedContact) {
+    doc.text(sanitizedContact, MARGIN_X + halfW + 2, rightY);
     rightY += 3.8;
   }
-  if (quotation.address) {
-    const addLinesR = doc.splitTextToSize(quotation.address, halfW - 4);
+  if (sanitizedAddress) {
+    const addLinesR = doc.splitTextToSize(sanitizedAddress, halfW - 4);
     doc.text(addLinesR, MARGIN_X + halfW + 2, rightY);
     rightY += (addLinesR.length * 3.5);
   }
-  if (quotation.phone_number) {
-    doc.text(quotation.phone_number, MARGIN_X + halfW + 2, rightY);
+  if (sanitizedPhone) {
+    doc.text(sanitizedPhone, MARGIN_X + halfW + 2, rightY);
   }
 
   y += custBoxH;
   doc.line(MARGIN_X, y, MARGIN_X + CONTENT_WIDTH, y);
 
   // ============================================================
-  // PRODUCT TABLE
+  // PRODUCT TABLE (Proportional Widths Total 190mm)
   // ============================================================
   const cols = [
     { name: 'S.No', width: 10, align: 'center' },
-    { name: 'Item Description', width: 64, align: 'left' },
+    { name: 'Item Description', width: 62, align: 'left' },
     { name: 'HSN/SAC', width: 18, align: 'center' },
     { name: 'QTY', width: 12, align: 'center' },
     { name: 'UOM', width: 14, align: 'center' },
-    { name: 'Rate (₹)', width: 20, align: 'right' },
-    { name: 'Disc %', width: 14, align: 'center' },
+    { name: 'Rate\n(₹)', width: 22, align: 'right' },
+    { name: 'Disc\n%', width: 14, align: 'center' },
     { name: 'Discount', width: 16, align: 'right' },
-    { name: 'Amount (₹)', width: 22, align: 'right' },
+    { name: 'Amount\n(₹)', width: 22, align: 'right' },
   ];
 
   doc.setFillColor(...COLORS.headerBlue);
   doc.rect(MARGIN_X, y, CONTENT_WIDTH, 8, 'F');
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(8);
+  doc.setFontSize(7.5);
   doc.setTextColor(0, 0, 0);
 
   let cX = MARGIN_X;
@@ -269,10 +294,10 @@ export async function generateQuotationPDF(quotation, items = [], logoBase64 = n
 
     if (col.name.includes('\n')) {
       const parts = col.name.split('\n');
-      doc.text(parts[0], textX, y + 3.2, { align: col.align });
-      doc.text(parts[1], textX, y + 6.2, { align: col.align });
+      doc.text(parts[0], textX, y + 3.0, { align: col.align });
+      doc.text(parts[1], textX, y + 6.0, { align: col.align });
     } else {
-      doc.text(col.name, textX, y + 5.2, { align: col.align });
+      doc.text(col.name, textX, y + 5.0, { align: col.align });
     }
     cX += col.width;
   });
@@ -287,12 +312,13 @@ export async function generateQuotationPDF(quotation, items = [], logoBase64 = n
   let totalUom = 'SET';
 
   items.forEach((item, index) => {
-    const descLines = doc.splitTextToSize(item.item_description || '', cols[1].width - 3);
+    const cleanDesc = sanitizePdfText(item.item_description || '');
+    const descLines = doc.splitTextToSize(cleanDesc, cols[1].width - 3);
     const rowH = Math.max(8, descLines.length * 3.8 + 3);
 
     let posX = MARGIN_X;
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8);
+    doc.setFontSize(7.5);
 
     // S.No
     doc.text(String(index + 1), posX + cols[0].width / 2, y + 4.5, { align: 'center' });
@@ -302,8 +328,9 @@ export async function generateQuotationPDF(quotation, items = [], logoBase64 = n
     doc.text(descLines, posX + 2, y + 4.5);
     posX += cols[1].width;
 
-    // HSN
-    doc.text(item.hsn_sac || '', posX + cols[2].width / 2, y + 4.5, { align: 'center' });
+    // HSN/SAC (Always defaults to fixed 852589)
+    const hsnValue = sanitizePdfText(item.hsn_sac || '852589');
+    doc.text(hsnValue, posX + cols[2].width / 2, y + 4.5, { align: 'center' });
     posX += cols[2].width;
 
     // QTY
@@ -313,7 +340,7 @@ export async function generateQuotationPDF(quotation, items = [], logoBase64 = n
     posX += cols[3].width;
 
     // UOM
-    totalUom = item.uom || 'SET';
+    totalUom = sanitizePdfText(item.uom || 'SET');
     doc.text(totalUom, posX + cols[4].width / 2, y + 4.5, { align: 'center' });
     posX += cols[4].width;
 
@@ -341,7 +368,7 @@ export async function generateQuotationPDF(quotation, items = [], logoBase64 = n
   doc.setFillColor(...COLORS.headerBlue);
   doc.rect(MARGIN_X, y, CONTENT_WIDTH, 6, 'F');
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(8.5);
+  doc.setFontSize(8);
 
   let totalX = MARGIN_X + cols[0].width;
   doc.text('Total', totalX + cols[1].width / 2, y + 4.2, { align: 'center' });
@@ -382,7 +409,8 @@ export async function generateQuotationPDF(quotation, items = [], logoBase64 = n
   const defaultTerms = quotation.terms_conditions || [];
   defaultTerms.forEach(term => {
     if (termY < y + splitBoxH - 2) {
-      const termLines = doc.splitTextToSize(term, leftW - 4);
+      const cleanTerm = sanitizePdfText(term);
+      const termLines = doc.splitTextToSize(cleanTerm, leftW - 4);
       doc.text(termLines, MARGIN_X + 2, termY);
       termY += (termLines.length * 3.2);
     }
@@ -410,7 +438,7 @@ export async function generateQuotationPDF(quotation, items = [], logoBase64 = n
   doc.line(MARGIN_X + leftW, netBoxY, MARGIN_X + CONTENT_WIDTH, netBoxY);
 
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(9);
+  doc.setFontSize(8.5);
   doc.text('Net Amount', MARGIN_X + leftW + 4, netBoxY + 6.5);
   doc.text(formatCurrency(quotation.net_amount), MARGIN_X + CONTENT_WIDTH - 2, netBoxY + 6.5, { align: 'right' });
 
@@ -485,118 +513,126 @@ export async function generateQuotationPDF(quotation, items = [], logoBase64 = n
   doc.text('This is a Computer Generated Document', centerX, PAGE_HEIGHT - 6, { align: 'center' });
 
   // ============================================================
-  // PAGE 2 – PRODUCT TECHNICAL SPECIFICATION (19 SPECIFICATIONS)
+  // PAGE 2 – PRODUCT TECHNICAL SPECIFICATION (EXACT 19 SPECIFICATIONS)
   // ============================================================
-  // Always include Page 2 if selected or default
-  if (quotation.include_tech_specs || true) {
-    doc.addPage();
-    let p2Y = 12;
+  // Always include Page 2 to guarantee exactly 2 pages
+  doc.addPage();
+  let p2Y = 12;
 
-    // Header Logo & Company Info
-    if (logoBase64) {
-      try {
-        doc.addImage(logoBase64, 'PNG', MARGIN_X + 5, p2Y, 30, 14);
-      } catch {
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(11);
-        doc.text('Eagle Eye', MARGIN_X + 5, p2Y + 8);
-      }
+  // Header Logo & Company Info
+  if (logoBase64) {
+    try {
+      doc.addImage(logoBase64, 'PNG', MARGIN_X + 5, p2Y, 30, 14);
+    } catch {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(11);
+      doc.text('Eagle Eye', MARGIN_X + 5, p2Y + 8);
     }
-
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(14);
-    doc.setTextColor(0, 0, 0);
-    doc.text('EAGLE EYE SAFDRIVE PVT LTD', centerX, p2Y + 8, { align: 'center' });
-
-    p2Y += 18;
-
-    // Subtitle Banner
-    doc.setFontSize(10);
-    doc.text('Product Specification Technical Specification', centerX, p2Y, { align: 'center' });
-    doc.line(centerX - 42, p2Y + 1, centerX + 42, p2Y + 1);
-
-    p2Y += 6;
-
-    // 4 Column Technical Matrix
-    const specCols = [
-      { name: 'No.', width: 14, align: 'center' },
-      { name: 'Specification', width: 52, align: 'center' },
-      { name: 'Technical Parameter', width: 94, align: 'center' },
-      { name: 'Remark', width: 30, align: 'center' },
-    ];
-
-    // Table Header
-    doc.rect(MARGIN_X, p2Y, CONTENT_WIDTH, 7);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(8.5);
-
-    let sX = MARGIN_X;
-    specCols.forEach(col => {
-      doc.text(col.name, sX + col.width / 2, p2Y + 4.8, { align: 'center' });
-      sX += col.width;
-    });
-
-    p2Y += 7;
-    const specTableStartY = p2Y - 7;
-
-    // 19 Technical Parameters from Exact Reference PDF Scan
-    const full19Specs = [
-      { no: '1', spec: 'Display size', param: '10-inchs IPS full viewing angle HD screen 16 : 10', remark: '' },
-      { no: '2', spec: 'Resolution', param: '1280*800, 4 Camera', remark: '' },
-      { no: '3', spec: 'System', param: 'Linux', remark: '' },
-      { no: '4', spec: 'Processor', param: 'MTK6762 CCRTEX-A53 Octa-core Processor 2GHz', remark: '' },
-      { no: '5', spec: 'Storage Memory', param: '128GB', remark: '' },
-      { no: '6', spec: 'Operating Memory', param: '2GB/4GB', remark: '' },
-      { no: '7', spec: 'GPU Processor', param: 'IMG GE8320，650MHZ', remark: '' },
-      { no: '8', spec: 'Calibration Method', param: 'One-key Calibration， Remote Calibration', remark: '' },
-      { no: '9', spec: 'Display Mode', param: '4K', remark: '' },
-      { no: '10', spec: 'Tracking Method', param: 'GPS+ GLONASS+ AGPS', remark: '' },
-      { no: '11', spec: 'Network', param: '4G full Netcom supports external SIM card', remark: '' },
-      { no: '12', spec: 'WiFi', param: 'supports 802.11 b/g/n protocol', remark: '' },
-      { no: '13', spec: 'USB insert', param: 'support 1 USB insert', remark: '' },
-      { no: '14', spec: 'T F card', param: 'Supports expansion up to 512GB', remark: '' },
-      { no: '15', spec: 'Car Setting', param: 'Settings include system, screen, time, sound, language, network, ETC', remark: '' },
-      { no: '16', spec: 'Operating Voltage', param: 'DC 9-36V, nominal DC 24V', remark: '' },
-      { no: '17', spec: 'Working Current', param: 'About 0.8A（with 4cameras）', remark: '' },
-      { no: '18', spec: 'Working Temperature', param: '-20-70 degrees', remark: '' },
-      { no: '19', spec: 'Storage temperature', param: '-40-85 degrees', remark: '' },
-    ];
-
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8);
-
-    full19Specs.forEach((row) => {
-      const rowH = 7;
-      doc.rect(MARGIN_X, p2Y, CONTENT_WIDTH, rowH);
-
-      let px = MARGIN_X;
-
-      // No.
-      doc.text(row.no, px + specCols[0].width / 2, p2Y + 4.8, { align: 'center' });
-      px += specCols[0].width;
-
-      // Spec
-      doc.text(row.spec, px + specCols[1].width / 2, p2Y + 4.8, { align: 'center' });
-      px += specCols[1].width;
-
-      // Parameter
-      doc.text(row.param, px + specCols[2].width / 2, p2Y + 4.8, { align: 'center' });
-      px += specCols[2].width;
-
-      // Remark
-      doc.text(row.remark || '', px + specCols[3].width / 2, p2Y + 4.8, { align: 'center' });
-
-      p2Y += rowH;
-    });
-
-    // Vertical Borders for Page 2
-    let sGridX = MARGIN_X;
-    specCols.forEach(col => {
-      doc.line(sGridX, specTableStartY, sGridX, p2Y);
-      sGridX += col.width;
-    });
-    doc.line(sGridX, specTableStartY, sGridX, p2Y);
   }
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(14);
+  doc.setTextColor(0, 0, 0);
+  doc.text('EAGLE EYE SAFDRIVE PVT LTD', centerX, p2Y + 8, { align: 'center' });
+
+  p2Y += 18;
+
+  // Subtitle Banner
+  doc.setFontSize(10);
+  doc.text('Product Specification Technical Specification', centerX, p2Y, { align: 'center' });
+  doc.line(centerX - 42, p2Y + 1, centerX + 42, p2Y + 1);
+
+  p2Y += 6;
+
+  // 4 Column Technical Matrix (Total 190mm: 12 + 50 + 98 + 30)
+  const specCols = [
+    { name: 'No.', width: 12, align: 'center' },
+    { name: 'Specification', width: 50, align: 'center' },
+    { name: 'Technical Parameter', width: 98, align: 'center' },
+    { name: 'Remark', width: 30, align: 'center' },
+  ];
+
+  // Table Header
+  doc.rect(MARGIN_X, p2Y, CONTENT_WIDTH, 7);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8.5);
+
+  let sX = MARGIN_X;
+  specCols.forEach(col => {
+    doc.text(col.name, sX + col.width / 2, p2Y + 4.8, { align: 'center' });
+    sX += col.width;
+  });
+
+  p2Y += 7;
+  const specTableStartY = p2Y - 7;
+
+  // 19 Technical Parameters from Reference PDF (All text sanitized)
+  const full19Specs = [
+    { no: '1', spec: 'Display size', param: '10-inchs IPS full viewing angle HD screen 16 : 10', remark: '' },
+    { no: '2', spec: 'Resolution', param: '1280*800, 4 Camera', remark: '' },
+    { no: '3', spec: 'System', param: 'Linux', remark: '' },
+    { no: '4', spec: 'Processor', param: 'MTK6762 CCRTEX-A53 Octa-core Processor 2GHz', remark: '' },
+    { no: '5', spec: 'Storage Memory', param: '128GB', remark: '' },
+    { no: '6', spec: 'Operating Memory', param: '2GB/4GB', remark: '' },
+    { no: '7', spec: 'GPU Processor', param: 'IMG GE8320, 650MHZ', remark: '' },
+    { no: '8', spec: 'Calibration Method', param: 'One-key Calibration, Remote Calibration', remark: '' },
+    { no: '9', spec: 'Display Mode', param: '4K', remark: '' },
+    { no: '10', spec: 'Tracking Method', param: 'GPS+ GLONASS+ AGPS', remark: '' },
+    { no: '11', spec: 'Network', param: '4G full Netcom supports external SIM card', remark: '' },
+    { no: '12', spec: 'WiFi', param: 'supports 802.11 b/g/n protocol', remark: '' },
+    { no: '13', spec: 'USB insert', param: 'support 1 USB insert', remark: '' },
+    { no: '14', spec: 'T F card', param: 'Supports expansion up to 512GB', remark: '' },
+    { no: '15', spec: 'Car Setting', param: 'Settings include system, screen, time, sound, language, network, ETC', remark: '' },
+    { no: '16', spec: 'Operating Voltage', param: 'DC 9-36V, nominal DC 24V', remark: '' },
+    { no: '17', spec: 'Working Current', param: 'About 0.8A (with 4cameras)', remark: '' },
+    { no: '18', spec: 'Working Temperature', param: '-20-70 degrees', remark: '' },
+    { no: '19', spec: 'Storage temperature', param: '-40-85 degrees', remark: '' },
+  ];
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+
+  full19Specs.forEach((row) => {
+    const cleanSpec = sanitizePdfText(row.spec);
+    const cleanParam = sanitizePdfText(row.param);
+    const cleanRemark = sanitizePdfText(row.remark);
+
+    const specLines = doc.splitTextToSize(cleanSpec, specCols[1].width - 4);
+    const paramLines = doc.splitTextToSize(cleanParam, specCols[2].width - 4);
+    const remarkLines = doc.splitTextToSize(cleanRemark, specCols[3].width - 4);
+
+    const maxLines = Math.max(specLines.length, paramLines.length, remarkLines.length, 1);
+    const rowH = Math.max(7, maxLines * 4 + 2);
+
+    doc.rect(MARGIN_X, p2Y, CONTENT_WIDTH, rowH);
+
+    let px = MARGIN_X;
+
+    // No.
+    doc.text(row.no, px + specCols[0].width / 2, p2Y + 4.8, { align: 'center' });
+    px += specCols[0].width;
+
+    // Spec
+    doc.text(specLines, px + specCols[1].width / 2, p2Y + 4.8, { align: 'center' });
+    px += specCols[1].width;
+
+    // Parameter
+    doc.text(paramLines, px + specCols[2].width / 2, p2Y + 4.8, { align: 'center' });
+    px += specCols[2].width;
+
+    // Remark
+    doc.text(remarkLines, px + specCols[3].width / 2, p2Y + 4.8, { align: 'center' });
+
+    p2Y += rowH;
+  });
+
+  // Vertical Borders for Page 2
+  let sGridX = MARGIN_X;
+  specCols.forEach(col => {
+    doc.line(sGridX, specTableStartY, sGridX, p2Y);
+    sGridX += col.width;
+  });
+  doc.line(sGridX, specTableStartY, sGridX, p2Y);
 
   // Return PDF Node Buffer
   const pdfOutput = doc.output('arraybuffer');
