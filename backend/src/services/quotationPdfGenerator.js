@@ -454,7 +454,7 @@ export async function generateQuotationPDF(quotation, items = [], logoBase64 = n
   // ============================================================
   // TERMS & CONDITIONS (LEFT) AND TAX / NET AMOUNT (RIGHT)
   // ============================================================
-  const splitBoxH = 45;
+  const splitBoxH = 50;
   const leftW = 135;
   const rightW = CONTENT_WIDTH - leftW; // 55mm
 
@@ -467,10 +467,10 @@ export async function generateQuotationPDF(quotation, items = [], logoBase64 = n
   doc.setFontSize(8.5);
   doc.setTextColor(0, 0, 0);
   doc.text('Terms & Conditions', MARGIN_X + 3, termY);
-  termY += 4.5;
+  termY += 5;
 
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7);
+  doc.setFontSize(7.2);
   doc.setTextColor(0, 0, 0);
 
   const exactDefaultTerms = [
@@ -495,19 +495,19 @@ export async function generateQuotationPDF(quotation, items = [], logoBase64 = n
     if (termY < y + splitBoxH - 2) {
       const termLines = doc.splitTextToSize(term, leftW - 6);
       doc.text(termLines, MARGIN_X + 3, termY);
-      termY += (termLines.length * 2.8 + 0.8);
+      termY += (termLines.length * 3.0 + 1.0);
     }
   });
 
   // Right Side Tax Breakdown
-  let rightTaxY = y + 5;
+  let rightTaxY = y + 5.5;
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(8);
+  doc.setFontSize(8.5);
 
   if (quotation.gst_applicable && quotation.gst_type === 'CGST_SGST') {
     doc.text('CGST', MARGIN_X + leftW + 4, rightTaxY);
     doc.text(formatCurrency(quotation.cgst_amount), MARGIN_X + CONTENT_WIDTH - 2, rightTaxY, { align: 'right' });
-    rightTaxY += 7;
+    rightTaxY += 7.5;
 
     doc.text('SGST', MARGIN_X + leftW + 4, rightTaxY);
     doc.text(formatCurrency(quotation.sgst_amount), MARGIN_X + CONTENT_WIDTH - 2, rightTaxY, { align: 'right' });
@@ -517,13 +517,13 @@ export async function generateQuotationPDF(quotation, items = [], logoBase64 = n
   }
 
   // Net Amount Row Box on Right
-  const netBoxY = y + splitBoxH - 10;
+  const netBoxY = y + splitBoxH - 12;
   doc.line(MARGIN_X + leftW, netBoxY, MARGIN_X + CONTENT_WIDTH, netBoxY);
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8.5);
-  doc.text('Net Amount', MARGIN_X + leftW + 4, netBoxY + 6.5);
-  doc.text(formatCurrency(quotation.net_amount), MARGIN_X + CONTENT_WIDTH - 2, netBoxY + 6.5, { align: 'right' });
+  doc.text('Net Amount', MARGIN_X + leftW + 4, netBoxY + 7.5);
+  doc.text(formatCurrency(quotation.net_amount), MARGIN_X + CONTENT_WIDTH - 2, netBoxY + 7.5, { align: 'right' });
 
   y += splitBoxH;
   doc.line(MARGIN_X, y, MARGIN_X + CONTENT_WIDTH, y);
@@ -533,45 +533,45 @@ export async function generateQuotationPDF(quotation, items = [], logoBase64 = n
   // ============================================================
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8.5);
-  doc.text('Net Amount in words', MARGIN_X + 2, y + 4.2);
+  doc.text('Net Amount in words', MARGIN_X + 2, y + 4.5);
   doc.setFont('helvetica', 'normal');
-  doc.text(numberToWordsIndian(quotation.net_amount), MARGIN_X + 2, y + 8.2);
+  doc.text(numberToWordsIndian(quotation.net_amount), MARGIN_X + 2, y + 9.0);
 
-  y += 10;
+  y += 12;
   doc.line(MARGIN_X, y, MARGIN_X + CONTENT_WIDTH, y);
 
   // ============================================================
   // BANK DETAILS & QR CODE
   // ============================================================
-  const bankBoxH = 28;
+  const bankBoxH = 32;
   const bankW = 140;
   const qrW = CONTENT_WIDTH - bankW; // 50mm
 
   doc.line(MARGIN_X + bankW, y, MARGIN_X + bankW, y + bankBoxH);
 
-  let bY = y + 4.5;
+  let bY = y + 5.0;
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(8);
+  doc.setFontSize(8.2);
 
-  doc.text('Bank Name: Indian Overseas Bank', MARGIN_X + 2, bY);
+  doc.text('Bank Name: Indian Overseas Bank', MARGIN_X + 3, bY);
   doc.text('Branch Name : ANNUR', MARGIN_X + 75, bY);
-  bY += 4.5;
+  bY += 5.0;
 
-  doc.text('Account No : 000702000641107', MARGIN_X + 2, bY);
+  doc.text('Account No : 000702000641107', MARGIN_X + 3, bY);
   doc.text('IFSC Code: IOBA0000007', MARGIN_X + 75, bY);
-  bY += 4.5;
+  bY += 5.0;
 
-  doc.text('Account Name : EAGLE EYE SAFDRIVE PVT LTD', MARGIN_X + 2, bY);
-  bY += 4.5;
-  doc.text('Scan QR', MARGIN_X + 2, bY);
-  bY += 4.5;
-  doc.text('UPI ID : EAGLEEYESAFDRIVE@iob', MARGIN_X + 2, bY);
+  doc.text('Account Name : EAGLE EYE SAFDRIVE PVT LTD', MARGIN_X + 3, bY);
+  bY += 5.0;
+  doc.text('Scan QR', MARGIN_X + 3, bY);
+  bY += 5.0;
+  doc.text('UPI ID : EAGLEEYESAFDRIVE@iob', MARGIN_X + 3, bY);
 
   // QR Code Image
   try {
     const upiUri = 'upi://pay?pa=EAGLEEYESAFDRIVE@iob&pn=EAGLE%20EYE%20SAFDRIVE%20PVT%20LTD&cu=INR';
     const qrDataUrl = await QRCode.toDataURL(upiUri, { margin: 1, width: 100 });
-    doc.addImage(qrDataUrl, 'PNG', MARGIN_X + bankW + (qrW - 22) / 2, y + 3, 22, 22);
+    doc.addImage(qrDataUrl, 'PNG', MARGIN_X + bankW + (qrW - 24) / 2, y + 4, 24, 24);
   } catch (err) {
     console.error('Failed to generate QR:', err);
   }
@@ -582,18 +582,20 @@ export async function generateQuotationPDF(quotation, items = [], logoBase64 = n
   // ============================================================
   // SIGNATORY & FOOTER
   // ============================================================
-  let sigY = y + 5;
+  const frameBottomY = pageMarginTop + outerFrameHeight;
+  let sigY = y + 7;
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8.5);
-  doc.text('For Eagle Eye Safdrive Pvt Ltd', MARGIN_X + CONTENT_WIDTH - 2, sigY, { align: 'right' });
+  doc.text('For Eagle Eye Safdrive Pvt Ltd', MARGIN_X + CONTENT_WIDTH - 3, sigY, { align: 'right' });
   
-  sigY += 12;
-  doc.text('Authorised Signatory', MARGIN_X + CONTENT_WIDTH - 2, sigY, { align: 'right' });
+  // Position Authorised Signatory near the bottom of outer box frame
+  const authorisedSignatoryY = Math.max(sigY + 22, frameBottomY - 6);
+  doc.text('Authorised Signatory', MARGIN_X + CONTENT_WIDTH - 3, authorisedSignatoryY, { align: 'right' });
 
   // Computer Generated Disclaimer Outside Box
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
-  doc.text('This is a Computer Generated Document', centerX, PAGE_HEIGHT - 6, { align: 'center' });
+  doc.text('This is a Computer Generated Document', centerX, PAGE_HEIGHT - 5, { align: 'center' });
 
   // ============================================================
   // PAGE 2 – PRODUCT TECHNICAL SPECIFICATION (EXACT 19 SPECIFICATIONS)
@@ -694,26 +696,27 @@ export async function generateQuotationPDF(quotation, items = [], logoBase64 = n
     const remarkLines = doc.splitTextToSize(cleanRemark, specCols[3].width - 4);
 
     const maxLines = Math.max(specLines.length, paramLines.length, remarkLines.length, 1);
-    const rowH = Math.max(7, maxLines * 4 + 2);
+    const rowH = Math.max(12.4, maxLines * 5.2 + 3);
 
     doc.rect(MARGIN_X, p2Y, CONTENT_WIDTH, rowH);
 
     let px = MARGIN_X;
+    const textY = p2Y + (rowH / 2) + 1.2;
 
     // No.
-    doc.text(row.no, px + specCols[0].width / 2, p2Y + 4.8, { align: 'center' });
+    doc.text(row.no, px + specCols[0].width / 2, textY, { align: 'center' });
     px += specCols[0].width;
 
     // Spec
-    doc.text(specLines, px + specCols[1].width / 2, p2Y + 4.8, { align: 'center' });
+    doc.text(specLines, px + specCols[1].width / 2, textY, { align: 'center' });
     px += specCols[1].width;
 
     // Parameter
-    doc.text(paramLines, px + specCols[2].width / 2, p2Y + 4.8, { align: 'center' });
+    doc.text(paramLines, px + specCols[2].width / 2, textY, { align: 'center' });
     px += specCols[2].width;
 
     // Remark
-    doc.text(remarkLines, px + specCols[3].width / 2, p2Y + 4.8, { align: 'center' });
+    doc.text(remarkLines, px + specCols[3].width / 2, textY, { align: 'center' });
 
     p2Y += rowH;
   });
