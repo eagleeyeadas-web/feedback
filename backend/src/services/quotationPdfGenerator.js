@@ -704,10 +704,14 @@ export async function generateQuotationPDF(quotation, items = [], logoBase64 = n
     }
 
     const displaySize = quotation.display_size || '10-inch';
+    const is7Inch = String(displaySize).toLowerCase().includes('7');
+    const displayParam = is7Inch
+      ? `${displaySize} IPS full viewing angle HD screen`
+      : `${displaySize} IPS full viewing angle HD screen 16:10`;
 
     // 19 Technical Parameters from Reference PDF
     const full19Specs = [
-      { no: '1', spec: 'Display size', param: `${displaySize} IPS full viewing angle HD screen 16:10`, remark: '' },
+      { no: '1', spec: 'Display size', param: displayParam, remark: '' },
       { no: '2', spec: 'Resolution', param: `1280*800, ${cameraCount} Camera`, remark: '' },
       { no: '3', spec: 'System', param: 'Linux', remark: '' },
       { no: '4', spec: 'Processor', param: 'MTK6762 CCRTEX-A53 Octa-core Processor 2GHz', remark: '' },

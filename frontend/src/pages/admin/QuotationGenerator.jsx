@@ -613,7 +613,9 @@ export default function QuotationGenerator() {
                 </div>
                 <div>
                   <h4 className="text-xs font-bold text-navy">Display Size Selection (2-Channel Product)</h4>
-                  <p className="text-[11px] text-gray-600">Select the display screen size for the Page 2 Technical Specifications table ({displaySize} IPS full viewing angle HD screen 16:10).</p>
+                  <p className="text-[11px] text-gray-600">
+                    Select the display screen size for the Page 2 Technical Specifications table ({displaySize === '7-inch' ? '7-inch IPS full viewing angle HD screen' : '10-inch IPS full viewing angle HD screen 16:10'}).
+                  </p>
                 </div>
               </div>
 
@@ -868,7 +870,7 @@ export default function QuotationGenerator() {
                   <option value="10-inch">10-inch</option>
                 </select>
                 <p className="text-[11px] text-gray-600">
-                  Configures the Display Size parameter on Page 2 Technical Specifications table ({displaySize} IPS full viewing angle HD screen 16:10).
+                  Configures the Display Size parameter on Page 2 Technical Specifications table ({displaySize === '7-inch' ? '7-inch IPS full viewing angle HD screen' : '10-inch IPS full viewing angle HD screen 16:10'}).
                 </p>
               </div>
             )}
