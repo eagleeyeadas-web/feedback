@@ -212,9 +212,10 @@ export async function generateFeedbackPDF(feedback, logoBase64 = null) {
   // ============================================================
   y = drawSectionHeader(doc, '6. CUSTOMER SIGNATURE', y);
 
-  const sigBoxHeight = 22;
+  const sigBoxHeight = 30;           // Taller box to better fit landscape signatures
   const sigLeftWidth = 115;
   const sigRightWidth = CONTENT_WIDTH - sigLeftWidth;
+  const sigPadding = 3;              // Inner padding around the signature image
 
   // Left box - Signature image container
   doc.setDrawColor(...COLORS.borderColor);
@@ -223,18 +224,51 @@ export async function generateFeedbackPDF(feedback, logoBase64 = null) {
 
   if (feedback.signatureDataUrl) {
     try {
-      doc.addImage(feedback.signatureDataUrl, 'PNG', MARGIN_X + 10, y + 2, sigLeftWidth - 20, sigBoxHeight - 4);
+      // Available area inside the signature box (after padding)
+      const availW = sigLeftWidth - sigPadding * 2;
+      const availH = sigBoxHeight - sigPadding * 2;
+
+      // Extract original pixel dimensions from the base64 PNG data URL
+      const sigDims = getImageDimensionsFromDataUrl(feedback.signatureDataUrl);
+
+      let imgW, imgH;
+
+      if (sigDims) {
+        const { width: origW, height: origH } = sigDims;
+        const aspectRatio = origW / origH;
+
+        // "contain" scaling — fit within availW × availH preserving aspect ratio
+        if (aspectRatio >= availW / availH) {
+          // Image is wider relative to available box → constrain by width
+          imgW = availW;
+          imgH = availW / aspectRatio;
+        } else {
+          // Image is taller relative to available box → constrain by height
+          imgH = availH;
+          imgW = availH * aspectRatio;
+        }
+      } else {
+        // Fallback: if dimensions couldn't be read, fill the available area
+        imgW = availW;
+        imgH = availH;
+      }
+
+      // Center the image within the available area
+      const imgX = MARGIN_X + sigPadding + (availW - imgW) / 2;
+      const imgY = y + sigPadding + (availH - imgH) / 2;
+
+      doc.addImage(feedback.signatureDataUrl, 'PNG', imgX, imgY, imgW, imgH);
     } catch {
       doc.setFont('helvetica', 'italic');
       doc.setFontSize(8);
       doc.setTextColor(...COLORS.lightText);
-      doc.text('[Digital Signature Captured]', MARGIN_X + 30, y + 12);
+      doc.text('[Digital Signature Captured]', MARGIN_X + 30, y + sigBoxHeight / 2 + 2);
     }
   } else {
     doc.setFont('helvetica', 'italic');
     doc.setFontSize(8);
     doc.setTextColor(...COLORS.lightText);
-    doc.text('[Digital Signature Captured]', MARGIN_X + 30, y + 12);
+    doc.text('[Digital Signature Captured]', MARGIN_X + 30, y + sigBoxHeight / 2 + 2);
   }
 
   // Right box - Date & Time container
@@ -243,12 +277,12 @@ export async function generateFeedbackPDF(feedback, logoBase64 = null) {
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8);
   doc.setTextColor(...COLORS.darkText);
-  doc.text('Signature Date', MARGIN_X + sigLeftWidth + 5, y + 8);
+  doc.text('Signature Date', MARGIN_X + sigLeftWidth + 5, y + 10);
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
   doc.setTextColor(...COLORS.darkText);
-  doc.text(`${dateStr} ${timeStr}`, MARGIN_X + sigLeftWidth + 5, y + 14);
+  doc.text(`${dateStr} ${timeStr}`, MARGIN_X + sigLeftWidth + 5, y + 16);
 
   y += sigBoxHeight + 6;
 
@@ -476,4 +510,28 @@ function formatTime(date) {
   hours = hours % 12;
   hours = hours ? hours : 12;
   return `${String(hours).padStart(2, '0')}:${minutes} ${ampm}`;
+}
+
+/**
+ * Extracts pixel width and height from a base64-encoded PNG data URL
+ * by reading the IHDR chunk (bytes 16–23 of the PNG file).
+ * Returns { width, height } or null if parsing fails.
+ */
+function getImageDimensionsFromDataUrl(dataUrl) {
+  try {
+    const base64Data = dataUrl.replace(/^data:image\/\w+;base64,/, '');
+    const buf = Buffer.from(base64Data, 'base64');
+
+    // PNG IHDR: width at bytes 16-19, height at bytes 20-23 (big-endian uint32)
+    if (buf.length >= 24) {
+      const width = buf.readUInt32BE(16);
+      const height = buf.readUInt32BE(20);
+      if (width > 0 && height > 0 && width < 20000 && height < 20000) {
+        return { width, height };
+      }
+    }
+    return null;
+  } catch {
+    return null;
+  }
 }
