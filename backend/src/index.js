@@ -50,7 +50,9 @@ app.use((err, req, res, _next) => {
 });
 
 // Start server
-app.listen(config.port, () => {
+// Bind to 0.0.0.0 so Render (and other cloud hosts) can reach the server.
+// Locally, this still works on localhost:3001.
+app.listen(config.port, '0.0.0.0', () => {
   console.log(`Eagle Eye Feedback API running on port ${config.port}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 });
