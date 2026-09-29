@@ -397,22 +397,40 @@ export async function generateQuotationPDF(quotation, items = [], logoBase64 = n
   doc.line(MARGIN_X + leftW, y, MARGIN_X + leftW, y + splitBoxH);
 
   // Terms Left Side
-  let termY = y + 4;
+  let termY = y + 4.5;
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8.5);
-  doc.text('Terms & Conditions', MARGIN_X + 2, termY);
+  doc.setTextColor(0, 0, 0);
+  doc.text('Terms & Conditions', MARGIN_X + 3, termY);
   termY += 4.5;
 
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7.5);
+  doc.setFontSize(7);
+  doc.setTextColor(0, 0, 0);
 
-  const defaultTerms = quotation.terms_conditions || [];
-  defaultTerms.forEach(term => {
+  const exactDefaultTerms = [
+    '1. 100% payment in advance is required along with a valid Purchase Order (PO) to confirm the order.',
+    '2. Payments are non-refundable once the order has been confirmed and processing has begun.',
+    '3. SIM card procurement, activation, and recharge/data charges shall be under the customer\'s scope.',
+    '4. Delivery timelines are estimates only and subject to stock availability.',
+    '5. Products/services provided are subject to a 3-year replacement warranty against manufacturing defects.',
+    '6. This warranty does not cover normal wear and tear, misuse, or damage caused by improper handling.',
+  ];
+
+  const rawTerms = (quotation.terms_conditions && quotation.terms_conditions.length > 0)
+    ? quotation.terms_conditions
+    : exactDefaultTerms;
+
+  const termsToRender = rawTerms.map((t, idx) => {
+    const clean = sanitizePdfText(t);
+    return /^\d+\./.test(clean) ? clean : `${idx + 1}. ${clean}`;
+  });
+
+  termsToRender.forEach(term => {
     if (termY < y + splitBoxH - 2) {
-      const cleanTerm = sanitizePdfText(term);
-      const termLines = doc.splitTextToSize(cleanTerm, leftW - 4);
-      doc.text(termLines, MARGIN_X + 2, termY);
-      termY += (termLines.length * 3.2);
+      const termLines = doc.splitTextToSize(term, leftW - 6);
+      doc.text(termLines, MARGIN_X + 3, termY);
+      termY += (termLines.length * 2.8 + 0.8);
     }
   });
 

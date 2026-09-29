@@ -8,7 +8,7 @@ const DEFAULT_TERMS = [
   'Payments are non-refundable once the order has been confirmed and processing has begun.',
   'SIM card procurement, activation, and recharge/data charges shall be under the customer\'s scope.',
   'Delivery timelines are estimates only and subject to stock availability.',
-  'Products/services provided are subject to "3 years replacement warranty against manufacturing defects".',
+  'Products/services provided are subject to a 3-year replacement warranty against manufacturing defects.',
   'This warranty does not cover normal wear and tear, misuse, or damage caused by improper handling.',
 ];
 
