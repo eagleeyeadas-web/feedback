@@ -1,6 +1,10 @@
 import { Router } from 'express';
 import supabase from '../services/supabase.js';
+import { generateFeedbackPDF } from '../services/pdfGenerator.js';
 import { requireAdmin } from '../middleware/auth.js';
+
+// UUID v4 format check — avoids Postgres cast errors when querying the UUID `id` column
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const router = Router();
 
@@ -163,11 +167,13 @@ router.get('/feedback/:id', async (req, res) => {
   try {
     const { id } = req.params;
 
-    const { data: feedback, error } = await supabase
-      .from('feedback')
-      .select('*')
-      .or(`id.eq.${id},feedback_id.eq.${id}`)
-      .single();
+    let query = supabase.from('feedback').select('*');
+    if (UUID_RE.test(id)) {
+      query = query.or(`id.eq.${id},feedback_id.eq.${id}`);
+    } else {
+      query = query.eq('feedback_id', id);
+    }
+    const { data: feedback, error } = await query.single();
 
     if (error || !feedback) {
       return res.status(404).json({ error: 'Feedback not found' });
@@ -200,34 +206,84 @@ router.get('/feedback/:id/pdf', async (req, res) => {
   try {
     const { id } = req.params;
 
-    const { data: feedback, error: fetchError } = await supabase
-      .from('feedback')
-      .select('pdf_path, feedback_id')
-      .or(`id.eq.${id},feedback_id.eq.${id}`)
-      .single();
+    // Look up the feedback record — query by UUID or feedback_id depending on format
+    let query = supabase.from('feedback').select('*');
+    if (UUID_RE.test(id)) {
+      query = query.or(`id.eq.${id},feedback_id.eq.${id}`);
+    } else {
+      query = query.eq('feedback_id', id);
+    }
+    const { data: feedback, error: fetchError } = await query.single();
 
     if (fetchError || !feedback) {
       return res.status(404).json({ error: 'Feedback not found' });
     }
 
-    if (!feedback.pdf_path) {
-      return res.status(404).json({ error: 'PDF not available' });
+    // If a pre-generated PDF exists in storage, serve it directly
+    if (feedback.pdf_path) {
+      try {
+        const { data: pdfData, error: downloadError } = await supabase.storage
+          .from('pdfs')
+          .download(feedback.pdf_path);
+
+        if (!downloadError && pdfData) {
+          const buffer = Buffer.from(await pdfData.arrayBuffer());
+          res.setHeader('Content-Type', 'application/pdf');
+          res.setHeader('Content-Disposition', `attachment; filename="${feedback.feedback_id}.pdf"`);
+          res.setHeader('Content-Length', buffer.length);
+          return res.send(buffer);
+        }
+      } catch (storageErr) {
+        console.warn('Stored PDF retrieval failed, regenerating:', storageErr.message);
+      }
     }
 
-    const { data: pdfData, error: downloadError } = await supabase.storage
-      .from('pdfs')
-      .download(feedback.pdf_path);
+    // Fallback: regenerate the PDF on the fly (covers missing pdf_path or deleted storage objects)
+    try {
+      let logoBase64 = null;
+      try {
+        const { data: logoData } = await supabase.storage.from('assets').download('logo.png');
+        if (logoData) {
+          const logoBuf = Buffer.from(await logoData.arrayBuffer());
+          logoBase64 = `data:image/png;base64,${logoBuf.toString('base64')}`;
+        }
+      } catch { /* continue without logo */ }
 
-    if (downloadError || !pdfData) {
-      return res.status(500).json({ error: 'Failed to retrieve PDF' });
+      // Fetch the signature data URL for PDF embedding
+      let signatureDataUrl = null;
+      if (feedback.signature_path) {
+        try {
+          const { data: sigData } = await supabase.storage
+            .from('signatures')
+            .download(feedback.signature_path);
+          if (sigData) {
+            const sigBuf = Buffer.from(await sigData.arrayBuffer());
+            signatureDataUrl = `data:image/png;base64,${sigBuf.toString('base64')}`;
+          }
+        } catch { /* continue without signature */ }
+      }
+
+      const pdfPayload = { ...feedback, signatureDataUrl };
+      const pdfBuffer = await generateFeedbackPDF(pdfPayload, logoBase64);
+
+      // Attempt to cache the regenerated PDF in storage for next time
+      const pdfPath = `pdfs/${feedback.feedback_id}.pdf`;
+      try {
+        await supabase.storage.from('pdfs').upload(pdfPath, pdfBuffer, {
+          contentType: 'application/pdf',
+          upsert: true,
+        });
+        await supabase.from('feedback').update({ pdf_path: pdfPath }).eq('id', feedback.id);
+      } catch { /* non-critical */ }
+
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${feedback.feedback_id}.pdf"`);
+      res.setHeader('Content-Length', pdfBuffer.length);
+      return res.send(pdfBuffer);
+    } catch (genErr) {
+      console.error('PDF regeneration failed:', genErr);
+      return res.status(500).json({ error: 'Failed to generate PDF' });
     }
-
-    const buffer = Buffer.from(await pdfData.arrayBuffer());
-
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="${feedback.feedback_id}.pdf"`);
-    res.setHeader('Content-Length', buffer.length);
-    return res.send(buffer);
   } catch (error) {
     console.error('Admin PDF download error:', error);
     return res.status(500).json({ error: 'Internal server error' });
