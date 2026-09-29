@@ -90,18 +90,33 @@ router.post('/', feedbackLimiter, validate(feedbackSchema), async (req, res) => 
       user_agent: req.get('User-Agent') || null,
     };
 
-    const { data: insertedFeedback, error: insertError } = await supabase
+    let insertedFeedback = null;
+    let { data: fbData, error: insertError } = await supabase
       .from('feedback')
       .insert(feedbackRecord)
       .select()
       .single();
 
-    if (insertError) {
+    if (insertError && insertError.message?.includes('pdf_expires_at')) {
+      console.warn('Supabase DB feedback table lacks pdf_expires_at column; retrying insertion without pdf_expires_at...');
+      delete feedbackRecord.pdf_expires_at;
+      const retryResult = await supabase
+        .from('feedback')
+        .insert(feedbackRecord)
+        .select()
+        .single();
+      fbData = retryResult.data;
+      insertError = retryResult.error;
+    }
+
+    if (insertError || !fbData) {
       console.error('Feedback insert error:', insertError);
       // Clean up uploaded signature
       await supabase.storage.from('signatures').remove([signaturePath]);
       return res.status(500).json({ error: 'Failed to save feedback' });
     }
+
+    insertedFeedback = fbData;
 
     // Generate PDF (Handled separately so PDF errors never compromise database insertion)
     try {

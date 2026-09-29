@@ -244,16 +244,32 @@ router.post('/', async (req, res) => {
     quotationRecord.pdf_path = pdfPath;
 
     // 7. Save Quotation Record to Database
-    const { data: insertedQuotation, error: insertError } = await supabase
+    let insertedQuotation = null;
+    let { data: insData, error: insertError } = await supabase
       .from('quotations')
       .insert([quotationRecord])
       .select()
       .single();
 
-    if (insertError) {
-      console.error('Database insertion error for quotation:', insertError);
-      return res.status(500).json({ error: 'Failed to save quotation to database', details: insertError.message });
+    // Fallback: If display_size column is not in Supabase PostgreSQL schema yet, retry insertion without display_size
+    if (insertError && insertError.message?.includes('display_size')) {
+      console.warn('Supabase DB quotations table lacks display_size column; retrying insertion without display_size...');
+      delete quotationRecord.display_size;
+      const retryResult = await supabase
+        .from('quotations')
+        .insert([quotationRecord])
+        .select()
+        .single();
+      insData = retryResult.data;
+      insertError = retryResult.error;
     }
+
+    if (insertError || !insData) {
+      console.error('Database insertion error for quotation:', insertError);
+      return res.status(500).json({ error: 'Failed to save quotation to database', details: insertError?.message });
+    }
+
+    insertedQuotation = insData;
 
     // 8. Save Quotation Items to Database
     const itemsToInsert = processedItems.map(item => ({
