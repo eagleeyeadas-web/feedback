@@ -53,6 +53,13 @@ export default function QuotationGenerator() {
     }
   ]);
 
+  // GST State
+  const [gstApplicable, setGstApplicable] = useState(true);
+  const [gstType, setGstType] = useState('CGST_SGST'); // 'CGST_SGST' | 'IGST'
+  const [cgstPct, setCgstPct] = useState(9);
+  const [sgstPct, setSgstPct] = useState(9);
+  const [igstPct, setIgstPct] = useState(18);
+
   // Load next quotation number on mount
   useEffect(() => {
     fetchNextQuotationNumber();
