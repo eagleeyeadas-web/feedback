@@ -1,16 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { getNextQuotationNumber, createQuotation, downloadQuotationPDF } from '../../lib/api';
+import { PRODUCT_OPTIONS, getFullProductDescription, getProductKeyFromDescription } from '../../lib/productHelpers';
 import { Plus, Trash2, Download, RefreshCw, FileText, CheckCircle2, AlertCircle, ShieldCheck } from 'lucide-react';
 
-export const PRODUCT_OPTIONS = [
-  '2 Channel Live',
-  '2 Channel Recording',
-  '4 Channel Live',
-  '4 Channel Recording',
-  '6 Channel Live',
-  '8 Channel Live',
-];
+export { PRODUCT_OPTIONS };
 
 const DEFAULT_TERMS = [
   '100% payment in advance is required along with a valid Purchase Order (PO) to confirm the order.',
@@ -39,11 +33,18 @@ export default function QuotationGenerator() {
   const [quotationNumber, setQuotationNumber] = useState('');
   const [quotationDate, setQuotationDate] = useState(() => new Date().toISOString().split('T')[0]);
 
+  // Terms & Specs
+  const [terms, setTerms] = useState(DEFAULT_TERMS);
+  const [includeTechSpecs, setIncludeTechSpecs] = useState(true);
+  const [techSpecTemplate, setTechSpecTemplate] = useState('default');
+  const [displaySize, setDisplaySize] = useState('10-inch'); // '7-inch' | '10-inch'
+
   // Dynamic Product Items
   const [items, setItems] = useState([
     {
       id: '1',
-      item_description: '2 Channel Live',
+      product_option: '2 Channel Live',
+      item_description: getFullProductDescription('2 Channel Live', '10-inch'),
       hsn_sac: '852589',
       qty: 1,
       uom: 'Nos',
@@ -51,19 +52,6 @@ export default function QuotationGenerator() {
       discount_pct: 0,
     }
   ]);
-
-  // GST State
-  const [gstApplicable, setGstApplicable] = useState(true);
-  const [gstType, setGstType] = useState('CGST_SGST'); // 'CGST_SGST' | 'IGST'
-  const [cgstPct, setCgstPct] = useState(9);
-  const [sgstPct, setSgstPct] = useState(9);
-  const [igstPct, setIgstPct] = useState(18);
-
-  // Terms & Specs
-  const [terms, setTerms] = useState(DEFAULT_TERMS);
-  const [includeTechSpecs, setIncludeTechSpecs] = useState(true);
-  const [techSpecTemplate, setTechSpecTemplate] = useState('default');
-  const [displaySize, setDisplaySize] = useState('10-inch'); // '7-inch' | '10-inch'
 
   // Load next quotation number on mount
   useEffect(() => {
@@ -82,13 +70,30 @@ export default function QuotationGenerator() {
     }
   };
 
+  const handleDisplaySizeChange = (newSize) => {
+    setDisplaySize(newSize);
+    setItems((prevItems) =>
+      prevItems.map((item) => {
+        const prodKey = getProductKeyFromDescription(item.product_option || item.item_description);
+        if (prodKey === '2 Channel Live' || prodKey === '2 Channel Recording') {
+          return {
+            ...item,
+            item_description: getFullProductDescription(prodKey, newSize),
+          };
+        }
+        return item;
+      })
+    );
+  };
+
   // Add Item Row
   const addItem = () => {
     setItems([
       ...items,
       {
         id: String(Date.now()),
-        item_description: '2 Channel Live',
+        product_option: '2 Channel Live',
+        item_description: getFullProductDescription('2 Channel Live', displaySize),
         hsn_sac: '852589',
         qty: 1,
         uom: 'Nos',
@@ -110,7 +115,13 @@ export default function QuotationGenerator() {
   // Update Item Row
   const updateItem = (index, field, value) => {
     const updated = [...items];
-    updated[index][field] = value;
+    if (field === 'item_description' || field === 'product_option') {
+      const prodKey = getProductKeyFromDescription(value);
+      updated[index].product_option = prodKey;
+      updated[index].item_description = getFullProductDescription(prodKey, displaySize);
+    } else {
+      updated[index][field] = value;
+    }
     setItems(updated);
   };
 
@@ -230,14 +241,18 @@ export default function QuotationGenerator() {
       include_tech_specs: includeTechSpecs,
       tech_spec_template: techSpecTemplate,
       display_size: displaySize,
-      items: items.map(item => ({
-        item_description: item.item_description.trim(),
-        hsn_sac: item.hsn_sac.trim(),
-        qty: parseFloat(item.qty) || 1,
-        uom: item.uom || 'Nos',
-        rate: parseFloat(item.rate) || 0,
-        discount_pct: parseFloat(item.discount_pct) || 0,
-      })),
+      items: items.map(item => {
+        const prodKey = getProductKeyFromDescription(item.product_option || item.item_description);
+        const fullDesc = getFullProductDescription(prodKey, displaySize);
+        return {
+          item_description: fullDesc,
+          hsn_sac: item.hsn_sac.trim(),
+          qty: parseFloat(item.qty) || 1,
+          uom: item.uom || 'Nos',
+          rate: parseFloat(item.rate) || 0,
+          discount_pct: parseFloat(item.discount_pct) || 0,
+        };
+      }),
     };
 
     try {
@@ -284,7 +299,8 @@ export default function QuotationGenerator() {
     setItems([
       {
         id: String(Date.now()),
-        item_description: '2 Channel Live',
+        product_option: '2 Channel Live',
+        item_description: getFullProductDescription('2 Channel Live', '10-inch'),
         hsn_sac: '852589',
         qty: 1,
         uom: 'Nos',
@@ -499,10 +515,10 @@ export default function QuotationGenerator() {
                     <tr key={item.id || index} className="hover:bg-gray-50">
                       <td className="p-2 text-center font-bold text-gray-500">{index + 1}</td>
                       
-                      <td className="p-2">
+                      <td className="p-2 min-w-[280px]">
                         <select
-                          value={item.item_description}
-                          onChange={(e) => updateItem(index, 'item_description', e.target.value)}
+                          value={getProductKeyFromDescription(item.product_option || item.item_description)}
+                          onChange={(e) => updateItem(index, 'product_option', e.target.value)}
                           required
                           className="w-full px-2.5 py-1.5 border border-gray-300 rounded-md text-xs font-semibold text-gray-800 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 cursor-pointer shadow-xs"
                         >
@@ -512,12 +528,10 @@ export default function QuotationGenerator() {
                               {prod}
                             </option>
                           ))}
-                          {item.item_description && !PRODUCT_OPTIONS.includes(item.item_description) && (
-                            <option value={item.item_description}>
-                              {item.item_description}
-                            </option>
-                          )}
                         </select>
+                        <p className="text-[11px] text-gray-600 mt-1.5 leading-relaxed bg-gray-50 p-2 rounded border border-gray-100 font-normal">
+                          {getFullProductDescription(item.product_option || item.item_description, displaySize)}
+                        </p>
                       </td>
 
                       <td className="p-2">
@@ -605,7 +619,7 @@ export default function QuotationGenerator() {
           </div>
 
           {/* Prominent Display Size selection banner for 2-channel products */}
-          {items.some(i => i.item_description === '2 Channel Live' || i.item_description === '2 Channel Recording') && (
+          {items.some(i => ['2 Channel Live', '2 Channel Recording'].includes(getProductKeyFromDescription(i.product_option || i.item_description))) && (
             <div className="mt-4 p-4 bg-blue-50 border-2 border-blue-300 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm animate-fade-in">
               <div className="flex items-center gap-3">
                 <div className="w-9 h-9 rounded-lg bg-blue-600 text-white font-bold flex items-center justify-center text-xs shadow-xs">
@@ -626,7 +640,7 @@ export default function QuotationGenerator() {
                 <select
                   id="displaySizeSelectMain"
                   value={displaySize}
-                  onChange={(e) => setDisplaySize(e.target.value)}
+                  onChange={(e) => handleDisplaySizeChange(e.target.value)}
                   className="px-4 py-2 border-2 border-blue-400 rounded-lg text-xs font-bold text-blue-900 bg-white focus:ring-2 focus:ring-blue-500 cursor-pointer shadow-xs"
                 >
                   <option value="7-inch">7-inch</option>
@@ -855,7 +869,7 @@ export default function QuotationGenerator() {
             )}
 
             {/* Display Size selection for 2-channel products */}
-            {items.some(i => i.item_description === '2 Channel Live' || i.item_description === '2 Channel Recording') && (
+            {items.some(i => ['2 Channel Live', '2 Channel Recording'].includes(getProductKeyFromDescription(i.product_option || i.item_description))) && (
               <div className="p-4 bg-blue-50/70 rounded-lg border border-blue-200 space-y-2">
                 <label htmlFor="displaySizeSelect" className="block text-xs font-bold text-navy">
                   Display Size Option (2-Camera Product):
@@ -863,7 +877,7 @@ export default function QuotationGenerator() {
                 <select
                   id="displaySizeSelect"
                   value={displaySize}
-                  onChange={(e) => setDisplaySize(e.target.value)}
+                  onChange={(e) => handleDisplaySizeChange(e.target.value)}
                   className="w-full p-2.5 border border-gray-300 rounded-lg text-xs font-semibold text-gray-800 bg-white focus:ring-2 focus:ring-blue-500 cursor-pointer shadow-xs"
                 >
                   <option value="7-inch">7-inch</option>

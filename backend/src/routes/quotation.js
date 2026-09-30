@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import supabase from '../services/supabase.js';
-import { generateQuotationPDF, numberToWordsIndian } from '../services/quotationPdfGenerator.js';
+import { generateQuotationPDF, numberToWordsIndian, getFullProductDescription } from '../services/quotationPdfGenerator.js';
 import { runFullCleanup } from '../services/quotationCleanupService.js';
 import { peekNextQuotationNumber, generateAndReserveQuotationNumber, handleQuotationDeletion } from '../services/quotationSequenceService.js';
 import { requireAdmin } from '../middleware/auth.js';
@@ -125,7 +125,7 @@ router.post('/', async (req, res) => {
 
       return {
         sno: index + 1,
-        item_description: item.item_description,
+        item_description: getFullProductDescription(item.item_description, data.display_size),
         hsn_sac: item.hsn_sac || '852589',
         qty,
         uom: item.uom || 'Nos',
