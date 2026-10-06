@@ -796,7 +796,7 @@ export async function generateQuotationPDF(quotation, items = [], logoBase64 = n
           { no: '7',  spec: 'GPU Processor',        param: 'IMG GE8320, 650MHz',                            remark: '' },
           { no: '8',  spec: 'Calibration Method',   param: 'One-key Calibration, Remote Calibration',       remark: '' },
           { no: '9',  spec: 'Display Mode',         param: '4K',                                            remark: '' },
-          { no: '10', spec: 'Tracking Method',      param: 'WiFi',                                          remark: '' },
+          { no: '10', spec: 'Tracking Method',      param: 'GPS+WiFi',                                      remark: '' },
           { no: '11', spec: 'Network',              param: '4G full Netcom supports external SIM card',     remark: '' },
           { no: '12', spec: 'WiFi',                 param: '720P, supports 802.11 b/g/n protocol',          remark: '' },
           { no: '13', spec: 'USB insert',           param: 'support 1 USB insert',                          remark: '' },
