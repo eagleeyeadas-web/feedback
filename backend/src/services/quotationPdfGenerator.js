@@ -763,10 +763,12 @@ export async function generateQuotationPDF(quotation, items = [], logoBase64 = n
     p2Y += 7;
     const specTableStartY = p2Y - 7;
 
-    // Determine dynamic camera count and display size
+    // Determine which product is selected (use first item's description)
+    let productKey = '4 Channel Live';
     let cameraCount = 4;
     if (items && items.length > 0) {
       const firstDesc = items[0].item_description || items[0].description || '';
+      productKey = getProductKeyFromDescription(firstDesc);
       const match = firstDesc.match(/(\d+)\s*Channel/i);
       if (match && match[1]) {
         cameraCount = parseInt(match[1], 10);
@@ -779,28 +781,53 @@ export async function generateQuotationPDF(quotation, items = [], logoBase64 = n
       ? `${displaySize} IPS full viewing angle HD screen`
       : `${displaySize} IPS full viewing angle HD screen 16:10`;
 
-    // 19 Technical Parameters from Reference PDF
-    const full19Specs = [
-      { no: '1', spec: 'Display size', param: displayParam, remark: '' },
-      { no: '2', spec: 'Resolution', param: `1280*800, ${cameraCount} Camera`, remark: '' },
-      { no: '3', spec: 'System', param: 'Linux', remark: '' },
-      { no: '4', spec: 'Processor', param: 'MTK6762 CCRTEX-A53 Octa-core Processor 2GHz', remark: '' },
-      { no: '5', spec: 'Storage Memory', param: '128GB', remark: '' },
-      { no: '6', spec: 'Operating Memory', param: '2GB/4GB', remark: '' },
-      { no: '7', spec: 'GPU Processor', param: 'IMG GE8320, 650MHZ', remark: '' },
-      { no: '8', spec: 'Calibration Method', param: 'One-key Calibration, Remote Calibration', remark: '' },
-      { no: '9', spec: 'Display Mode', param: '4K', remark: '' },
-      { no: '10', spec: 'Tracking Method', param: 'GPS+ GLONASS+ AGPS', remark: '' },
-      { no: '11', spec: 'Network', param: '4G full Netcom supports external SIM card', remark: '' },
-      { no: '12', spec: 'WiFi', param: 'supports 802.11 b/g/n protocol', remark: '' },
-      { no: '13', spec: 'USB insert', param: 'support 1 USB insert', remark: '' },
-      { no: '14', spec: 'T F card', param: 'Supports expansion up to 512GB', remark: '' },
-      { no: '15', spec: 'Car Setting', param: 'Settings include system, screen, time, sound, language, network, ETC', remark: '' },
-      { no: '16', spec: 'Operating Voltage', param: 'DC 9-36V, nominal DC 24V', remark: '' },
-      { no: '17', spec: 'Working Current', param: 'About 0.8A (with 4cameras)', remark: '' },
-      { no: '18', spec: 'Working Temperature', param: '-20-70 degrees', remark: '' },
-      { no: '19', spec: 'Storage temperature', param: '-40-85 degrees', remark: '' },
-    ];
+    const is8ChannelLive = productKey === '8 Channel Live';
+
+    // 19 Technical Parameters — values switch per product
+    // 8 Channel Live gets its own specific parameters; all others use the default set.
+    const full19Specs = is8ChannelLive
+      ? [
+          { no: '1',  spec: 'Display size',        param: '10-inch IPS full viewing angle HD screen 16:10', remark: '' },
+          { no: '2',  spec: 'Resolution',           param: '1280*800, 8 Camera',                            remark: '' },
+          { no: '3',  spec: 'System',               param: 'Linux',                                         remark: '' },
+          { no: '4',  spec: 'Processor',            param: 'MTK6762 CORTEX-A53 Octa-core Processor 2GHz',   remark: '' },
+          { no: '5',  spec: 'Storage Memory',       param: '2 TB',                                          remark: '' },
+          { no: '6',  spec: 'Operating Memory',     param: '2 TB',                                          remark: '' },
+          { no: '7',  spec: 'GPU Processor',        param: 'IMG GE8320, 650MHz',                            remark: '' },
+          { no: '8',  spec: 'Calibration Method',   param: 'One-key Calibration, Remote Calibration',       remark: '' },
+          { no: '9',  spec: 'Display Mode',         param: '4K',                                            remark: '' },
+          { no: '10', spec: 'Tracking Method',      param: 'WiFi',                                          remark: '' },
+          { no: '11', spec: 'Network',              param: '4G full Netcom supports external SIM card',     remark: '' },
+          { no: '12', spec: 'WiFi',                 param: '720P, supports 802.11 b/g/n protocol',          remark: '' },
+          { no: '13', spec: 'USB insert',           param: 'support 1 USB insert',                          remark: '' },
+          { no: '14', spec: 'T F card',             param: 'Supports expansion up to 512GB',                remark: '' },
+          { no: '15', spec: 'Car Setting',          param: 'Settings include system, screen, time, sound, language, network, ETC', remark: '' },
+          { no: '16', spec: 'Operating Voltage',    param: '12-36V, nominal DC 24V',                        remark: '' },
+          { no: '17', spec: 'Working Current',      param: 'About 8A (with 8 cameras)',                     remark: '' },
+          { no: '18', spec: 'Working Temperature',  param: '-20-70 degrees',                                remark: '' },
+          { no: '19', spec: 'Storage temperature',  param: '-40-85 degrees',                                remark: '' },
+        ]
+      : [
+          { no: '1',  spec: 'Display size',        param: displayParam,                                     remark: '' },
+          { no: '2',  spec: 'Resolution',           param: `1280*800, ${cameraCount} Camera`,               remark: '' },
+          { no: '3',  spec: 'System',               param: 'Linux',                                         remark: '' },
+          { no: '4',  spec: 'Processor',            param: 'MTK6762 CCRTEX-A53 Octa-core Processor 2GHz',   remark: '' },
+          { no: '5',  spec: 'Storage Memory',       param: '128GB',                                         remark: '' },
+          { no: '6',  spec: 'Operating Memory',     param: '2GB/4GB',                                       remark: '' },
+          { no: '7',  spec: 'GPU Processor',        param: 'IMG GE8320, 650MHZ',                            remark: '' },
+          { no: '8',  spec: 'Calibration Method',   param: 'One-key Calibration, Remote Calibration',       remark: '' },
+          { no: '9',  spec: 'Display Mode',         param: '4K',                                            remark: '' },
+          { no: '10', spec: 'Tracking Method',      param: 'GPS+ GLONASS+ AGPS',                            remark: '' },
+          { no: '11', spec: 'Network',              param: '4G full Netcom supports external SIM card',     remark: '' },
+          { no: '12', spec: 'WiFi',                 param: 'supports 802.11 b/g/n protocol',                remark: '' },
+          { no: '13', spec: 'USB insert',           param: 'support 1 USB insert',                          remark: '' },
+          { no: '14', spec: 'T F card',             param: 'Supports expansion up to 512GB',                remark: '' },
+          { no: '15', spec: 'Car Setting',          param: 'Settings include system, screen, time, sound, language, network, ETC', remark: '' },
+          { no: '16', spec: 'Operating Voltage',    param: 'DC 9-36V, nominal DC 24V',                      remark: '' },
+          { no: '17', spec: 'Working Current',      param: `About 0.8A (with ${cameraCount}cameras)`,       remark: '' },
+          { no: '18', spec: 'Working Temperature',  param: '-20-70 degrees',                                remark: '' },
+          { no: '19', spec: 'Storage temperature',  param: '-40-85 degrees',                                remark: '' },
+        ];
 
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8);
