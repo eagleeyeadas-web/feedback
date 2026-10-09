@@ -48,7 +48,16 @@ export async function getInventoryTransactions(params = {}) {
 /**
  * Adds new stock batch (Store Manager / Admin)
  */
-export async function receiveNewStock({ device_type, quantity, user, remarks = '' }) {
+export async function receiveNewStock({
+  device_type,
+  quantity,
+  user,
+  supplier = '',
+  purchase_ref = '',
+  unit_cost = null,
+  received_date = null,
+  remarks = '',
+}) {
   if (!quantity || quantity <= 0) {
     throw new Error('Received stock quantity must be greater than 0');
   }
@@ -74,13 +83,23 @@ export async function receiveNewStock({ device_type, quantity, user, remarks = '
 
   if (updateErr) throw new Error(updateErr.message);
 
+  const formattedRemarks = [
+    remarks,
+    supplier ? `Supplier: ${supplier}` : null,
+    purchase_ref ? `Ref/Inv: ${purchase_ref}` : null,
+    unit_cost ? `Unit Cost: ₹${unit_cost}` : null,
+    received_date ? `Received Date: ${received_date}` : null,
+  ]
+    .filter(Boolean)
+    .join(' | ');
+
   // Insert transaction
   await supabase.from('inventory_transactions').insert([{
     product_id: product.id,
     transaction_type: 'STOCK_RECEIVED',
     quantity: quantity,
     performed_by: user.id,
-    reason_or_remarks: remarks || `New stock batch received for ${device_type}`,
+    reason_or_remarks: formattedRemarks || `New stock batch received for ${device_type}`,
     idempotency_key: `RECEIVE-${product.id}-${Date.now()}`,
   }]);
 
@@ -91,7 +110,7 @@ export async function receiveNewStock({ device_type, quantity, user, remarks = '
     action: 'RECEIVE_NEW_STOCK',
     target_table: 'inventory_products',
     target_id: product.id,
-    details: { device_type, quantity, new_usable_stock: newUsable },
+    details: { device_type, quantity, supplier, purchase_ref, unit_cost, new_usable_stock: newUsable },
   });
 
   return { success: true, usable_stock: newUsable };

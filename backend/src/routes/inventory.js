@@ -43,11 +43,15 @@ router.get('/transactions', requireRole('STORE_MANAGER'), async (req, res) => {
  */
 router.post('/receive', requireRole('STORE_MANAGER'), async (req, res) => {
   try {
-    const { device_type, quantity, remarks } = req.body;
+    const { device_type, quantity, supplier, purchase_ref, unit_cost, received_date, remarks } = req.body;
     const result = await receiveNewStock({
       device_type,
       quantity: parseInt(quantity, 10),
       user: req.profile,
+      supplier,
+      purchase_ref,
+      unit_cost: unit_cost ? parseFloat(unit_cost) : null,
+      received_date,
       remarks,
     });
     return res.json(result);

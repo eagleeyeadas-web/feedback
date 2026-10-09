@@ -10,6 +10,9 @@ import InventoryManagement from './InventoryManagement';
 import CustomerManagement from './CustomerManagement';
 import UserManagement from './UserManagement';
 import AuditLogs from './AuditLogs';
+import SalesWorkspace from './workspaces/SalesWorkspace';
+import TechnicalWorkspace from './workspaces/TechnicalWorkspace';
+import StoreWorkspace from './workspaces/StoreWorkspace';
 import {
   fetchAdminStats,
   fetchAdminFeedback,
@@ -42,6 +45,8 @@ import {
   Users,
   UserCheck,
   Shield,
+  Briefcase,
+  Store,
 } from 'lucide-react';
 
 export default function Dashboard() {
@@ -242,6 +247,43 @@ export default function Dashboard() {
               Installation Jobs
             </button>
 
+            {/* OPERATIONAL WORKSPACE PAGES (Single Admin Login Access) */}
+            <button
+              onClick={() => { setActiveTab('sales_workspace'); navigate('/admin/dashboard'); setShowMobileSidebar(false); }}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
+                activeTab === 'sales_workspace'
+                  ? 'bg-blue-600 text-white shadow-sm font-semibold'
+                  : 'text-white/70 hover:text-white hover:bg-white/5'
+              }`}
+            >
+              <Briefcase size={18} />
+              Sales Workspace
+            </button>
+
+            <button
+              onClick={() => { setActiveTab('technical_workspace'); navigate('/admin/dashboard'); setShowMobileSidebar(false); }}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
+                activeTab === 'technical_workspace'
+                  ? 'bg-purple-600 text-white shadow-sm font-semibold'
+                  : 'text-white/70 hover:text-white hover:bg-white/5'
+              }`}
+            >
+              <Wrench size={18} />
+              Technical Workspace
+            </button>
+
+            <button
+              onClick={() => { setActiveTab('store_workspace'); navigate('/admin/dashboard'); setShowMobileSidebar(false); }}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
+                activeTab === 'store_workspace'
+                  ? 'bg-amber-600 text-white shadow-sm font-semibold'
+                  : 'text-white/70 hover:text-white hover:bg-white/5'
+              }`}
+            >
+              <Store size={18} />
+              Store Manager Workspace
+            </button>
+
             <button
               onClick={() => { setActiveTab('inventory'); navigate('/admin/dashboard'); setShowMobileSidebar(false); }}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
@@ -252,6 +294,30 @@ export default function Dashboard() {
             >
               <Package size={18} />
               Stock & Inventory
+            </button>
+
+            <button
+              onClick={() => { setActiveTab('quotation_generator'); navigate('/admin/dashboard'); setShowMobileSidebar(false); }}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
+                activeTab === 'quotation_generator'
+                  ? 'bg-white/15 text-white shadow-sm font-semibold'
+                  : 'text-white/70 hover:text-white hover:bg-white/5'
+              }`}
+            >
+              <FileText size={18} />
+              Quotation Generator
+            </button>
+
+            <button
+              onClick={() => { setActiveTab('quotation_history'); navigate('/admin/dashboard'); setShowMobileSidebar(false); }}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
+                activeTab === 'quotation_history'
+                  ? 'bg-white/15 text-white shadow-sm font-semibold'
+                  : 'text-white/70 hover:text-white hover:bg-white/5'
+              }`}
+            >
+              <History size={18} />
+              Quotation History
             </button>
 
             {(role === 'SALES' || role === 'ADMIN') && (
@@ -266,34 +332,6 @@ export default function Dashboard() {
                 <Users size={18} />
                 Customer Directory
               </button>
-            )}
-
-            {(role === 'SALES' || role === 'ADMIN') && (
-              <>
-                <button
-                  onClick={() => { setActiveTab('quotation_generator'); navigate('/admin/dashboard'); setShowMobileSidebar(false); }}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
-                    activeTab === 'quotation_generator'
-                      ? 'bg-white/15 text-white shadow-sm font-semibold'
-                      : 'text-white/70 hover:text-white hover:bg-white/5'
-                  }`}
-                >
-                  <FileText size={18} />
-                  Quotation Generator
-                </button>
-
-                <button
-                  onClick={() => { setActiveTab('quotation_history'); navigate('/admin/dashboard'); setShowMobileSidebar(false); }}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
-                    activeTab === 'quotation_history'
-                      ? 'bg-white/15 text-white shadow-sm font-semibold'
-                      : 'text-white/70 hover:text-white hover:bg-white/5'
-                  }`}
-                >
-                  <History size={18} />
-                  Quotation History
-                </button>
-              </>
             )}
 
             {role === 'ADMIN' && (
@@ -363,6 +401,9 @@ export default function Dashboard() {
               <Menu size={20} />
             </button>
             <h1 className="text-lg font-bold text-navy">
+              {activeTab === 'sales_workspace' && 'Sales & Customer Intake Workspace'}
+              {activeTab === 'technical_workspace' && 'Technical Team Job Workspace'}
+              {activeTab === 'store_workspace' && 'Store Manager & Stock Workspace'}
               {activeTab === 'installation_checklists' && 'Installation Checklist Workflow'}
               {activeTab === 'inventory' && 'Inventory & Device Movements'}
               {activeTab === 'customers' && 'Customer Records'}
@@ -376,6 +417,39 @@ export default function Dashboard() {
         </header>
 
         <main className="p-4 lg:p-6">
+          {activeTab === 'sales_workspace' && (
+            <SalesWorkspace
+              onSelectChecklist={(id) => {
+                setActiveTab('installation_checklists');
+                setChecklistSubView({ type: 'view', id });
+                navigate(`/admin/installation-checklists/${id}`);
+              }}
+              onCreateChecklist={() => {
+                setActiveTab('installation_checklists');
+                setChecklistSubView({ type: 'create', id: null });
+                navigate('/admin/installation-checklists/create');
+              }}
+              onNavigateTab={(tab) => setActiveTab(tab)}
+            />
+          )}
+          {activeTab === 'technical_workspace' && (
+            <TechnicalWorkspace
+              onSelectChecklist={(id) => {
+                setActiveTab('installation_checklists');
+                setChecklistSubView({ type: 'view', id });
+                navigate(`/admin/installation-checklists/${id}`);
+              }}
+            />
+          )}
+          {activeTab === 'store_workspace' && (
+            <StoreWorkspace
+              onSelectChecklist={(id) => {
+                setActiveTab('installation_checklists');
+                setChecklistSubView({ type: 'view', id });
+                navigate(`/admin/installation-checklists/${id}`);
+              }}
+            />
+          )}
           {activeTab === 'inventory' && <InventoryManagement />}
           {activeTab === 'customers' && <CustomerManagement />}
           {activeTab === 'users' && <UserManagement />}

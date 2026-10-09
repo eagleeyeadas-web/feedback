@@ -24,7 +24,12 @@ export default function InventoryManagement() {
   // Receive stock modal state
   const [showReceiveModal, setShowReceiveModal] = useState(false);
   const [selectedDeviceType, setSelectedDeviceType] = useState('2 Channel Live');
+  const [sku, setSku] = useState('');
   const [receiveQty, setReceiveQty] = useState('');
+  const [supplier, setSupplier] = useState('');
+  const [purchaseRef, setPurchaseRef] = useState('');
+  const [receivedDate, setReceivedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [unitCost, setUnitCost] = useState('');
   const [receiveRemarks, setReceiveRemarks] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
@@ -95,6 +100,10 @@ export default function InventoryManagement() {
         body: JSON.stringify({
           device_type: selectedDeviceType,
           quantity: qty,
+          supplier,
+          purchase_ref: purchaseRef,
+          unit_cost: unitCost ? parseFloat(unitCost) : null,
+          received_date: receivedDate,
           remarks: receiveRemarks,
         }),
       });
@@ -104,6 +113,9 @@ export default function InventoryManagement() {
 
       setSuccessMsg(`Successfully added ${qty} units of ${selectedDeviceType} to usable stock.`);
       setReceiveQty('');
+      setSupplier('');
+      setPurchaseRef('');
+      setUnitCost('');
       setReceiveRemarks('');
       setShowReceiveModal(false);
       fetchData();
@@ -361,12 +373,12 @@ export default function InventoryManagement() {
       {/* Receive Stock Modal */}
       {showReceiveModal && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
             <h3 className="text-lg font-bold text-navy flex items-center gap-2">
-              <Plus className="w-5 h-5 text-blue-600" /> Receive New Stock Batch
+              <Plus className="w-5 h-5 text-blue-600" /> Add Stock Batch
             </h3>
             <p className="text-xs text-gray-500">
-              Record incoming physical inventory batch received from manufacturer/supplier.
+              Record incoming physical inventory received from supplier/manufacturer.
             </p>
 
             {errorMsg && (
@@ -375,43 +387,106 @@ export default function InventoryManagement() {
               </div>
             )}
 
-            <form onSubmit={handleReceiveStock} className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">Device Type</label>
-                <select
-                  value={selectedDeviceType}
-                  onChange={(e) => setSelectedDeviceType(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                >
-                  {products.map((p) => (
-                    <option key={p.id} value={p.device_type}>
-                      {p.device_type} (Current Usable: {p.usable_stock})
-                    </option>
-                  ))}
-                </select>
+            <form onSubmit={handleReceiveStock} className="space-y-3 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-gray-700 mb-1">Device Type *</label>
+                  <select
+                    value={selectedDeviceType}
+                    onChange={(e) => setSelectedDeviceType(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs focus:ring-2 focus:ring-blue-500 outline-none"
+                  >
+                    {products.map((p) => (
+                      <option key={p.id} value={p.device_type}>
+                        {p.device_type} (Usable: {p.usable_stock})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-gray-700 mb-1">SKU / Internal Code</label>
+                  <input
+                    type="text"
+                    value={sku}
+                    onChange={(e) => setSku(e.target.value)}
+                    placeholder="e.g. EE-2CH-LIVE"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs focus:ring-2 focus:ring-blue-500 outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-gray-700 mb-1">Quantity Received *</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={receiveQty}
+                    onChange={(e) => setReceiveQty(e.target.value)}
+                    placeholder="e.g. 25"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs focus:ring-2 focus:ring-blue-500 outline-none"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-gray-700 mb-1">Received Date *</label>
+                  <input
+                    type="date"
+                    value={receivedDate}
+                    onChange={(e) => setReceivedDate(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs focus:ring-2 focus:ring-blue-500 outline-none"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-gray-700 mb-1">Supplier Name</label>
+                  <input
+                    type="text"
+                    value={supplier}
+                    onChange={(e) => setSupplier(e.target.value)}
+                    placeholder="e.g. SafDrive Electronics Pvt Ltd"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs focus:ring-2 focus:ring-blue-500 outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-gray-700 mb-1">Purchase Ref / Invoice No.</label>
+                  <input
+                    type="text"
+                    value={purchaseRef}
+                    onChange={(e) => setPurchaseRef(e.target.value)}
+                    placeholder="e.g. INV-2026-9081"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs focus:ring-2 focus:ring-blue-500 outline-none"
+                  />
+                </div>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">Received Quantity</label>
+                <label className="block font-semibold text-gray-700 mb-1">Unit Cost (₹)</label>
                 <input
                   type="number"
-                  min="1"
-                  value={receiveQty}
-                  onChange={(e) => setReceiveQty(e.target.value)}
-                  placeholder="e.g. 25"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                  required
+                  min="0"
+                  step="0.01"
+                  value={unitCost}
+                  onChange={(e) => setUnitCost(e.target.value)}
+                  placeholder="e.g. 8500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs focus:ring-2 focus:ring-blue-500 outline-none"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">Batch / Receipt Remarks</label>
+                <label className="block font-semibold text-gray-700 mb-1">Receipt Remarks</label>
                 <textarea
                   rows="2"
                   value={receiveRemarks}
                   onChange={(e) => setReceiveRemarks(e.target.value)}
-                  placeholder="Supplier batch number or delivery invoice note..."
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                  placeholder="Additional stock receipt notes..."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs focus:ring-2 focus:ring-blue-500 outline-none"
                 />
               </div>
 
@@ -419,16 +494,16 @@ export default function InventoryManagement() {
                 <button
                   type="button"
                   onClick={() => setShowReceiveModal(false)}
-                  className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 font-medium"
+                  className="px-4 py-2 text-xs text-gray-600 hover:text-gray-800 font-medium"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="px-4 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                  className="px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50"
                 >
-                  {submitting ? 'Receiving...' : 'Add to Stock'}
+                  {submitting ? 'Adding Stock...' : 'Add Stock Batch'}
                 </button>
               </div>
             </form>
