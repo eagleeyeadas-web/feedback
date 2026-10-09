@@ -27,16 +27,22 @@ export default function InstallationChecklistDetails({ id: propId, onEdit, onBac
   const token = session?.access_token;
   const navigate = useNavigate();
   const routeParams = useParams();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const checklistId = propId || routeParams.id;
   const documentRef = useRef(null);
+  const isGeneratingRef = useRef(false);
+  const autoDownloadedRef = useRef(false);
 
   const [checklist, setChecklist] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [downloadingImage, setDownloadingImage] = useState(false);
   const [toastMessage, setToastMessage] = useState(null);
+
+  useEffect(() => {
+    autoDownloadedRef.current = false;
+  }, [checklistId]);
 
   useEffect(() => {
     if (!token || !checklistId) return;
@@ -58,15 +64,7 @@ export default function InstallationChecklistDetails({ id: propId, onEdit, onBac
         setError(err.message || 'Failed to fetch checklist details');
       })
       .finally(() => setLoading(false));
-  }, [token, checklistId, searchParams]);
-
-  useEffect(() => {
-    if (checklist && searchParams.get('action') === 'download') {
-      setTimeout(() => {
-        handleDownloadImage();
-      }, 600);
-    }
-  }, [checklist]);
+  }, [token, checklistId]);
 
   const showToast = (msg) => {
     setToastMessage(msg);
@@ -74,15 +72,27 @@ export default function InstallationChecklistDetails({ id: propId, onEdit, onBac
   };
 
   const handleDownloadImage = async () => {
-    if (!documentRef.current || !checklist) return;
+    // Synchronously guard against concurrent image generation calls
+    if (isGeneratingRef.current || !documentRef.current || !checklist) {
+      return;
+    }
+
+    isGeneratingRef.current = true;
     setDownloadingImage(true);
+
     try {
+      const node = documentRef.current;
+
       // High-quality PNG generation with html-to-image
-      const dataUrl = await toPng(documentRef.current, {
+      // fontEmbedCSS: '' prevents html-to-image from attempting to access cross-origin document.styleSheets[].cssRules
+      const dataUrl = await toPng(node, {
         quality: 0.98,
         pixelRatio: 2, // 2x Retina resolution for sharp text
         backgroundColor: '#ffffff',
         cacheBust: true,
+        fontEmbedCSS: '',
+        width: node.scrollWidth,
+        height: node.scrollHeight,
       });
 
       const link = document.createElement('a');
@@ -98,9 +108,28 @@ export default function InstallationChecklistDetails({ id: propId, onEdit, onBac
       console.error('Image generation error:', err);
       alert('Failed to generate PNG image. Please try again.');
     } finally {
+      isGeneratingRef.current = false;
       setDownloadingImage(false);
     }
   };
+
+  useEffect(() => {
+    if (!checklist || searchParams.get('action') !== 'download') return;
+
+    if (autoDownloadedRef.current) return;
+    autoDownloadedRef.current = true;
+
+    // Clean up action from searchParams so subsequent re-renders never re-trigger auto download
+    const newParams = new URLSearchParams(searchParams);
+    newParams.delete('action');
+    setSearchParams(newParams, { replace: true });
+
+    const timer = setTimeout(() => {
+      handleDownloadImage();
+    }, 400);
+
+    return () => clearTimeout(timer);
+  }, [checklist, searchParams, setSearchParams]);
 
   const handlePrint = () => {
     window.print();
