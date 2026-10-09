@@ -1,14 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../../hooks/useAuth';
-import { fetchInstallationChecklistDetail } from '../../../lib/api';
+import { fetchInstallationChecklistDetail, downloadInstallationPDF } from '../../../lib/api';
 import { downloadInstallationExcel } from '../../../lib/excelHelper';
-import { toPng } from 'html-to-image';
 import {
   ArrowLeft,
   Edit,
   FileSpreadsheet,
-  Image as ImageIcon,
+  FileDown,
   CheckCircle2,
   AlertTriangle,
   User,
@@ -37,7 +36,7 @@ export default function InstallationChecklistDetails({ id: propId, onEdit, onBac
   const [checklist, setChecklist] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [downloadingImage, setDownloadingImage] = useState(false);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [toastMessage, setToastMessage] = useState(null);
 
   useEffect(() => {
@@ -71,45 +70,34 @@ export default function InstallationChecklistDetails({ id: propId, onEdit, onBac
     setTimeout(() => setToastMessage(null), 3000);
   };
 
-  const handleDownloadImage = async () => {
-    // Synchronously guard against concurrent image generation calls
-    if (isGeneratingRef.current || !documentRef.current || !checklist) {
+  const handleDownloadPdf = async () => {
+    // Synchronously guard against concurrent PDF generation calls
+    if (isGeneratingRef.current || !checklist || !token) {
       return;
     }
 
     isGeneratingRef.current = true;
-    setDownloadingImage(true);
+    setDownloadingPdf(true);
 
     try {
-      const node = documentRef.current;
-
-      // High-quality PNG generation with html-to-image
-      // fontEmbedCSS: '' prevents html-to-image from attempting to access cross-origin document.styleSheets[].cssRules
-      const dataUrl = await toPng(node, {
-        quality: 0.98,
-        pixelRatio: 2, // 2x Retina resolution for sharp text
-        backgroundColor: '#ffffff',
-        cacheBust: true,
-        fontEmbedCSS: '',
-        width: node.scrollWidth,
-        height: node.scrollHeight,
-      });
-
+      const blob = await downloadInstallationPDF(token, checklist.id);
+      const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
-      const filename = `EagleEye-Installation-${checklist.checklist_number}.png`;
+      const filename = `EagleEye-Installation-${checklist.checklist_number}.pdf`;
+      link.href = url;
       link.download = filename;
-      link.href = dataUrl;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+      URL.revokeObjectURL(url);
 
-      showToast(`Image downloaded: ${filename}`);
+      showToast(`PDF downloaded: ${filename}`);
     } catch (err) {
-      console.error('Image generation error:', err);
-      alert('Failed to generate PNG image. Please try again.');
+      console.error('PDF generation error:', err);
+      alert(err.message || 'Failed to generate PDF. Please try again.');
     } finally {
       isGeneratingRef.current = false;
-      setDownloadingImage(false);
+      setDownloadingPdf(false);
     }
   };
 
@@ -125,7 +113,7 @@ export default function InstallationChecklistDetails({ id: propId, onEdit, onBac
     setSearchParams(newParams, { replace: true });
 
     const timer = setTimeout(() => {
-      handleDownloadImage();
+      handleDownloadPdf();
     }, 400);
 
     return () => clearTimeout(timer);
@@ -228,12 +216,12 @@ export default function InstallationChecklistDetails({ id: propId, onEdit, onBac
           </button>
 
           <button
-            onClick={handleDownloadImage}
-            disabled={downloadingImage}
+            onClick={handleDownloadPdf}
+            disabled={downloadingPdf}
             className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-4 py-2 rounded-xl shadow-sm transition-all disabled:opacity-50 cursor-pointer"
           >
-            <ImageIcon size={15} />
-            <span>{downloadingImage ? 'Generating Image...' : 'Download as Image'}</span>
+            <FileDown size={15} />
+            <span>{downloadingPdf ? 'Generating PDF...' : 'Download as PDF'}</span>
           </button>
 
           <button
@@ -554,12 +542,12 @@ export default function InstallationChecklistDetails({ id: propId, onEdit, onBac
           </button>
 
           <button
-            onClick={handleDownloadImage}
-            disabled={downloadingImage}
+            onClick={handleDownloadPdf}
+            disabled={downloadingPdf}
             className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-4 py-2 rounded-xl shadow-sm transition-all disabled:opacity-50 cursor-pointer"
           >
-            <ImageIcon size={15} />
-            <span>{downloadingImage ? 'Generating Image...' : 'Download as Image'}</span>
+            <FileDown size={15} />
+            <span>{downloadingPdf ? 'Generating PDF...' : 'Download as PDF'}</span>
           </button>
 
           <button

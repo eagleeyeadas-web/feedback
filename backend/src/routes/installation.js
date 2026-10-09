@@ -9,6 +9,7 @@ import {
   deleteChecklist,
   getInstallationStats,
 } from '../services/installationService.js';
+import { generateInstallationChecklistPDF } from '../services/installationPdfGenerator.js';
 
 const router = Router();
 
@@ -132,6 +133,30 @@ router.get('/:id', async (req, res) => {
   } catch (err) {
     console.error('Error in GET /installations/:id:', err);
     return res.status(404).json({ error: err.message || 'Installation checklist not found' });
+  }
+});
+
+/**
+ * GET /api/admin/installations/:id/pdf
+ * Download PDF for an installation checklist (Admin only)
+ */
+router.get('/:id/pdf', async (req, res) => {
+  try {
+    const item = await getChecklistById(req.params.id);
+    if (!item) {
+      return res.status(404).json({ error: 'Installation checklist not found' });
+    }
+
+    const pdfBuffer = await generateInstallationChecklistPDF(item);
+    const filename = `EagleEye-Installation-${item.checklist_number}.pdf`;
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Length', pdfBuffer.length);
+    return res.send(pdfBuffer);
+  } catch (err) {
+    console.error('Error in GET /installations/:id/pdf:', err);
+    return res.status(500).json({ error: err.message || 'Failed to generate installation PDF' });
   }
 });
 

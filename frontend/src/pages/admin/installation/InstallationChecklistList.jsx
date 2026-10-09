@@ -11,7 +11,7 @@ import {
   Edit,
   Trash2,
   FileSpreadsheet,
-  Image as ImageIcon,
+  FileDown,
   ChevronLeft,
   ChevronRight,
   RefreshCw,
@@ -454,16 +454,16 @@ export default function InstallationChecklistList({ onSelectChecklist, onCreateN
                           <Edit size={16} />
                         </button>
 
-                        {/* Download Image Action */}
+                        {/* Download PDF Action */}
                         <button
                           onClick={() => {
                             if (onSelectChecklist) onSelectChecklist(item.id, 'download');
                             else navigate(`/admin/installation-checklists/${item.id}?action=download`);
                           }}
-                          title="Download Image"
+                          title="Download PDF"
                           className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer"
                         >
-                          <ImageIcon size={16} />
+                          <FileDown size={16} />
                         </button>
 
                         {/* Download Excel Action */}

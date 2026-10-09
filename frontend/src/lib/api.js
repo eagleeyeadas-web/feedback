@@ -215,4 +215,15 @@ export async function deleteInstallationChecklist(token, id) {
   return json;
 }
 
+export async function downloadInstallationPDF(token, id) {
+  const res = await fetch(`${API_BASE}/admin/installations/${id}/pdf`, {
+    headers: adminHeaders(token),
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.error || 'Failed to download installation PDF');
+  }
+  return res.blob();
+}
+
 
