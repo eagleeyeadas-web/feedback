@@ -19,6 +19,8 @@ import {
   RefreshCw,
   AlertTriangle,
   MapPin,
+  ExternalLink,
+  Share2,
   CheckCircle2,
   Wrench,
 } from 'lucide-react';
@@ -366,11 +368,42 @@ export default function InstallationChecklistList({ onSelectChecklist, onCreateN
                     <td className="py-3.5 px-4 whitespace-nowrap font-mono text-gray-600">
                       {item.client_mobile}
                     </td>
-                    <td className="py-3.5 px-4 whitespace-nowrap text-gray-600">
-                      <span className="flex items-center gap-1">
-                        <MapPin size={12} className="text-gray-400" />
-                        {item.client_location || '—'}
-                      </span>
+                    <td className="py-3 px-4 whitespace-nowrap text-gray-600">
+                      <div className="flex flex-col gap-0.5">
+                        <span className="flex items-center gap-1 font-semibold text-navy">
+                          <MapPin size={13} className="text-blue-600 shrink-0" />
+                          {item.client_location || '—'}
+                        </span>
+                        {item.google_maps_location ? (
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            <a
+                              href={item.google_maps_location}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              title={item.google_maps_location}
+                              className="flex items-center gap-1 text-[11px] font-medium text-blue-600 hover:text-blue-800 hover:underline bg-blue-50/80 px-2 py-0.5 rounded border border-blue-200/60 max-w-[170px] truncate"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <ExternalLink size={11} className="shrink-0 text-blue-600" />
+                              <span className="truncate">Open GMap</span>
+                            </a>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigator.clipboard.writeText(item.google_maps_location);
+                                showToast('Google Maps URL copied to clipboard!');
+                              }}
+                              title="Copy Google Maps URL to share"
+                              className="p-1 text-gray-500 hover:text-blue-600 hover:bg-gray-100 rounded transition-colors cursor-pointer"
+                            >
+                              <Share2 size={12} />
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="text-[10px] text-gray-400 italic">No Map Link</span>
+                        )}
+                      </div>
                     </td>
                     <td className="py-3.5 px-4 whitespace-nowrap">
                       <span className="bg-gray-100 text-gray-800 px-2 py-0.5 rounded font-medium text-[11px]">
