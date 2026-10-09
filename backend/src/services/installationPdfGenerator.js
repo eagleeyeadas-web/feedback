@@ -62,14 +62,6 @@ function formatCurrency(amt) {
 }
 
 /**
- * Helper to split URLs at safe punctuation characters for text wrapping
- */
-function prepareUrlForWrap(url) {
-  if (!url) return '';
-  return String(url).replace(/([/?&=._,-])/g, '$1 ');
-}
-
-/**
  * Loads the company logo image as Base64 string
  */
 function getLogoBase64() {
@@ -124,10 +116,10 @@ function drawKeyValueGrid(doc, rows, startY) {
     // Calculate required row height based on text wrapping
     let maxCellHeight = 11;
     row.forEach((cell) => {
-      let valStr = cell.isUrl ? prepareUrlForWrap(cell.value) : sanitizeText(cell.value || '—');
-      doc.setFontSize(cell.isUrl ? 7 : 8.5);
+      let valStr = cell.isUrl ? 'Open Google Maps Location' : sanitizeText(cell.value || '—');
+      doc.setFontSize(8.5);
       const lines = doc.splitTextToSize(valStr, colWidth - 6);
-      const cellH = Math.max(11, 4.5 + lines.length * (cell.isUrl ? 3.2 : 3.8));
+      const cellH = Math.max(11, 4.5 + lines.length * 3.8);
       if (cellH > maxCellHeight) maxCellHeight = cellH;
     });
 
@@ -145,23 +137,28 @@ function drawKeyValueGrid(doc, rows, startY) {
       doc.setTextColor(...COLORS.grayText);
       doc.text(sanitizeText(cell.label).toUpperCase(), cellX + 3, y + 4);
 
-      // Value
-      doc.setFont('helvetica', cell.bold !== false ? 'bold' : 'normal');
-      doc.setFontSize(cell.isUrl ? 7 : 8.5);
-
-      if (cell.color) {
-        doc.setTextColor(...cell.color);
-      } else {
-        doc.setTextColor(...COLORS.darkText);
-      }
-
-      let valStr = cell.isUrl ? prepareUrlForWrap(cell.value) : sanitizeText(cell.value || '—');
-      const lines = doc.splitTextToSize(valStr, colWidth - 6);
-      doc.text(lines, cellX + 3, y + 8);
-
-      // Add clickable URL link annotation if present
+      // Value / Link
       if (cell.isUrl && cell.value && cell.value.startsWith('http')) {
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(8.5);
+        doc.setTextColor(...COLORS.blueText);
+        doc.text('Open Google Maps Location', cellX + 3, y + 7.8);
+
+        // Add clickable URL link annotation with full original destination URL
         doc.link(cellX, y, colWidth, maxCellHeight, { url: cell.value });
+      } else {
+        doc.setFont('helvetica', cell.bold !== false ? 'bold' : 'normal');
+        doc.setFontSize(8.5);
+
+        if (cell.color) {
+          doc.setTextColor(...cell.color);
+        } else {
+          doc.setTextColor(...COLORS.darkText);
+        }
+
+        const valStr = sanitizeText(cell.value || '—');
+        const lines = doc.splitTextToSize(valStr, colWidth - 6);
+        doc.text(lines, cellX + 3, y + 7.8);
       }
     });
 
@@ -361,15 +358,12 @@ export async function generateInstallationChecklistPDF(item) {
   ];
 
   y = drawKeyValueGrid(doc, pricingRows, y);
+  y += 5;
 
   // ============================================================
-  // PAGE 2 — INSTALLATION DETAILS, TEAM, CONFIRMATION & REMARKS
+  // SECTION 4 — 4. INSTALLATION DETAILS (Fits cleanly on Page 1)
   // ============================================================
-  doc.addPage();
-  y = 22;
-  drawCompactHeader(2);
-
-  // SECTION 4 — 4. INSTALLATION DETAILS (3 Cols then 2 Cols)
+  checkAddPage(32);
   y = drawSectionHeader(doc, '4. INSTALLATION DETAILS', y);
 
   const installationRow1 = [
@@ -388,7 +382,13 @@ export async function generateInstallationChecklistPDF(item) {
 
   y = drawKeyValueGrid(doc, installationRow1, y);
   y = drawKeyValueGrid(doc, installationRow2, y);
-  y += 5;
+
+  // ============================================================
+  // PAGE 2 — TEAM, CONFIRMATION, REMARKS & SIGNATURE
+  // ============================================================
+  doc.addPage();
+  y = 22;
+  drawCompactHeader(2);
 
   // SECTION 5 — 5. INSTALLATION TEAM (2 Equal Columns)
   y = drawSectionHeader(doc, '5. INSTALLATION TEAM', y);
