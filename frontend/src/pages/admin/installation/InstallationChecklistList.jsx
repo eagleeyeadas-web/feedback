@@ -357,12 +357,6 @@ export default function InstallationChecklistList({ onSelectChecklist, onCreateN
                   <th className="py-3.5 px-4">Client Name</th>
                   <th className="py-3.5 px-4">Mobile Number</th>
                   <th className="py-3.5 px-4">Client Location</th>
-                  <th className="py-3.5 px-4">Type of Device</th>
-                  <th className="py-3.5 px-4 text-center">Devices</th>
-                  <th className="py-3.5 px-4 text-center">Vehicles</th>
-                  <th className="py-3.5 px-4">Vehicle Type</th>
-                  <th className="py-3.5 px-4">Installation or Service</th>
-                  <th className="py-3.5 px-4">Expected Arrival</th>
                   <th className="py-3.5 px-4">Installation Status</th>
                   <th className="py-3.5 px-4">Payment Status</th>
                   <th className="py-3.5 px-4">Created Date</th>
@@ -417,38 +411,6 @@ export default function InstallationChecklistList({ onSelectChecklist, onCreateN
                           <span className="text-[10px] text-gray-400 italic">No Map Link</span>
                         )}
                       </div>
-                    </td>
-                    <td className="py-3.5 px-4 whitespace-nowrap">
-                      <span className="bg-gray-100 text-gray-800 px-2 py-0.5 rounded font-medium text-[11px]">
-                        {item.device_type}
-                      </span>
-                      {item.extra_devices && (
-                        <span className="ml-1 text-[10px] text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">
-                          +{item.extra_device_count} extra
-                        </span>
-                      )}
-                    </td>
-                    <td className="py-3.5 px-4 text-center font-bold">{item.number_of_devices}</td>
-                    <td className="py-3.5 px-4 text-center font-bold">{item.number_of_vehicles}</td>
-                    <td className="py-3.5 px-4 whitespace-nowrap text-gray-600">
-                      {item.vehicle_type || '—'}
-                    </td>
-                    <td className="py-3.5 px-4 whitespace-nowrap">
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                        item.installation_or_service === 'Service'
-                          ? 'bg-purple-100 text-purple-700'
-                          : 'bg-indigo-100 text-indigo-700'
-                      }`}>
-                        {item.installation_or_service}
-                      </span>
-                    </td>
-                    <td className="py-3.5 px-4 whitespace-nowrap text-gray-600">
-                      {item.expected_arrival_date ? new Date(item.expected_arrival_date).toLocaleDateString('en-IN') : '—'}
-                      {item.expected_arrival_time && (
-                        <span className="text-[10px] text-gray-400 block font-mono">
-                          {item.expected_arrival_time}
-                        </span>
-                      )}
                     </td>
                     <td className="py-3.5 px-4 whitespace-nowrap">
                       <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold border ${getStatusBadge(item.installation_status)}`}>
