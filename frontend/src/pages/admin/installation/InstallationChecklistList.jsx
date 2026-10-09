@@ -1,10 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../hooks/useAuth';
-import {
-  fetchInstallationChecklists,
-  deleteInstallationChecklist,
-} from '../../../lib/api';
+import { fetchInstallationChecklists, deleteInstallationChecklist } from '../../../lib/api';
+import { downloadInstallationExcel, downloadAllInstallationsExcel } from '../../../lib/excelHelper';
 import {
   Search,
   Plus,
@@ -12,7 +10,7 @@ import {
   Eye,
   Edit,
   Trash2,
-  Printer,
+  FileSpreadsheet,
   Image as ImageIcon,
   ChevronLeft,
   ChevronRight,
@@ -177,16 +175,31 @@ export default function InstallationChecklistList({ onSelectChecklist, onCreateN
             Manage client vehicle device installation and service records ({totalCount} total)
           </p>
         </div>
-        <button
-          onClick={() => {
-            if (onCreateNew) onCreateNew();
-            else navigate('/admin/installation-checklists/create');
-          }}
-          className="flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-5 py-2.5 rounded-xl shadow-sm transition-all cursor-pointer"
-        >
-          <Plus size={18} />
-          <span>Create Checklist</span>
-        </button>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => {
+              downloadAllInstallationsExcel(checklists);
+              showToast('Exported all checklists to Excel successfully!');
+            }}
+            title="Download all listed checklists as Excel file"
+            className="flex items-center justify-center gap-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-semibold px-4 py-2.5 rounded-xl transition-all cursor-pointer shadow-xs"
+          >
+            <FileSpreadsheet size={16} />
+            <span>Export Excel</span>
+          </button>
+
+          <button
+            onClick={() => {
+              if (onCreateNew) onCreateNew();
+              else navigate('/admin/installation-checklists/create');
+            }}
+            className="flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-5 py-2.5 rounded-xl shadow-sm transition-all cursor-pointer"
+          >
+            <Plus size={18} />
+            <span>Create Checklist</span>
+          </button>
+        </div>
       </div>
 
       {/* Search & Filter Controls */}
@@ -491,16 +504,16 @@ export default function InstallationChecklistList({ onSelectChecklist, onCreateN
                           <ImageIcon size={16} />
                         </button>
 
-                        {/* Print Action */}
+                        {/* Download Excel Action */}
                         <button
                           onClick={() => {
-                            if (onSelectChecklist) onSelectChecklist(item.id, 'print');
-                            else navigate(`/admin/installation-checklists/${item.id}?action=print`);
+                            downloadInstallationExcel(item);
+                            showToast(`Excel file downloaded for ${item.checklist_number}`);
                           }}
-                          title="Print Checklist"
-                          className="p-1.5 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors cursor-pointer"
+                          title="Download as Excel"
+                          className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer"
                         >
-                          <Printer size={16} />
+                          <FileSpreadsheet size={16} />
                         </button>
 
                         {/* Delete Action */}

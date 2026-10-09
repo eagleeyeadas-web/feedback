@@ -2,11 +2,12 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../../hooks/useAuth';
 import { fetchInstallationChecklistDetail } from '../../../lib/api';
+import { downloadInstallationExcel } from '../../../lib/excelHelper';
 import { toPng } from 'html-to-image';
 import {
   ArrowLeft,
   Edit,
-  Printer,
+  FileSpreadsheet,
   Image as ImageIcon,
   CheckCircle2,
   AlertTriangle,
@@ -207,11 +208,14 @@ export default function InstallationChecklistDetails({ id: propId, onEdit, onBac
           </button>
 
           <button
-            onClick={handlePrint}
-            className="flex items-center gap-1.5 bg-navy hover:bg-blue-900 text-white text-xs font-semibold px-4 py-2 rounded-xl shadow-sm transition-all cursor-pointer"
+            onClick={() => {
+              downloadInstallationExcel(checklist);
+              showToast(`Excel file downloaded for ${checklist.checklist_number}`);
+            }}
+            className="flex items-center gap-1.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold px-4 py-2 rounded-xl shadow-sm transition-all cursor-pointer"
           >
-            <Printer size={15} />
-            <span>Print</span>
+            <FileSpreadsheet size={15} />
+            <span>Download as Excel</span>
           </button>
 
           <button
@@ -530,11 +534,14 @@ export default function InstallationChecklistDetails({ id: propId, onEdit, onBac
           </button>
 
           <button
-            onClick={handlePrint}
-            className="flex items-center gap-1.5 bg-navy hover:bg-blue-900 text-white text-xs font-semibold px-4 py-2 rounded-xl shadow-sm transition-all cursor-pointer"
+            onClick={() => {
+              downloadInstallationExcel(checklist);
+              showToast(`Excel file downloaded for ${checklist.checklist_number}`);
+            }}
+            className="flex items-center gap-1.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold px-4 py-2 rounded-xl shadow-sm transition-all cursor-pointer"
           >
-            <Printer size={15} />
-            <span>Print</span>
+            <FileSpreadsheet size={15} />
+            <span>Download as Excel</span>
           </button>
         </div>
       </div>
