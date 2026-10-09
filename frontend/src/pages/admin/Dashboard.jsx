@@ -6,6 +6,10 @@ import QuotationHistory from './QuotationHistory';
 import InstallationChecklistList from './installation/InstallationChecklistList';
 import InstallationChecklistForm from './installation/InstallationChecklistForm';
 import InstallationChecklistDetails from './installation/InstallationChecklistDetails';
+import InventoryManagement from './InventoryManagement';
+import CustomerManagement from './CustomerManagement';
+import UserManagement from './UserManagement';
+import AuditLogs from './AuditLogs';
 import {
   fetchAdminStats,
   fetchAdminFeedback,
@@ -34,14 +38,18 @@ import {
   History,
   PlusCircle,
   Wrench,
+  Package,
+  Users,
+  UserCheck,
+  Shield,
 } from 'lucide-react';
 
 export default function Dashboard() {
-  const { token, user, signOut } = useAuth();
+  const { token, user, role, profile, signOut } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
-  const [activeTab, setActiveTab] = useState('feedback'); // 'feedback' | 'quotation_generator' | 'quotation_history' | 'installation_checklists'
+  const [activeTab, setActiveTab] = useState('installation_checklists'); // default tab
   const [checklistSubView, setChecklistSubView] = useState({ type: 'list', id: null });
   const [stats, setStats] = useState(null);
   const [installationStats, setInstallationStats] = useState(null);
@@ -174,6 +182,20 @@ export default function Dashboard() {
 
   const { pagination } = feedback;
 
+  const roleLabels = {
+    ADMIN: 'Administrator',
+    SALES: 'Sales Executive',
+    TECHNICAL: 'Service Engineer',
+    STORE_MANAGER: 'Store Manager',
+  };
+
+  const roleColors = {
+    ADMIN: 'bg-purple-500/20 text-purple-300 border-purple-400/30',
+    SALES: 'bg-blue-500/20 text-blue-300 border-blue-400/30',
+    TECHNICAL: 'bg-emerald-500/20 text-emerald-300 border-emerald-400/30',
+    STORE_MANAGER: 'bg-amber-500/20 text-amber-300 border-amber-400/30',
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 flex">
       {/* Mobile sidebar overlay */}
@@ -187,79 +209,138 @@ export default function Dashboard() {
       {/* Sidebar */}
       <aside
         className={`fixed lg:static inset-y-0 left-0 z-50 w-64 bg-navy text-white
-          transform transition-transform duration-300 lg:transform-none
+          transform transition-transform duration-300 lg:transform-none flex flex-col justify-between
           ${showMobileSidebar ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}
       >
-        <div className="p-5 border-b border-white/10">
-          <h2 className="font-bold text-lg">Eagle Eye Safdrive</h2>
-          <p className="text-xs text-white/50">Admin Management Portal</p>
+        <div>
+          <div className="p-5 border-b border-white/10">
+            <h2 className="font-bold text-lg">Eagle Eye Safdrive</h2>
+            <div className="flex items-center gap-2 mt-1">
+              <span className={`text-[11px] font-bold px-2 py-0.5 rounded-md border ${roleColors[role] || 'bg-white/10 text-white/80'}`}>
+                {role}
+              </span>
+              <span className="text-xs text-white/50 truncate">
+                {roleLabels[role] || role}
+              </span>
+            </div>
+          </div>
+          <nav className="p-4 space-y-1">
+            <button
+              onClick={() => {
+                setActiveTab('installation_checklists');
+                setChecklistSubView({ type: 'list', id: null });
+                navigate('/admin/installation-checklists');
+                setShowMobileSidebar(false);
+              }}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
+                activeTab === 'installation_checklists'
+                  ? 'bg-blue-600 text-white shadow-sm font-semibold'
+                  : 'text-white/70 hover:text-white hover:bg-white/5'
+              }`}
+            >
+              <Wrench size={18} />
+              Installation Jobs
+            </button>
+
+            <button
+              onClick={() => { setActiveTab('inventory'); navigate('/admin/dashboard'); setShowMobileSidebar(false); }}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
+                activeTab === 'inventory'
+                  ? 'bg-white/15 text-white shadow-sm font-semibold'
+                  : 'text-white/70 hover:text-white hover:bg-white/5'
+              }`}
+            >
+              <Package size={18} />
+              Stock & Inventory
+            </button>
+
+            {(role === 'SALES' || role === 'ADMIN') && (
+              <button
+                onClick={() => { setActiveTab('customers'); navigate('/admin/dashboard'); setShowMobileSidebar(false); }}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
+                  activeTab === 'customers'
+                    ? 'bg-white/15 text-white shadow-sm font-semibold'
+                    : 'text-white/70 hover:text-white hover:bg-white/5'
+                }`}
+              >
+                <Users size={18} />
+                Customer Directory
+              </button>
+            )}
+
+            {(role === 'SALES' || role === 'ADMIN') && (
+              <>
+                <button
+                  onClick={() => { setActiveTab('quotation_generator'); navigate('/admin/dashboard'); setShowMobileSidebar(false); }}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
+                    activeTab === 'quotation_generator'
+                      ? 'bg-white/15 text-white shadow-sm font-semibold'
+                      : 'text-white/70 hover:text-white hover:bg-white/5'
+                  }`}
+                >
+                  <FileText size={18} />
+                  Quotation Generator
+                </button>
+
+                <button
+                  onClick={() => { setActiveTab('quotation_history'); navigate('/admin/dashboard'); setShowMobileSidebar(false); }}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
+                    activeTab === 'quotation_history'
+                      ? 'bg-white/15 text-white shadow-sm font-semibold'
+                      : 'text-white/70 hover:text-white hover:bg-white/5'
+                  }`}
+                >
+                  <History size={18} />
+                  Quotation History
+                </button>
+              </>
+            )}
+
+            {role === 'ADMIN' && (
+              <>
+                <button
+                  onClick={() => { setActiveTab('users'); navigate('/admin/dashboard'); setShowMobileSidebar(false); }}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
+                    activeTab === 'users'
+                      ? 'bg-white/15 text-white shadow-sm font-semibold'
+                      : 'text-white/70 hover:text-white hover:bg-white/5'
+                  }`}
+                >
+                  <UserCheck size={18} />
+                  Employee Accounts
+                </button>
+
+                <button
+                  onClick={() => { setActiveTab('audit_logs'); navigate('/admin/dashboard'); setShowMobileSidebar(false); }}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
+                    activeTab === 'audit_logs'
+                      ? 'bg-white/15 text-white shadow-sm font-semibold'
+                      : 'text-white/70 hover:text-white hover:bg-white/5'
+                  }`}
+                >
+                  <Shield size={18} />
+                  System Audit Logs
+                </button>
+              </>
+            )}
+
+            <button
+              onClick={() => { setActiveTab('feedback'); navigate('/admin/dashboard'); setShowMobileSidebar(false); }}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
+                activeTab === 'feedback'
+                  ? 'bg-white/15 text-white shadow-sm font-semibold'
+                  : 'text-white/70 hover:text-white hover:bg-white/5'
+              }`}
+            >
+              <BarChart3 size={18} />
+              Customer Feedback
+            </button>
+          </nav>
         </div>
-        <nav className="p-4 space-y-1">
-          <button
-            onClick={() => { setActiveTab('feedback'); navigate('/admin/dashboard'); setShowMobileSidebar(false); }}
-            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
-              activeTab === 'feedback'
-                ? 'bg-white/15 text-white shadow-sm font-semibold'
-                : 'text-white/70 hover:text-white hover:bg-white/5'
-            }`}
-          >
-            <BarChart3 size={18} />
-            Customer Feedback
-          </button>
 
-          <button
-            onClick={() => { setActiveTab('quotation_generator'); navigate('/admin/dashboard'); setShowMobileSidebar(false); }}
-            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
-              activeTab === 'quotation_generator'
-                ? 'bg-blue-600 text-white shadow-sm font-semibold'
-                : 'text-white/70 hover:text-white hover:bg-white/5'
-            }`}
-          >
-            <FileText size={18} />
-            Quotation Generator
-          </button>
-
-          <button
-            onClick={() => { setActiveTab('quotation_history'); navigate('/admin/dashboard'); setShowMobileSidebar(false); }}
-            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
-              activeTab === 'quotation_history'
-                ? 'bg-white/15 text-white shadow-sm font-semibold'
-                : 'text-white/70 hover:text-white hover:bg-white/5'
-            }`}
-          >
-            <History size={18} />
-            Quotation History
-          </button>
-
-          <button
-            onClick={() => {
-              setActiveTab('installation_checklists');
-              setChecklistSubView({ type: 'list', id: null });
-              navigate('/admin/installation-checklists');
-              setShowMobileSidebar(false);
-            }}
-            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
-              activeTab === 'installation_checklists'
-                ? 'bg-white/15 text-white shadow-sm font-semibold'
-                : 'text-white/70 hover:text-white hover:bg-white/5'
-            }`}
-          >
-            <Wrench size={18} />
-            Installation Checklist
-          </button>
-
-          <div className="pt-4 border-t border-white/10 my-2" />
-
-          <button
-            onClick={() => navigate('/')}
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-white/70 hover:text-white hover:bg-white/5 text-sm font-medium transition-colors cursor-pointer"
-          >
-            <MessageSquare size={18} />
-            Public Feedback Form
-          </button>
-        </nav>
-        <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-white/10">
-          <div className="text-xs text-white/50 mb-2 truncate">{user?.email}</div>
+        <div className="p-4 border-t border-white/10">
+          <div className="text-xs font-semibold text-white/90 truncate">{profile?.full_name || user?.email}</div>
+          <div className="text-[11px] text-white/50 truncate mb-3">{user?.email}</div>
           <button
             onClick={handleSignOut}
             className="flex items-center gap-2 text-sm text-white/70 hover:text-white transition-colors cursor-pointer"
@@ -282,62 +363,24 @@ export default function Dashboard() {
               <Menu size={20} />
             </button>
             <h1 className="text-lg font-bold text-navy">
+              {activeTab === 'installation_checklists' && 'Installation Checklist Workflow'}
+              {activeTab === 'inventory' && 'Inventory & Device Movements'}
+              {activeTab === 'customers' && 'Customer Records'}
+              {activeTab === 'users' && 'Employee Account Management'}
+              {activeTab === 'audit_logs' && 'System Audit Trail'}
               {activeTab === 'feedback' && 'Customer Feedback Management'}
               {activeTab === 'quotation_generator' && 'Quotation Generator (PDF)'}
               {activeTab === 'quotation_history' && 'Quotation History & Records'}
-              {activeTab === 'installation_checklists' && 'Installation Checklist Management'}
             </h1>
-          </div>
-          <div className="flex items-center gap-2">
-            {activeTab === 'feedback' && (
-              <button
-                onClick={handleExportCSV}
-                className="flex items-center gap-1.5 text-xs font-medium text-navy hover:bg-navy/5
-                           px-3 py-1.5 rounded-lg transition-colors cursor-pointer border border-navy/20"
-              >
-                <FileDown size={14} />
-                <span className="hidden sm:inline">Export CSV</span>
-              </button>
-            )}
-            {activeTab === 'quotation_history' && (
-              <button
-                onClick={handleExportQuotationCSV}
-                className="flex items-center gap-1.5 text-xs font-medium text-navy hover:bg-navy/5
-                           px-3 py-1.5 rounded-lg transition-colors cursor-pointer border border-navy/20"
-              >
-                <FileDown size={14} />
-                <span className="hidden sm:inline">Export CSV</span>
-              </button>
-            )}
-            {activeTab === 'installation_checklists' && checklistSubView.type === 'list' && (
-              <button
-                onClick={() => {
-                  setChecklistSubView({ type: 'create', id: null });
-                  navigate('/admin/installation-checklists/create');
-                }}
-                className="flex items-center gap-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700
-                           px-3.5 py-1.5 rounded-lg transition-colors cursor-pointer shadow-sm"
-              >
-                <PlusCircle size={14} />
-                <span>Create Checklist</span>
-              </button>
-            )}
-            {activeTab !== 'quotation_generator' && activeTab !== 'installation_checklists' && (
-              <button
-                onClick={() => setActiveTab('quotation_generator')}
-                className="flex items-center gap-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700
-                           px-3 py-1.5 rounded-lg transition-colors cursor-pointer shadow-sm"
-              >
-                <PlusCircle size={14} />
-                <span>New Quotation</span>
-              </button>
-            )}
           </div>
         </header>
 
         <main className="p-4 lg:p-6">
+          {activeTab === 'inventory' && <InventoryManagement />}
+          {activeTab === 'customers' && <CustomerManagement />}
+          {activeTab === 'users' && <UserManagement />}
+          {activeTab === 'audit_logs' && <AuditLogs />}
           {activeTab === 'quotation_generator' && <QuotationGenerator />}
-
           {activeTab === 'quotation_history' && <QuotationHistory />}
 
           {activeTab === 'installation_checklists' && (

@@ -19,10 +19,14 @@ import {
   MapPin,
   ExternalLink,
   CheckSquare,
+  Clock,
+  Package,
+  Wrench,
+  ShieldCheck,
 } from 'lucide-react';
 
 export default function InstallationChecklistDetails({ id: propId, onEdit, onBack }) {
-  const { session } = useAuth();
+  const { session, role } = useAuth();
   const token = session?.access_token;
   const navigate = useNavigate();
   const routeParams = useParams();
@@ -38,6 +42,13 @@ export default function InstallationChecklistDetails({ id: propId, onEdit, onBac
   const [error, setError] = useState(null);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [toastMessage, setToastMessage] = useState(null);
+
+  // Workflow Modal States
+  const [showIssueModal, setShowIssueModal] = useState(false);
+  const [showTechModal, setShowTechModal] = useState(false);
+  const [showReturnModal, setShowReturnModal] = useState(false);
+  const [showVerifyModal, setShowVerifyModal] = useState(false);
+  const [showDiscModal, setShowDiscModal] = useState(false);
 
   useEffect(() => {
     autoDownloadedRef.current = false;
@@ -206,10 +217,65 @@ export default function InstallationChecklistDetails({ id: propId, onEdit, onBac
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+          {/* Stage 2: Store Issue */}
+          {(role === 'STORE_MANAGER' || role === 'ADMIN') && (
+            <button
+              onClick={() => setShowIssueModal(true)}
+              className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-3 py-2 rounded-xl shadow-xs transition-colors cursor-pointer"
+            >
+              <Package size={15} />
+              <span>Issue Stock</span>
+            </button>
+          )}
+
+          {/* Stage 3: Technical Report */}
+          {(role === 'TECHNICAL' || role === 'ADMIN') && (
+            <button
+              onClick={() => setShowTechModal(true)}
+              className="flex items-center gap-1.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold px-3 py-2 rounded-xl shadow-xs transition-colors cursor-pointer"
+            >
+              <Wrench size={15} />
+              <span>Submit Tech Report</span>
+            </button>
+          )}
+
+          {/* Stage 4: Declare Return */}
+          {(role === 'TECHNICAL' || role === 'ADMIN') && (
+            <button
+              onClick={() => setShowReturnModal(true)}
+              className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-3 py-2 rounded-xl shadow-xs transition-colors cursor-pointer"
+            >
+              <ArrowLeft size={15} />
+              <span>Declare Return</span>
+            </button>
+          )}
+
+          {/* Stage 5: Verify Store Return */}
+          {(role === 'STORE_MANAGER' || role === 'ADMIN') && (
+            <button
+              onClick={() => setShowVerifyModal(true)}
+              className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3 py-2 rounded-xl shadow-xs transition-colors cursor-pointer"
+            >
+              <ShieldCheck size={15} />
+              <span>Verify Physical Return</span>
+            </button>
+          )}
+
+          {/* Stage 6: Admin Resolve Discrepancy */}
+          {role === 'ADMIN' && checklist.reconciliation_status === 'DISCREPANCY_OPEN' && (
+            <button
+              onClick={() => setShowDiscModal(true)}
+              className="flex items-center gap-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold px-3 py-2 rounded-xl shadow-xs transition-colors cursor-pointer"
+            >
+              <AlertTriangle size={15} />
+              <span>Resolve Discrepancy</span>
+            </button>
+          )}
+
           <button
             onClick={handleEditClick}
-            className="flex items-center gap-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 text-xs font-semibold px-4 py-2 rounded-xl transition-colors cursor-pointer"
+            className="flex items-center gap-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 text-xs font-semibold px-3 py-2 rounded-xl transition-colors cursor-pointer"
           >
             <Edit size={15} />
             <span>Edit</span>
@@ -218,29 +284,78 @@ export default function InstallationChecklistDetails({ id: propId, onEdit, onBac
           <button
             onClick={handleDownloadPdf}
             disabled={downloadingPdf}
-            className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-4 py-2 rounded-xl shadow-sm transition-all disabled:opacity-50 cursor-pointer"
+            className="flex items-center gap-1.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold px-3 py-2 rounded-xl shadow-xs transition-all disabled:opacity-50 cursor-pointer"
           >
             <FileDown size={15} />
-            <span>{downloadingPdf ? 'Generating PDF...' : 'Download as PDF'}</span>
+            <span>{downloadingPdf ? 'Generating PDF...' : 'Download PDF'}</span>
           </button>
+        </div>
+      </div>
 
-          <button
-            onClick={() => {
-              downloadInstallationExcel(checklist);
-              showToast(`Excel file downloaded for ${checklist.checklist_number}`);
-            }}
-            className="flex items-center gap-1.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold px-4 py-2 rounded-xl shadow-sm transition-all cursor-pointer"
-          >
-            <FileSpreadsheet size={15} />
-            <span>Download as Excel</span>
-          </button>
+      {/* WORKFLOW RECONCILIATION STAGE TRACKER */}
+      <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 space-y-3 no-print">
+        <div className="flex items-center justify-between">
+          <h3 className="text-xs font-extrabold text-navy uppercase tracking-wider flex items-center gap-2">
+            <Clock size={16} className="text-blue-600" /> 7-Stage Installation & Stock Reconciliation Status
+          </h3>
+          <span className={`text-xs font-bold px-3 py-1 rounded-full ${
+            checklist.reconciliation_status === 'FULLY_RECONCILED'
+              ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+              : checklist.reconciliation_status === 'DISCREPANCY_OPEN'
+              ? 'bg-red-100 text-red-800 border border-red-300'
+              : 'bg-blue-100 text-blue-800 border border-blue-300'
+          }`}>
+            {checklist.reconciliation_status || 'INITIATED'}
+          </span>
+        </div>
 
-          <button
-            onClick={handleBackClick}
-            className="px-3.5 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-100 rounded-xl transition-colors cursor-pointer"
-          >
-            Back
-          </button>
+        <div className="grid grid-cols-2 sm:grid-cols-6 gap-2 text-center text-xs">
+          <div className="p-2.5 rounded-xl border bg-emerald-50 border-emerald-200 text-emerald-800 font-medium">
+            <span className="block font-bold text-[10px] uppercase text-emerald-600">Stage 1</span>
+            Sales Checklist Created
+          </div>
+          <div className={`p-2.5 rounded-xl border font-medium ${
+            ['STORE_ISSUED', 'SITE_WORK_COMPLETED', 'PENDING_STORE_VERIFICATION', 'DISCREPANCY_OPEN', 'FULLY_RECONCILED'].includes(checklist.reconciliation_status)
+              ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+              : 'bg-gray-50 border-gray-200 text-gray-400'
+          }`}>
+            <span className="block font-bold text-[10px] uppercase text-gray-500">Stage 2</span>
+            Store Issued Stock
+          </div>
+          <div className={`p-2.5 rounded-xl border font-medium ${
+            ['SITE_WORK_COMPLETED', 'PENDING_STORE_VERIFICATION', 'DISCREPANCY_OPEN', 'FULLY_RECONCILED'].includes(checklist.reconciliation_status)
+              ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+              : 'bg-gray-50 border-gray-200 text-gray-400'
+          }`}>
+            <span className="block font-bold text-[10px] uppercase text-gray-500">Stage 3</span>
+            Tech Site Completion
+          </div>
+          <div className={`p-2.5 rounded-xl border font-medium ${
+            ['PENDING_STORE_VERIFICATION', 'DISCREPANCY_OPEN', 'FULLY_RECONCILED'].includes(checklist.reconciliation_status)
+              ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+              : 'bg-gray-50 border-gray-200 text-gray-400'
+          }`}>
+            <span className="block font-bold text-[10px] uppercase text-gray-500">Stage 4</span>
+            Returns Declared
+          </div>
+          <div className={`p-2.5 rounded-xl border font-medium ${
+            ['DISCREPANCY_OPEN', 'FULLY_RECONCILED'].includes(checklist.reconciliation_status)
+              ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+              : 'bg-gray-50 border-gray-200 text-gray-400'
+          }`}>
+            <span className="block font-bold text-[10px] uppercase text-gray-500">Stage 5</span>
+            Store Verified Returns
+          </div>
+          <div className={`p-2.5 rounded-xl border font-medium ${
+            checklist.reconciliation_status === 'FULLY_RECONCILED'
+              ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+              : checklist.reconciliation_status === 'DISCREPANCY_OPEN'
+              ? 'bg-red-50 border-red-200 text-red-800'
+              : 'bg-gray-50 border-gray-200 text-gray-400'
+          }`}>
+            <span className="block font-bold text-[10px] uppercase text-gray-500">Stage 6 & 7</span>
+            Reconciled
+          </div>
         </div>
       </div>
 
@@ -522,46 +637,540 @@ export default function InstallationChecklistDetails({ id: propId, onEdit, onBac
         </div>
       </div>
 
-      {/* Bottom Actions Bar (Hidden on Print) */}
-      <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-between no-print">
-        <button
-          onClick={handleBackClick}
-          className="flex items-center gap-1.5 text-xs font-semibold text-gray-600 hover:text-navy px-4 py-2 rounded-xl hover:bg-gray-100 transition-colors cursor-pointer"
-        >
-          <ArrowLeft size={16} />
-          <span>Back to Checklists</span>
-        </button>
+      {/* WORKFLOW STAGE 2: STORE ISSUE MODAL */}
+      {showIssueModal && (
+        <IssueStockModal
+          checklist={checklist}
+          token={token}
+          onClose={() => setShowIssueModal(false)}
+          onSuccess={() => {
+            setShowIssueModal(false);
+            showToast('Stock issued successfully!');
+            fetchInstallationChecklistDetail(token, checklistId).then(setChecklist);
+          }}
+        />
+      )}
 
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handleEditClick}
-            className="flex items-center gap-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 text-xs font-semibold px-4 py-2 rounded-xl transition-colors cursor-pointer"
-          >
-            <Edit size={15} />
-            <span>Edit</span>
-          </button>
+      {/* WORKFLOW STAGE 3: TECHNICAL REPORT MODAL */}
+      {showTechModal && (
+        <TechReportModal
+          checklist={checklist}
+          token={token}
+          onClose={() => setShowTechModal(false)}
+          onSuccess={() => {
+            setShowTechModal(false);
+            showToast('Technical report submitted!');
+            fetchInstallationChecklistDetail(token, checklistId).then(setChecklist);
+          }}
+        />
+      )}
 
-          <button
-            onClick={handleDownloadPdf}
-            disabled={downloadingPdf}
-            className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-4 py-2 rounded-xl shadow-sm transition-all disabled:opacity-50 cursor-pointer"
-          >
-            <FileDown size={15} />
-            <span>{downloadingPdf ? 'Generating PDF...' : 'Download as PDF'}</span>
-          </button>
+      {/* WORKFLOW STAGE 4: DECLARE RETURN MODAL */}
+      {showReturnModal && (
+        <DeclareReturnModal
+          checklist={checklist}
+          token={token}
+          onClose={() => setShowReturnModal(false)}
+          onSuccess={() => {
+            setShowReturnModal(false);
+            showToast('Return declaration submitted to Store Manager!');
+            fetchInstallationChecklistDetail(token, checklistId).then(setChecklist);
+          }}
+        />
+      )}
 
-          <button
-            onClick={() => {
-              downloadInstallationExcel(checklist);
-              showToast(`Excel file downloaded for ${checklist.checklist_number}`);
-            }}
-            className="flex items-center gap-1.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold px-4 py-2 rounded-xl shadow-sm transition-all cursor-pointer"
-          >
-            <FileSpreadsheet size={15} />
-            <span>Download as Excel</span>
-          </button>
-        </div>
+      {/* WORKFLOW STAGE 5: VERIFY STORE RETURN MODAL */}
+      {showVerifyModal && (
+        <VerifyReturnModal
+          checklist={checklist}
+          token={token}
+          onClose={() => setShowVerifyModal(false)}
+          onSuccess={() => {
+            setShowVerifyModal(false);
+            showToast('Store return physically verified!');
+            fetchInstallationChecklistDetail(token, checklistId).then(setChecklist);
+          }}
+        />
+      )}
+
+      {/* WORKFLOW STAGE 6: ADMIN RESOLVE DISCREPANCY MODAL */}
+      {showDiscModal && (
+        <ResolveDiscModal
+          checklist={checklist}
+          token={token}
+          onClose={() => setShowDiscModal(false)}
+          onSuccess={() => {
+            setShowDiscModal(false);
+            showToast('Discrepancy resolved!');
+            fetchInstallationChecklistDetail(token, checklistId).then(setChecklist);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+/* ============================================================
+   WORKFLOW MODAL SUB-COMPONENTS
+   ============================================================ */
+
+function IssueStockModal({ checklist, token, onClose, onSuccess }) {
+  const [qty, setQty] = useState(checklist.number_of_devices || 1);
+  const [notes, setNotes] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+
+    try {
+      const res = await fetch(`/api/admin/installations/${checklist.id}/issue-stock`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          device_type: checklist.device_type,
+          quantity: parseInt(qty, 10),
+          notes,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to issue stock');
+      onSuccess();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+        <h3 className="text-lg font-bold text-navy flex items-center gap-2">
+          <Package className="w-5 h-5 text-blue-600" /> Store Manager: Issue Stock (Stage 2)
+        </h3>
+        <p className="text-xs text-gray-500">
+          Check inventory and issue physical devices for job {checklist.checklist_number}.
+        </p>
+
+        {error && <div className="p-3 bg-red-50 text-red-700 text-xs rounded-lg border border-red-200">{error}</div>}
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-xs font-semibold text-gray-700 mb-1">Requested Device Type</label>
+            <input type="text" value={checklist.device_type} disabled className="w-full px-3 py-2 bg-gray-100 border border-gray-300 rounded-lg text-sm text-gray-700 font-semibold" />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-gray-700 mb-1">Actual Quantity to Issue</label>
+            <input
+              type="number"
+              min="1"
+              value={qty}
+              onChange={(e) => setQty(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-gray-700 mb-1">Store Dispatch Notes</label>
+            <textarea
+              rows="2"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Serial numbers or dispatch box details..."
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+            />
+          </div>
+
+          <div className="flex justify-end gap-3 pt-2">
+            <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 font-medium">Cancel</button>
+            <button type="submit" disabled={loading} className="px-4 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50">
+              {loading ? 'Deducting Stock...' : 'Confirm Stock Issue'}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );
 }
+
+function TechReportModal({ checklist, token, onClose, onSuccess }) {
+  const [form, setForm] = useState({
+    devices_carried_qty: checklist.number_of_devices || 1,
+    devices_installed_qty: checklist.number_of_devices || 1,
+    devices_unused_qty: 0,
+    devices_damaged_qty: 0,
+    devices_missing_qty: 0,
+    completion_status: 'Completed',
+    remarks: '',
+  });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+
+    try {
+      const res = await fetch(`/api/admin/installations/${checklist.id}/technical-report`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(form),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to submit technical report');
+      onSuccess();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+        <h3 className="text-lg font-bold text-navy flex items-center gap-2">
+          <Wrench className="w-5 h-5 text-purple-600" /> Technical Team: Site Completion Report (Stage 3)
+        </h3>
+        <p className="text-xs text-gray-500">Record actual devices carried, installed, unused, damaged, or missing at client site.</p>
+
+        {error && <div className="p-3 bg-red-50 text-red-700 text-xs rounded-lg border border-red-200">{error}</div>}
+
+        <form onSubmit={handleSubmit} className="space-y-3 text-xs">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block font-semibold text-gray-700 mb-1">Carried Quantity</label>
+              <input type="number" min="0" value={form.devices_carried_qty} onChange={(e) => setForm({ ...form, devices_carried_qty: e.target.value })} className="w-full px-3 py-2 border rounded-lg text-sm" required />
+            </div>
+            <div>
+              <label className="block font-semibold text-gray-700 mb-1">Installed Quantity</label>
+              <input type="number" min="0" value={form.devices_installed_qty} onChange={(e) => setForm({ ...form, devices_installed_qty: e.target.value })} className="w-full px-3 py-2 border rounded-lg text-sm" required />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <label className="block font-semibold text-gray-700 mb-1">Unused (Return)</label>
+              <input type="number" min="0" value={form.devices_unused_qty} onChange={(e) => setForm({ ...form, devices_unused_qty: e.target.value })} className="w-full px-3 py-2 border rounded-lg text-sm" />
+            </div>
+            <div>
+              <label className="block font-semibold text-gray-700 mb-1">Damaged</label>
+              <input type="number" min="0" value={form.devices_damaged_qty} onChange={(e) => setForm({ ...form, devices_damaged_qty: e.target.value })} className="w-full px-3 py-2 border rounded-lg text-sm" />
+            </div>
+            <div>
+              <label className="block font-semibold text-gray-700 mb-1">Missing</label>
+              <input type="number" min="0" value={form.devices_missing_qty} onChange={(e) => setForm({ ...form, devices_missing_qty: e.target.value })} className="w-full px-3 py-2 border rounded-lg text-sm" />
+            </div>
+          </div>
+
+          <div>
+            <label className="block font-semibold text-gray-700 mb-1">Completion Status</label>
+            <select value={form.completion_status} onChange={(e) => setForm({ ...form, completion_status: e.target.value })} className="w-full px-3 py-2 border rounded-lg text-sm font-semibold">
+              <option value="Completed">Completed</option>
+              <option value="In Progress">In Progress</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block font-semibold text-gray-700 mb-1">Technician Site Remarks</label>
+            <textarea rows="2" value={form.remarks} onChange={(e) => setForm({ ...form, remarks: e.target.value })} placeholder="Installation notes or site issues encountered..." className="w-full px-3 py-2 border rounded-lg text-sm" />
+          </div>
+
+          <div className="flex justify-end gap-3 pt-2">
+            <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 font-medium">Cancel</button>
+            <button type="submit" disabled={loading} className="px-4 py-2 text-sm font-semibold text-white bg-purple-600 rounded-lg hover:bg-purple-700 disabled:opacity-50">
+              {loading ? 'Submitting...' : 'Submit Tech Report'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function DeclareReturnModal({ checklist, token, onClose, onSuccess }) {
+  const [qty, setQty] = useState(0);
+  const [remarks, setRemarks] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+
+    try {
+      const res = await fetch(`/api/admin/installations/${checklist.id}/declare-return`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          device_type: checklist.device_type,
+          declared_return_qty: parseInt(qty, 10),
+          remarks,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to declare returns');
+      onSuccess();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+        <h3 className="text-lg font-bold text-navy flex items-center gap-2">
+          <ArrowLeft className="w-5 h-5 text-indigo-600" /> Technical Team: Declare Unused Returns (Stage 4)
+        </h3>
+        <p className="text-xs text-gray-500">Declare unused items to be returned to store. (Pending Store Physical Verification).</p>
+
+        {error && <div className="p-3 bg-red-50 text-red-700 text-xs rounded-lg border border-red-200">{error}</div>}
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-xs font-semibold text-gray-700 mb-1">Declared Return Quantity</label>
+            <input type="number" min="0" value={qty} onChange={(e) => setQty(e.target.value)} className="w-full px-3 py-2 border rounded-lg text-sm" required />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-gray-700 mb-1">Return Condition Remarks</label>
+            <textarea rows="2" value={remarks} onChange={(e) => setRemarks(e.target.value)} placeholder="Condition of returned devices..." className="w-full px-3 py-2 border rounded-lg text-sm" />
+          </div>
+
+          <div className="flex justify-end gap-3 pt-2">
+            <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-gray-600 font-medium">Cancel</button>
+            <button type="submit" disabled={loading} className="px-4 py-2 text-sm font-semibold text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50">
+              {loading ? 'Submitting...' : 'Declare Returns'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function VerifyReturnModal({ checklist, token, onClose, onSuccess }) {
+  const [returnRecord, setReturnRecord] = useState(null);
+  const [acceptedQty, setAcceptedQty] = useState(0);
+  const [damagedQty, setDamagedQty] = useState(0);
+  const [missingQty, setMissingQty] = useState(0);
+  const [remarks, setRemarks] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    // Fetch pending return for this checklist
+    fetch('/api/admin/inventory/discrepancies', { headers: { Authorization: `Bearer ${token}` } })
+      .then(() => fetch(`/api/admin/installations/${checklist.id}`, { headers: { Authorization: `Bearer ${token}` } }))
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.returns && data.returns.length > 0) {
+          const latest = data.returns[0];
+          setReturnRecord(latest);
+          setAcceptedQty(latest.declared_return_qty || 0);
+        } else {
+          setReturnRecord({ id: null, declared_return_qty: 0, device_type: checklist.device_type });
+        }
+      })
+      .catch((err) => console.error(err))
+      .finally(() => setLoading(false));
+  }, [checklist.id, token]);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!returnRecord?.id) {
+      setError('No return declaration record found to verify. Please ask Technical team to declare returns first.');
+      return;
+    }
+
+    setError('');
+    setSubmitting(true);
+
+    try {
+      const res = await fetch(`/api/admin/installations/${checklist.id}/verify-return`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          return_id: returnRecord.id,
+          accepted_usable_qty: parseInt(acceptedQty, 10) || 0,
+          damaged_qty: parseInt(damagedQty, 10) || 0,
+          missing_qty: parseInt(missingQty, 10) || 0,
+          remarks,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to verify store return');
+      onSuccess();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+        <h3 className="text-lg font-bold text-navy flex items-center gap-2">
+          <ShieldCheck className="w-5 h-5 text-emerald-600" /> Store Manager: Physical Return Verification (Stage 5)
+        </h3>
+        <p className="text-xs text-gray-500">Physically inspect returned devices. Only usable returned stock is credited back to inventory.</p>
+
+        {error && <div className="p-3 bg-red-50 text-red-700 text-xs rounded-lg border border-red-200">{error}</div>}
+
+        {loading ? (
+          <p className="text-xs text-gray-400 text-center py-4">Fetching declared return record...</p>
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-3 text-xs">
+            {returnRecord && (
+              <div className="p-3 bg-blue-50 border border-blue-100 rounded-lg">
+                <span className="font-semibold text-blue-900 block">Declared Return by Tech:</span>
+                <span className="text-sm font-bold text-blue-700">{returnRecord.declared_return_qty} units of {returnRecord.device_type}</span>
+              </div>
+            )}
+
+            <div>
+              <label className="block font-semibold text-gray-700 mb-1">Accepted Usable Quantity (Credits Usable Stock)</label>
+              <input type="number" min="0" value={acceptedQty} onChange={(e) => setAcceptedQty(e.target.value)} className="w-full px-3 py-2 border rounded-lg text-sm text-emerald-700 font-bold" required />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block font-semibold text-gray-700 mb-1">Damaged Quantity</label>
+                <input type="number" min="0" value={damagedQty} onChange={(e) => setDamagedQty(e.target.value)} className="w-full px-3 py-2 border rounded-lg text-sm text-red-600 font-bold" />
+              </div>
+              <div>
+                <label className="block font-semibold text-gray-700 mb-1">Missing Quantity</label>
+                <input type="number" min="0" value={missingQty} onChange={(e) => setMissingQty(e.target.value)} className="w-full px-3 py-2 border rounded-lg text-sm text-amber-600 font-bold" />
+              </div>
+            </div>
+
+            <div>
+              <label className="block font-semibold text-gray-700 mb-1">Verification Remarks</label>
+              <textarea rows="2" value={remarks} onChange={(e) => setRemarks(e.target.value)} placeholder="Physical inspection report..." className="w-full px-3 py-2 border rounded-lg text-sm" />
+            </div>
+
+            <div className="flex justify-end gap-3 pt-2">
+              <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-gray-600 font-medium">Cancel</button>
+              <button type="submit" disabled={submitting} className="px-4 py-2 text-sm font-semibold text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 disabled:opacity-50">
+                {submitting ? 'Verifying...' : 'Verify & Credit Usable Stock'}
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ResolveDiscModal({ checklist, token, onClose, onSuccess }) {
+  const [discId, setDiscId] = useState(null);
+  const [notes, setNotes] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    fetch('/api/admin/inventory/discrepancies', { headers: { Authorization: `Bearer ${token}` } })
+      .then((res) => res.json())
+      .then((data) => {
+        const item = (data || []).find((d) => d.checklist_id === checklist.id && d.status === 'OPEN');
+        if (item) setDiscId(item.id);
+      })
+      .catch((err) => console.error(err));
+  }, [checklist.id, token]);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!discId) {
+      setError('No open discrepancy record found for this checklist.');
+      return;
+    }
+
+    setError('');
+    setLoading(true);
+
+    try {
+      const res = await fetch(`/api/admin/installations/${checklist.id}/resolve-discrepancy`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          discrepancy_id: discId,
+          resolution_notes: notes,
+          status: 'RESOLVED_ADMIN_APPROVED',
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to resolve discrepancy');
+      onSuccess();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+        <h3 className="text-lg font-bold text-navy flex items-center gap-2">
+          <AlertTriangle className="w-5 h-5 text-amber-600" /> Admin: Resolve Discrepancy (Stage 6)
+        </h3>
+        <p className="text-xs text-gray-500">Review open inventory discrepancy and log authorized resolution notes.</p>
+
+        {error && <div className="p-3 bg-red-50 text-red-700 text-xs rounded-lg border border-red-200">{error}</div>}
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-xs font-semibold text-gray-700 mb-1">Resolution Explanation / Audit Notes *</label>
+            <textarea
+              rows="3"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Explain why the discrepancy occurred and authorized adjustment..."
+              className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none"
+              required
+            />
+          </div>
+
+          <div className="flex justify-end gap-3 pt-2">
+            <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-gray-600 font-medium">Cancel</button>
+            <button type="submit" disabled={loading} className="px-4 py-2 text-sm font-semibold text-white bg-amber-600 rounded-lg hover:bg-amber-700 disabled:opacity-50">
+              {loading ? 'Resolving...' : 'Approve & Reconcile Job'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+

@@ -10,6 +10,10 @@ import feedbackRoutes from './routes/feedback.js';
 import adminRoutes from './routes/admin.js';
 import quotationRoutes from './routes/quotation.js';
 import installationRoutes from './routes/installation.js';
+import inventoryRoutes from './routes/inventory.js';
+import customerRoutes from './routes/customers.js';
+import userRoutes from './routes/users.js';
+import auditRoutes from './routes/audit.js';
 import { runQuotationCleanup } from './services/quotationCleanupService.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -50,6 +54,10 @@ app.use('/api/admin/quotations', quotationRoutes);
 app.use('/api/admin/quotation', quotationRoutes);
 app.use('/api/admin/installations', installationRoutes);
 app.use('/api/installations', installationRoutes);
+app.use('/api/admin/inventory', inventoryRoutes);
+app.use('/api/admin/customers', customerRoutes);
+app.use('/api/admin/users', userRoutes);
+app.use('/api/admin/audit-logs', auditRoutes);
 
 // Serve built static frontend files if present (fixes 404 on refresh)
 const frontendDistPath = path.resolve(__dirname, '../../frontend/dist');
