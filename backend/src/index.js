@@ -9,6 +9,7 @@ import config from './config.js';
 import feedbackRoutes from './routes/feedback.js';
 import adminRoutes from './routes/admin.js';
 import quotationRoutes from './routes/quotation.js';
+import installationRoutes from './routes/installation.js';
 import { runQuotationCleanup } from './services/quotationCleanupService.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -47,6 +48,8 @@ app.use('/api/feedback', feedbackRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/admin/quotations', quotationRoutes);
 app.use('/api/admin/quotation', quotationRoutes);
+app.use('/api/admin/installations', installationRoutes);
+app.use('/api/installations', installationRoutes);
 
 // Serve built static frontend files if present (fixes 404 on refresh)
 const frontendDistPath = path.resolve(__dirname, '../../frontend/dist');

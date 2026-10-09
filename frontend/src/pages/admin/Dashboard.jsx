@@ -1,14 +1,18 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import QuotationGenerator from './QuotationGenerator';
 import QuotationHistory from './QuotationHistory';
+import InstallationChecklistList from './installation/InstallationChecklistList';
+import InstallationChecklistForm from './installation/InstallationChecklistForm';
+import InstallationChecklistDetails from './installation/InstallationChecklistDetails';
 import {
   fetchAdminStats,
   fetchAdminFeedback,
   downloadAdminPDF,
   exportCSV,
   exportQuotationCSV,
+  fetchInstallationStats,
 } from '../../lib/api';
 import {
   BarChart3,
@@ -29,14 +33,18 @@ import {
   FileText,
   History,
   PlusCircle,
+  Wrench,
 } from 'lucide-react';
 
 export default function Dashboard() {
   const { token, user, signOut } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
-  const [activeTab, setActiveTab] = useState('feedback'); // 'feedback' | 'quotation_generator' | 'quotation_history'
+  const [activeTab, setActiveTab] = useState('feedback'); // 'feedback' | 'quotation_generator' | 'quotation_history' | 'installation_checklists'
+  const [checklistSubView, setChecklistSubView] = useState({ type: 'list', id: null });
   const [stats, setStats] = useState(null);
+  const [installationStats, setInstallationStats] = useState(null);
   const [feedback, setFeedback] = useState({ data: [], pagination: {} });
   const [loading, setLoading] = useState(true);
   const [showFilters, setShowFilters] = useState(false);
@@ -61,12 +69,14 @@ export default function Dashboard() {
     if (!token) return;
     setLoading(true);
     try {
-      const [statsData, feedbackData] = await Promise.all([
-        fetchAdminStats(token),
-        fetchAdminFeedback(token, filters),
+      const [statsData, feedbackData, instStatsData] = await Promise.all([
+        fetchAdminStats(token).catch(() => null),
+        fetchAdminFeedback(token, filters).catch(() => ({ data: [], pagination: {} })),
+        fetchInstallationStats(token).catch(() => null),
       ]);
       setStats(statsData);
       setFeedback(feedbackData);
+      setInstallationStats(instStatsData);
     } catch (err) {
       console.error('Failed to load data:', err);
     } finally {
@@ -77,6 +87,29 @@ export default function Dashboard() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // Sync URL path with Active Tab and SubView
+  useEffect(() => {
+    const path = location.pathname;
+    if (path.startsWith('/admin/installation-checklists')) {
+      setActiveTab('installation_checklists');
+      if (path === '/admin/installation-checklists/create') {
+        setChecklistSubView({ type: 'create', id: null });
+      } else if (path.endsWith('/edit')) {
+        const parts = path.split('/');
+        const id = parts[parts.length - 2];
+        setChecklistSubView({ type: 'edit', id });
+      } else {
+        const parts = path.split('/');
+        const lastPart = parts[parts.length - 1];
+        if (lastPart !== 'installation-checklists' && lastPart) {
+          setChecklistSubView({ type: 'view', id: lastPart });
+        } else {
+          setChecklistSubView({ type: 'list', id: null });
+        }
+      }
+    }
+  }, [location.pathname]);
 
   const handleSearch = (e) => {
     e.preventDefault();
@@ -163,7 +196,7 @@ export default function Dashboard() {
         </div>
         <nav className="p-4 space-y-1">
           <button
-            onClick={() => { setActiveTab('feedback'); setShowMobileSidebar(false); }}
+            onClick={() => { setActiveTab('feedback'); navigate('/admin/dashboard'); setShowMobileSidebar(false); }}
             className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
               activeTab === 'feedback'
                 ? 'bg-white/15 text-white shadow-sm font-semibold'
@@ -175,7 +208,7 @@ export default function Dashboard() {
           </button>
 
           <button
-            onClick={() => { setActiveTab('quotation_generator'); setShowMobileSidebar(false); }}
+            onClick={() => { setActiveTab('quotation_generator'); navigate('/admin/dashboard'); setShowMobileSidebar(false); }}
             className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
               activeTab === 'quotation_generator'
                 ? 'bg-blue-600 text-white shadow-sm font-semibold'
@@ -187,7 +220,7 @@ export default function Dashboard() {
           </button>
 
           <button
-            onClick={() => { setActiveTab('quotation_history'); setShowMobileSidebar(false); }}
+            onClick={() => { setActiveTab('quotation_history'); navigate('/admin/dashboard'); setShowMobileSidebar(false); }}
             className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
               activeTab === 'quotation_history'
                 ? 'bg-white/15 text-white shadow-sm font-semibold'
@@ -196,6 +229,23 @@ export default function Dashboard() {
           >
             <History size={18} />
             Quotation History
+          </button>
+
+          <button
+            onClick={() => {
+              setActiveTab('installation_checklists');
+              setChecklistSubView({ type: 'list', id: null });
+              navigate('/admin/installation-checklists');
+              setShowMobileSidebar(false);
+            }}
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
+              activeTab === 'installation_checklists'
+                ? 'bg-white/15 text-white shadow-sm font-semibold'
+                : 'text-white/70 hover:text-white hover:bg-white/5'
+            }`}
+          >
+            <Wrench size={18} />
+            Installation Checklist
           </button>
 
           <div className="pt-4 border-t border-white/10 my-2" />
@@ -235,6 +285,7 @@ export default function Dashboard() {
               {activeTab === 'feedback' && 'Customer Feedback Management'}
               {activeTab === 'quotation_generator' && 'Quotation Generator (PDF)'}
               {activeTab === 'quotation_history' && 'Quotation History & Records'}
+              {activeTab === 'installation_checklists' && 'Installation Checklist Management'}
             </h1>
           </div>
           <div className="flex items-center gap-2">
@@ -258,7 +309,20 @@ export default function Dashboard() {
                 <span className="hidden sm:inline">Export CSV</span>
               </button>
             )}
-            {activeTab !== 'quotation_generator' && (
+            {activeTab === 'installation_checklists' && checklistSubView.type === 'list' && (
+              <button
+                onClick={() => {
+                  setChecklistSubView({ type: 'create', id: null });
+                  navigate('/admin/installation-checklists/create');
+                }}
+                className="flex items-center gap-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700
+                           px-3.5 py-1.5 rounded-lg transition-colors cursor-pointer shadow-sm"
+              >
+                <PlusCircle size={14} />
+                <span>Create Checklist</span>
+              </button>
+            )}
+            {activeTab !== 'quotation_generator' && activeTab !== 'installation_checklists' && (
               <button
                 onClick={() => setActiveTab('quotation_generator')}
                 className="flex items-center gap-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700
@@ -275,6 +339,75 @@ export default function Dashboard() {
           {activeTab === 'quotation_generator' && <QuotationGenerator />}
 
           {activeTab === 'quotation_history' && <QuotationHistory />}
+
+          {activeTab === 'installation_checklists' && (
+            <div>
+              {checklistSubView.type === 'list' && (
+                <InstallationChecklistList
+                  onSelectChecklist={(id, mode) => {
+                    if (mode === 'edit') {
+                      setChecklistSubView({ type: 'edit', id });
+                      navigate(`/admin/installation-checklists/${id}/edit`);
+                    } else if (mode === 'download') {
+                      setChecklistSubView({ type: 'view', id });
+                      navigate(`/admin/installation-checklists/${id}?action=download`);
+                    } else if (mode === 'print') {
+                      setChecklistSubView({ type: 'view', id });
+                      navigate(`/admin/installation-checklists/${id}?action=print`);
+                    } else {
+                      setChecklistSubView({ type: 'view', id });
+                      navigate(`/admin/installation-checklists/${id}`);
+                    }
+                  }}
+                  onCreateNew={() => {
+                    setChecklistSubView({ type: 'create', id: null });
+                    navigate('/admin/installation-checklists/create');
+                  }}
+                />
+              )}
+
+              {checklistSubView.type === 'create' && (
+                <InstallationChecklistForm
+                  onSaved={(id) => {
+                    setChecklistSubView({ type: 'view', id });
+                    navigate(`/admin/installation-checklists/${id}`);
+                  }}
+                  onCancel={() => {
+                    setChecklistSubView({ type: 'list', id: null });
+                    navigate('/admin/installation-checklists');
+                  }}
+                />
+              )}
+
+              {checklistSubView.type === 'edit' && (
+                <InstallationChecklistForm
+                  id={checklistSubView.id}
+                  onSaved={(id) => {
+                    setChecklistSubView({ type: 'view', id });
+                    navigate(`/admin/installation-checklists/${id}`);
+                  }}
+                  onCancel={() => {
+                    setChecklistSubView({ type: 'list', id: null });
+                    navigate('/admin/installation-checklists');
+                  }}
+                />
+              )}
+
+              {checklistSubView.type === 'view' && (
+                <InstallationChecklistDetails
+                  id={checklistSubView.id}
+                  onEdit={(id) => {
+                    setChecklistSubView({ type: 'edit', id });
+                    navigate(`/admin/installation-checklists/${id}/edit`);
+                  }}
+                  onBack={() => {
+                    setChecklistSubView({ type: 'list', id: null });
+                    navigate('/admin/installation-checklists');
+                  }}
+                />
+              )}
+            </div>
+          )}
 
           {activeTab === 'feedback' && (
             <>

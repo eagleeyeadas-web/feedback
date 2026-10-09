@@ -38,6 +38,38 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       />
+      <Route
+        path="/admin/installation-checklists"
+        element={
+          <ProtectedRoute>
+            <Dashboard />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/installation-checklists/create"
+        element={
+          <ProtectedRoute>
+            <Dashboard />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/installation-checklists/:id"
+        element={
+          <ProtectedRoute>
+            <Dashboard />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/installation-checklists/:id/edit"
+        element={
+          <ProtectedRoute>
+            <Dashboard />
+          </ProtectedRoute>
+        }
+      />
       <Route path="/admin" element={<Navigate to="/admin/dashboard" replace />} />
 
       {/* 404 fallback */}

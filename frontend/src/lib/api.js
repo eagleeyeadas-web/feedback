@@ -149,3 +149,70 @@ export async function exportQuotationCSV(token, params = {}) {
   return res.blob();
 }
 
+/**
+ * Installation Checklist API Helpers
+ */
+export async function fetchInstallationStats(token) {
+  const res = await fetch(`${API_BASE}/admin/installations/stats`, {
+    headers: adminHeaders(token),
+  });
+  if (!res.ok) throw new Error('Failed to fetch installation statistics');
+  return res.json();
+}
+
+export async function fetchInstallationChecklists(token, params = {}) {
+  const query = new URLSearchParams(params).toString();
+  const res = await fetch(`${API_BASE}/admin/installations?${query}`, {
+    headers: adminHeaders(token),
+  });
+  if (!res.ok) throw new Error('Failed to fetch installation checklists');
+  return res.json();
+}
+
+export async function fetchInstallationChecklistDetail(token, id) {
+  const res = await fetch(`${API_BASE}/admin/installations/${id}`, {
+    headers: adminHeaders(token),
+  });
+  if (!res.ok) throw new Error('Failed to fetch installation checklist detail');
+  return res.json();
+}
+
+export async function createInstallationChecklist(token, data) {
+  const res = await fetch(`${API_BASE}/admin/installations`, {
+    method: 'POST',
+    headers: adminHeaders(token),
+    body: JSON.stringify(data),
+  });
+  const json = await res.json();
+  if (!res.ok) {
+    throw new Error(json.error || 'Failed to create installation checklist');
+  }
+  return json;
+}
+
+export async function updateInstallationChecklist(token, id, data) {
+  const res = await fetch(`${API_BASE}/admin/installations/${id}`, {
+    method: 'PUT',
+    headers: adminHeaders(token),
+    body: JSON.stringify(data),
+  });
+  const json = await res.json();
+  if (!res.ok) {
+    throw new Error(json.error || 'Failed to update installation checklist');
+  }
+  return json;
+}
+
+export async function deleteInstallationChecklist(token, id) {
+  const res = await fetch(`${API_BASE}/admin/installations/${id}`, {
+    method: 'DELETE',
+    headers: adminHeaders(token),
+  });
+  const json = await res.json();
+  if (!res.ok) {
+    throw new Error(json.error || 'Failed to delete installation checklist');
+  }
+  return json;
+}
+
+
