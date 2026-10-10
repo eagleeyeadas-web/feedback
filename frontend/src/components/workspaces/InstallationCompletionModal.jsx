@@ -1,40 +1,78 @@
-import { useState } from 'react';
-import { Wrench, CheckCircle2, AlertTriangle, X, ShieldAlert, ArrowLeft } from 'lucide-react';
-import { submitInstallationCompletionReport } from '../../lib/api';
+import { useState, useEffect } from 'react';
+import { Wrench, CheckCircle2, AlertTriangle, X, ShieldAlert, ArrowLeft, Loader2 } from 'lucide-react';
+import { submitInstallationCompletionReport, fetchDeviceCarryRecord } from '../../lib/api';
 
-export default function InstallationCompletionModal({ checklist, carryRecord, token, onClose, onSuccess }) {
+export default function InstallationCompletionModal({ checklist, carryRecord: initialCarryRecord, token, onClose, onSuccess }) {
   const [loading, setLoading] = useState(false);
+  const [fetchingCarry, setFetchingCarry] = useState(!initialCarryRecord && !!checklist?.id);
   const [error, setError] = useState('');
   const [completionStatus, setCompletionStatus] = useState('Site Work Completed');
   const [generalRemarks, setGeneralRemarks] = useState('');
+  const [items, setItems] = useState([]);
 
-  // Prepare device items based on carryRecord or checklist
-  const carryItems = carryRecord?.items && carryRecord.items.length > 0
-    ? carryRecord.items
-    : [
+  useEffect(() => {
+    let isMounted = true;
+    async function loadCarryRecord() {
+      if (initialCarryRecord) {
+        setupItems(initialCarryRecord.items);
+        setFetchingCarry(false);
+        return;
+      }
+      if (checklist?.id) {
+        try {
+          setFetchingCarry(true);
+          const res = await fetchDeviceCarryRecord(token, checklist.id);
+          if (isMounted && res?.items && res.items.length > 0) {
+            setupItems(res.items);
+          } else if (isMounted) {
+            setupFallbackItems();
+          }
+        } catch (err) {
+          console.warn('Could not fetch carry record for completion modal, using fallback:', err.message);
+          if (isMounted) setupFallbackItems();
+        } finally {
+          if (isMounted) setFetchingCarry(false);
+        }
+      } else {
+        setupFallbackItems();
+        setFetchingCarry(false);
+      }
+    }
+
+    function setupItems(carryItems) {
+      const formItems = carryItems.map((ci) => {
+        const qtyCarried = Math.max(0, parseInt(ci.quantity_declared_to_carry || ci.quantity_carried, 10) || 0);
+        return {
+          device_type: ci.device_type,
+          quantity_carried: qtyCarried,
+          quantity_installed: qtyCarried, // default installed = carried
+          quantity_to_return: 0,
+          quantity_damaged: 0,
+          quantity_missing: 0,
+          discrepancy_reason: '',
+        };
+      });
+      setItems(formItems);
+    }
+
+    function setupFallbackItems() {
+      const fallbackItems = [
         {
-          device_type: checklist.device_type,
+          device_type: checklist.device_type || '2 Channel Live',
           quantity_carried: checklist.number_of_devices || 1,
         },
         ...(checklist.extra_devices && checklist.extra_device_type
           ? [{ device_type: checklist.extra_device_type, quantity_carried: checklist.extra_device_count || 1 }]
           : []),
       ];
+      setupItems(fallbackItems);
+    }
 
-  const initialFormItems = carryItems.map((ci) => {
-    const qtyCarried = Math.max(0, parseInt(ci.quantity_carried, 10) || 0);
-    return {
-      device_type: ci.device_type,
-      quantity_carried: qtyCarried,
-      quantity_installed: qtyCarried, // default installed = carried
-      quantity_to_return: 0,
-      quantity_damaged: 0,
-      quantity_missing: 0,
-      discrepancy_reason: '',
+    loadCarryRecord();
+    return () => {
+      isMounted = false;
     };
-  });
-
-  const [items, setItems] = useState(initialFormItems);
+  }, [checklist, initialCarryRecord, token]);
 
   const handleItemChange = (index, field, value) => {
     setItems((prev) => {
@@ -161,7 +199,13 @@ export default function InstallationCompletionModal({ checklist, carryRecord, to
           </div>
         )}
 
-        {/* Form */}
+        {fetchingCarry ? (
+          <div className="py-12 text-center text-gray-500 flex flex-col items-center justify-center gap-2">
+            <Loader2 className="w-6 h-6 animate-spin text-purple-600" />
+            <span className="text-xs font-medium">Fetching technician's declared carry record...</span>
+          </div>
+        ) : (
+        /* Form */
         <form onSubmit={handleSubmit} className="space-y-4 text-xs">
           <div className="space-y-4">
             {items.map((item, idx) => {
@@ -316,6 +360,7 @@ export default function InstallationCompletionModal({ checklist, carryRecord, to
             </button>
           </div>
         </form>
+        )}
       </div>
     </div>
   );

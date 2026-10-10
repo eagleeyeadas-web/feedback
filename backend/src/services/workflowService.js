@@ -9,11 +9,11 @@ const inMemoryCompletionReports = new Map();
 const inMemoryReturns = new Map();
 
 /**
- * Stage 2.5: Technical submits Pre-Installation Device Carry Form
+ * Stage 2.5: Technical submits Pre-Installation Device Carry Form (Dynamic Device Selection)
  */
 export async function submitDeviceCarryRecord({ checklist_id, user, items, remarks = '' }) {
   if (!items || !Array.isArray(items) || items.length === 0) {
-    throw new Error('Device carry items are required');
+    throw new Error('At least one device type and quantity must be recorded to carry.');
   }
 
   // 1. Fetch checklist reference
@@ -27,27 +27,31 @@ export async function submitDeviceCarryRecord({ checklist_id, user, items, remar
     throw new Error('Installation checklist not found');
   }
 
-  // 2. Validate items
+  // 2. Validate duplicate device types
+  const seenTypes = new Set();
   const processedItems = items.map((item) => {
+    if (!item.device_type || !item.device_type.trim()) {
+      throw new Error('Device type selection is required for every row.');
+    }
+    const devType = item.device_type.trim();
+
+    if (seenTypes.has(devType)) {
+      throw new Error(`Duplicate device type selected: "${devType}". Please combine quantities into a single row.`);
+    }
+    seenTypes.add(devType);
+
+    const rawQty = item.quantity_to_carry !== undefined ? item.quantity_to_carry : item.quantity_carried;
+    const qtyCarried = parseInt(rawQty, 10);
+    if (isNaN(qtyCarried) || qtyCarried <= 0) {
+      throw new Error(`Quantity to carry for ${devType} must be a positive whole number greater than 0.`);
+    }
+
     const qtyIssued = Math.max(0, parseInt(item.quantity_issued, 10) || 0);
-    const qtyCarried = Math.max(0, parseInt(item.quantity_carried, 10) || 0);
-
-    if (qtyCarried > qtyIssued) {
-      throw new Error(
-        `Carried quantity (${qtyCarried}) cannot exceed issued quantity (${qtyIssued}) for ${item.device_type} without an authorized issue.`
-      );
-    }
-
     const diff = qtyCarried - qtyIssued;
-    if (diff !== 0 && (!item.discrepancy_reason || !item.discrepancy_reason.trim())) {
-      throw new Error(
-        `Explanation remark is required for ${item.device_type} because actual carried (${qtyCarried}) differs from issued (${qtyIssued}).`
-      );
-    }
 
     return {
       checklist_id,
-      device_type: item.device_type,
+      device_type: devType,
       quantity_issued: qtyIssued,
       quantity_carried: qtyCarried,
       discrepancy_quantity: diff,
@@ -59,7 +63,7 @@ export async function submitDeviceCarryRecord({ checklist_id, user, items, remar
     checklist_id,
     technician_user_id: user.id,
     technician_name: user.full_name || user.email,
-    status: processedItems.some((i) => i.discrepancy_quantity !== 0) ? 'DISCREPANCY' : 'SUBMITTED',
+    status: 'SUBMITTED',
     remarks: remarks ? remarks.trim() : null,
     submitted_at: new Date().toISOString(),
   };
