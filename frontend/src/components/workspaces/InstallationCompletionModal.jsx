@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
-import { Wrench, CheckCircle2, AlertTriangle, X, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
-import { submitInstallationCompletionReport, fetchDeviceCarryRecord } from '../../lib/api';
+import { Wrench, CheckCircle2, AlertTriangle, X, Loader2, ChevronDown, ChevronUp, Eye } from 'lucide-react';
+import { submitInstallationCompletionReport, fetchDeviceCarryRecord, fetchInstallationCompletionReport } from '../../lib/api';
 
-export default function InstallationCompletionModal({ checklist, carryRecord: initialCarryRecord, token, onClose, onSuccess }) {
+export default function InstallationCompletionModal({ checklist, carryRecord: initialCarryRecord, token, readOnly = false, onClose, onSuccess }) {
   const [loading, setLoading] = useState(false);
-  const [fetchingCarry, setFetchingCarry] = useState(!initialCarryRecord && !!checklist?.id);
+  const [fetchingCarry, setFetchingCarry] = useState(true);
   const [error, setError] = useState('');
   const [completionStatus, setCompletionStatus] = useState('Site Work Completed');
   const [generalRemarks, setGeneralRemarks] = useState('');
@@ -13,12 +13,40 @@ export default function InstallationCompletionModal({ checklist, carryRecord: in
 
   useEffect(() => {
     let isMounted = true;
-    async function loadCarryRecord() {
+    async function loadData() {
+      // 1. If in readOnly mode, try to fetch the submitted completion report first
+      if (readOnly && checklist?.id) {
+        try {
+          setFetchingCarry(true);
+          const report = await fetchInstallationCompletionReport(token, checklist.id);
+          if (isMounted && report && report.items && report.items.length > 0) {
+            const formItems = report.items.map((ci) => ({
+              device_type: ci.device_type,
+              quantity_carried: ci.quantity_carried,
+              quantity_installed: ci.quantity_installed,
+              quantity_to_return: ci.quantity_to_return,
+              quantity_damaged: ci.quantity_damaged,
+              quantity_missing: ci.quantity_missing,
+              discrepancy_reason: ci.discrepancy_reason || '',
+            }));
+            setItems(formItems);
+            setCompletionStatus(report.completion_status || 'Site Work Completed');
+            setGeneralRemarks(report.remarks || '');
+            setFetchingCarry(false);
+            return;
+          }
+        } catch (err) {
+          console.warn('Could not fetch completion report for readOnly view, falling back to carry record:', err.message);
+        }
+      }
+
+      // 2. Standard carry record setup
       if (initialCarryRecord) {
         setupItems(initialCarryRecord.items);
         setFetchingCarry(false);
         return;
       }
+
       if (checklist?.id) {
         try {
           setFetchingCarry(true);
@@ -69,11 +97,11 @@ export default function InstallationCompletionModal({ checklist, carryRecord: in
       setupItems(fallbackItems);
     }
 
-    loadCarryRecord();
+    loadData();
     return () => {
       isMounted = false;
     };
-  }, [checklist, initialCarryRecord, token]);
+  }, [checklist, initialCarryRecord, readOnly, token]);
 
   const toggleDamagedMissing = (idx) => {
     setExpandedDamagedMissing((prev) => ({
@@ -158,10 +186,10 @@ export default function InstallationCompletionModal({ checklist, carryRecord: in
         <div className="flex items-center justify-between border-b border-gray-100 pb-3">
           <div>
             <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 bg-purple-100 text-purple-800 rounded">
-              Site Completion Report
+              {readOnly ? 'View Site Report (Read-Only)' : 'Site Completion Report'}
             </span>
             <h3 className="text-lg font-bold text-gray-900 mt-1 flex items-center gap-2">
-              <Wrench className="w-5 h-5 text-purple-600" /> Submit Site Installation Completion Report
+              <Wrench className="w-5 h-5 text-purple-600" /> {readOnly ? 'View Submitted Installation Completion Report' : 'Submit Site Installation Completion Report'}
             </h3>
           </div>
           <button
@@ -205,7 +233,7 @@ export default function InstallationCompletionModal({ checklist, carryRecord: in
         {fetchingCarry ? (
           <div className="py-10 text-center text-gray-500 flex flex-col items-center justify-center gap-2">
             <Loader2 className="w-6 h-6 animate-spin text-purple-600" />
-            <span className="text-xs font-medium">Loading carry record details...</span>
+            <span className="text-xs font-medium">Loading completion report details...</span>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4 text-xs">
@@ -242,9 +270,10 @@ export default function InstallationCompletionModal({ checklist, carryRecord: in
                           type="number"
                           min="0"
                           max={carried}
+                          disabled={readOnly}
                           value={item.quantity_installed}
                           onChange={(e) => handleItemChange(idx, 'quantity_installed', e.target.value)}
-                          className="w-full px-3 py-1.5 border border-gray-300 rounded-lg font-bold text-emerald-700 focus:ring-2 focus:ring-emerald-500 outline-none"
+                          className="w-full px-3 py-1.5 border border-gray-300 rounded-lg font-bold text-emerald-700 focus:ring-2 focus:ring-emerald-500 outline-none disabled:bg-gray-100 disabled:text-gray-800"
                           required
                         />
                       </div>
@@ -255,9 +284,10 @@ export default function InstallationCompletionModal({ checklist, carryRecord: in
                           type="number"
                           min="0"
                           max={carried}
+                          disabled={readOnly}
                           value={item.quantity_to_return}
                           onChange={(e) => handleItemChange(idx, 'quantity_to_return', e.target.value)}
-                          className="w-full px-3 py-1.5 border border-gray-300 rounded-lg font-bold text-blue-700 focus:ring-2 focus:ring-blue-500 outline-none"
+                          className="w-full px-3 py-1.5 border border-gray-300 rounded-lg font-bold text-blue-700 focus:ring-2 focus:ring-blue-500 outline-none disabled:bg-gray-100 disabled:text-gray-800"
                         />
                       </div>
                     </div>
@@ -288,9 +318,10 @@ export default function InstallationCompletionModal({ checklist, carryRecord: in
                               type="number"
                               min="0"
                               max={carried}
+                              disabled={readOnly}
                               value={item.quantity_damaged}
                               onChange={(e) => handleItemChange(idx, 'quantity_damaged', e.target.value)}
-                              className="w-full px-2.5 py-1 border border-gray-300 rounded text-xs font-bold text-rose-600 focus:ring-2 focus:ring-rose-500 outline-none bg-white"
+                              className="w-full px-2.5 py-1 border border-gray-300 rounded text-xs font-bold text-rose-600 focus:ring-2 focus:ring-rose-500 outline-none bg-white disabled:bg-gray-100 disabled:text-gray-800"
                             />
                           </div>
                           <div>
@@ -299,9 +330,10 @@ export default function InstallationCompletionModal({ checklist, carryRecord: in
                               type="number"
                               min="0"
                               max={carried}
+                              disabled={readOnly}
                               value={item.quantity_missing}
                               onChange={(e) => handleItemChange(idx, 'quantity_missing', e.target.value)}
-                              className="w-full px-2.5 py-1 border border-gray-300 rounded text-xs font-bold text-amber-600 focus:ring-2 focus:ring-amber-500 outline-none bg-white"
+                              className="w-full px-2.5 py-1 border border-gray-300 rounded text-xs font-bold text-amber-600 focus:ring-2 focus:ring-amber-500 outline-none bg-white disabled:bg-gray-100 disabled:text-gray-800"
                             />
                           </div>
                         </div>
@@ -318,9 +350,10 @@ export default function InstallationCompletionModal({ checklist, carryRecord: in
                         <input
                           type="text"
                           placeholder="Brief explanation required..."
+                          disabled={readOnly}
                           value={item.discrepancy_reason}
                           onChange={(e) => handleItemChange(idx, 'discrepancy_reason', e.target.value)}
-                          className="w-full px-3 py-1 border border-rose-300 rounded text-xs focus:ring-2 focus:ring-rose-500 outline-none bg-white"
+                          className="w-full px-3 py-1 border border-rose-300 rounded text-xs focus:ring-2 focus:ring-rose-500 outline-none bg-white disabled:bg-gray-100 disabled:text-gray-800"
                           required
                         />
                       </div>
@@ -336,8 +369,9 @@ export default function InstallationCompletionModal({ checklist, carryRecord: in
                 <label className="block font-semibold text-gray-700 mb-1 text-xs">Overall Installation Status</label>
                 <select
                   value={completionStatus}
+                  disabled={readOnly}
                   onChange={(e) => setCompletionStatus(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs font-bold text-gray-800 focus:ring-2 focus:ring-purple-500 outline-none"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs font-bold text-gray-800 focus:ring-2 focus:ring-purple-500 outline-none disabled:bg-gray-100"
                 >
                   <option value="Site Work Completed">Site Work Completed</option>
                   <option value="Completed">Completed</option>
@@ -345,13 +379,14 @@ export default function InstallationCompletionModal({ checklist, carryRecord: in
               </div>
 
               <div>
-                <label className="block font-semibold text-gray-700 mb-1 text-xs">Optional Technician Remarks</label>
+                <label className="block font-semibold text-gray-700 mb-1 text-xs">Technician Remarks</label>
                 <input
                   type="text"
                   placeholder="Optional site notes..."
+                  disabled={readOnly}
                   value={generalRemarks}
                   onChange={(e) => setGeneralRemarks(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs focus:ring-2 focus:ring-purple-500 outline-none"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs focus:ring-2 focus:ring-purple-500 outline-none disabled:bg-gray-100"
                 />
               </div>
             </div>
@@ -362,16 +397,18 @@ export default function InstallationCompletionModal({ checklist, carryRecord: in
                 onClick={onClose}
                 className="px-4 py-2 text-xs font-semibold text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-xl transition-colors"
               >
-                Cancel
+                {readOnly ? 'Close' : 'Cancel'}
               </button>
-              <button
-                type="submit"
-                disabled={loading}
-                className="px-5 py-2.5 text-xs font-bold text-white bg-purple-600 hover:bg-purple-700 rounded-xl shadow-sm transition-all disabled:opacity-50 flex items-center gap-2 cursor-pointer"
-              >
-                <CheckCircle2 className="w-4 h-4" />
-                <span>{loading ? 'Submitting Report...' : 'Submit Installation Report'}</span>
-              </button>
+              {!readOnly && (
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="px-5 py-2.5 text-xs font-bold text-white bg-purple-600 hover:bg-purple-700 rounded-xl shadow-sm transition-all disabled:opacity-50 flex items-center gap-2 cursor-pointer"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>{loading ? 'Submitting Report...' : 'Submit Installation Report'}</span>
+                </button>
+              )}
             </div>
           </form>
         )}

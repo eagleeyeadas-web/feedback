@@ -35,6 +35,7 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
   // Active Modals State
   const [carryModalJob, setCarryModalJob] = useState(null);
   const [completionModalJob, setCompletionModalJob] = useState(null);
+  const [viewReportModalJob, setViewReportModalJob] = useState(null);
 
   const loadData = useCallback(async () => {
     if (!token) {
@@ -286,12 +287,9 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
               </thead>
               <tbody className="divide-y divide-gray-200">
                 {filteredChecklists.map((item) => {
-                  const isCarryDone = item.carry_status === 'RECORDED';
-                  const isStarted = ['In Progress', 'Site Work Completed', 'Completed'].includes(
-                    item.installation_status
-                  );
-                  const isCompleted =
-                    item.installation_status === 'Completed' || item.installation_status === 'Site Work Completed';
+                  const isCarryDone = item.carry_status === 'RECORDED' || item.reconciliation_status === 'CARRY_RECORDED' || item.reconciliation_status === 'STORE_ISSUED';
+                  const isStarted = ['In Progress', 'Site Work Completed', 'Completed'].includes(item.installation_status);
+                  const isReportSubmitted = item.installation_status === 'Site Work Completed' || item.installation_status === 'Completed';
 
                   return (
                     <tr key={item.id} className="hover:bg-gray-50/80 transition-colors">
@@ -350,16 +348,26 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
                       <td className="py-3 px-4">
                         <span
                           className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${
-                            isCompleted
-                              ? 'bg-emerald-100 text-emerald-800'
+                            isReportSubmitted
+                              ? item.reconciliation_status === 'PENDING_STORE_VERIFICATION'
+                                ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                                : item.reconciliation_status === 'DISCREPANCY_OPEN'
+                                ? 'bg-rose-100 text-rose-800 border border-rose-300'
+                                : 'bg-emerald-100 text-emerald-800 border border-emerald-300'
                               : item.installation_status === 'In Progress'
-                              ? 'bg-blue-100 text-blue-800'
+                              ? 'bg-blue-100 text-blue-800 border border-blue-300'
                               : item.installation_status === 'Ready to Start'
-                              ? 'bg-purple-100 text-purple-800'
-                              : 'bg-purple-50 text-purple-700'
+                              ? 'bg-purple-100 text-purple-800 border border-purple-300'
+                              : 'bg-purple-50 text-purple-700 border border-purple-200'
                           }`}
                         >
-                          {!isCarryDone && item.installation_status !== 'Completed'
+                          {isReportSubmitted
+                            ? item.reconciliation_status === 'PENDING_STORE_VERIFICATION'
+                              ? 'Awaiting Store Verification'
+                              : item.reconciliation_status === 'DISCREPANCY_OPEN'
+                              ? 'Requires Review'
+                              : 'Installation Report Submitted'
+                            : !isCarryDone
                             ? 'Carry Form Required'
                             : item.installation_status}
                         </span>
@@ -382,57 +390,76 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
                         </span>
                       </td>
 
-                      {/* Actions Column */}
+                      {/* Actions Column: Single Primary Button per Workflow Stage */}
                       <td className="py-3 px-4">
                         <div className="flex flex-col gap-1.5">
-                          {/* 1. Pre-Installation Carry Form Button */}
-                          {!isCarryDone ? (
+                          {/* STAGE 1: Assigned, Carry Not Submitted */}
+                          {!isCarryDone && !isReportSubmitted && (
                             <button
                               onClick={() => setCarryModalJob(item)}
-                              className="px-2.5 py-1 text-[11px] font-bold text-white bg-amber-600 hover:bg-amber-700 rounded-lg shadow-2xs flex items-center gap-1 cursor-pointer"
+                              className="px-3 py-1.5 text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 rounded-lg shadow-2xs flex items-center gap-1.5 cursor-pointer w-fit"
                             >
-                              <Truck className="w-3 h-3" /> Record Devices Carried
-                            </button>
-                          ) : (
-                            <button
-                              onClick={() => setCarryModalJob(item)}
-                              className="px-2.5 py-1 text-[10px] font-medium text-gray-600 hover:text-gray-900 bg-gray-100 rounded-lg flex items-center gap-1 cursor-pointer"
-                            >
-                              <Truck className="w-3 h-3 text-emerald-600" /> View Carry Record
+                              <Truck className="w-3.5 h-3.5" /> Record Devices Carried
                             </button>
                           )}
 
-                          {/* 2. Start Installation Button (Only after carry form done and not started yet) */}
-                          {isCarryDone && !isStarted && (
+                          {/* STAGE 2: Carry Submitted, Not Started Yet */}
+                          {isCarryDone && !isStarted && !isReportSubmitted && (
                             <button
                               onClick={() => handleStartInstallation(item.id)}
-                              className="px-2.5 py-1 text-[11px] font-bold text-white bg-purple-600 hover:bg-purple-700 rounded-lg shadow-2xs flex items-center gap-1 cursor-pointer"
+                              className="px-3 py-1.5 text-xs font-bold text-white bg-purple-600 hover:bg-purple-700 rounded-lg shadow-2xs flex items-center gap-1.5 cursor-pointer w-fit"
                             >
-                              <Play className="w-3 h-3" /> Start Installation
+                              <Play className="w-3.5 h-3.5" /> Start Installation
                             </button>
                           )}
 
-                          {/* 3. Post-Installation Completion Form Button */}
-                          {isStarted && (
+                          {/* STAGE 3: Installation In Progress */}
+                          {isStarted && !isReportSubmitted && (
                             <button
                               onClick={() => setCompletionModalJob(item)}
-                              className="px-2.5 py-1 text-[11px] font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-2xs flex items-center gap-1 cursor-pointer"
+                              className="px-3 py-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-2xs flex items-center gap-1.5 cursor-pointer w-fit"
                             >
-                              <FileCheck className="w-3 h-3" /> {isCompleted ? 'View/Update Completion' : 'Complete Installation'}
+                              <FileCheck className="w-3.5 h-3.5" /> Complete Installation
                             </button>
                           )}
 
-                          {/* View Checklist Details */}
-                          <button
-                            onClick={() =>
-                              onSelectChecklist
-                                ? onSelectChecklist(item.id)
-                                : navigate(`/admin/installation-checklists/${item.id}`)
-                            }
-                            className="text-[11px] font-semibold text-purple-700 hover:text-purple-900 flex items-center gap-1 mt-0.5"
-                          >
-                            Job Details <ArrowRight className="w-3 h-3" />
-                          </button>
+                          {/* STAGE 4: Installation Report Submitted */}
+                          {isReportSubmitted && (
+                            <button
+                              onClick={() => setViewReportModalJob(item)}
+                              className="px-3 py-1.5 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg flex items-center gap-1.5 cursor-pointer w-fit"
+                            >
+                              <Truck className="w-3.5 h-3.5 text-blue-600" /> View Installation Report
+                            </button>
+                          )}
+
+                          {/* SECONDARY LINKS */}
+                          <div className="flex items-center gap-2 text-[10px] mt-0.5 text-gray-500">
+                            <button
+                              onClick={() =>
+                                onSelectChecklist
+                                  ? onSelectChecklist(item.id)
+                                  : navigate(`/admin/installation-checklists/${item.id}`)
+                              }
+                              className="font-semibold text-purple-700 hover:text-purple-900 flex items-center gap-0.5"
+                            >
+                              Job Details <ArrowRight className="w-3 h-3" />
+                            </button>
+
+                            {/* Stage 2 optional correction mechanism */}
+                            {isCarryDone && !isStarted && (
+                              <>
+                                <span>•</span>
+                                <button
+                                  onClick={() => setCarryModalJob(item)}
+                                  className="text-gray-500 hover:text-gray-800 underline font-medium"
+                                  title="Update physical device carry declaration prior to starting"
+                                >
+                                  Edit Carry Record
+                                </button>
+                              </>
+                            )}
+                          </div>
                         </div>
                       </td>
                     </tr>
@@ -444,7 +471,7 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
         )}
       </div>
 
-      {/* MODAL 1: Mandatory Pre-Installation Device Carry Form */}
+      {/* MODAL 1: Pre-Installation Device Carry Form */}
       {carryModalJob && (
         <DeviceCarryModal
           checklist={carryModalJob}
@@ -458,7 +485,7 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
         />
       )}
 
-      {/* MODAL 2: Post-Installation Completion Form */}
+      {/* MODAL 2: Post-Installation Completion Form (Editable) */}
       {completionModalJob && (
         <InstallationCompletionModal
           checklist={completionModalJob}
@@ -469,6 +496,17 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
             showToast('Post-installation completion report submitted!');
             loadData();
           }}
+        />
+      )}
+
+      {/* MODAL 3: Submitted Installation Report (Read-Only) */}
+      {viewReportModalJob && (
+        <InstallationCompletionModal
+          checklist={viewReportModalJob}
+          token={token}
+          readOnly={true}
+          onClose={() => setViewReportModalJob(null)}
+          onSuccess={() => setViewReportModalJob(null)}
         />
       )}
     </div>

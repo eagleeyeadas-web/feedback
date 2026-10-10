@@ -330,7 +330,14 @@ export async function submitInstallationCompletionReport({
     details: { checklist_id, totalInstalled, totalUnused, totalDamaged, totalMissing, hasDiscrepancy },
   });
 
-  return { id: reportId, checklist_id, items: processedItems, summary: reportData };
+  return {
+    id: reportId,
+    checklist_id,
+    items: processedItems,
+    summary: reportData,
+    status: finalInstStatus,
+    reconciliation_status: finalReconStatus,
+  };
 }
 
 /**

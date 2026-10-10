@@ -12,37 +12,33 @@ import {
   startInstallationJob, 
   submitInstallationCompletionReport 
 } from '../src/services/workflowService.js';
-import { getChecklists } from '../src/services/installationService.js';
+import { createChecklist, getChecklists } from '../src/services/installationService.js';
 import supabase from '../src/services/supabase.js';
 
 async function runTests() {
   console.log('--- Starting Dynamic Device Carry Form Acceptance Tests ---');
 
-  const testUser = { id: 'tech-user-123', email: 'technician@eagleeye.com', name: 'Test Technician' };
+  const testUser = { id: 'f3a5e467-a1bf-40ef-8878-ec64b29bbfd5', email: 'technician@eagleeye.com', name: 'Test Technician' };
 
   try {
-    const allJobs = await getChecklists();
-    let sampleChecklistId;
-
-    if (allJobs?.checklists?.length > 0) {
-      sampleChecklistId = allJobs.checklists[0].id;
-      console.log(`Using existing checklist from DB: ${allJobs.checklists[0].checklist_number} (ID: ${sampleChecklistId})`);
-    } else {
-      sampleChecklistId = '99999999-9999-4999-8999-999999999999';
-      await supabase.from('installation_checklists').delete().eq('id', sampleChecklistId);
-      const { error: createErr } = await supabase.from('installation_checklists').insert({
-        id: sampleChecklistId,
-        checklist_number: 'CHK-TEST-CARRY-999',
-        client_name: 'Carry Test Client Ltd',
-        client_location: 'Industrial Area',
-        service_engineer: 'John Engineer',
-        service_assistant: 'Assistant Alex',
-        status: 'Assigned',
-        device_type: '2 Channel Live',
-        number_of_devices: 2
-      });
-      if (createErr) console.warn('Sample checklist insert warning:', createErr.message);
-    }
+    const created = await createChecklist(testUser.id, {
+      client_name: 'Carry Test Client Ltd',
+      client_mobile: '9876543210',
+      client_location: 'Industrial Area',
+      device_type: '2 Channel Live',
+      number_of_devices: 2,
+      number_of_vehicles: 1,
+      confirmed_price: 15000,
+      payment_method: 'UPI',
+      installation_or_service: 'Installation',
+      expected_arrival_date: '2026-10-10',
+      expected_arrival_time: '10:00 AM',
+      service_engineer: 'John Engineer',
+      service_assistant: 'Assistant Alex',
+      installation_status: 'Assigned'
+    });
+    const sampleChecklistId = created.id;
+    console.log(`Created test checklist: ${created.checklist_number} (ID: ${sampleChecklistId})`);
 
     // Test 1: Empty device items validation
     console.log('\n[Test 1] Submit empty device list (Should fail validation)');
