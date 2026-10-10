@@ -61,9 +61,6 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
     device_type: DEVICE_OPTIONS[0],
     number_of_devices: 1,
     number_of_vehicles: 1,
-    extra_devices: false,
-    extra_device_type: DEVICE_OPTIONS[0],
-    extra_device_count: 1,
     confirmed_price: '',
     payment_method: 'UPI',
     advance_received: false,
@@ -102,9 +99,6 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
             device_type: data.device_type || DEVICE_OPTIONS[0],
             number_of_devices: data.number_of_devices || 1,
             number_of_vehicles: data.number_of_vehicles || 1,
-            extra_devices: Boolean(data.extra_devices),
-            extra_device_type: data.extra_device_type || DEVICE_OPTIONS[0],
-            extra_device_count: data.extra_device_count || 1,
             confirmed_price: data.confirmed_price !== null ? String(data.confirmed_price) : '',
             payment_method: data.payment_method || 'UPI',
             advance_received: Boolean(data.advance_received),
@@ -138,10 +132,6 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
       const next = { ...prev, [field]: val };
 
       // Auto clear conditional section data if toggled to false
-      if (field === 'extra_devices' && !val) {
-        next.extra_device_type = DEVICE_OPTIONS[0];
-        next.extra_device_count = 1;
-      }
       if (field === 'advance_received' && !val) {
         next.advance_amount = '';
       }
@@ -182,11 +172,6 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
 
     if (Number(formData.number_of_devices) <= 0) return 'Number of Devices must be greater than 0';
     if (Number(formData.number_of_vehicles) <= 0) return 'Number of Vehicles must be greater than 0';
-
-    if (formData.extra_devices) {
-      if (!formData.extra_device_type) return 'Type of Extra Device is required when Extra Devices to be Carried is Yes';
-      if (Number(formData.extra_device_count) <= 0) return 'Number of Extra Devices to be Carried must be greater than 0';
-    }
 
     const confPrice = Number(formData.confirmed_price);
     if (isNaN(confPrice) || confPrice < 0) return 'Please enter a valid Confirmed Price (>= 0)';
@@ -242,9 +227,9 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
         device_type: formData.device_type,
         number_of_devices: Number(formData.number_of_devices),
         number_of_vehicles: Number(formData.number_of_vehicles),
-        extra_devices: formData.extra_devices,
-        extra_device_type: formData.extra_devices ? formData.extra_device_type : null,
-        extra_device_count: formData.extra_devices ? Number(formData.extra_device_count) : null,
+        extra_devices: false,
+        extra_device_type: null,
+        extra_device_count: null,
         confirmed_price: Number(formData.confirmed_price) || 0,
         payment_method: formData.payment_method,
         advance_received: formData.advance_received,
@@ -498,74 +483,6 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
               />
             </div>
           </div>
-
-          <div className="pt-3 border-t border-gray-50">
-            <label className="block text-xs font-semibold text-gray-700 mb-2">
-              Extra Devices to be Carried? <span className="text-rose-500">*</span>
-            </label>
-            <div className="flex items-center gap-6">
-              <label className="flex items-center gap-2 text-xs font-medium cursor-pointer">
-                <input
-                  type="radio"
-                  name="extra_devices"
-                  checked={formData.extra_devices === true}
-                  onChange={() => handleChange('extra_devices', true)}
-                  className="text-blue-600 focus:ring-blue-500"
-                />
-                <span>Yes</span>
-              </label>
-              <label className="flex items-center gap-2 text-xs font-medium cursor-pointer">
-                <input
-                  type="radio"
-                  name="extra_devices"
-                  checked={formData.extra_devices === false}
-                  onChange={() => handleChange('extra_devices', false)}
-                  className="text-blue-600 focus:ring-blue-500"
-                />
-                <span>No</span>
-              </label>
-            </div>
-          </div>
-
-          {/* SECTION 4 — EXTRA DEVICE DETAILS (CONDITIONAL) */}
-          {formData.extra_devices && (
-            <div className="p-4 bg-blue-50/50 border border-blue-100 rounded-xl space-y-3 animate-in fade-in duration-200">
-              <h4 className="text-xs font-bold text-blue-900 uppercase tracking-wider">
-                EXTRA DEVICE DETAILS
-              </h4>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">
-                    Type of Extra Device <span className="text-rose-500">*</span>
-                  </label>
-                  <select
-                    value={formData.extra_device_type}
-                    onChange={(e) => handleChange('extra_device_type', e.target.value)}
-                    className="w-full text-xs p-2.5 border border-gray-200 rounded-xl bg-white focus:outline-none focus:border-blue-500"
-                  >
-                    {DEVICE_OPTIONS.map((opt) => (
-                      <option key={opt} value={opt}>
-                        {opt}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">
-                    Number of Extra Devices to be Carried <span className="text-rose-500">*</span>
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    value={formData.extra_device_count}
-                    onChange={(e) => handleChange('extra_device_count', e.target.value)}
-                    className="w-full text-xs p-2.5 border border-gray-200 rounded-xl bg-white focus:outline-none focus:border-blue-500 font-semibold"
-                  />
-                </div>
-              </div>
-            </div>
-          )}
         </div>
 
         {/* SECTION 5 — 3. PRICING & PAYMENT */}

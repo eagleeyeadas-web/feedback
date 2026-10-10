@@ -479,7 +479,7 @@ export default function InstallationChecklistDetails({ id: propId, onEdit, onBac
             <HardDrive size={15} className="text-blue-600" />
             2. DEVICE DETAILS
           </h3>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs bg-gray-50/50 p-4 rounded-xl border border-gray-100">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs bg-gray-50/50 p-4 rounded-xl border border-gray-100">
             <div>
               <span className="text-gray-500 block text-[11px]">Type of Device</span>
               <span className="font-bold text-gray-900">{checklist.device_type}</span>
@@ -492,18 +492,18 @@ export default function InstallationChecklistDetails({ id: propId, onEdit, onBac
               <span className="text-gray-500 block text-[11px]">Number of Vehicles</span>
               <span className="font-bold text-gray-900">{checklist.number_of_vehicles}</span>
             </div>
-            <div>
-              <span className="text-gray-500 block text-[11px]">Extra Devices to be Carried?</span>
-              <span className="font-bold text-blue-700">{checklist.extra_devices ? 'Yes' : 'No'}</span>
-            </div>
 
             {checklist.extra_devices && (
               <>
-                <div className="col-span-2 sm:col-span-2">
+                <div>
+                  <span className="text-gray-500 block text-[11px]">Extra Devices to be Carried?</span>
+                  <span className="font-bold text-blue-700">Yes</span>
+                </div>
+                <div>
                   <span className="text-gray-500 block text-[11px]">Type of Extra Device</span>
                   <span className="font-bold text-gray-900">{checklist.extra_device_type || '—'}</span>
                 </div>
-                <div className="col-span-2 sm:col-span-2">
+                <div>
                   <span className="text-gray-500 block text-[11px]">Number of Extra Devices to be Carried</span>
                   <span className="font-bold text-gray-900">{checklist.extra_device_count || '—'}</span>
                 </div>

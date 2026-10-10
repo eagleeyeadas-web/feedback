@@ -325,12 +325,12 @@ export async function generateInstallationChecklistPDF(item) {
       { label: 'Type of Device', value: item.device_type || '—' },
       { label: 'Number of Devices', value: String(item.number_of_devices || '0') },
       { label: 'Number of Vehicles', value: String(item.number_of_vehicles || '0') },
-      { label: 'Extra Devices Carried?', value: item.extra_devices ? 'Yes' : 'No', color: item.extra_devices ? COLORS.blueText : COLORS.darkText },
     ],
   ];
 
   if (item.extra_devices) {
     deviceRows.push([
+      { label: 'Extra Devices Carried?', value: 'Yes', color: COLORS.blueText },
       { label: 'Type of Extra Device', value: item.extra_device_type || '—' },
       { label: 'Number of Extra Devices Carried', value: String(item.extra_device_count || '—') },
     ]);

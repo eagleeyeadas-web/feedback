@@ -78,23 +78,6 @@ const checklistValidationSchema = z.object({
   remarks: z.string().nullable().optional(),
   client_confirmation: z.enum(['Confirmed', 'Not Confirmed']).default('Confirmed'),
 }).superRefine((data, ctx) => {
-  if (data.extra_devices) {
-    if (!data.extra_device_type || !DEVICE_TYPES.includes(data.extra_device_type)) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['extra_device_type'],
-        message: 'Type of Extra Device is required when Extra Devices to be Carried is Yes',
-      });
-    }
-    if (!data.extra_device_count || data.extra_device_count <= 0) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['extra_device_count'],
-        message: 'Number of Extra Devices must be greater than 0',
-      });
-    }
-  }
-
   const adv = data.advance_received ? (data.advance_amount || 0) : 0;
   const pend = data.pending_payment ? (data.pending_amount || 0) : 0;
   if (adv + pend > data.confirmed_price) {
