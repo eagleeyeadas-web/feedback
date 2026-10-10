@@ -55,6 +55,7 @@ app.use('/api/admin/quotation', quotationRoutes);
 app.use('/api/admin/installations', installationRoutes);
 app.use('/api/installations', installationRoutes);
 app.use('/api/admin/inventory', inventoryRoutes);
+app.use('/api/inventory', inventoryRoutes);
 app.use('/api/admin/customers', customerRoutes);
 app.use('/api/admin/users', userRoutes);
 app.use('/api/admin/audit-logs', auditRoutes);
