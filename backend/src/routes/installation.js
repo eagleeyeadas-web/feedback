@@ -23,6 +23,7 @@ import {
   submitInstallationCompletionReport,
   getInstallationCompletionReport,
   getPendingStoreReturns,
+  enrichChecklistsWithWorkflowStatus,
 } from '../services/workflowService.js';
 
 const router = Router();
@@ -154,6 +155,9 @@ router.get('/pending-returns', requireRole('STORE_MANAGER', 'ADMIN'), async (req
 router.get('/', requireRole('ADMIN', 'SALES', 'TECHNICAL', 'STORE_MANAGER'), async (req, res) => {
   try {
     const result = await getChecklists(req.query);
+    if (result && Array.isArray(result.checklists)) {
+      result.checklists = await enrichChecklistsWithWorkflowStatus(result.checklists);
+    }
     return res.json(result);
   } catch (err) {
     console.error('Error in GET /installations:', err);

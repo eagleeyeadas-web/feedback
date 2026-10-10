@@ -479,6 +479,14 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
           token={token}
           onClose={() => setCarryModalJob(null)}
           onSuccess={() => {
+            const targetId = carryModalJob.id;
+            setChecklists((prev) =>
+              prev.map((item) =>
+                item.id === targetId
+                  ? { ...item, carry_status: 'RECORDED', reconciliation_status: 'CARRY_RECORDED' }
+                  : item
+              )
+            );
             setCarryModalJob(null);
             showToast('Device carry record submitted successfully!');
             loadData();
@@ -492,7 +500,26 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
           checklist={completionModalJob}
           token={token}
           onClose={() => setCompletionModalJob(null)}
-          onSuccess={() => {
+          onSuccess={(result) => {
+            const targetId = completionModalJob.id;
+            const isReturn =
+              result?.reconciliation_status === 'PENDING_STORE_VERIFICATION' ||
+              result?.summary?.devices_unused_qty > 0;
+
+            setChecklists((prev) =>
+              prev.map((item) =>
+                item.id === targetId
+                  ? {
+                      ...item,
+                      carry_status: 'RECORDED',
+                      installation_status: 'Completed',
+                      reconciliation_status: isReturn
+                        ? 'PENDING_STORE_VERIFICATION'
+                        : 'FULLY_RECONCILED',
+                    }
+                  : item
+              )
+            );
             setCompletionModalJob(null);
             showToast('Post-installation completion report submitted!');
             loadData();

@@ -748,3 +748,38 @@ export async function resolveDiscrepancy({
 
   return updated;
 }
+
+/**
+ * Enrich installation checklists with persisted workflow status from in-memory fallback stores
+ */
+export async function enrichChecklistsWithWorkflowStatus(checklists) {
+  if (!Array.isArray(checklists)) return checklists;
+
+  return checklists.map((item) => {
+    let copy = { ...item };
+
+    // 1. Check carry record in-memory fallback store
+    const carryRecord = inMemoryCarryRecords.get(item.id);
+    if (carryRecord || item.carry_status === 'RECORDED') {
+      copy.carry_status = 'RECORDED';
+      if (!copy.reconciliation_status || copy.reconciliation_status === 'SALES_CREATED') {
+        copy.reconciliation_status = 'CARRY_RECORDED';
+      }
+    }
+
+    // 2. Check completion report in-memory fallback store
+    const completionReport = inMemoryCompletionReports.get(item.id);
+    if (
+      completionReport ||
+      item.installation_status === 'Completed' ||
+      item.installation_status === 'Site Work Completed'
+    ) {
+      copy.installation_status = 'Completed';
+      if (completionReport?.reconciliation_status) {
+        copy.reconciliation_status = completionReport.reconciliation_status;
+      }
+    }
+
+    return copy;
+  });
+}
