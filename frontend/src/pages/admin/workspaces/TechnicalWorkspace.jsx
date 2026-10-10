@@ -287,8 +287,22 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
               </thead>
               <tbody className="divide-y divide-gray-200">
                 {filteredChecklists.map((item) => {
-                  const isCarryDone = item.carry_status === 'RECORDED' || item.reconciliation_status === 'CARRY_RECORDED' || item.reconciliation_status === 'STORE_ISSUED';
-                  const isReportSubmitted = item.installation_status === 'Site Work Completed' || item.installation_status === 'Completed';
+                  const carryStatusUpper = (item.carry_status || '').toUpperCase();
+                  const reconStatusUpper = (item.reconciliation_status || '').toUpperCase();
+                  const instStatusUpper = (item.installation_status || '').toUpperCase();
+
+                  const isCarryDone =
+                    carryStatusUpper === 'RECORDED' ||
+                    reconStatusUpper === 'CARRY_RECORDED' ||
+                    reconStatusUpper === 'STORE_ISSUED';
+
+                  const isReportSubmitted =
+                    instStatusUpper === 'COMPLETED' ||
+                    instStatusUpper === 'SITE WORK COMPLETED' ||
+                    reconStatusUpper === 'SITE_WORK_COMPLETED' ||
+                    reconStatusUpper === 'PENDING_STORE_VERIFICATION' ||
+                    reconStatusUpper === 'DISCREPANCY_OPEN' ||
+                    reconStatusUpper === 'FULLY_RECONCILED';
 
                   return (
                     <tr key={item.id} className="hover:bg-gray-50/80 transition-colors">
