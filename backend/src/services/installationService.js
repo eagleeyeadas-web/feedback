@@ -148,8 +148,9 @@ export async function createChecklist(adminUserId, data) {
 export async function getChecklists(params = {}) {
   const {
     page = 1,
-    limit = 15,
+    limit = 100,
     search = '',
+    serviceEngineer = '',
     installationStatus = '',
     paymentStatus = '',
     installationOrService = '',
@@ -161,17 +162,23 @@ export async function getChecklists(params = {}) {
   } = params;
 
   const pageNum = Math.max(1, parseInt(page, 10));
-  const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10)));
+  const limitNum = Math.min(200, Math.max(1, parseInt(limit, 10)));
   const offset = (pageNum - 1) * limitNum;
 
   let query = supabase
     .from('installation_checklists')
     .select('*', { count: 'exact' });
 
-  // Search filter (Checklist Number, Client Name, Client Mobile, Client Location)
+  // Search filter (Checklist Number, Client Name, Client Mobile, Client Location, Technician)
   if (search && search.trim()) {
     const s = search.trim();
-    query = query.or(`checklist_number.ilike.%${s}%,client_name.ilike.%${s}%,client_mobile.ilike.%${s}%,client_location.ilike.%${s}%`);
+    query = query.or(`checklist_number.ilike.%${s}%,client_name.ilike.%${s}%,client_mobile.ilike.%${s}%,client_location.ilike.%${s}%,service_engineer.ilike.%${s}%`);
+  }
+
+  // Service Engineer Filter (Primary filter on service_engineer)
+  if (serviceEngineer && serviceEngineer.trim() && serviceEngineer !== 'all') {
+    const eng = serviceEngineer.trim();
+    query = query.ilike('service_engineer', `%${eng}%`);
   }
 
   // Filters
@@ -225,6 +232,66 @@ export async function getChecklists(params = {}) {
     limit: limitNum,
     totalPages,
   };
+}
+
+/**
+ * Fetch unique list of Service Engineers from database
+ */
+export async function getServiceEngineers() {
+  const map = new Map();
+
+  // 1. Fetch from admin_users (TECHNICAL, ADMIN roles)
+  try {
+    const { data: users, error } = await supabase
+      .from('admin_users')
+      .select('id, full_name, email, role')
+      .in('role', ['TECHNICAL', 'ADMIN', 'admin', 'super_admin']);
+
+    if (!error && users) {
+      users.forEach((u) => {
+        const name = u.full_name || u.email || 'Unnamed Engineer';
+        map.set(u.id, {
+          id: u.id,
+          name,
+          role: u.role,
+          email: u.email,
+        });
+      });
+    }
+  } catch (err) {
+    console.warn('Error fetching engineers from admin_users:', err.message);
+  }
+
+  // 2. Fetch distinct service_engineer names from installation_checklists
+  try {
+    const { data: checklists, error } = await supabase
+      .from('installation_checklists')
+      .select('service_engineer')
+      .not('service_engineer', 'is', null);
+
+    if (!error && checklists) {
+      checklists.forEach((c) => {
+        if (c.service_engineer && c.service_engineer.trim()) {
+          const engName = c.service_engineer.trim();
+          const exists = Array.from(map.values()).some(
+            (e) => e.name.toLowerCase() === engName.toLowerCase() || e.id === engName
+          );
+          if (!exists) {
+            map.set(engName, {
+              id: engName,
+              name: engName,
+              role: 'TECHNICAL',
+              email: '',
+            });
+          }
+        }
+      });
+    }
+  } catch (err) {
+    console.warn('Error fetching distinct service_engineer from checklists:', err.message);
+  }
+
+  return Array.from(map.values());
 }
 
 /**

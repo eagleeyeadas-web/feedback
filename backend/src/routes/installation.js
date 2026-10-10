@@ -8,6 +8,7 @@ import {
   updateChecklist,
   deleteChecklist,
   getInstallationStats,
+  getServiceEngineers,
 } from '../services/installationService.js';
 import { generateInstallationChecklistPDF } from '../services/installationPdfGenerator.js';
 import { issueStockForJob } from '../services/inventoryService.js';
@@ -16,6 +17,12 @@ import {
   declareDeviceReturns,
   verifyStoreReturn,
   resolveDiscrepancy,
+  submitDeviceCarryRecord,
+  getDeviceCarryRecord,
+  startInstallationJob,
+  submitInstallationCompletionReport,
+  getInstallationCompletionReport,
+  getPendingStoreReturns,
 } from '../services/workflowService.js';
 
 const router = Router();
@@ -109,6 +116,34 @@ router.get('/stats', requireRole('ADMIN', 'SALES', 'TECHNICAL', 'STORE_MANAGER')
   } catch (err) {
     console.error('Error fetching installation stats:', err);
     return res.status(500).json({ error: 'Failed to fetch installation statistics' });
+  }
+});
+
+/**
+ * GET /api/admin/installations/engineers
+ * Unique list of service engineers for filtering dropdown
+ */
+router.get('/engineers', requireRole('ADMIN', 'SALES', 'TECHNICAL', 'STORE_MANAGER'), async (req, res) => {
+  try {
+    const engineers = await getServiceEngineers();
+    return res.json(engineers);
+  } catch (err) {
+    console.error('Error fetching service engineers:', err);
+    return res.status(500).json({ error: 'Failed to fetch service engineers' });
+  }
+});
+
+/**
+ * GET /api/admin/installations/pending-returns
+ * Fetch all declared returns pending Store Manager physical verification
+ */
+router.get('/pending-returns', requireRole('STORE_MANAGER', 'ADMIN'), async (req, res) => {
+  try {
+    const returns = await getPendingStoreReturns();
+    return res.json(returns);
+  } catch (err) {
+    console.error('Error fetching pending returns:', err);
+    return res.status(500).json({ error: 'Failed to fetch pending store returns' });
   }
 });
 
@@ -240,46 +275,88 @@ router.post('/:id/issue-stock', requireRole('STORE_MANAGER', 'ADMIN'), async (re
 });
 
 /**
- * Stage 3: TECHNICAL records actual site installation quantities
- * POST /api/admin/installations/:id/technical-report
+ * GET /api/admin/installations/:id/carry-record
+ * Fetch pre-installation device carry record for job
  */
-router.post('/:id/technical-report', requireRole('TECHNICAL', 'ADMIN'), async (req, res) => {
+router.get('/:id/carry-record', requireRole('ADMIN', 'SALES', 'TECHNICAL', 'STORE_MANAGER'), async (req, res) => {
   try {
-    const {
-      devices_carried_qty,
-      devices_installed_qty,
-      devices_unused_qty,
-      devices_damaged_qty,
-      devices_missing_qty,
-      extra_devices_carried_qty,
-      extra_devices_installed_qty,
-      extra_devices_unused_qty,
-      extra_devices_damaged_qty,
-      extra_devices_missing_qty,
-      completion_status,
-      remarks,
-    } = req.body;
+    const record = await getDeviceCarryRecord(req.params.id);
+    return res.json(record || { checklist_id: req.params.id, items: [], status: 'NOT_RECORDED' });
+  } catch (err) {
+    console.error('Error fetching carry record:', err);
+    return res.status(500).json({ error: 'Failed to fetch device carry record' });
+  }
+});
 
-    const result = await submitTechnicalReport({
+/**
+ * POST /api/admin/installations/:id/carry-record
+ * Submit Pre-Installation Device Carry Form (TECHNICAL, ADMIN)
+ */
+router.post('/:id/carry-record', requireRole('TECHNICAL', 'ADMIN'), async (req, res) => {
+  try {
+    const { items, remarks } = req.body;
+    const result = await submitDeviceCarryRecord({
       checklist_id: req.params.id,
       user: req.profile,
-      devices_carried_qty: parseInt(devices_carried_qty, 10) || 0,
-      devices_installed_qty: parseInt(devices_installed_qty, 10) || 0,
-      devices_unused_qty: parseInt(devices_unused_qty, 10) || 0,
-      devices_damaged_qty: parseInt(devices_damaged_qty, 10) || 0,
-      devices_missing_qty: parseInt(devices_missing_qty, 10) || 0,
-      extra_devices_carried_qty: parseInt(extra_devices_carried_qty, 10) || 0,
-      extra_devices_installed_qty: parseInt(extra_devices_installed_qty, 10) || 0,
-      extra_devices_unused_qty: parseInt(extra_devices_unused_qty, 10) || 0,
-      extra_devices_damaged_qty: parseInt(extra_devices_damaged_qty, 10) || 0,
-      extra_devices_missing_qty: parseInt(extra_devices_missing_qty, 10) || 0,
+      items,
+      remarks,
+    });
+    return res.status(201).json(result);
+  } catch (err) {
+    console.error('Error submitting carry record:', err);
+    return res.status(400).json({ error: err.message || 'Failed to submit device carry record' });
+  }
+});
+
+/**
+ * POST /api/admin/installations/:id/start-installation
+ * Start installation work after completing mandatory carry form (TECHNICAL, ADMIN)
+ */
+router.post('/:id/start-installation', requireRole('TECHNICAL', 'ADMIN'), async (req, res) => {
+  try {
+    const result = await startInstallationJob({
+      checklist_id: req.params.id,
+      user: req.profile,
+    });
+    return res.json(result);
+  } catch (err) {
+    console.error('Error starting installation:', err);
+    return res.status(400).json({ error: err.message || 'Failed to start installation job' });
+  }
+});
+
+/**
+ * GET /api/admin/installations/:id/completion-report
+ * Fetch post-installation completion report for job
+ */
+router.get('/:id/completion-report', requireRole('ADMIN', 'SALES', 'TECHNICAL', 'STORE_MANAGER'), async (req, res) => {
+  try {
+    const report = await getInstallationCompletionReport(req.params.id);
+    return res.json(report || { checklist_id: req.params.id, items: [] });
+  } catch (err) {
+    console.error('Error fetching completion report:', err);
+    return res.status(500).json({ error: 'Failed to fetch completion report' });
+  }
+});
+
+/**
+ * POST /api/admin/installations/:id/completion-report
+ * Submit Post-Installation Completion Form (TECHNICAL, ADMIN)
+ */
+router.post('/:id/completion-report', requireRole('TECHNICAL', 'ADMIN'), async (req, res) => {
+  try {
+    const { items, completion_status, remarks } = req.body;
+    const result = await submitInstallationCompletionReport({
+      checklist_id: req.params.id,
+      user: req.profile,
+      items,
       completion_status,
       remarks,
     });
     return res.json(result);
   } catch (err) {
-    console.error('Error in POST /installations/:id/technical-report:', err);
-    return res.status(400).json({ error: err.message || 'Failed to submit technical report' });
+    console.error('Error submitting completion report:', err);
+    return res.status(400).json({ error: err.message || 'Failed to submit completion report' });
   }
 });
 

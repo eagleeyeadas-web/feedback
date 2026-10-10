@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../../hooks/useAuth';
 import { fetchInstallationChecklistDetail, downloadInstallationPDF } from '../../../lib/api';
+import DeviceCarryModal from '../../../components/workspaces/DeviceCarryModal';
+import InstallationCompletionModal from '../../../components/workspaces/InstallationCompletionModal';
 import { downloadInstallationExcel } from '../../../lib/excelHelper';
 import {
   ArrowLeft,
@@ -46,6 +48,8 @@ export default function InstallationChecklistDetails({ id: propId, onEdit, onBac
   // Workflow Modal States
   const [showIssueModal, setShowIssueModal] = useState(false);
   const [showTechModal, setShowTechModal] = useState(false);
+  const [showCarryModal, setShowCarryModal] = useState(false);
+  const [showCompletionModal, setShowCompletionModal] = useState(false);
   const [showReturnModal, setShowReturnModal] = useState(false);
   const [showVerifyModal, setShowVerifyModal] = useState(false);
   const [showDiscModal, setShowDiscModal] = useState(false);
@@ -229,14 +233,25 @@ export default function InstallationChecklistDetails({ id: propId, onEdit, onBac
             </button>
           )}
 
-          {/* Stage 3: Technical Report */}
+          {/* Stage 2.5: Record Carry Devices */}
           {(role === 'TECHNICAL' || role === 'ADMIN') && (
             <button
-              onClick={() => setShowTechModal(true)}
+              onClick={() => setShowCarryModal(true)}
+              className="flex items-center gap-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold px-3 py-2 rounded-xl shadow-xs transition-colors cursor-pointer"
+            >
+              <Package size={15} />
+              <span>Record Carry Devices</span>
+            </button>
+          )}
+
+          {/* Stage 3: Technical Completion Report */}
+          {(role === 'TECHNICAL' || role === 'ADMIN') && (
+            <button
+              onClick={() => setShowCompletionModal(true)}
               className="flex items-center gap-1.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold px-3 py-2 rounded-xl shadow-xs transition-colors cursor-pointer"
             >
               <Wrench size={15} />
-              <span>Submit Tech Report</span>
+              <span>Complete Installation Report</span>
             </button>
           )}
 
@@ -646,6 +661,34 @@ export default function InstallationChecklistDetails({ id: propId, onEdit, onBac
           onSuccess={() => {
             setShowIssueModal(false);
             showToast('Stock issued successfully!');
+            fetchInstallationChecklistDetail(token, checklistId).then(setChecklist);
+          }}
+        />
+      )}
+
+      {/* PRE-INSTALLATION CARRY FORM MODAL */}
+      {showCarryModal && (
+        <DeviceCarryModal
+          checklist={checklist}
+          token={token}
+          onClose={() => setShowCarryModal(false)}
+          onSuccess={() => {
+            setShowCarryModal(false);
+            showToast('Device carry record submitted!');
+            fetchInstallationChecklistDetail(token, checklistId).then(setChecklist);
+          }}
+        />
+      )}
+
+      {/* POST-INSTALLATION COMPLETION FORM MODAL */}
+      {showCompletionModal && (
+        <InstallationCompletionModal
+          checklist={checklist}
+          token={token}
+          onClose={() => setShowCompletionModal(false)}
+          onSuccess={() => {
+            setShowCompletionModal(false);
+            showToast('Installation completion report submitted!');
             fetchInstallationChecklistDetail(token, checklistId).then(setChecklist);
           }}
         />

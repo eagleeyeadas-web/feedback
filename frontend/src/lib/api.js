@@ -226,4 +226,71 @@ export async function downloadInstallationPDF(token, id) {
   return res.blob();
 }
 
+/**
+ * Service Engineer List & Carry / Completion Workflow APIs
+ */
+export async function fetchServiceEngineers(token) {
+  const res = await fetch(`${API_BASE}/admin/installations/engineers`, {
+    headers: adminHeaders(token),
+  });
+  if (!res.ok) throw new Error('Failed to fetch service engineers');
+  return res.json();
+}
+
+export async function fetchDeviceCarryRecord(token, checklistId) {
+  const res = await fetch(`${API_BASE}/admin/installations/${checklistId}/carry-record`, {
+    headers: adminHeaders(token),
+  });
+  if (!res.ok) throw new Error('Failed to fetch device carry record');
+  return res.json();
+}
+
+export async function submitDeviceCarryRecord(token, checklistId, data) {
+  const res = await fetch(`${API_BASE}/admin/installations/${checklistId}/carry-record`, {
+    method: 'POST',
+    headers: adminHeaders(token),
+    body: JSON.stringify(data),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to submit device carry record');
+  return json;
+}
+
+export async function startInstallationJob(token, checklistId) {
+  const res = await fetch(`${API_BASE}/admin/installations/${checklistId}/start-installation`, {
+    method: 'POST',
+    headers: adminHeaders(token),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to start installation job');
+  return json;
+}
+
+export async function fetchInstallationCompletionReport(token, checklistId) {
+  const res = await fetch(`${API_BASE}/admin/installations/${checklistId}/completion-report`, {
+    headers: adminHeaders(token),
+  });
+  if (!res.ok) throw new Error('Failed to fetch completion report');
+  return res.json();
+}
+
+export async function submitInstallationCompletionReport(token, checklistId, data) {
+  const res = await fetch(`${API_BASE}/admin/installations/${checklistId}/completion-report`, {
+    method: 'POST',
+    headers: adminHeaders(token),
+    body: JSON.stringify(data),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to submit installation completion report');
+  return json;
+}
+
+export async function fetchPendingStoreReturns(token) {
+  const res = await fetch(`${API_BASE}/admin/installations/pending-returns`, {
+    headers: adminHeaders(token),
+  });
+  if (!res.ok) throw new Error('Failed to fetch pending store returns');
+  return res.json();
+}
+
 
