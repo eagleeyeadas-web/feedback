@@ -14,7 +14,7 @@ import inventoryRoutes from './routes/inventory.js';
 import customerRoutes from './routes/customers.js';
 import userRoutes from './routes/users.js';
 import auditRoutes from './routes/audit.js';
-import { runQuotationCleanup } from './services/quotationCleanupService.js';
+import { runFullCleanup, handleCleanupEndpoint } from './services/quotationCleanupService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -46,6 +46,9 @@ app.use(express.urlencoded({ extended: true }));
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
+
+// Centralized Cleanup Trigger Endpoint (Direct alias)
+app.post('/api/admin/cleanup', handleCleanupEndpoint);
 
 // Routes
 app.use('/api/feedback', feedbackRoutes);
@@ -88,17 +91,17 @@ app.listen(config.port, '0.0.0.0', () => {
   console.log(`Eagle Eye Feedback API running on port ${config.port}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 
-  // Automated 10-day quotation cleanup background task (Runs every 6 hours)
-  const CLEANUP_INTERVAL_MS = 6 * 60 * 60 * 1000;
+  // Automated 20-day centralized cleanup background task (Runs daily / every 24 hours)
+  const CLEANUP_INTERVAL_MS = 24 * 60 * 60 * 1000;
   
-  // Initial check 10 seconds after startup
+  // Initial check 15 seconds after startup (safely catches up if server slept on Render)
   setTimeout(() => {
-    runQuotationCleanup().catch(err => console.error('Initial startup quotation cleanup error:', err));
-  }, 10000);
+    runFullCleanup().catch(err => console.error('Initial startup cleanup error:', err));
+  }, 15000);
 
   // Set recurring schedule
   setInterval(() => {
-    runQuotationCleanup().catch(err => console.error('Scheduled quotation cleanup error:', err));
+    runFullCleanup().catch(err => console.error('Scheduled daily cleanup error:', err));
   }, CLEANUP_INTERVAL_MS);
 });
 

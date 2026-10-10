@@ -61,7 +61,7 @@ router.post('/', feedbackLimiter, validate(feedbackSchema), async (req, res) => 
     // Insert feedback record
     const nowDate = new Date();
     const now = nowDate.toISOString();
-    const pdfExpiresAt = new Date(nowDate.getTime() + (10 * 24 * 60 * 60 * 1000)).toISOString();
+    const pdfExpiresAt = new Date(nowDate.getTime() + (20 * 24 * 60 * 60 * 1000)).toISOString();
 
     const feedbackRecord = {
       feedback_id: feedbackId,
@@ -207,7 +207,7 @@ router.get('/:feedbackId/pdf', async (req, res) => {
     }
 
     if (!feedback.pdf_path || (feedback.pdf_expires_at && new Date(feedback.pdf_expires_at) <= new Date())) {
-      return res.status(410).json({ error: 'Customer Feedback PDF has expired after 10-day retention window.' });
+      return res.status(410).json({ error: 'Customer Feedback PDF has expired after 20-day retention window.' });
     }
 
     // Download PDF from storage

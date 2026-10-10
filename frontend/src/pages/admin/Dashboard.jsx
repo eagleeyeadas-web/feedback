@@ -718,7 +718,7 @@ export default function Dashboard() {
                             {(!item.pdf_path || (item.pdf_expires_at && new Date(item.pdf_expires_at) <= new Date())) ? (
                               <span
                                 className="px-2 py-0.5 rounded text-[11px] font-medium bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed select-none"
-                                title="PDF expired after 10-day retention window"
+                                title="PDF expired after 20-day retention window"
                               >
                                 PDF Expired
                               </span>
@@ -808,7 +808,7 @@ function FeedbackDetailDrawer({ feedback, onClose, onDownloadPDF }) {
             {(!f.pdf_path || (f.pdf_expires_at && new Date(f.pdf_expires_at) <= new Date())) ? (
               <span
                 className="px-2.5 py-1 rounded-lg text-xs font-medium bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed select-none"
-                title="PDF expired after 10-day retention window"
+                title="PDF expired after 20-day retention window"
               >
                 PDF Expired
               </span>

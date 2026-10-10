@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import supabase from '../services/supabase.js';
 import { generateQuotationPDF, numberToWordsIndian, getFullProductDescription } from '../services/quotationPdfGenerator.js';
-import { runFullCleanup } from '../services/quotationCleanupService.js';
+import { handleCleanupEndpoint } from '../services/quotationCleanupService.js';
 import { peekNextQuotationNumber, generateAndReserveQuotationNumber, handleQuotationDeletion } from '../services/quotationSequenceService.js';
 import { requireAdmin } from '../middleware/auth.js';
 
@@ -10,34 +10,12 @@ const router = Router();
 
 /**
  * POST /api/admin/quotations/cleanup
- * Cron job endpoint for cleaning up quotations and customer feedback PDFs older than 10 days
- * Protected by secret header `x-cron-secret` or Admin Bearer Token
+ * Centralized 20-day automatic retention cleanup trigger for eligible attachments
+ * Protected strictly by CRON_SECRET header `x-cron-secret` (or query param) or Admin Bearer Token.
+ * Note: Never uses a hardcoded fallback secret.
  */
-router.post('/cleanup', async (req, res) => {
-  try {
-    const secret = req.headers['x-cron-secret'] || req.query.secret;
-    const expectedSecret = process.env.CRON_SECRET || 'eagleeye_quotation_cleanup_secret';
+router.post('/cleanup', handleCleanupEndpoint);
 
-    const authHeader = req.headers.authorization;
-    let isAdmin = false;
-
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      const token = authHeader.split(' ')[1];
-      const { data: { user } } = await supabase.auth.getUser(token);
-      if (user) isAdmin = true;
-    }
-
-    if (secret !== expectedSecret && !isAdmin) {
-      return res.status(401).json({ error: 'Unauthorized cleanup request' });
-    }
-
-    const result = await runFullCleanup();
-    return res.json({ message: 'Scheduled cleanup executed successfully', result });
-  } catch (err) {
-    console.error('Cleanup route error:', err);
-    return res.status(500).json({ error: 'Cleanup execution failed' });
-  }
-});
 
 // Require admin authentication for remaining quotation endpoints
 router.use(requireAdmin);
@@ -185,7 +163,7 @@ router.post('/', async (req, res) => {
       : defaultTerms;
 
     const createdAt = new Date();
-    const expiresAt = new Date(createdAt.getTime() + (10 * 24 * 60 * 60 * 1000)); // Exactly 10 days in the future
+    const expiresAt = new Date(createdAt.getTime() + (20 * 24 * 60 * 60 * 1000)); // Exactly 20 days in the future
 
     const quotationRecord = {
       quotation_number: quotationNo,
