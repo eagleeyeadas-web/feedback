@@ -288,7 +288,6 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
               <tbody className="divide-y divide-gray-200">
                 {filteredChecklists.map((item) => {
                   const isCarryDone = item.carry_status === 'RECORDED' || item.reconciliation_status === 'CARRY_RECORDED' || item.reconciliation_status === 'STORE_ISSUED';
-                  const isStarted = ['In Progress', 'Site Work Completed', 'Completed'].includes(item.installation_status);
                   const isReportSubmitted = item.installation_status === 'Site Work Completed' || item.installation_status === 'Completed';
 
                   return (
@@ -340,7 +339,7 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
                               : 'bg-amber-100 text-amber-800 border border-amber-300'
                           }`}
                         >
-                          {isCarryDone ? 'RECORDED' : 'NOT RECORDED'}
+                          {isCarryDone ? 'Recorded' : 'Not Recorded'}
                         </span>
                       </td>
 
@@ -354,10 +353,8 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
                                 : item.reconciliation_status === 'DISCREPANCY_OPEN'
                                 ? 'bg-rose-100 text-rose-800 border border-rose-300'
                                 : 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                              : item.installation_status === 'In Progress'
+                              : isCarryDone
                               ? 'bg-blue-100 text-blue-800 border border-blue-300'
-                              : item.installation_status === 'Ready to Start'
-                              ? 'bg-purple-100 text-purple-800 border border-purple-300'
                               : 'bg-purple-50 text-purple-700 border border-purple-200'
                           }`}
                         >
@@ -366,10 +363,10 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
                               ? 'Awaiting Store Verification'
                               : item.reconciliation_status === 'DISCREPANCY_OPEN'
                               ? 'Requires Review'
-                              : 'Installation Report Submitted'
+                              : 'Completed'
                             : !isCarryDone
                             ? 'Carry Form Required'
-                            : item.installation_status}
+                            : 'Ready for Report'}
                         </span>
                       </td>
 
@@ -393,7 +390,7 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
                       {/* Actions Column: Single Primary Button per Workflow Stage */}
                       <td className="py-3 px-4">
                         <div className="flex flex-col gap-1.5">
-                          {/* STAGE 1: Assigned, Carry Not Submitted */}
+                          {/* STAGE 1: Carry record not submitted */}
                           {!isCarryDone && !isReportSubmitted && (
                             <button
                               onClick={() => setCarryModalJob(item)}
@@ -403,33 +400,23 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
                             </button>
                           )}
 
-                          {/* STAGE 2: Carry Submitted, Not Started Yet */}
-                          {isCarryDone && !isStarted && !isReportSubmitted && (
-                            <button
-                              onClick={() => handleStartInstallation(item.id)}
-                              className="px-3 py-1.5 text-xs font-bold text-white bg-purple-600 hover:bg-purple-700 rounded-lg shadow-2xs flex items-center gap-1.5 cursor-pointer w-fit"
-                            >
-                              <Play className="w-3.5 h-3.5" /> Start Installation
-                            </button>
-                          )}
-
-                          {/* STAGE 3: Installation In Progress */}
-                          {isStarted && !isReportSubmitted && (
+                          {/* STAGE 2: Carry record submitted, completion report not submitted */}
+                          {isCarryDone && !isReportSubmitted && (
                             <button
                               onClick={() => setCompletionModalJob(item)}
                               className="px-3 py-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-2xs flex items-center gap-1.5 cursor-pointer w-fit"
                             >
-                              <FileCheck className="w-3.5 h-3.5" /> Complete Installation
+                              <FileCheck className="w-3.5 h-3.5" /> Record Installed & Returned Devices
                             </button>
                           )}
 
-                          {/* STAGE 4: Installation Report Submitted */}
+                          {/* STAGE 3: Completion report submitted */}
                           {isReportSubmitted && (
                             <button
                               onClick={() => setViewReportModalJob(item)}
                               className="px-3 py-1.5 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg flex items-center gap-1.5 cursor-pointer w-fit"
                             >
-                              <Truck className="w-3.5 h-3.5 text-blue-600" /> View Installation Report
+                              <FileCheck className="w-3.5 h-3.5 text-blue-600" /> View Installation Report
                             </button>
                           )}
 
@@ -441,19 +428,19 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
                                   ? onSelectChecklist(item.id)
                                   : navigate(`/admin/installation-checklists/${item.id}`)
                               }
-                              className="font-semibold text-purple-700 hover:text-purple-900 flex items-center gap-0.5"
+                              className="font-semibold text-purple-700 hover:text-purple-900 flex items-center gap-0.5 cursor-pointer"
                             >
                               Job Details <ArrowRight className="w-3 h-3" />
                             </button>
 
-                            {/* Stage 2 optional correction mechanism */}
-                            {isCarryDone && !isStarted && (
+                            {/* Optional edit carry record link prior to report submission */}
+                            {isCarryDone && !isReportSubmitted && (
                               <>
                                 <span>•</span>
                                 <button
                                   onClick={() => setCarryModalJob(item)}
-                                  className="text-gray-500 hover:text-gray-800 underline font-medium"
-                                  title="Update physical device carry declaration prior to starting"
+                                  className="text-gray-500 hover:text-gray-800 underline font-medium cursor-pointer"
+                                  title="Update physical device carry declaration prior to submitting report"
                                 >
                                   Edit Carry Record
                                 </button>
