@@ -6,7 +6,6 @@ import QuotationHistory from './QuotationHistory';
 import InstallationChecklistList from './installation/InstallationChecklistList';
 import InstallationChecklistForm from './installation/InstallationChecklistForm';
 import InstallationChecklistDetails from './installation/InstallationChecklistDetails';
-import InventoryManagement from './InventoryManagement';
 import CustomerManagement from './CustomerManagement';
 import UserManagement from './UserManagement';
 import AuditLogs from './AuditLogs';
@@ -275,25 +274,13 @@ export default function Dashboard() {
             <button
               onClick={() => { setActiveTab('store_workspace'); navigate('/admin/dashboard'); setShowMobileSidebar(false); }}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
-                activeTab === 'store_workspace'
+                activeTab === 'store_workspace' || activeTab === 'inventory'
                   ? 'bg-amber-600 text-white shadow-sm font-semibold'
                   : 'text-white/70 hover:text-white hover:bg-white/5'
               }`}
             >
               <Store size={18} />
               Store Manager Workspace
-            </button>
-
-            <button
-              onClick={() => { setActiveTab('inventory'); navigate('/admin/dashboard'); setShowMobileSidebar(false); }}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
-                activeTab === 'inventory'
-                  ? 'bg-white/15 text-white shadow-sm font-semibold'
-                  : 'text-white/70 hover:text-white hover:bg-white/5'
-              }`}
-            >
-              <Package size={18} />
-              Stock & Inventory
             </button>
 
             <button
@@ -441,7 +428,7 @@ export default function Dashboard() {
               }}
             />
           )}
-          {activeTab === 'store_workspace' && (
+          {(activeTab === 'store_workspace' || activeTab === 'inventory') && (
             <StoreWorkspace
               onSelectChecklist={(id) => {
                 setActiveTab('installation_checklists');
@@ -450,7 +437,6 @@ export default function Dashboard() {
               }}
             />
           )}
-          {activeTab === 'inventory' && <InventoryManagement />}
           {activeTab === 'customers' && <CustomerManagement />}
           {activeTab === 'users' && <UserManagement />}
           {activeTab === 'audit_logs' && <AuditLogs />}

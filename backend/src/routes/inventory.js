@@ -2,9 +2,15 @@ import { Router } from 'express';
 import { requireRole } from '../middleware/auth.js';
 import {
   getInventoryProducts,
+  getInventorySummary,
   getInventoryTransactions,
   receiveNewStock,
 } from '../services/inventoryService.js';
+import {
+  getAllStoreReturns,
+  getPendingStoreReturns,
+  verifyStoreReturn,
+} from '../services/workflowService.js';
 import supabase from '../services/supabase.js';
 
 const router = Router();
@@ -20,6 +26,20 @@ router.get('/', requireRole('STORE_MANAGER', 'SALES', 'TECHNICAL'), async (req, 
   } catch (err) {
     console.error('Error in GET /inventory:', err);
     return res.status(500).json({ error: err.message || 'Failed to fetch inventory' });
+  }
+});
+
+/**
+ * GET /api/admin/inventory/summary
+ * Accessible to STORE_MANAGER, SALES, TECHNICAL, ADMIN
+ */
+router.get('/summary', requireRole('STORE_MANAGER', 'SALES', 'TECHNICAL'), async (req, res) => {
+  try {
+    const summary = await getInventorySummary();
+    return res.json(summary);
+  } catch (err) {
+    console.error('Error in GET /inventory/summary:', err);
+    return res.status(500).json({ error: err.message || 'Failed to fetch inventory summary' });
   }
 });
 
@@ -58,6 +78,47 @@ router.post('/receive', requireRole('STORE_MANAGER'), async (req, res) => {
   } catch (err) {
     console.error('Error in POST /inventory/receive:', err);
     return res.status(400).json({ error: err.message || 'Failed to receive stock' });
+  }
+});
+
+/**
+ * GET /api/admin/inventory/returns
+ * Fetch all declared device returns (STORE_MANAGER, ADMIN)
+ */
+router.get('/returns', requireRole('STORE_MANAGER'), async (req, res) => {
+  try {
+    const returns = await getAllStoreReturns();
+    return res.json(returns);
+  } catch (err) {
+    console.error('Error in GET /inventory/returns:', err);
+    return res.status(500).json({ error: err.message || 'Failed to fetch store returns' });
+  }
+});
+
+/**
+ * POST /api/admin/inventory/verify-return
+ * Verify physical store return (STORE_MANAGER, ADMIN)
+ */
+router.post('/verify-return', requireRole('STORE_MANAGER'), async (req, res) => {
+  try {
+    const { return_id, accepted_usable_qty, damaged_qty, missing_qty, remarks } = req.body;
+    if (!return_id) {
+      return res.status(400).json({ error: 'return_id is required' });
+    }
+
+    const result = await verifyStoreReturn({
+      return_id,
+      accepted_usable_qty: parseInt(accepted_usable_qty, 10) || 0,
+      damaged_qty: parseInt(damaged_qty, 10) || 0,
+      missing_qty: parseInt(missing_qty, 10) || 0,
+      user: req.profile,
+      remarks,
+    });
+
+    return res.json(result);
+  } catch (err) {
+    console.error('Error in POST /inventory/verify-return:', err);
+    return res.status(400).json({ error: err.message || 'Failed to verify store return' });
   }
 });
 

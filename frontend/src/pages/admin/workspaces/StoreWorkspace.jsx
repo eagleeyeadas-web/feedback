@@ -1,62 +1,187 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../../hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
-import { Package, ShieldCheck, AlertTriangle, ArrowRight, Clock, CheckCircle2, X } from 'lucide-react';
-import InventoryManagement from '../InventoryManagement';
-import { fetchPendingStoreReturns } from '../../../lib/api';
+import {
+  Package,
+  ShieldCheck,
+  AlertTriangle,
+  ArrowRight,
+  Clock,
+  CheckCircle2,
+  X,
+  Plus,
+  RefreshCw,
+  Search,
+  Filter,
+  ArrowDownLeft,
+  ArrowUpRight,
+  Truck,
+  RotateCcw,
+  Check,
+} from 'lucide-react';
+import {
+  fetchInventoryProducts,
+  fetchInventorySummary,
+  fetchInventoryTransactions,
+  receiveInventoryStock,
+  fetchAllStoreReturns,
+  verifyStoreReturnApi,
+} from '../../../lib/api';
+
+const STANDARD_DEVICE_TYPES = [
+  '2 Channel Live',
+  '2 Channel Recording',
+  '4 Channel Live',
+  '4 Channel Recording',
+  '6 Channel Live',
+  '6 Channel Recording',
+  '8 Channel Live',
+];
 
 export default function StoreWorkspace({ onSelectChecklist }) {
-  const { token, user } = useAuth();
+  const { token, user, role } = useAuth();
   const navigate = useNavigate();
-  const [checklists, setChecklists] = useState([]);
-  const [pendingReturns, setPendingReturns] = useState([]);
+
+  // Tab State: 'overview', 'add_stock', 'movements', 'returns'
+  const [activeTab, setActiveTab] = useState('overview');
+
+  // Inventory State
+  const [products, setProducts] = useState([]);
+  const [summary, setSummary] = useState({
+    totalUsable: 0,
+    totalIssued: 0,
+    totalAwaitingReturn: 0,
+    totalDamaged: 0,
+  });
+  const [transactions, setTransactions] = useState([]);
+  const [storeReturns, setStoreReturns] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('inventory'); // 'inventory', 'pending_issue', 'pending_verification'
+  const [searchStock, setSearchStock] = useState('');
+
+  // Transactions Filter
+  const [txFilterType, setTxFilterType] = useState('');
+  const [txSearch, setTxSearch] = useState('');
+
+  // Add Stock Form State
+  const [addDeviceType, setAddDeviceType] = useState('2 Channel Live');
+  const [addQty, setAddQty] = useState('');
+  const [addSupplier, setAddSupplier] = useState('');
+  const [addPurchaseRef, setAddPurchaseRef] = useState('');
+  const [addUnitCost, setAddUnitCost] = useState('');
+  const [addReceivedDate, setAddReceivedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [addRemarks, setAddRemarks] = useState('');
+  const [addingStock, setAddingStock] = useState(false);
+  const [addError, setAddError] = useState('');
+
+  // Verify Return Modal State
   const [verifyModalReturn, setVerifyModalReturn] = useState(null);
   const [toastMessage, setToastMessage] = useState('');
 
-  const loadData = async () => {
+  const loadAllData = useCallback(async () => {
+    if (!token) return;
     setLoading(true);
+
     try {
-      // 1. Fetch checklists
-      const res = await fetch('/api/admin/installations', { headers: { Authorization: `Bearer ${token}` } });
-      if (res.ok) {
-        const data = await res.json();
-        setChecklists(data.checklists || []);
+      // 1. Fetch inventory products
+      const prodData = await fetchInventoryProducts(token).catch(() => []);
+      setProducts(prodData || []);
+
+      // 2. Fetch inventory summary metrics
+      const sumData = await fetchInventorySummary(token).catch(() => null);
+      if (sumData) {
+        setSummary(sumData);
+      } else {
+        // Fallback calculate from products
+        let u = 0, i = 0, d = 0;
+        (prodData || []).forEach((p) => {
+          u += Number(p.usable_stock) || 0;
+          i += Number(p.issued_stock) || 0;
+          d += Number(p.damaged_stock) || 0;
+        });
+        setSummary((prev) => ({ ...prev, totalUsable: u, totalIssued: i, totalDamaged: d }));
       }
 
-      // 2. Fetch pending returns
-      const returnsData = await fetchPendingStoreReturns(token);
-      setPendingReturns(returnsData || []);
+      // 3. Fetch transactions
+      const txData = await fetchInventoryTransactions(token, {
+        type: txFilterType,
+        search: txSearch,
+        limit: 100,
+      }).catch(() => ({ transactions: [] }));
+      setTransactions(txData.transactions || []);
+
+      // 4. Fetch all store returns
+      const returnsData = await fetchAllStoreReturns(token).catch(() => []);
+      setStoreReturns(returnsData || []);
+
+      // Update awaiting return count from returns list
+      const awaiting = (returnsData || [])
+        .filter((r) => r.status === 'PENDING_STORE_VERIFICATION')
+        .reduce((acc, curr) => acc + (Number(curr.declared_return_qty) || 0), 0);
+
+      setSummary((prev) => ({ ...prev, totalAwaitingReturn: awaiting }));
     } catch (err) {
-      console.error('Failed to load Store workspace data:', err);
+      console.error('Failed to load Store Workspace data:', err);
     } finally {
       setLoading(false);
     }
-  };
+  }, [token, txFilterType, txSearch]);
 
   useEffect(() => {
-    if (token) {
-      loadData();
-    }
-  }, [token]);
+    loadAllData();
+  }, [loadAllData]);
 
   const showToast = (msg) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(''), 3500);
   };
 
-  const pendingIssueJobs = checklists.filter(
-    (c) => c.reconciliation_status === 'INITIATED' || c.installation_status === 'Assigned'
+  const handleAddStockSubmit = async (e) => {
+    e.preventDefault();
+    setAddError('');
+
+    const qty = parseInt(addQty, 10);
+    if (isNaN(qty) || qty <= 0) {
+      setAddError('Quantity received must be a positive whole number greater than 0.');
+      return;
+    }
+
+    setAddingStock(true);
+    try {
+      await receiveInventoryStock(token, {
+        device_type: addDeviceType,
+        quantity: qty,
+        supplier: addSupplier,
+        purchase_ref: addPurchaseRef,
+        unit_cost: addUnitCost ? parseFloat(addUnitCost) : null,
+        received_date: addReceivedDate,
+        remarks: addRemarks,
+      });
+
+      showToast(`Successfully added ${qty} units of ${addDeviceType} to usable stock.`);
+      setAddQty('');
+      setAddSupplier('');
+      setAddPurchaseRef('');
+      setAddUnitCost('');
+      setAddRemarks('');
+      loadAllData();
+      setActiveTab('overview');
+    } catch (err) {
+      console.error('Error adding stock:', err);
+      setAddError(err.message || 'Failed to add stock batch.');
+    } finally {
+      setAddingStock(false);
+    }
+  };
+
+  // Filter products by search text
+  const filteredProducts = products.filter(
+    (p) =>
+      (p.device_type || '').toLowerCase().includes(searchStock.toLowerCase()) ||
+      (p.device_name || '').toLowerCase().includes(searchStock.toLowerCase()) ||
+      (p.sku || '').toLowerCase().includes(searchStock.toLowerCase())
   );
 
-  // Return jobs awaiting store physical verification
-  const pendingVerifyJobs = checklists.filter(
-    (c) =>
-      c.reconciliation_status === 'PENDING_STORE_VERIFICATION' ||
-      c.reconciliation_status === 'SITE_WORK_COMPLETED' ||
-      pendingReturns.some((r) => r.checklist_id === c.id)
-  );
+  const pendingReturns = storeReturns.filter((r) => r.status === 'PENDING_STORE_VERIFICATION');
 
   return (
     <div className="space-y-6">
@@ -69,7 +194,7 @@ export default function StoreWorkspace({ onSelectChecklist }) {
       )}
 
       {/* Header */}
-      <div className="bg-gradient-to-r from-amber-900 to-navy p-6 rounded-2xl text-white shadow-md flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="bg-gradient-to-r from-amber-900 via-amber-800 to-navy p-6 rounded-2xl text-white shadow-md flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <span className="text-xs font-bold px-2.5 py-1 bg-amber-500/30 text-amber-200 rounded-md border border-amber-400/30 uppercase tracking-wider">
             Operational Workspace
@@ -77,108 +202,533 @@ export default function StoreWorkspace({ onSelectChecklist }) {
           <h1 className="text-2xl font-bold mt-2 flex items-center gap-2">
             <Package className="w-7 h-7 text-amber-400" /> Store Manager Workspace
           </h1>
-          <p className="text-xs text-white/70 mt-1 max-w-xl">
-            Receive incoming stock batches, issue physical devices for approved installation jobs, verify returned devices, separate damaged stock, and reconcile inventory discrepancies.
+          <p className="text-xs text-white/80 mt-1 max-w-xl">
+            Real-time usable stock balances, incoming stock intake, technician return verification, and auditable movement logs.
           </p>
         </div>
-      </div>
 
-      {/* Tabs */}
-      <div className="border-b border-gray-200 flex flex-wrap gap-6">
         <button
-          onClick={() => setActiveTab('inventory')}
-          className={`pb-3 text-xs font-bold border-b-2 transition-colors flex items-center gap-2 cursor-pointer ${
-            activeTab === 'inventory' ? 'border-amber-600 text-amber-600' : 'border-transparent text-gray-500'
-          }`}
+          onClick={loadAllData}
+          disabled={loading}
+          className="self-start md:self-auto flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white text-xs font-semibold px-4 py-2.5 rounded-xl border border-white/20 transition-all cursor-pointer disabled:opacity-50"
         >
-          <Package className="w-4 h-4" /> Stock Balances & Add Stock
-        </button>
-        <button
-          onClick={() => setActiveTab('pending_issue')}
-          className={`pb-3 text-xs font-bold border-b-2 transition-colors flex items-center gap-2 cursor-pointer ${
-            activeTab === 'pending_issue' ? 'border-amber-600 text-amber-600' : 'border-transparent text-gray-500'
-          }`}
-        >
-          <Clock className="w-4 h-4" /> Jobs Awaiting Issue ({pendingIssueJobs.length})
-        </button>
-        <button
-          onClick={() => setActiveTab('pending_verification')}
-          className={`pb-3 text-xs font-bold border-b-2 transition-colors flex items-center gap-2 cursor-pointer ${
-            activeTab === 'pending_verification' ? 'border-amber-600 text-amber-600' : 'border-transparent text-gray-500'
-          }`}
-        >
-          <ShieldCheck className="w-4 h-4" /> Returns Pending Physical Verification ({pendingVerifyJobs.length})
+          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+          <span>Refresh Workspace</span>
         </button>
       </div>
 
-      {/* TAB 1: Inventory Management View */}
-      {activeTab === 'inventory' && <InventoryManagement />}
+      {/* 4 Clean Tabs */}
+      <div className="bg-white p-1.5 rounded-xl border border-gray-200 shadow-xs flex flex-wrap gap-1.5">
+        <button
+          onClick={() => setActiveTab('overview')}
+          className={`flex-1 min-w-[140px] py-2.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+            activeTab === 'overview'
+              ? 'bg-amber-600 text-white shadow-xs'
+              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+          }`}
+        >
+          <Package className="w-4 h-4" />
+          <span>Stock Overview</span>
+        </button>
 
-      {/* TAB 2: Pending Stock Issue Jobs */}
-      {activeTab === 'pending_issue' && (
-        <div className="bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden">
-          <div className="p-4 border-b border-gray-200 bg-gray-50/50 flex items-center justify-between">
-            <h3 className="text-sm font-bold text-gray-900">Installation Jobs Awaiting Device Issue</h3>
-            <span className="text-xs text-gray-500 font-medium">{pendingIssueJobs.length} pending</span>
+        <button
+          onClick={() => setActiveTab('add_stock')}
+          className={`flex-1 min-w-[140px] py-2.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+            activeTab === 'add_stock'
+              ? 'bg-amber-600 text-white shadow-xs'
+              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+          }`}
+        >
+          <Plus className="w-4 h-4" />
+          <span>Add Stock</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('movements')}
+          className={`flex-1 min-w-[140px] py-2.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+            activeTab === 'movements'
+              ? 'bg-amber-600 text-white shadow-xs'
+              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+          }`}
+        >
+          <Clock className="w-4 h-4" />
+          <span>Stock Movements</span>
+          <span className="ml-1 px-1.5 py-0.2 text-[10px] bg-black/10 rounded-full font-mono">
+            {transactions.length}
+          </span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('returns')}
+          className={`flex-1 min-w-[140px] py-2.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+            activeTab === 'returns'
+              ? 'bg-amber-600 text-white shadow-xs'
+              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+          }`}
+        >
+          <ShieldCheck className="w-4 h-4" />
+          <span>Device Returns</span>
+          {pendingReturns.length > 0 && (
+            <span
+              className={`ml-1 px-1.5 py-0.2 text-[10px] rounded-full font-bold ${
+                activeTab === 'returns' ? 'bg-white text-amber-900' : 'bg-amber-100 text-amber-800'
+              }`}
+            >
+              {pendingReturns.length} pending
+            </span>
+          )}
+        </button>
+      </div>
+
+      {/* =========================================================================
+          SECTION 1: STOCK OVERVIEW
+          ========================================================================= */}
+      {activeTab === 'overview' && (
+        <div className="space-y-5">
+          {/* Summary Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-xs flex items-center gap-4">
+              <div className="w-11 h-11 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600">
+                <Package className="w-6 h-6" />
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 font-semibold uppercase tracking-wider">Total Usable Units</p>
+                <p className="text-2xl font-bold text-gray-900 mt-0.5">{summary.totalUsable}</p>
+                <p className="text-[10px] text-emerald-600 font-medium">Available for technician carry</p>
+              </div>
+            </div>
+
+            <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-xs flex items-center gap-4">
+              <div className="w-11 h-11 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600">
+                <Truck className="w-6 h-6" />
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 font-semibold uppercase tracking-wider">Issued to Technicians</p>
+                <p className="text-2xl font-bold text-gray-900 mt-0.5">{summary.totalIssued}</p>
+                <p className="text-[10px] text-blue-600 font-medium">Currently deployed on site</p>
+              </div>
+            </div>
+
+            <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-xs flex items-center gap-4">
+              <div className="w-11 h-11 rounded-lg bg-amber-50 flex items-center justify-center text-amber-600">
+                <RotateCcw className="w-6 h-6" />
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 font-semibold uppercase tracking-wider">Awaiting Verification</p>
+                <p className="text-2xl font-bold text-gray-900 mt-0.5">{summary.totalAwaitingReturn}</p>
+                <p className="text-[10px] text-amber-700 font-medium">Declared returns pending check</p>
+              </div>
+            </div>
+
+            <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-xs flex items-center gap-4">
+              <div className="w-11 h-11 rounded-lg bg-rose-50 flex items-center justify-center text-rose-600">
+                <AlertTriangle className="w-6 h-6" />
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 font-semibold uppercase tracking-wider">Damaged Units</p>
+                <p className="text-2xl font-bold text-gray-900 mt-0.5">{summary.totalDamaged}</p>
+                <p className="text-[10px] text-rose-600 font-medium">Quarantined from usable stock</p>
+              </div>
+            </div>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse text-xs">
-              <thead>
-                <tr className="bg-gray-50 border-b border-gray-200 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                  <th className="py-3 px-4">Checklist No.</th>
-                  <th className="py-3 px-4">Client Name</th>
-                  <th className="py-3 px-4">Requested Device Type</th>
-                  <th className="py-3 px-4">Requested Quantity</th>
-                  <th className="py-3 px-4">Arrival Schedule</th>
-                  <th className="py-3 px-4">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {pendingIssueJobs.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} className="py-8 text-center text-gray-400">
-                      No jobs currently awaiting stock issuance.
-                    </td>
+
+          {/* Search Bar & Quick Action */}
+          <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div className="relative w-full sm:w-80">
+              <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder="Search device type or model..."
+                value={searchStock}
+                onChange={(e) => setSearchStock(e.target.value)}
+                className="w-full text-xs pl-9 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:border-amber-500 text-gray-800"
+              />
+            </div>
+
+            <button
+              onClick={() => setActiveTab('add_stock')}
+              className="w-full sm:w-auto px-4 py-2 text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 rounded-lg shadow-xs flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
+            >
+              <Plus className="w-4 h-4" /> Add Stock Batch
+            </button>
+          </div>
+
+          {/* Stock Overview Table */}
+          <div className="bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden">
+            <div className="p-4 border-b border-gray-200 bg-gray-50/50 flex items-center justify-between">
+              <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                <Package className="w-4 h-4 text-amber-600" /> Device Type Inventory Balances
+              </h3>
+              <span className="text-xs text-gray-500 font-medium">
+                {filteredProducts.length} device types
+              </span>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="bg-gray-50 border-b border-gray-200 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                    <th className="py-3 px-4">Device Type</th>
+                    <th className="py-3 px-4 text-right">Usable Stock</th>
+                    <th className="py-3 px-4 text-right">Issued to Techs</th>
+                    <th className="py-3 px-4 text-right">Damaged Stock</th>
+                    <th className="py-3 px-4 text-right">Min Level</th>
+                    <th className="py-3 px-4 text-center">Status</th>
+                    <th className="py-3 px-4">Last Updated</th>
+                    <th className="py-3 px-4 text-center">Action</th>
                   </tr>
-                ) : (
-                  pendingIssueJobs.map((item) => (
-                    <tr key={item.id} className="hover:bg-gray-50/80 transition-colors">
-                      <td className="py-3 px-4 font-mono font-bold text-amber-800">{item.checklist_number}</td>
-                      <td className="py-3 px-4 font-bold text-gray-900">{item.client_name}</td>
-                      <td className="py-3 px-4 font-semibold text-gray-800">{item.device_type}</td>
-                      <td className="py-3 px-4 font-bold text-blue-700">{item.number_of_devices} units</td>
-                      <td className="py-3 px-4 text-gray-600">
-                        {item.expected_arrival_date} {item.expected_arrival_time}
-                      </td>
-                      <td className="py-3 px-4">
-                        <button
-                          onClick={() =>
-                            onSelectChecklist
-                              ? onSelectChecklist(item.id)
-                              : navigate(`/admin/installation-checklists/${item.id}`)
-                          }
-                          className="text-xs font-bold text-amber-700 hover:text-amber-900 flex items-center gap-1 cursor-pointer"
-                        >
-                          Issue Stock <ArrowRight className="w-3 h-3" />
-                        </button>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {filteredProducts.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="py-8 text-center text-gray-400">
+                        No matching device records found.
                       </td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+                  ) : (
+                    filteredProducts.map((item) => {
+                      const isLowStock = item.usable_stock <= (item.min_stock_level || 5);
+                      const isOutOfStock = item.usable_stock === 0;
+
+                      return (
+                        <tr key={item.id} className="hover:bg-gray-50/80 transition-colors">
+                          <td className="py-3.5 px-4">
+                            <div className="font-bold text-gray-900">{item.device_type}</div>
+                            <div className="text-[10px] text-gray-400">{item.device_name}</div>
+                          </td>
+                          <td className="py-3.5 px-4 text-right font-mono font-extrabold text-sm text-emerald-700">
+                            {item.usable_stock}
+                          </td>
+                          <td className="py-3.5 px-4 text-right font-mono font-bold text-blue-700">
+                            {item.issued_stock || 0}
+                          </td>
+                          <td className="py-3.5 px-4 text-right font-mono font-bold text-rose-600">
+                            {item.damaged_stock || 0}
+                          </td>
+                          <td className="py-3.5 px-4 text-right font-mono text-gray-500">
+                            {item.min_stock_level || 5}
+                          </td>
+                          <td className="py-3.5 px-4 text-center">
+                            <span
+                              className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${
+                                isOutOfStock
+                                  ? 'bg-rose-100 text-rose-800 border border-rose-300'
+                                  : isLowStock
+                                  ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                                  : 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                              }`}
+                            >
+                              {isOutOfStock ? 'OUT OF STOCK' : isLowStock ? 'LOW STOCK' : 'IN STOCK'}
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-4 text-gray-500 text-[11px]">
+                            {item.updated_at ? new Date(item.updated_at).toLocaleDateString('en-IN') : 'Recently'}
+                          </td>
+                          <td className="py-3.5 px-4 text-center">
+                            <button
+                              onClick={() => {
+                                setAddDeviceType(item.device_type);
+                                setActiveTab('add_stock');
+                              }}
+                              className="px-2.5 py-1 text-[11px] font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg cursor-pointer transition-colors"
+                            >
+                              + Add Stock
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}
 
-      {/* TAB 3: Store Manager Return Verification */}
-      {activeTab === 'pending_verification' && (
+      {/* =========================================================================
+          SECTION 2: ADD STOCK (INCOMING INTAKE)
+          ========================================================================= */}
+      {activeTab === 'add_stock' && (
+        <div className="max-w-2xl mx-auto bg-white p-6 rounded-2xl border border-gray-200 shadow-sm space-y-5">
+          <div className="border-b border-gray-100 pb-3">
+            <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 bg-amber-100 text-amber-800 rounded">
+              Store Intake
+            </span>
+            <h2 className="text-lg font-bold text-gray-900 mt-1 flex items-center gap-2">
+              <Plus className="w-5 h-5 text-amber-600" /> Receive Incoming Stock Batch
+            </h2>
+            <p className="text-xs text-gray-500 mt-0.5">
+              Increase physical usable stock for devices received from suppliers or central logistics. An immutable transaction record will be created.
+            </p>
+          </div>
+
+          {addError && (
+            <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-xl flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+              <span>{addError}</span>
+            </div>
+          )}
+
+          <form onSubmit={handleAddStockSubmit} className="space-y-4 text-xs">
+            <div>
+              <label className="block font-bold text-gray-700 mb-1">Device Type *</label>
+              <select
+                value={addDeviceType}
+                onChange={(e) => setAddDeviceType(e.target.value)}
+                className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-xl font-bold text-gray-800 focus:outline-none focus:border-amber-500"
+                required
+              >
+                {STANDARD_DEVICE_TYPES.map((type) => (
+                  <option key={type} value={type}>
+                    {type}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block font-bold text-gray-700 mb-1">Quantity Received *</label>
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  placeholder="e.g. 20"
+                  value={addQty}
+                  onChange={(e) => setAddQty(e.target.value)}
+                  className="w-full p-2.5 border border-gray-300 rounded-xl font-bold text-emerald-700 focus:outline-none focus:border-emerald-500"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-gray-700 mb-1">Received Date</label>
+                <input
+                  type="date"
+                  value={addReceivedDate}
+                  onChange={(e) => setAddReceivedDate(e.target.value)}
+                  className="w-full p-2.5 border border-gray-300 rounded-xl text-gray-800 focus:outline-none focus:border-amber-500"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block font-semibold text-gray-700 mb-1">Supplier / Vendor (Optional)</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Eagle Eye Central Logistics"
+                  value={addSupplier}
+                  onChange={(e) => setAddSupplier(e.target.value)}
+                  className="w-full p-2.5 border border-gray-300 rounded-xl text-gray-800 focus:outline-none focus:border-amber-500"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-gray-700 mb-1">Invoice / PO Reference (Optional)</label>
+                <input
+                  type="text"
+                  placeholder="e.g. INV-2026-904"
+                  value={addPurchaseRef}
+                  onChange={(e) => setAddPurchaseRef(e.target.value)}
+                  className="w-full p-2.5 border border-gray-300 rounded-xl text-gray-800 focus:outline-none focus:border-amber-500"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block font-semibold text-gray-700 mb-1">Remarks / Batch Notes (Optional)</label>
+              <textarea
+                rows="2"
+                placeholder="Inspection notes or warehouse location..."
+                value={addRemarks}
+                onChange={(e) => setAddRemarks(e.target.value)}
+                className="w-full p-2.5 border border-gray-300 rounded-xl text-gray-800 focus:outline-none focus:border-amber-500"
+              />
+            </div>
+
+            <div className="pt-3 border-t border-gray-100 flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setActiveTab('overview')}
+                className="px-4 py-2 font-semibold text-gray-600 hover:text-gray-800 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={addingStock}
+                className="px-5 py-2.5 font-bold text-white bg-amber-600 hover:bg-amber-700 rounded-xl shadow-xs transition-colors flex items-center gap-2 cursor-pointer disabled:opacity-50"
+              >
+                <Plus className="w-4 h-4" />
+                <span>{addingStock ? 'Submitting Batch...' : 'Add Stock to Usable Inventory'}</span>
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* =========================================================================
+          SECTION 3: STOCK MOVEMENTS (AUDIT TRAIL)
+          ========================================================================= */}
+      {activeTab === 'movements' && (
+        <div className="space-y-4">
+          {/* Movement Filters */}
+          <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-xs grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label className="block text-[11px] font-bold text-gray-600 uppercase mb-1">
+                Filter by Transaction Type
+              </label>
+              <select
+                value={txFilterType}
+                onChange={(e) => setTxFilterType(e.target.value)}
+                className="w-full text-xs p-2.5 bg-gray-50 border border-gray-200 rounded-xl font-semibold text-gray-800 focus:outline-none focus:border-amber-500"
+              >
+                <option value="">All Movement Types</option>
+                <option value="STOCK_RECEIVED">Stock Received (Intake)</option>
+                <option value="STOCK_ISSUED">Issued to Technician</option>
+                <option value="USABLE_STOCK_RETURNED">Usable Return Verified</option>
+                <option value="DAMAGED_STOCK_RECEIVED">Damaged Stock Received</option>
+                <option value="STOCK_ADJUSTMENT">Stock Adjustment</option>
+              </select>
+            </div>
+
+            <div className="sm:col-span-2">
+              <label className="block text-[11px] font-bold text-gray-600 uppercase mb-1">
+                Search Transactions
+              </label>
+              <div className="relative">
+                <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="Search by remarks, reference, technician, or device..."
+                  value={txSearch}
+                  onChange={(e) => setTxSearch(e.target.value)}
+                  className="w-full text-xs pl-9 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:border-amber-500 text-gray-800"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Transactions Ledger */}
+          <div className="bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden">
+            <div className="p-4 border-b border-gray-200 bg-gray-50/50 flex items-center justify-between">
+              <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                <Clock className="w-4 h-4 text-amber-600" /> Immutable Stock Movement Ledger
+              </h3>
+              <span className="text-xs text-gray-500 font-medium">
+                {transactions.length} recorded movements
+              </span>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="bg-gray-50 border-b border-gray-200 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                    <th className="py-3 px-4">Timestamp</th>
+                    <th className="py-3 px-4">Transaction Type</th>
+                    <th className="py-3 px-4">Device Type</th>
+                    <th className="py-3 px-4 text-right">Quantity</th>
+                    <th className="py-3 px-4">Checklist Ref</th>
+                    <th className="py-3 px-4">Performed By</th>
+                    <th className="py-3 px-4">Reason / Remarks</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {transactions.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="py-8 text-center text-gray-400">
+                        No inventory transactions found matching filters.
+                      </td>
+                    </tr>
+                  ) : (
+                    transactions.map((tx) => {
+                      const isPositive = ['STOCK_RECEIVED', 'USABLE_STOCK_RETURNED'].includes(tx.transaction_type);
+                      const isNegative = tx.transaction_type === 'STOCK_ISSUED';
+
+                      return (
+                        <tr key={tx.id} className="hover:bg-gray-50/80 transition-colors">
+                          <td className="py-3 px-4 font-mono text-[11px] text-gray-500">
+                            {new Date(tx.created_at).toLocaleString('en-IN', {
+                              dateStyle: 'short',
+                              timeStyle: 'short',
+                            })}
+                          </td>
+
+                          <td className="py-3 px-4">
+                            <span
+                              className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                tx.transaction_type === 'STOCK_RECEIVED'
+                                  ? 'bg-emerald-100 text-emerald-800'
+                                  : tx.transaction_type === 'STOCK_ISSUED'
+                                  ? 'bg-blue-100 text-blue-800'
+                                  : tx.transaction_type === 'USABLE_STOCK_RETURNED'
+                                  ? 'bg-purple-100 text-purple-800'
+                                  : tx.transaction_type === 'DAMAGED_STOCK_RECEIVED'
+                                  ? 'bg-rose-100 text-rose-800'
+                                  : 'bg-gray-100 text-gray-800'
+                              }`}
+                            >
+                              {tx.transaction_type.replace(/_/g, ' ')}
+                            </span>
+                          </td>
+
+                          <td className="py-3 px-4 font-semibold text-gray-900">{tx.device_type}</td>
+
+                          <td
+                            className={`py-3 px-4 text-right font-mono font-bold ${
+                              isPositive ? 'text-emerald-600' : isNegative ? 'text-blue-600' : 'text-gray-900'
+                            }`}
+                          >
+                            {isPositive ? `+${tx.quantity}` : isNegative ? `-${tx.quantity}` : tx.quantity}
+                          </td>
+
+                          <td className="py-3 px-4 font-mono text-purple-700 font-semibold">
+                            {tx.checklist_id ? (
+                              <button
+                                onClick={() =>
+                                  onSelectChecklist
+                                    ? onSelectChecklist(tx.checklist_id)
+                                    : navigate(`/admin/installation-checklists/${tx.checklist_id}`)
+                                }
+                                className="hover:underline cursor-pointer"
+                              >
+                                {tx.checklist_id.slice(0, 8)}...
+                              </button>
+                            ) : (
+                              '—'
+                            )}
+                          </td>
+
+                          <td className="py-3 px-4 text-gray-600 font-medium">{tx.performer_name || 'System'}</td>
+
+                          <td className="py-3 px-4 text-gray-500 max-w-xs truncate" title={tx.reason_or_remarks}>
+                            {tx.reason_or_remarks || '—'}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =========================================================================
+          SECTION 4: DEVICE RETURNS (STORE VERIFICATION)
+          ========================================================================= */}
+      {activeTab === 'returns' && (
         <div className="bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden">
           <div className="p-4 border-b border-gray-200 bg-gray-50/50 flex items-center justify-between">
             <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
-              <ShieldCheck className="w-4 h-4 text-amber-600" /> Declared Returns Pending Physical Store Verification
+              <ShieldCheck className="w-4 h-4 text-amber-600" /> Technician Declared Device Returns
             </h3>
-            <span className="text-xs text-gray-500 font-medium">{pendingVerifyJobs.length} pending</span>
+            <span className="text-xs text-gray-500 font-medium">
+              {pendingReturns.length} pending physical verification
+            </span>
           </div>
 
           <div className="overflow-x-auto">
@@ -187,55 +737,83 @@ export default function StoreWorkspace({ onSelectChecklist }) {
                 <tr className="bg-gray-50 border-b border-gray-200 text-xs font-semibold text-gray-500 uppercase tracking-wider">
                   <th className="py-3 px-4">Checklist No.</th>
                   <th className="py-3 px-4">Client Name</th>
+                  <th className="py-3 px-4">Technician</th>
                   <th className="py-3 px-4">Device Type</th>
-                  <th className="py-3 px-4">Technician Name</th>
-                  <th className="py-3 px-4">Declared Return Qty</th>
-                  <th className="py-3 px-4">Verification Status</th>
-                  <th className="py-3 px-4">Action</th>
+                  <th className="py-3 px-4 text-right">Declared Return Qty</th>
+                  <th className="py-3 px-4">Date Reported</th>
+                  <th className="py-3 px-4 text-center">Verification Status</th>
+                  <th className="py-3 px-4 text-center">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {pendingVerifyJobs.length === 0 ? (
+                {storeReturns.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="py-8 text-center text-gray-400">
-                      No returned devices currently awaiting store physical verification.
+                    <td colSpan={8} className="py-8 text-center text-gray-400">
+                      No returned devices currently recorded.
                     </td>
                   </tr>
                 ) : (
-                  pendingVerifyJobs.map((item) => {
-                    const matchedReturn = pendingReturns.find((r) => r.checklist_id === item.id);
-                    const returnId = matchedReturn ? matchedReturn.id : null;
-                    const declaredQty = matchedReturn ? matchedReturn.declared_return_qty : item.number_of_devices;
+                  storeReturns.map((ret) => {
+                    const isPending = ret.status === 'PENDING_STORE_VERIFICATION';
+                    const chk = ret.installation_checklists;
+                    const chkNum = chk?.checklist_number || ret.checklist_number || ret.checklist_id?.slice(0, 8);
+                    const client = chk?.client_name || ret.client_name || 'Client';
+                    const tech = chk?.service_engineer || ret.technician_name || 'Technician';
 
                     return (
-                      <tr key={item.id} className="hover:bg-gray-50/80 transition-colors">
-                        <td className="py-3 px-4 font-mono font-bold text-emerald-800">{item.checklist_number}</td>
-                        <td className="py-3 px-4 font-bold text-gray-900">{item.client_name}</td>
-                        <td className="py-3 px-4 font-semibold text-gray-800">{item.device_type}</td>
-                        <td className="py-3 px-4 text-gray-700">{item.service_engineer || 'Technician'}</td>
-                        <td className="py-3 px-4 font-bold text-blue-700">{declaredQty} units</td>
-                        <td className="py-3 px-4 font-bold text-amber-700">
-                          <span className="px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[10px]">
-                            {matchedReturn?.status || item.reconciliation_status}
+                      <tr key={ret.id} className="hover:bg-gray-50/80 transition-colors">
+                        <td className="py-3.5 px-4 font-mono font-bold text-purple-700">{chkNum}</td>
+                        <td className="py-3.5 px-4 font-bold text-gray-900">{client}</td>
+                        <td className="py-3.5 px-4 text-gray-700 font-medium">{tech}</td>
+                        <td className="py-3.5 px-4 font-semibold text-gray-800">{ret.device_type}</td>
+                        <td className="py-3.5 px-4 text-right font-mono font-bold text-blue-700">
+                          {ret.declared_return_qty} units
+                        </td>
+                        <td className="py-3.5 px-4 text-gray-500">
+                          {new Date(ret.declared_at || ret.created_at).toLocaleDateString('en-IN')}
+                        </td>
+                        <td className="py-3.5 px-4 text-center">
+                          <span
+                            className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${
+                              isPending
+                                ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                                : ret.status === 'DISCREPANCY_FLAGGED'
+                                ? 'bg-rose-100 text-rose-800 border border-rose-300'
+                                : 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                            }`}
+                          >
+                            {isPending
+                              ? 'AWAITING STORE VERIFICATION'
+                              : ret.status === 'DISCREPANCY_FLAGGED'
+                              ? 'VERIFIED WITH DISCREPANCY'
+                              : 'VERIFIED'}
                           </span>
                         </td>
-                        <td className="py-3 px-4">
-                          <button
-                            onClick={() =>
-                              setVerifyModalReturn({
-                                return_id: returnId || `return-${item.id}`,
-                                checklist_id: item.id,
-                                checklist_number: item.checklist_number,
-                                client_name: item.client_name,
-                                technician_name: item.service_engineer || 'Technician',
-                                device_type: item.device_type,
-                                declared_return_qty: declaredQty,
-                              })
-                            }
-                            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg shadow-2xs text-[11px] flex items-center gap-1 cursor-pointer"
-                          >
-                            <ShieldCheck className="w-3.5 h-3.5" /> Verify Physical Return
-                          </button>
+                        <td className="py-3.5 px-4 text-center">
+                          {isPending ? (
+                            <button
+                              onClick={() =>
+                                setVerifyModalReturn({
+                                  return_id: ret.id,
+                                  checklist_id: ret.checklist_id,
+                                  checklist_number: chkNum,
+                                  client_name: client,
+                                  technician_name: tech,
+                                  device_type: ret.device_type,
+                                  declared_return_qty: ret.declared_return_qty,
+                                })
+                              }
+                              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg shadow-2xs text-[11px] flex items-center justify-center gap-1 cursor-pointer transition-colors"
+                            >
+                              <ShieldCheck className="w-3.5 h-3.5" />
+                              <span>Verify Physical Return</span>
+                            </button>
+                          ) : (
+                            <span className="text-[11px] text-gray-400 font-semibold flex items-center justify-center gap-1">
+                              <Check className="w-3.5 h-3.5 text-emerald-600" />
+                              <span>Usable: {ret.accepted_usable_qty || 0} | Dmg: {ret.damaged_qty || 0}</span>
+                            </span>
+                          )}
                         </td>
                       </tr>
                     );
@@ -247,7 +825,9 @@ export default function StoreWorkspace({ onSelectChecklist }) {
         </div>
       )}
 
-      {/* Store Verification Modal */}
+      {/* =========================================================================
+          VERIFY RETURN MODAL
+          ========================================================================= */}
       {verifyModalReturn && (
         <StoreReturnVerifyModal
           returnItem={verifyModalReturn}
@@ -257,7 +837,7 @@ export default function StoreWorkspace({ onSelectChecklist }) {
           onSuccess={() => {
             setVerifyModalReturn(null);
             showToast('Returned devices physically verified and stock updated!');
-            loadData();
+            loadAllData();
           }}
         />
       )}
@@ -266,79 +846,62 @@ export default function StoreWorkspace({ onSelectChecklist }) {
 }
 
 function StoreReturnVerifyModal({ returnItem, token, user, onClose, onSuccess }) {
-  const [declaredQty] = useState(returnItem.declared_return_qty || 0);
-  const [receivedQty, setReceivedQty] = useState(returnItem.declared_return_qty || 0);
-  const [acceptedUsableQty, setAcceptedUsableQty] = useState(returnItem.declared_return_qty || 0);
+  const declaredQty = Number(returnItem.declared_return_qty) || 0;
+  const [acceptedUsableQty, setAcceptedUsableQty] = useState(declaredQty);
   const [damagedQty, setDamagedQty] = useState(0);
   const [missingQty, setMissingQty] = useState(0);
   const [remarks, setRemarks] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  const usableNum = parseInt(acceptedUsableQty, 10) || 0;
+  const dmgNum = parseInt(damagedQty, 10) || 0;
+  const missNum = parseInt(missingQty, 10) || 0;
+  const totalAccounted = usableNum + dmgNum + missNum;
+  const hasDiscrepancy = totalAccounted !== declaredQty || dmgNum > 0 || missNum > 0;
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
 
-    const rec = parseInt(receivedQty, 10) || 0;
-    const usable = parseInt(acceptedUsableQty, 10) || 0;
-    const dmg = parseInt(damagedQty, 10) || 0;
-    const miss = parseInt(missingQty, 10) || 0;
-
-    if (rec < 0 || usable < 0 || dmg < 0 || miss < 0) {
+    if (usableNum < 0 || dmgNum < 0 || missNum < 0) {
       setError('Quantities cannot be negative.');
       return;
     }
 
-    if (usable + dmg > rec) {
-      setError(`Usable (${usable}) + Damaged (${dmg}) cannot exceed received quantity (${rec}).`);
-      return;
-    }
-
-    const totalAccounted = rec + miss;
     if (totalAccounted !== declaredQty && (!remarks || !remarks.trim())) {
-      setError(`Received (${rec}) + Missing (${miss}) does not equal Declared Return (${declaredQty}). Explanation remarks are required.`);
+      setError(
+        `Total accounted quantity (${totalAccounted}) does not match declared return quantity (${declaredQty}). An explanation remark is required.`
+      );
       return;
     }
 
     setLoading(true);
 
     try {
-      const res = await fetch(`/api/admin/installations/${returnItem.checklist_id}/verify-return`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          return_id: returnItem.return_id,
-          accepted_usable_qty: usable,
-          damaged_qty: dmg,
-          missing_qty: miss,
-          remarks: remarks.trim(),
-        }),
+      await verifyStoreReturnApi(token, {
+        return_id: returnItem.return_id,
+        accepted_usable_qty: usableNum,
+        damaged_qty: dmgNum,
+        missing_qty: missNum,
+        remarks: remarks.trim(),
       });
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to verify store return');
       onSuccess();
     } catch (err) {
       console.error('Error verifying return:', err);
-      setError(err.message || 'Failed to verify store return');
+      setError(err.message || 'Failed to verify store return.');
     } finally {
       setLoading(false);
     }
   };
 
-  const recNum = parseInt(receivedQty, 10) || 0;
-  const missNum = parseInt(missingQty, 10) || 0;
-  const hasDiscrepancy = recNum + missNum !== declaredQty;
-
   return (
     <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4">
         <div className="flex items-center justify-between border-b border-gray-100 pb-3">
-          <h3 className="text-base font-extrabold text-navy flex items-center gap-2">
-            <ShieldCheck className="w-5 h-5 text-emerald-600" /> Store Physical Return Verification
+          <h3 className="text-base font-extrabold text-gray-900 flex items-center gap-2">
+            <ShieldCheck className="w-5 h-5 text-emerald-600" /> Physical Store Return Verification
           </h3>
           <button onClick={onClose} className="p-1 rounded text-gray-400 hover:text-gray-600">
             <X className="w-5 h-5" />
@@ -379,21 +942,11 @@ function StoreReturnVerifyModal({ returnItem, token, user, onClose, onSuccess })
         )}
 
         <form onSubmit={handleSubmit} className="space-y-3.5 text-xs">
-          <div>
-            <label className="block font-semibold text-gray-700 mb-1">Physically Received Quantity</label>
-            <input
-              type="number"
-              min="0"
-              value={receivedQty}
-              onChange={(e) => setReceivedQty(e.target.value)}
-              className="w-full px-3 py-2 border rounded-lg font-bold text-blue-900 focus:ring-2 focus:ring-blue-500 outline-none"
-              required
-            />
-          </div>
-
           <div className="grid grid-cols-3 gap-3">
             <div>
-              <label className="block font-semibold text-emerald-800 mb-1">Accepted Usable (Credits Stock)</label>
+              <label className="block font-semibold text-emerald-800 mb-1">
+                Usable Received (Credits Usable)
+              </label>
               <input
                 type="number"
                 min="0"
@@ -405,7 +958,9 @@ function StoreReturnVerifyModal({ returnItem, token, user, onClose, onSuccess })
             </div>
 
             <div>
-              <label className="block font-semibold text-rose-800 mb-1">Damaged Qty (Damaged Stock)</label>
+              <label className="block font-semibold text-rose-800 mb-1">
+                Damaged Received (Damaged Stock)
+              </label>
               <input
                 type="number"
                 min="0"
@@ -416,7 +971,9 @@ function StoreReturnVerifyModal({ returnItem, token, user, onClose, onSuccess })
             </div>
 
             <div>
-              <label className="block font-semibold text-amber-800 mb-1">Missing Qty</label>
+              <label className="block font-semibold text-amber-800 mb-1">
+                Not Received (Missing / Discrepancy)
+              </label>
               <input
                 type="number"
                 min="0"
@@ -430,26 +987,26 @@ function StoreReturnVerifyModal({ returnItem, token, user, onClose, onSuccess })
           {hasDiscrepancy && (
             <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg space-y-1">
               <label className="block font-bold text-amber-900 text-xs">
-                Discrepancy Reason / Remarks <span className="text-rose-500">*</span>
+                Discrepancy Explanation Remarks <span className="text-rose-500">*</span>
               </label>
               <input
                 type="text"
-                placeholder="Explain quantity mismatch between declared return and physical count..."
+                placeholder="Explain missing units, transit damage, or reason for count variance..."
                 value={remarks}
                 onChange={(e) => setRemarks(e.target.value)}
-                className="w-full px-3 py-1.5 border border-amber-300 rounded-lg text-xs focus:ring-2 focus:ring-amber-500 outline-none"
+                className="w-full px-3 py-1.5 border border-amber-300 rounded-lg text-xs focus:ring-2 focus:ring-amber-500 outline-none bg-white"
                 required
               />
             </div>
           )}
 
           <div>
-            <label className="block font-semibold text-gray-700 mb-1">Store Verification Notes</label>
+            <label className="block font-semibold text-gray-700 mb-1">Verification Notes (Optional)</label>
             <textarea
               rows="2"
               value={remarks}
               onChange={(e) => setRemarks(e.target.value)}
-              placeholder="Physical inspection notes..."
+              placeholder="Physical inspection remarks..."
               className="w-full px-3 py-2 border rounded-lg text-xs focus:ring-2 focus:ring-emerald-500 outline-none"
             />
           </div>
@@ -464,7 +1021,7 @@ function StoreReturnVerifyModal({ returnItem, token, user, onClose, onSuccess })
               className="px-5 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
             >
               <CheckCircle2 className="w-4 h-4" />
-              <span>{loading ? 'Verifying...' : 'Verify Return & Update Inventory'}</span>
+              <span>{loading ? 'Verifying...' : 'Confirm & Update Stock'}</span>
             </button>
           </div>
         </form>

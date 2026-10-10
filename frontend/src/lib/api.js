@@ -293,4 +293,63 @@ export async function fetchPendingStoreReturns(token) {
   return res.json();
 }
 
+/**
+ * Inventory & Store Manager Workspace APIs
+ */
+export async function fetchInventoryProducts(token) {
+  const res = await fetch(`${API_BASE}/admin/inventory`, {
+    headers: adminHeaders(token),
+  });
+  if (!res.ok) throw new Error('Failed to fetch inventory products');
+  return res.json();
+}
+
+export async function fetchInventorySummary(token) {
+  const res = await fetch(`${API_BASE}/admin/inventory/summary`, {
+    headers: adminHeaders(token),
+  });
+  if (!res.ok) throw new Error('Failed to fetch inventory summary');
+  return res.json();
+}
+
+export async function fetchInventoryTransactions(token, params = {}) {
+  const query = new URLSearchParams(params).toString();
+  const res = await fetch(`${API_BASE}/admin/inventory/transactions?${query}`, {
+    headers: adminHeaders(token),
+  });
+  if (!res.ok) throw new Error('Failed to fetch inventory transactions');
+  return res.json();
+}
+
+export async function receiveInventoryStock(token, data) {
+  const res = await fetch(`${API_BASE}/admin/inventory/receive`, {
+    method: 'POST',
+    headers: adminHeaders(token),
+    body: JSON.stringify(data),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to receive stock');
+  return json;
+}
+
+export async function fetchAllStoreReturns(token) {
+  const res = await fetch(`${API_BASE}/admin/inventory/returns`, {
+    headers: adminHeaders(token),
+  });
+  if (!res.ok) throw new Error('Failed to fetch store returns');
+  return res.json();
+}
+
+export async function verifyStoreReturnApi(token, data) {
+  const res = await fetch(`${API_BASE}/admin/inventory/verify-return`, {
+    method: 'POST',
+    headers: adminHeaders(token),
+    body: JSON.stringify(data),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to verify store return');
+  return json;
+}
+
+
 

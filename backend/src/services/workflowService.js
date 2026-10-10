@@ -1,5 +1,6 @@
 import supabase from './supabase.js';
 import { logAudit } from './auditService.js';
+import { deductStockForCarryRecord, creditStockForVerifiedReturn } from './inventoryService.js';
 
 /**
  * In-memory fallback stores for workflow records if Supabase tables are not yet migrated
@@ -25,6 +26,12 @@ export async function submitDeviceCarryRecord({ checklist_id, user, items, remar
 
   if (checkErr || !checklist) {
     throw new Error('Installation checklist not found');
+  }
+
+  // Prevent duplicate carry submission
+  const existingCarry = await getDeviceCarryRecord(checklist_id);
+  if (existingCarry && existingCarry.items && existingCarry.items.length > 0) {
+    throw new Error('Device carry record has already been submitted for this installation job. Duplicate carry submission rejected.');
   }
 
   // 2. Validate duplicate device types
@@ -57,6 +64,15 @@ export async function submitDeviceCarryRecord({ checklist_id, user, items, remar
       discrepancy_quantity: diff,
       discrepancy_reason: item.discrepancy_reason ? item.discrepancy_reason.trim() : null,
     };
+  });
+
+  // 3. Atomically validate available stock and deduct from usable stock
+  // If any requested quantity exceeds available stock, throws error and halts submission!
+  await deductStockForCarryRecord({
+    checklist_id,
+    technician_user_id: user.id,
+    technician_name: user.full_name || user.email,
+    items: processedItems,
   });
 
   const carryRecord = {
@@ -502,81 +518,27 @@ export async function verifyStoreReturn({
 
   if (!ret) throw new Error('Return declaration record not found');
 
+  // Prevent duplicate return verification
+  if (ret.status !== 'PENDING_STORE_VERIFICATION') {
+    throw new Error('Return declaration has already been verified and reconciled. Duplicate return verification rejected.');
+  }
+
   const actual_received_qty = accepted_usable_qty + damaged_qty;
   const totalAccounted = actual_received_qty + missing_qty;
   const isDiscrepancy = totalAccounted !== ret.declared_return_qty;
 
-  // 1. Credit verified usable stock (only usable returned devices increase usable stock)
-  if (accepted_usable_qty > 0) {
-    try {
-      const { data: product } = await supabase
-        .from('inventory_products')
-        .select('*')
-        .eq('device_type', ret.device_type)
-        .maybeSingle();
+  // 1. Credit verified usable stock and record damaged stock atomically via inventoryService
+  await creditStockForVerifiedReturn({
+    checklist_id: ret.checklist_id,
+    device_type: ret.device_type,
+    accepted_usable_qty,
+    damaged_qty,
+    user,
+    remarks,
+    return_id,
+  });
 
-      if (product) {
-        const newUsable = product.usable_stock + accepted_usable_qty;
-        const newReturned = (product.returned_usable_stock || 0) + accepted_usable_qty;
-        await supabase
-          .from('inventory_products')
-          .update({
-            usable_stock: newUsable,
-            returned_usable_stock: newReturned,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', product.id);
-
-        await supabase.from('inventory_transactions').insert([{
-          product_id: product.id,
-          transaction_type: 'USABLE_STOCK_RETURNED',
-          quantity: accepted_usable_qty,
-          checklist_id: ret.checklist_id,
-          performed_by: user.id,
-          reason_or_remarks: remarks || `Physical store return verified for ${ret.device_type}`,
-          idempotency_key: `RETURN-USABLE-${ret.id}-${Date.now()}`,
-        }]);
-      }
-    } catch (invErr) {
-      console.warn('Inventory products table not available:', invErr.message);
-    }
-  }
-
-  // 2. Track damaged stock separately (NOT in usable stock)
-  if (damaged_qty > 0) {
-    try {
-      const { data: product } = await supabase
-        .from('inventory_products')
-        .select('*')
-        .eq('device_type', ret.device_type)
-        .maybeSingle();
-
-      if (product) {
-        const newDamaged = (product.damaged_stock || 0) + damaged_qty;
-        await supabase
-          .from('inventory_products')
-          .update({
-            damaged_stock: newDamaged,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', product.id);
-
-        await supabase.from('inventory_transactions').insert([{
-          product_id: product.id,
-          transaction_type: 'DAMAGED_STOCK_RECEIVED',
-          quantity: damaged_qty,
-          checklist_id: ret.checklist_id,
-          performed_by: user.id,
-          reason_or_remarks: remarks || `Damaged stock recorded for ${ret.device_type}`,
-          idempotency_key: `RETURN-DAMAGED-${ret.id}-${Date.now()}`,
-        }]);
-      }
-    } catch (invErr) {
-      console.warn('Inventory products table not available for damaged stock:', invErr.message);
-    }
-  }
-
-  // 3. Update return record status
+  // 2. Update return record status
   const returnStatus = isDiscrepancy ? 'DISCREPANCY_FLAGGED' : 'VERIFIED_AND_RECONCILED';
   const updatedReturn = {
     ...ret,
@@ -612,7 +574,7 @@ export async function verifyStoreReturn({
     console.warn('Could not update job_device_returns in DB:', e.message);
   }
 
-  // 4. Create Discrepancy if flagged
+  // 3. Create Discrepancy if flagged
   if (isDiscrepancy) {
     try {
       await supabase.from('inventory_discrepancies').insert([{
@@ -670,7 +632,8 @@ export async function getPendingStoreReturns() {
     const { data: dbReturns, error } = await supabase
       .from('job_device_returns')
       .select('*, installation_checklists(checklist_number, client_name, service_engineer)')
-      .eq('status', 'PENDING_STORE_VERIFICATION');
+      .eq('status', 'PENDING_STORE_VERIFICATION')
+      .order('created_at', { ascending: false });
 
     if (!error && dbReturns) {
       returns.push(...dbReturns);
@@ -681,6 +644,34 @@ export async function getPendingStoreReturns() {
 
   for (const [id, ret] of inMemoryReturns.entries()) {
     if (ret.status === 'PENDING_STORE_VERIFICATION' && !returns.some((r) => r.id === id)) {
+      returns.push(ret);
+    }
+  }
+
+  return returns;
+}
+
+/**
+ * Fetch all declared store returns (both pending and verified)
+ */
+export async function getAllStoreReturns() {
+  const returns = [];
+
+  try {
+    const { data: dbReturns, error } = await supabase
+      .from('job_device_returns')
+      .select('*, installation_checklists(checklist_number, client_name, service_engineer)')
+      .order('created_at', { ascending: false });
+
+    if (!error && dbReturns) {
+      returns.push(...dbReturns);
+    }
+  } catch (e) {
+    console.warn('Error fetching all returns from DB:', e.message);
+  }
+
+  for (const [id, ret] of inMemoryReturns.entries()) {
+    if (!returns.some((r) => r.id === id)) {
       returns.push(ret);
     }
   }
