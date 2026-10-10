@@ -212,11 +212,11 @@ export default function InstallationChecklistDetails({ id: propId, onEdit, onBac
           <div className="flex items-center gap-3">
             <h2 className="text-xl font-bold text-navy">{checklist.checklist_number}</h2>
             <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
-              checklist.installation_status === 'Completed'
+              checklist.installation_status === 'Completed' || checklist.installation_status === 'Site Work Completed'
                 ? 'bg-emerald-100 text-emerald-800'
                 : 'bg-blue-100 text-blue-800'
             }`}>
-              {checklist.installation_status}
+              {checklist.installation_status === 'Site Work Completed' ? 'Completed' : (checklist.installation_status || 'Assigned')}
             </span>
           </div>
         </div>
@@ -420,7 +420,7 @@ export default function InstallationChecklistDetails({ id: propId, onEdit, onBac
           </div>
           <div>
             <span className="text-gray-500 text-[11px] block">Installation Status</span>
-            <span className="font-bold text-emerald-800">{checklist.installation_status}</span>
+            <span className="font-bold text-emerald-800">{checklist.installation_status === 'Site Work Completed' ? 'Completed' : (checklist.installation_status || 'Assigned')}</span>
           </div>
           <div>
             <span className="text-gray-500 text-[11px] block">Payment Status</span>
@@ -611,7 +611,7 @@ export default function InstallationChecklistDetails({ id: propId, onEdit, onBac
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs bg-gray-50/50 p-4 rounded-xl border border-gray-100">
             <div>
               <span className="text-gray-500 block text-[11px]">Installation Status</span>
-              <span className="font-bold text-blue-900">{checklist.installation_status}</span>
+              <span className="font-bold text-blue-900">{checklist.installation_status === 'Site Work Completed' ? 'Completed' : (checklist.installation_status || 'Assigned')}</span>
             </div>
             <div>
               <span className="text-gray-500 block text-[11px]">Payment Status</span>

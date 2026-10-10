@@ -92,9 +92,9 @@ export default function SalesWorkspace({ onSelectChecklist, onCreateChecklist, o
             <Calendar className="w-4 h-4" />
           </div>
           <div>
-            <p className="text-[11px] text-gray-500 font-medium">Pending & Assigned</p>
+            <p className="text-[11px] text-gray-500 font-medium">Assigned Jobs</p>
             <p className="text-xl font-bold text-gray-900">
-              {checklists.filter((c) => c.installation_status === 'Pending' || c.installation_status === 'Assigned').length}
+              {checklists.filter((c) => c.installation_status === 'Assigned' || c.installation_status === 'Pending').length}
             </p>
           </div>
         </div>
@@ -191,7 +191,7 @@ export default function SalesWorkspace({ onSelectChecklist, onCreateChecklist, o
                           ? 'bg-purple-100 text-purple-800 border border-purple-300'
                           : 'bg-amber-100 text-amber-800 border border-amber-300'
                       }`}>
-                        {item.installation_status === 'Site Work Completed' ? 'Completed' : item.installation_status}
+                        {item.installation_status === 'Site Work Completed' ? 'Completed' : (item.installation_status || 'Assigned')}
                       </span>
                     </td>
                     <td className="py-3 px-4">

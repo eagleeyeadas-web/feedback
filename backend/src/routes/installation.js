@@ -40,7 +40,7 @@ const DEVICE_TYPES = [
 
 const indianMobileRegex = /^[6-9]\d{9}$/;
 
-const checklistValidationSchema = z.object({
+export const checklistValidationSchema = z.object({
   client_name: z.string().min(1, 'Client name is required'),
   client_mobile: z.string().refine((val) => indianMobileRegex.test(val.replace(/\s+/g, '')), {
     message: 'Valid 10-digit Indian mobile number is required (starting with 6-9)',
@@ -73,7 +73,9 @@ const checklistValidationSchema = z.object({
   }),
   service_engineer: z.string().min(1, 'Team Member 1 – Service Engineer is required'),
   service_assistant: z.string().min(1, 'Team Member 2 – Service Assistant is required'),
-  installation_status: z.enum(['Pending', 'Assigned', 'In Progress', 'Completed', 'Cancelled']).default('Pending'),
+  installation_status: z.enum(['Assigned', 'Completed'], {
+    errorMap: () => ({ message: 'Installation Status must be either Assigned or Completed' }),
+  }).default('Assigned'),
   payment_status: z.enum(['Paid', 'Partially Paid', 'Pending']).default('Pending'),
   remarks: z.string().nullable().optional(),
   client_confirmation: z.enum(['Confirmed', 'Not Confirmed']).default('Confirmed'),
@@ -154,7 +156,11 @@ router.get('/', requireRole('ADMIN', 'SALES', 'TECHNICAL', 'STORE_MANAGER'), asy
  */
 router.get('/:id', requireRole('ADMIN', 'SALES', 'TECHNICAL', 'STORE_MANAGER'), async (req, res) => {
   try {
-    const item = await getChecklistById(req.params.id);
+    let item = await getChecklistById(req.params.id);
+    if (item) {
+      const enriched = await enrichChecklistsWithWorkflowStatus([item]);
+      item = enriched[0] || item;
+    }
     return res.json(item);
   } catch (err) {
     console.error('Error in GET /installations/:id:', err);
@@ -168,10 +174,13 @@ router.get('/:id', requireRole('ADMIN', 'SALES', 'TECHNICAL', 'STORE_MANAGER'), 
  */
 router.get('/:id/pdf', requireRole('ADMIN', 'SALES', 'TECHNICAL', 'STORE_MANAGER'), async (req, res) => {
   try {
-    const item = await getChecklistById(req.params.id);
+    let item = await getChecklistById(req.params.id);
     if (!item) {
       return res.status(404).json({ error: 'Installation checklist not found' });
     }
+
+    const enriched = await enrichChecklistsWithWorkflowStatus([item]);
+    item = enriched[0] || item;
 
     const pdfBuffer = await generateInstallationChecklistPDF(item);
     const filename = `EagleEye-Installation-${item.checklist_number}.pdf`;

@@ -123,11 +123,12 @@ export default function InstallationChecklistList({ onSelectChecklist, onCreateN
   const getStatusBadge = (status) => {
     switch (status) {
       case 'Completed':
+      case 'Site Work Completed':
         return 'bg-emerald-100 text-emerald-800 border-emerald-300';
-      case 'In Progress':
-        return 'bg-blue-100 text-blue-800 border-blue-300';
       case 'Assigned':
-        return 'bg-purple-100 text-purple-800 border-purple-300';
+        return 'bg-blue-100 text-blue-800 border-blue-300';
+      case 'In Progress':
+        return 'bg-indigo-100 text-indigo-800 border-indigo-300';
       case 'Cancelled':
         return 'bg-rose-100 text-rose-800 border-rose-300';
       default:
@@ -255,11 +256,8 @@ export default function InstallationChecklistList({ onSelectChecklist, onCreateN
                 className="w-full text-xs p-2 border border-gray-200 rounded-lg focus:outline-none focus:border-blue-500"
               >
                 <option value="">All Statuses</option>
-                <option value="Pending">Pending</option>
                 <option value="Assigned">Assigned</option>
-                <option value="In Progress">In Progress</option>
                 <option value="Completed">Completed</option>
-                <option value="Cancelled">Cancelled</option>
               </select>
             </div>
 

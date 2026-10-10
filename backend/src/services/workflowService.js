@@ -108,9 +108,7 @@ export async function submitDeviceCarryRecord({ checklist_id, user, items, remar
   }
 
   // 4. Update installation checklist status
-  const updatedInstallationStatus = ['Pending', 'Assigned'].includes(checklist.installation_status)
-    ? 'Ready to Start'
-    : checklist.installation_status;
+  const updatedInstallationStatus = checklist.installation_status || 'Assigned';
 
   await supabase
     .from('installation_checklists')

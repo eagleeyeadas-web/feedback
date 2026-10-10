@@ -281,8 +281,8 @@ export async function generateInstallationChecklistPDF(item) {
       { label: 'Installation / Service', value: item.installation_or_service || '—', color: COLORS.navy },
       {
         label: 'Installation Status',
-        value: item.installation_status || 'Pending',
-        color: item.installation_status === 'Completed' ? COLORS.emerald : COLORS.blueText,
+        value: item.installation_status === 'Site Work Completed' ? 'Completed' : (item.installation_status || 'Assigned'),
+        color: (item.installation_status === 'Completed' || item.installation_status === 'Site Work Completed') ? COLORS.emerald : COLORS.blueText,
       },
       {
         label: 'Payment Status',
@@ -408,7 +408,11 @@ export async function generateInstallationChecklistPDF(item) {
 
   const confirmationRows = [
     [
-      { label: 'Installation Status', value: item.installation_status || '—', color: item.installation_status === 'Completed' ? COLORS.emerald : COLORS.blueText },
+      {
+        label: 'Installation Status',
+        value: item.installation_status === 'Site Work Completed' ? 'Completed' : (item.installation_status || 'Assigned'),
+        color: (item.installation_status === 'Completed' || item.installation_status === 'Site Work Completed') ? COLORS.emerald : COLORS.blueText,
+      },
       { label: 'Payment Status', value: item.payment_status || '—', color: item.payment_status === 'Paid' ? COLORS.emerald : COLORS.amber },
       { label: 'Client Confirmation', value: item.client_confirmation || '—', color: item.client_confirmation === 'Confirmed' ? COLORS.emerald : COLORS.rose },
     ],

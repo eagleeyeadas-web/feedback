@@ -35,7 +35,7 @@ const DEVICE_OPTIONS = [
 
 const VEHICLE_OPTIONS = ['Lorry', 'Truck', 'Bus', 'Heavy Vehicle', 'Other'];
 const PAYMENT_METHODS = ['Cash', 'UPI', 'Bank Transfer', 'Credit', 'Other'];
-const INSTALLATION_STATUSES = ['Pending', 'Assigned', 'In Progress', 'Completed', 'Cancelled'];
+const INSTALLATION_STATUSES = ['Assigned', 'Completed'];
 const PAYMENT_STATUSES = ['Paid', 'Partially Paid', 'Pending'];
 
 export default function InstallationChecklistForm({ id: propId, onSaved, onCancel }) {
@@ -51,6 +51,7 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
   const [fetching, setFetching] = useState(isEditMode);
   const [error, setError] = useState(null);
   const [successToast, setSuccessToast] = useState(null);
+  const [isAuthoritativeCompleted, setIsAuthoritativeCompleted] = useState(false);
 
   // Form State matching all 27 questions exactly
   const [formData, setFormData] = useState({
@@ -75,7 +76,7 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
     installation_or_service: 'Installation',
     service_engineer: '',
     service_assistant: '',
-    installation_status: 'Pending',
+    installation_status: 'Assigned',
     payment_status: 'Pending',
     remarks: '',
     client_confirmation: 'Confirmed',
@@ -91,6 +92,10 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
         .then((data) => {
           setChecklistNumber(data.checklist_number);
           const isCustomVehicle = data.vehicle_type && !VEHICLE_OPTIONS.includes(data.vehicle_type);
+          const isCompleted = data.installation_status === 'Completed' || data.installation_status === 'Site Work Completed';
+          setIsAuthoritativeCompleted(isCompleted);
+          const safeStatus = isCompleted ? 'Completed' : 'Assigned';
+
           setFormData({
             client_name: data.client_name || '',
             client_mobile: data.client_mobile || '',
@@ -113,7 +118,7 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
             installation_or_service: data.installation_or_service || 'Installation',
             service_engineer: data.service_engineer || '',
             service_assistant: data.service_assistant || '',
-            installation_status: data.installation_status || 'Pending',
+            installation_status: safeStatus,
             payment_status: data.payment_status || 'Pending',
             remarks: data.remarks || '',
             client_confirmation: data.client_confirmation || 'Confirmed',
@@ -204,6 +209,10 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
     if (!formData.service_engineer.trim()) return 'Team Member 1 – Service Engineer is required';
     if (!formData.service_assistant.trim()) return 'Team Member 2 – Service Assistant is required';
 
+    if (!formData.installation_status || !INSTALLATION_STATUSES.includes(formData.installation_status)) {
+      return 'Installation Status is required and must be either Assigned or Completed';
+    }
+
     return null;
   };
 
@@ -243,7 +252,7 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
         installation_or_service: formData.installation_or_service,
         service_engineer: formData.service_engineer.trim(),
         service_assistant: formData.service_assistant.trim(),
-        installation_status: formData.installation_status,
+        installation_status: isAuthoritativeCompleted ? 'Completed' : formData.installation_status,
         payment_status: formData.payment_status,
         remarks: formData.remarks.trim() || null,
         client_confirmation: formData.client_confirmation,
@@ -818,7 +827,11 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
               <select
                 value={formData.installation_status}
                 onChange={(e) => handleChange('installation_status', e.target.value)}
-                className="w-full text-xs p-2.5 border border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 font-semibold"
+                disabled={isEditMode && isAuthoritativeCompleted}
+                required
+                className={`w-full text-xs p-2.5 border border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 font-semibold ${
+                  isEditMode && isAuthoritativeCompleted ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''
+                }`}
               >
                 {INSTALLATION_STATUSES.map((st) => (
                   <option key={st} value={st}>
@@ -826,6 +839,11 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
                   </option>
                 ))}
               </select>
+              {isEditMode && isAuthoritativeCompleted && (
+                <p className="text-[10px] text-emerald-600 font-medium mt-1">
+                  Completed via technical report (cannot be reverted).
+                </p>
+              )}
             </div>
 
             <div>

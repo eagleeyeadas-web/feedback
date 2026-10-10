@@ -117,7 +117,7 @@ export async function createChecklist(adminUserId, data) {
     installation_or_service: data.installation_or_service,
     service_engineer: data.service_engineer ? data.service_engineer.trim() : '',
     service_assistant: data.service_assistant ? data.service_assistant.trim() : '',
-    installation_status: data.installation_status || 'Pending',
+    installation_status: data.installation_status || 'Assigned',
     payment_status: paymentStatus,
     remarks: data.remarks ? data.remarks.trim() : null,
     client_confirmation: data.client_confirmation || 'Confirmed',
@@ -183,7 +183,13 @@ export async function getChecklists(params = {}) {
 
   // Filters
   if (installationStatus) {
-    query = query.eq('installation_status', installationStatus);
+    if (installationStatus === 'Assigned') {
+      query = query.in('installation_status', ['Assigned', 'Pending', 'In Progress']);
+    } else if (installationStatus === 'Completed') {
+      query = query.in('installation_status', ['Completed', 'Site Work Completed']);
+    } else {
+      query = query.eq('installation_status', installationStatus);
+    }
   }
   if (paymentStatus) {
     query = query.eq('payment_status', paymentStatus);
@@ -358,7 +364,9 @@ export async function updateChecklist(id, data) {
     installation_or_service: data.installation_or_service || existing.installation_or_service,
     service_engineer: data.service_engineer ? data.service_engineer.trim() : existing.service_engineer,
     service_assistant: data.service_assistant ? data.service_assistant.trim() : existing.service_assistant,
-    installation_status: data.installation_status || existing.installation_status,
+    installation_status: ((existing.installation_status === 'Completed' || existing.installation_status === 'Site Work Completed') && (data.installation_status !== 'Completed'))
+      ? 'Completed'
+      : (data.installation_status || existing.installation_status),
     payment_status: paymentStatus,
     remarks: data.remarks !== undefined ? (data.remarks ? data.remarks.trim() : null) : existing.remarks,
     client_confirmation: data.client_confirmation || existing.client_confirmation,
@@ -407,6 +415,16 @@ export async function getInstallationStats() {
     .from('installation_checklists')
     .select('*', { count: 'exact', head: true });
 
+  const { count: assigned } = await supabase
+    .from('installation_checklists')
+    .select('*', { count: 'exact', head: true })
+    .in('installation_status', ['Assigned', 'Pending', 'In Progress']);
+
+  const { count: completed } = await supabase
+    .from('installation_checklists')
+    .select('*', { count: 'exact', head: true })
+    .in('installation_status', ['Completed', 'Site Work Completed']);
+
   const { count: pending } = await supabase
     .from('installation_checklists')
     .select('*', { count: 'exact', head: true })
@@ -417,15 +435,11 @@ export async function getInstallationStats() {
     .select('*', { count: 'exact', head: true })
     .eq('installation_status', 'In Progress');
 
-  const { count: completed } = await supabase
-    .from('installation_checklists')
-    .select('*', { count: 'exact', head: true })
-    .eq('installation_status', 'Completed');
-
   return {
     total: total || 0,
+    assigned: assigned || 0,
+    completed: completed || 0,
     pending: pending || 0,
     inProgress: inProgress || 0,
-    completed: completed || 0,
   };
 }
