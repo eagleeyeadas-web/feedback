@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../../hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -13,19 +13,22 @@ import {
   UserCheck,
   Filter,
   Play,
-  RotateCcw,
+  RefreshCw,
 } from 'lucide-react';
 import DeviceCarryModal from '../../../components/workspaces/DeviceCarryModal';
 import InstallationCompletionModal from '../../../components/workspaces/InstallationCompletionModal';
-import { fetchServiceEngineers, startInstallationJob } from '../../../lib/api';
+import { fetchInstallationChecklists, fetchServiceEngineers, startInstallationJob } from '../../../lib/api';
 
 export default function TechnicalWorkspace({ onSelectChecklist }) {
-  const { token } = useAuth();
+  const { session, token: authToken, loading: authLoading } = useAuth();
+  const token = authToken || session?.access_token;
   const navigate = useNavigate();
+
   const [checklists, setChecklists] = useState([]);
   const [engineers, setEngineers] = useState([]);
   const [selectedEngineer, setSelectedEngineer] = useState('all');
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [search, setSearch] = useState('');
   const [actionSuccessMsg, setActionSuccessMsg] = useState('');
 
@@ -33,52 +36,58 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
   const [carryModalJob, setCarryModalJob] = useState(null);
   const [completionModalJob, setCompletionModalJob] = useState(null);
 
-  const loadData = async () => {
-    setLoading(true);
-    try {
-      // 1. Fetch checklists
-      const res = await fetch('/api/admin/installations', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setChecklists(data.checklists || []);
+  const loadData = useCallback(async () => {
+    if (!token) {
+      if (!authLoading) {
+        setLoading(false);
       }
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      // 1. Fetch all assigned installation checklists
+      const res = await fetchInstallationChecklists(token, { limit: 200 });
+      setChecklists(res.checklists || []);
 
       // 2. Fetch engineers list for filter dropdown
       const engList = await fetchServiceEngineers(token);
       setEngineers(engList || []);
     } catch (err) {
       console.error('Failed to load Technical workspace data:', err);
+      setError(err.message || 'Failed to fetch assigned technical jobs. Please click Retry.');
     } finally {
       setLoading(false);
     }
-  };
+  }, [token, authLoading]);
 
   useEffect(() => {
-    if (token) {
-      loadData();
-    }
-  }, [token]);
+    loadData();
+  }, [loadData]);
 
   const showToast = (msg) => {
     setActionSuccessMsg(msg);
     setTimeout(() => setActionSuccessMsg(''), 3500);
   };
 
-  // Filter checklists by Service Engineer (primary filter) AND search text
+  // Filter checklists by Service Engineer (primary filter) AND search query
   const filteredChecklists = checklists.filter((item) => {
-    // Service Engineer primary filter matching engineer ID or engineer name
+    // 1. Service Engineer primary filter
     let matchesEngineer = true;
     if (selectedEngineer !== 'all') {
       const targetEng = engineers.find((e) => e.id === selectedEngineer);
-      const targetName = targetEng ? targetEng.name.toLowerCase() : selectedEngineer.toLowerCase();
+      const targetName = (targetEng ? targetEng.name : selectedEngineer).toLowerCase();
+      const itemEngName = (item.service_engineer || '').toLowerCase();
 
-      const engPrimaryName = (item.service_engineer || '').toLowerCase();
-      matchesEngineer = engPrimaryName.includes(targetName) || item.service_engineer === selectedEngineer;
+      matchesEngineer =
+        itemEngName.includes(targetName) ||
+        targetName.includes(itemEngName) ||
+        item.service_engineer === selectedEngineer;
     }
 
-    // Text search matching checklist_number, client_name, service_engineer, service_assistant
+    // 2. Search query matching checklist_number, client_name, location, or technician
     let matchesSearch = true;
     if (search.trim()) {
       const s = search.trim().toLowerCase();
@@ -93,12 +102,12 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
     return matchesEngineer && matchesSearch;
   });
 
-  // Calculate dynamic metric counts based on filtered results
-  const assignedJobsCount = filteredChecklists.length;
-  const inProgressCount = filteredChecklists.filter(
+  // Calculate dynamic dashboard summary metrics
+  const assignedJobsCount = checklists.length;
+  const inProgressCount = checklists.filter(
     (c) => c.installation_status === 'In Progress' || c.reconciliation_status === 'STORE_ISSUED'
   ).length;
-  const siteCompletedCount = filteredChecklists.filter(
+  const siteCompletedCount = checklists.filter(
     (c) =>
       c.installation_status === 'Site Work Completed' ||
       c.installation_status === 'Completed' ||
@@ -136,12 +145,21 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
             <Wrench className="w-7 h-7 text-purple-400" /> Technical Team Job Workspace
           </h1>
           <p className="text-xs text-white/70 mt-1 max-w-xl">
-            Record mandatory pre-installation physical devices carried, start installation jobs, submit site installation completion reports, and declare unused devices for store verification.
+            View assigned installation jobs, record mandatory pre-installation devices carried, start site work, submit completion reports, and declare return items.
           </p>
         </div>
+
+        <button
+          onClick={loadData}
+          disabled={loading}
+          className="self-start md:self-auto flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white text-xs font-semibold px-4 py-2.5 rounded-xl border border-white/20 transition-all cursor-pointer disabled:opacity-50"
+        >
+          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+          <span>Refresh Jobs</span>
+        </button>
       </div>
 
-      {/* Metrics Bar (Updates based on filtered results) */}
+      {/* Metrics Bar */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-xs flex items-center gap-4">
           <div className="w-10 h-10 rounded-lg bg-purple-50 flex items-center justify-center text-purple-600">
@@ -186,7 +204,7 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
             onChange={(e) => setSelectedEngineer(e.target.value)}
             className="w-full text-xs p-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:border-purple-500 font-semibold text-gray-800"
           >
-            <option value="all">All Engineers</option>
+            <option value="all">All Engineers ({checklists.length} jobs)</option>
             {engineers.map((eng) => (
               <option key={eng.id} value={eng.id}>
                 {eng.name} {eng.role ? `(${eng.role})` : ''}
@@ -224,45 +242,56 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
           </span>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-xs">
-            <thead>
-              <tr className="bg-gray-50 border-b border-gray-200 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                <th className="py-3 px-4">Checklist No.</th>
-                <th className="py-3 px-4">Client Details</th>
-                <th className="py-3 px-4">Sales Device Request</th>
-                <th className="py-3 px-4">Assigned Team</th>
-                <th className="py-3 px-4">Arrival Date/Time</th>
-                <th className="py-3 px-4">Carry Status</th>
-                <th className="py-3 px-4">Installation Status</th>
-                <th className="py-3 px-4">Reconciliation Status</th>
-                <th className="py-3 px-4">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200">
-              {loading ? (
-                <tr>
-                  <td colSpan={9} className="py-10 text-center text-gray-400">
-                    Loading Technical jobs...
-                  </td>
+        {loading ? (
+          <div className="p-12 text-center">
+            <div className="w-8 h-8 border-3 border-purple-600 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+            <p className="text-xs font-semibold text-gray-600">Loading Technical jobs...</p>
+          </div>
+        ) : error ? (
+          <div className="p-8 text-center text-rose-600 space-y-3">
+            <AlertTriangle className="w-8 h-8 mx-auto text-rose-500" />
+            <p className="text-xs font-bold">{error}</p>
+            <button
+              onClick={loadData}
+              className="px-4 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs rounded-xl border border-rose-200 transition-colors cursor-pointer"
+            >
+              Retry Loading Jobs
+            </button>
+          </div>
+        ) : filteredChecklists.length === 0 ? (
+          <div className="p-12 text-center text-gray-400 space-y-2">
+            <Filter className="w-8 h-8 text-gray-300 mx-auto" />
+            <p className="font-semibold text-gray-600">No assigned technical jobs found</p>
+            <p className="text-[11px] text-gray-400">
+              {checklists.length === 0
+                ? 'No installation checklists exist in the database yet.'
+                : 'Try adjusting your Service Engineer filter or search query.'}
+            </p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-200 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                  <th className="py-3 px-4">Checklist No.</th>
+                  <th className="py-3 px-4">Client Details</th>
+                  <th className="py-3 px-4">Sales Device Request</th>
+                  <th className="py-3 px-4">Assigned Team</th>
+                  <th className="py-3 px-4">Arrival Date/Time</th>
+                  <th className="py-3 px-4">Carry Status</th>
+                  <th className="py-3 px-4">Installation Status</th>
+                  <th className="py-3 px-4">Reconciliation Status</th>
+                  <th className="py-3 px-4">Actions</th>
                 </tr>
-              ) : filteredChecklists.length === 0 ? (
-                <tr>
-                  <td colSpan={9} className="py-12 text-center text-gray-400 space-y-2">
-                    <Filter className="w-8 h-8 text-gray-300 mx-auto" />
-                    <p className="font-semibold text-gray-600">No matching installation jobs found.</p>
-                    <p className="text-[11px] text-gray-400">
-                      Try adjusting your Service Engineer filter or search keywords.
-                    </p>
-                  </td>
-                </tr>
-              ) : (
-                filteredChecklists.map((item) => {
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {filteredChecklists.map((item) => {
                   const isCarryDone = item.carry_status === 'RECORDED';
                   const isStarted = ['In Progress', 'Site Work Completed', 'Completed'].includes(
                     item.installation_status
                   );
-                  const isCompleted = item.installation_status === 'Completed' || item.installation_status === 'Site Work Completed';
+                  const isCompleted =
+                    item.installation_status === 'Completed' || item.installation_status === 'Site Work Completed';
 
                   return (
                     <tr key={item.id} className="hover:bg-gray-50/80 transition-colors">
@@ -277,7 +306,7 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
                         <div className="text-[11px] text-gray-500">{item.client_location}</div>
                       </td>
 
-                      {/* Sales Request */}
+                      {/* Sales Device Request */}
                       <td className="py-3 px-4">
                         <span className="font-semibold text-gray-800">{item.device_type}</span>
                         <div className="text-[10px] text-gray-400">Qty: {item.number_of_devices}</div>
@@ -321,13 +350,13 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
                       <td className="py-3 px-4">
                         <span
                           className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${
-                            item.installation_status === 'Completed' || item.installation_status === 'Site Work Completed'
+                            isCompleted
                               ? 'bg-emerald-100 text-emerald-800'
                               : item.installation_status === 'In Progress'
                               ? 'bg-blue-100 text-blue-800'
                               : item.installation_status === 'Ready to Start'
                               ? 'bg-purple-100 text-purple-800'
-                              : 'bg-gray-100 text-gray-700'
+                              : 'bg-purple-50 text-purple-700'
                           }`}
                         >
                           {!isCarryDone && item.installation_status !== 'Completed'
@@ -408,11 +437,11 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
                       </td>
                     </tr>
                   );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* MODAL 1: Mandatory Pre-Installation Device Carry Form */}
