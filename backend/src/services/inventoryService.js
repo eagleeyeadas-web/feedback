@@ -341,6 +341,31 @@ export async function deductStockForCarryRecord({ checklist_id, technician_user_
 }
 
 /**
+ * Issue stock for an approved checklist (compatibility export)
+ */
+export async function issueStockForJob({
+  checklist_id,
+  device_type,
+  quantity,
+  user,
+  notes = '',
+}) {
+  const qty = parseInt(quantity, 10);
+  if (isNaN(qty) || qty <= 0) {
+    throw new Error('Issued quantity must be greater than 0');
+  }
+
+  await deductStockForCarryRecord({
+    checklist_id,
+    technician_user_id: user?.id,
+    technician_name: user?.full_name || user?.email || 'Store Manager',
+    items: [{ device_type, carried_qty: qty }],
+  });
+
+  return { success: true };
+}
+
+/**
  * Credit stock when Store Manager verifies physically returned devices
  */
 export async function creditStockForVerifiedReturn({
