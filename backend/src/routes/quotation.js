@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import supabase from '../services/supabase.js';
 import { generateQuotationPDF, numberToWordsIndian, getFullProductDescription } from '../services/quotationPdfGenerator.js';
-import { handleCleanupEndpoint } from '../services/quotationCleanupService.js';
+import { handleCleanupEndpoint, handleCleanupStatusEndpoint } from '../services/quotationCleanupService.js';
 import { peekNextQuotationNumber, generateAndReserveQuotationNumber, handleQuotationDeletion } from '../services/quotationSequenceService.js';
 import { requireAdmin } from '../middleware/auth.js';
 
@@ -11,10 +11,10 @@ const router = Router();
 /**
  * POST /api/admin/quotations/cleanup
  * Centralized 20-day automatic retention cleanup trigger for eligible attachments
- * Protected strictly by CRON_SECRET header `x-cron-secret` (or query param) or Admin Bearer Token.
- * Note: Never uses a hardcoded fallback secret.
  */
 router.post('/cleanup', handleCleanupEndpoint);
+router.get('/cleanup/status', handleCleanupStatusEndpoint);
+
 
 
 // Require admin authentication for remaining quotation endpoints

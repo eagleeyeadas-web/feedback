@@ -3,8 +3,10 @@ import { AuthProvider, useAuth } from './hooks/useAuth';
 import FeedbackForm from './pages/FeedbackForm';
 import AdminLogin from './pages/admin/Login';
 import Dashboard from './pages/admin/Dashboard';
+import ActiveSessionCleanupTracker from './components/ActiveSessionCleanupTracker';
 
 function ProtectedRoute({ children }) {
+
   const { session, loading } = useAuth();
 
   if (loading) {
@@ -82,6 +84,7 @@ export default function App() {
   return (
     <HashRouter>
       <AuthProvider>
+        <ActiveSessionCleanupTracker />
         <AppRoutes />
       </AuthProvider>
     </HashRouter>

@@ -14,7 +14,7 @@ import inventoryRoutes from './routes/inventory.js';
 import customerRoutes from './routes/customers.js';
 import userRoutes from './routes/users.js';
 import auditRoutes from './routes/audit.js';
-import { runFullCleanup, handleCleanupEndpoint } from './services/quotationCleanupService.js';
+import { runFullCleanup, handleCleanupEndpoint, handleCleanupStatusEndpoint, executeActivityTriggeredCleanup } from './services/quotationCleanupService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -47,8 +47,10 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// Centralized Cleanup Trigger Endpoint (Direct alias)
+// Centralized Cleanup Endpoints
 app.post('/api/admin/cleanup', handleCleanupEndpoint);
+app.get('/api/admin/cleanup/status', handleCleanupStatusEndpoint);
+
 
 // Routes
 app.use('/api/feedback', feedbackRoutes);
@@ -91,17 +93,17 @@ app.listen(config.port, '0.0.0.0', () => {
   console.log(`Eagle Eye Feedback API running on port ${config.port}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 
-  // Automated 20-day centralized cleanup background task (Runs daily / every 24 hours)
+  // Controlled 20-day centralized cleanup background task (Enforces 24-hour limit & atomic lock)
   const CLEANUP_INTERVAL_MS = 24 * 60 * 60 * 1000;
   
   // Initial check 15 seconds after startup (safely catches up if server slept on Render)
   setTimeout(() => {
-    runFullCleanup().catch(err => console.error('Initial startup cleanup error:', err));
+    executeActivityTriggeredCleanup({ userId: null, force: false }).catch(err => console.error('Initial startup cleanup check error:', err));
   }, 15000);
 
-  // Set recurring schedule
+  // Set recurring schedule (controlled with 24h database state verification)
   setInterval(() => {
-    runFullCleanup().catch(err => console.error('Scheduled daily cleanup error:', err));
+    executeActivityTriggeredCleanup({ userId: null, force: false }).catch(err => console.error('Scheduled daily cleanup check error:', err));
   }, CLEANUP_INTERVAL_MS);
 });
 

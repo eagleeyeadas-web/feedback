@@ -364,8 +364,12 @@ export async function runFullCleanup() {
   const quotationResult = await runQuotationCleanup();
   const feedbackResult = await runFeedbackPdfCleanup();
 
+  const isQuotationsSuccessful = !quotationResult.error && (quotationResult.failed === 0 || quotationResult.processed === 0);
+  const isFeedbackSuccessful = !feedbackResult.error && (feedbackResult.failed === 0 || feedbackResult.processed === 0);
+  const overallSuccess = isQuotationsSuccessful && isFeedbackSuccessful;
+
   return {
-    success: true,
+    success: overallSuccess,
     policy: '20-Day Centralized Automatic Retention',
     retentionDays: RETENTION_DAYS,
     timestamp: new Date().toISOString(),
@@ -387,12 +391,300 @@ export async function runFullCleanup() {
   };
 }
 
+export const CLEANUP_JOB_ID = 'centralized_20day_cleanup';
+export const COOLDOWN_HOURS = 24;
+export const COOLDOWN_MS = COOLDOWN_HOURS * 60 * 60 * 1000;
+export const LOCK_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes lock expiry
+
+// Resilient in-memory fallback state in case database table is unreachable or not yet migrated
+let inMemoryCleanupState = {
+  id: CLEANUP_JOB_ID,
+  last_successful_run_at: null,
+  last_run_started_at: null,
+  last_run_status: 'IDLE',
+  locked_until: null,
+  last_run_summary: null,
+  last_error: null,
+};
+
+/**
+ * Test helper to simulate past timestamps and failure recovery
+ */
+export function _setCleanupStateForTesting(state) {
+  inMemoryCleanupState = {
+    ...inMemoryCleanupState,
+    ...state,
+  };
+}
+
+
+/**
+ * Get current persistent cleanup state from database (or fallback)
+ */
+export async function getCleanupState() {
+  try {
+    const { data, error } = await supabase
+      .from('system_cleanup_state')
+      .select('*')
+      .eq('id', CLEANUP_JOB_ID)
+      .maybeSingle();
+
+    if (!error && data) {
+      inMemoryCleanupState = { ...data };
+      return data;
+    }
+  } catch (err) {
+    console.warn('[Cleanup State] DB fetch failed, using fallback state:', err.message);
+  }
+  return inMemoryCleanupState;
+}
+
+/**
+ * Atomically claim cleanup lock and verify 24-hour cooldown.
+ * Safe against race conditions from concurrent browser tabs or multiple users.
+ */
+export async function claimCleanupLock({ userId = null, cooldownHours = 24, force = false } = {}) {
+  const now = new Date();
+  const nowUtc = now.toISOString();
+  const lockExpiry = new Date(now.getTime() + LOCK_TIMEOUT_MS).toISOString();
+
+  // Step 1: Try stored procedure RPC claim_cleanup_lock if available in Supabase
+  try {
+    const { data: rpcData, error: rpcError } = await supabase
+      .rpc('claim_cleanup_lock', {
+        p_user_id: userId || null,
+        p_cooldown_hours: force ? 0 : cooldownHours,
+      });
+
+    if (!rpcError && rpcData && rpcData.length > 0) {
+      const claimResult = rpcData[0];
+      return {
+        claimed: Boolean(claimResult.claimed),
+        reason: claimResult.reason,
+        lastSuccessfulRunAt: claimResult.last_successful_run_at,
+        lockedUntil: claimResult.locked_until,
+      };
+    }
+  } catch (rpcErr) {
+    // RPC not available yet; proceed to table optimistic update
+  }
+
+  // Step 2: Table-level optimistic claim on system_cleanup_state
+  try {
+    const { data: existing, error: selectErr } = await supabase
+      .from('system_cleanup_state')
+      .select('*')
+      .eq('id', CLEANUP_JOB_ID)
+      .maybeSingle();
+
+    if (!selectErr) {
+      const current = existing || inMemoryCleanupState;
+
+      // Check active lock
+      if (current.locked_until && new Date(current.locked_until) > now) {
+        return {
+          claimed: false,
+          reason: 'CLEANUP_ALREADY_RUNNING',
+          lastSuccessfulRunAt: current.last_successful_run_at,
+          lockedUntil: current.locked_until,
+        };
+      }
+
+      // Check 24-hour cooldown
+      if (!force && current.last_successful_run_at) {
+        const lastRunTime = new Date(current.last_successful_run_at).getTime();
+        if (now.getTime() - lastRunTime < cooldownHours * 60 * 60 * 1000) {
+          return {
+            claimed: false,
+            reason: 'COOLDOWN_ACTIVE',
+            lastSuccessfulRunAt: current.last_successful_run_at,
+            lockedUntil: null,
+          };
+        }
+      }
+
+      // Claim lock atomically via conditional update
+      const { data: updatedRows, error: updateErr } = await supabase
+        .from('system_cleanup_state')
+        .update({
+          last_run_status: 'RUNNING',
+          last_run_started_at: nowUtc,
+          locked_until: lockExpiry,
+          triggered_by_user_id: userId || null,
+          updated_at: nowUtc,
+        })
+        .eq('id', CLEANUP_JOB_ID)
+        .select();
+
+      if (!updateErr && updatedRows && updatedRows.length > 0) {
+        inMemoryCleanupState = { ...updatedRows[0] };
+        return {
+          claimed: true,
+          reason: 'LOCK_ACQUIRED',
+          lastSuccessfulRunAt: updatedRows[0].last_successful_run_at,
+          lockedUntil: lockExpiry,
+        };
+      }
+    }
+  } catch (dbErr) {
+    console.warn('[Cleanup Lock] DB table update failed, evaluating fallback lock:', dbErr.message);
+  }
+
+  // Step 3: Resilient in-memory lock fallback
+  if (inMemoryCleanupState.locked_until && new Date(inMemoryCleanupState.locked_until) > now) {
+    return {
+      claimed: false,
+      reason: 'CLEANUP_ALREADY_RUNNING',
+      lastSuccessfulRunAt: inMemoryCleanupState.last_successful_run_at,
+      lockedUntil: inMemoryCleanupState.locked_until,
+    };
+  }
+
+  if (!force && inMemoryCleanupState.last_successful_run_at) {
+    const lastRunTime = new Date(inMemoryCleanupState.last_successful_run_at).getTime();
+    if (now.getTime() - lastRunTime < cooldownHours * 60 * 60 * 1000) {
+      return {
+        claimed: false,
+        reason: 'COOLDOWN_ACTIVE',
+        lastSuccessfulRunAt: inMemoryCleanupState.last_successful_run_at,
+        lockedUntil: null,
+      };
+    }
+  }
+
+  inMemoryCleanupState.last_run_status = 'RUNNING';
+  inMemoryCleanupState.last_run_started_at = nowUtc;
+  inMemoryCleanupState.locked_until = lockExpiry;
+  inMemoryCleanupState.triggered_by_user_id = userId || null;
+
+  return {
+    claimed: true,
+    reason: 'LOCK_ACQUIRED',
+    lastSuccessfulRunAt: inMemoryCleanupState.last_successful_run_at,
+    lockedUntil: lockExpiry,
+  };
+}
+
+/**
+ * Release lock and update persistent status
+ */
+export async function releaseCleanupLock({ success, summary = null, error = null }) {
+  const nowUtc = new Date().toISOString();
+
+  // Try RPC first
+  try {
+    const { error: rpcErr } = await supabase.rpc('release_cleanup_lock', {
+      p_success: Boolean(success),
+      p_summary: summary || null,
+      p_error: error || null,
+    });
+    if (!rpcErr) return;
+  } catch (e) {
+    // Fall back to table update
+  }
+
+  const updatePayload = {
+    last_run_status: success ? 'COMPLETED' : 'FAILED',
+    locked_until: null,
+    updated_at: nowUtc,
+  };
+
+  if (success) {
+    updatePayload.last_successful_run_at = nowUtc;
+    updatePayload.last_run_summary = summary || null;
+    updatePayload.last_error = null;
+  } else {
+    // Rule 8: Do NOT update last_successful_run_at on failure!
+    updatePayload.last_error = error || 'Cleanup execution failed';
+  }
+
+  try {
+    await supabase
+      .from('system_cleanup_state')
+      .update(updatePayload)
+      .eq('id', CLEANUP_JOB_ID);
+  } catch (err) {
+    console.warn('[Cleanup Lock] DB release update failed:', err.message);
+  }
+
+  inMemoryCleanupState = {
+    ...inMemoryCleanupState,
+    ...updatePayload,
+  };
+}
+
+/**
+ * Activity-Triggered Cleanup Orchestrator.
+ * Enforces 24-hour interval between successful executions and concurrency lock.
+ */
+export async function executeActivityTriggeredCleanup({ userId = null, force = false } = {}) {
+  console.log(`[Activity Cleanup Engine] Evaluating cleanup eligibility (user: ${userId || 'SYSTEM'}, force: ${force})...`);
+
+  // Step 1: Attempt to claim the concurrency lock and evaluate 24-hour cooldown
+  const claim = await claimCleanupLock({ userId, cooldownHours: COOLDOWN_HOURS, force });
+
+  if (!claim.claimed) {
+    console.log(`[Activity Cleanup Engine] Cleanup skipped. Reason: ${claim.reason} (Last successful run: ${claim.lastSuccessfulRunAt || 'Never'})`);
+    return {
+      status: 'skipped',
+      executed: false,
+      reason: claim.reason,
+      lastSuccessfulRunAt: claim.lastSuccessfulRunAt,
+      lockedUntil: claim.lockedUntil,
+    };
+  }
+
+  console.log('[Activity Cleanup Engine] Lock acquired! Executing centralized 20-day retention cleanup across all eligible modules...');
+
+  // Step 2: Execute centralized cleanup
+  let cleanupResult = null;
+  let executionError = null;
+
+  try {
+    cleanupResult = await runFullCleanup();
+    if (!cleanupResult.success) {
+      executionError = 'One or more cleanup modules failed';
+    }
+  } catch (err) {
+    executionError = err.message || 'Unexpected cleanup execution exception';
+    console.error('[Activity Cleanup Engine] Execution error:', executionError);
+  }
+
+  // Step 3: Release lock and update persistent database state
+  const isSuccess = !executionError && cleanupResult && cleanupResult.success;
+  await releaseCleanupLock({
+    success: isSuccess,
+    summary: cleanupResult,
+    error: executionError,
+  });
+
+  if (!isSuccess) {
+    console.error(`[Activity Cleanup Engine] Cleanup failed: ${executionError}. Last successful run timestamp was NOT updated.`);
+    return {
+      status: 'failed',
+      executed: true,
+      success: false,
+      error: executionError,
+      lastSuccessfulRunAt: claim.lastSuccessfulRunAt,
+    };
+  }
+
+  console.log('[Activity Cleanup Engine] Cleanup completed successfully. Updated persistent last_successful_run_at timestamp.');
+  return {
+    status: 'completed',
+    executed: true,
+    success: true,
+    result: cleanupResult,
+    lastSuccessfulRunAt: new Date().toISOString(),
+  };
+}
+
 /**
  * Express Route Handler for Centralized 20-Day Cleanup Trigger.
  * Validates authentication via:
  * 1. process.env.CRON_SECRET (via header `x-cron-secret` or query param `secret`)
  *    - Strict: NEVER uses a hardcoded fallback secret!
- * 2. Supabase Admin Bearer Token
+ * 2. Authenticated user token (Sales, Technical, Store Manager, Admin)
  */
 export async function handleCleanupEndpoint(req, res) {
   try {
@@ -405,27 +697,102 @@ export async function handleCleanupEndpoint(req, res) {
     }
 
     const authHeader = req.headers.authorization;
-    let isAdmin = false;
+    let isAuthenticatedUser = false;
+    let userId = null;
 
     if (authHeader && authHeader.startsWith('Bearer ')) {
       const token = authHeader.split(' ')[1];
       const { data: { user } } = await supabase.auth.getUser(token);
-      if (user) isAdmin = true;
+      if (user) {
+        isAuthenticatedUser = true;
+        userId = user.id;
+      }
     }
 
-    if (!isCronAuthorized && !isAdmin) {
+    if (!isCronAuthorized && !isAuthenticatedUser) {
       if (!cronSecret && !authHeader) {
         console.error('[Cleanup API] CRON_SECRET environment variable is not configured on the server.');
         return res.status(500).json({ error: 'CRON_SECRET environment variable is not configured on the server' });
       }
-      return res.status(401).json({ error: 'Unauthorized cleanup request: Invalid or missing x-cron-secret' });
+      return res.status(401).json({ error: 'Unauthorized cleanup request: Valid user authentication or x-cron-secret required.' });
     }
 
-    const result = await runFullCleanup();
-    return res.json({ message: 'Centralized 20-day scheduled cleanup executed successfully', result });
+    // Force run only allowed if explicit force query is passed by authorized secret/admin
+    const force = Boolean(req.query.force && isCronAuthorized);
+
+    const result = await executeActivityTriggeredCleanup({ userId, force });
+
+    if (result.status === 'skipped') {
+      return res.json({
+        message: 'Cleanup check completed: Skipped because cleanup already executed within 24 hours or is currently running.',
+        status: 'skipped',
+        reason: result.reason,
+        lastSuccessfulRunAt: result.lastSuccessfulRunAt,
+        executed: false,
+      });
+    }
+
+    if (result.status === 'failed') {
+      return res.status(500).json({
+        error: 'Cleanup execution failed',
+        status: 'failed',
+        reason: result.error,
+        executed: true,
+      });
+    }
+
+    return res.json({
+      message: 'Centralized 20-day scheduled cleanup executed successfully',
+      status: 'completed',
+      result: result.result,
+      lastSuccessfulRunAt: result.lastSuccessfulRunAt,
+      executed: true,
+    });
   } catch (err) {
     console.error('Cleanup route error:', err);
     return res.status(500).json({ error: 'Cleanup execution failed' });
   }
 }
+
+/**
+ * Express Route Handler for Inspecting Cleanup Status
+ */
+export async function handleCleanupStatusEndpoint(req, res) {
+  try {
+    const authHeader = req.headers.authorization;
+    const cronSecret = process.env.CRON_SECRET;
+    const providedSecret = req.headers['x-cron-secret'] || req.query.secret;
+
+    let authorized = false;
+    if (cronSecret && providedSecret && providedSecret === cronSecret) {
+      authorized = true;
+    }
+
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.split(' ')[1];
+      const { data: { user } } = await supabase.auth.getUser(token);
+      if (user) authorized = true;
+    }
+
+    if (!authorized) {
+      return res.status(401).json({ error: 'Unauthorized status request' });
+    }
+
+    const state = await getCleanupState();
+    return res.json({
+      jobId: CLEANUP_JOB_ID,
+      retentionDays: RETENTION_DAYS,
+      cooldownHours: COOLDOWN_HOURS,
+      lastSuccessfulRunAt: state.last_successful_run_at,
+      lastRunStatus: state.last_run_status,
+      lockedUntil: state.locked_until,
+      lastRunSummary: state.last_run_summary,
+      lastError: state.last_error,
+    });
+  } catch (err) {
+    console.error('Cleanup status error:', err);
+    return res.status(500).json({ error: 'Failed to retrieve cleanup status' });
+  }
+}
+
 

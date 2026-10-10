@@ -362,5 +362,31 @@ export async function verifyStoreReturnApi(token, data) {
   return json;
 }
 
+/**
+ * Trigger user-activity-based 24-hour retention cleanup check
+ */
+export async function triggerActivityCleanup(token) {
+  const res = await fetch(`${API_BASE}/admin/cleanup`, {
+    method: 'POST',
+    headers: adminHeaders(token),
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(json.error || 'Failed to trigger cleanup check');
+  return json;
+}
+
+/**
+ * Fetch cleanup status and last successful execution timestamp
+ */
+export async function fetchCleanupStatus(token) {
+  const res = await fetch(`${API_BASE}/admin/cleanup/status`, {
+    headers: adminHeaders(token),
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(json.error || 'Failed to fetch cleanup status');
+  return json;
+}
+
+
 
 
