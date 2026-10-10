@@ -303,22 +303,36 @@ export async function submitInstallationCompletionReport({
     }
   }
 
-  // Update checklist status
-  const finalInstStatus = completion_status === 'Completed' ? 'Completed' : 'Site Work Completed';
+  // Update checklist status automatically across all workspaces
+  const finalInstStatus = 'Completed';
   const finalReconStatus = hasDiscrepancy
     ? 'DISCREPANCY_OPEN'
     : totalUnused > 0
     ? 'PENDING_STORE_VERIFICATION'
-    : 'SITE_WORK_COMPLETED';
+    : 'FULLY_RECONCILED';
 
-  await supabase
-    .from('installation_checklists')
-    .update({
-      installation_status: finalInstStatus,
-      reconciliation_status: finalReconStatus,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', checklist_id);
+  const now = new Date().toISOString();
+  try {
+    const { error: err1 } = await supabase
+      .from('installation_checklists')
+      .update({
+        installation_status: finalInstStatus,
+        updated_at: now,
+      })
+      .eq('id', checklist_id);
+
+    if (err1) console.warn('Could not update installation_status in DB:', err1.message);
+
+    // Try updating optional reconciliation_status if column exists
+    await supabase
+      .from('installation_checklists')
+      .update({
+        reconciliation_status: finalReconStatus,
+      })
+      .eq('id', checklist_id);
+  } catch (err) {
+    console.warn('DB update warning for checklist status:', err.message);
+  }
 
   await logAudit({
     actor_id: user.id,

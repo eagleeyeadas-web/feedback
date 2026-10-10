@@ -76,36 +76,48 @@ export default function SalesWorkspace({ onSelectChecklist, onCreateChecklist, o
       </div>
 
       {/* Quick Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-xs flex items-center gap-4">
-          <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600">
-            <Wrench className="w-5 h-5" />
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+        <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-xs flex items-center gap-3">
+          <div className="w-9 h-9 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600">
+            <Wrench className="w-4 h-4" />
           </div>
           <div>
-            <p className="text-xs text-gray-500 font-medium">Total Checklists Initiated</p>
-            <p className="text-2xl font-bold text-gray-900">{checklists.length}</p>
+            <p className="text-[11px] text-gray-500 font-medium">Total Checklists</p>
+            <p className="text-xl font-bold text-gray-900">{checklists.length}</p>
           </div>
         </div>
 
-        <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-xs flex items-center gap-4">
-          <div className="w-10 h-10 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600">
-            <Calendar className="w-5 h-5" />
+        <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-xs flex items-center gap-3">
+          <div className="w-9 h-9 rounded-lg bg-amber-50 flex items-center justify-center text-amber-600">
+            <Calendar className="w-4 h-4" />
           </div>
           <div>
-            <p className="text-xs text-gray-500 font-medium">Pending Arrival Schedules</p>
-            <p className="text-2xl font-bold text-gray-900">
+            <p className="text-[11px] text-gray-500 font-medium">Pending & Assigned</p>
+            <p className="text-xl font-bold text-gray-900">
               {checklists.filter((c) => c.installation_status === 'Pending' || c.installation_status === 'Assigned').length}
             </p>
           </div>
         </div>
 
-        <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-xs flex items-center gap-4">
-          <div className="w-10 h-10 rounded-lg bg-purple-50 flex items-center justify-center text-purple-600">
-            <Users className="w-5 h-5" />
+        <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-xs flex items-center gap-3">
+          <div className="w-9 h-9 rounded-lg bg-purple-50 flex items-center justify-center text-purple-600">
+            <CheckCircle2 className="w-4 h-4" />
           </div>
           <div>
-            <p className="text-xs text-gray-500 font-medium">Recent Customer Profiles</p>
-            <p className="text-2xl font-bold text-gray-900">{customers.length}</p>
+            <p className="text-[11px] text-gray-500 font-medium">Completed Jobs</p>
+            <p className="text-xl font-bold text-gray-900">
+              {checklists.filter((c) => c.installation_status === 'Completed' || c.installation_status === 'Site Work Completed').length}
+            </p>
+          </div>
+        </div>
+
+        <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-xs flex items-center gap-3">
+          <div className="w-9 h-9 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600">
+            <Users className="w-4 h-4" />
+          </div>
+          <div>
+            <p className="text-[11px] text-gray-500 font-medium">Customer Profiles</p>
+            <p className="text-xl font-bold text-gray-900">{customers.length}</p>
           </div>
         </div>
       </div>
@@ -170,12 +182,16 @@ export default function SalesWorkspace({ onSelectChecklist, onCreateChecklist, o
                       <div className="text-[10px] text-gray-400">{item.expected_arrival_time}</div>
                     </td>
                     <td className="py-3 px-4">
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                        item.installation_status === 'Completed'
-                          ? 'bg-emerald-100 text-emerald-800'
-                          : 'bg-blue-100 text-blue-800'
+                      <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${
+                        item.installation_status === 'Completed' || item.installation_status === 'Site Work Completed'
+                          ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                          : item.installation_status === 'In Progress'
+                          ? 'bg-blue-100 text-blue-800 border border-blue-300'
+                          : item.installation_status === 'Assigned'
+                          ? 'bg-purple-100 text-purple-800 border border-purple-300'
+                          : 'bg-amber-100 text-amber-800 border border-amber-300'
                       }`}>
-                        {item.installation_status}
+                        {item.installation_status === 'Site Work Completed' ? 'Completed' : item.installation_status}
                       </span>
                     </td>
                     <td className="py-3 px-4">
