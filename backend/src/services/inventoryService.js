@@ -224,6 +224,163 @@ export async function receiveNewStock({
 }
 
 /**
+ * Adjust or Edit stock balances (Add or Remove stock with required reason)
+ */
+export async function adjustStock({
+  device_type,
+  action, // 'ADD' | 'REMOVE' | 'SET'
+  quantity,
+  reason,
+  move_to_damaged = false,
+  user,
+}) {
+  if (!device_type || !STANDARD_DEVICE_TYPES.includes(device_type)) {
+    throw new Error(`Invalid device type selected: "${device_type}".`);
+  }
+
+  const qty = parseInt(quantity, 10);
+  if (isNaN(qty) || qty < 0) {
+    throw new Error('Quantity must be a valid non-negative whole number.');
+  }
+
+  if (!reason || !reason.trim()) {
+    throw new Error('A valid reason is required for any stock adjustment or edit.');
+  }
+
+  let product = inMemoryProducts.get(device_type);
+  if (!product) {
+    product = {
+      id: `prod-${Date.now()}`,
+      device_name: `${device_type} System`,
+      device_type,
+      usable_stock: 50,
+      issued_stock: 0,
+      damaged_stock: 0,
+      min_stock_level: 5,
+      updated_at: new Date().toISOString(),
+    };
+    inMemoryProducts.set(device_type, product);
+  }
+
+  const currentUsable = product.usable_stock || 0;
+  let newUsable = currentUsable;
+  let newDamaged = product.damaged_stock || 0;
+  let qtyDelta = 0;
+  const normalizedAction = (action || '').toUpperCase();
+  let txType = 'STOCK_ADJUSTMENT';
+
+  if (normalizedAction === 'ADD') {
+    if (qty <= 0) throw new Error('Quantity to add must be greater than 0.');
+    newUsable = currentUsable + qty;
+    qtyDelta = qty;
+    txType = 'STOCK_RECEIVED';
+  } else if (normalizedAction === 'REMOVE') {
+    if (qty <= 0) throw new Error('Quantity to remove must be greater than 0.');
+    if (qty > currentUsable) {
+      throw new Error(`Cannot remove ${qty} units. Current usable stock is only ${currentUsable} units.`);
+    }
+    newUsable = currentUsable - qty;
+    qtyDelta = -qty;
+    txType = 'STOCK_ADJUSTMENT';
+    if (move_to_damaged) {
+      newDamaged = (product.damaged_stock || 0) + qty;
+    }
+  } else if (normalizedAction === 'SET') {
+    newUsable = qty;
+    qtyDelta = qty - currentUsable;
+    txType = 'STOCK_ADJUSTMENT';
+  } else {
+    throw new Error('Invalid adjustment action. Supported actions: ADD, REMOVE, SET.');
+  }
+
+  // Update in-memory product
+  product.usable_stock = newUsable;
+  product.damaged_stock = newDamaged;
+  product.updated_at = new Date().toISOString();
+
+  // Try DB update
+  try {
+    const { data: dbProd } = await supabase
+      .from('inventory_products')
+      .select('*')
+      .eq('device_type', device_type)
+      .maybeSingle();
+
+    if (dbProd) {
+      await supabase
+        .from('inventory_products')
+        .update({
+          usable_stock: newUsable,
+          damaged_stock: newDamaged,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', dbProd.id);
+    }
+  } catch (dbErr) {
+    console.warn('DB update failed, stored in memory:', dbErr.message);
+  }
+
+  const remarkFormatted = `[Manual ${normalizedAction}] ${reason.trim()} (Usable: ${currentUsable} → ${newUsable}${move_to_damaged ? `, Damaged: +${Math.abs(qtyDelta)}` : ''})`;
+
+  const transactionRecord = {
+    id: `tx-adj-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    product_id: product.id,
+    device_type,
+    device_name: product.device_name,
+    transaction_type: txType,
+    quantity: Math.abs(qtyDelta),
+    checklist_id: null,
+    performed_by: user?.id,
+    performer_name: user?.full_name || user?.email || 'Store Manager',
+    reason_or_remarks: remarkFormatted,
+    idempotency_key: `ADJUST-${device_type}-${Date.now()}`,
+    created_at: new Date().toISOString(),
+  };
+
+  try {
+    await supabase.from('inventory_transactions').insert([{
+      product_id: product.id,
+      transaction_type: txType,
+      quantity: Math.abs(qtyDelta),
+      performed_by: user?.id,
+      reason_or_remarks: remarkFormatted,
+      idempotency_key: transactionRecord.idempotency_key,
+    }]);
+  } catch (txErr) {
+    console.warn('DB transaction insert error:', txErr.message);
+  }
+
+  inMemoryTransactions.unshift(transactionRecord);
+
+  await logAudit({
+    actor_id: user?.id,
+    actor_email: user?.email,
+    actor_role: user?.role,
+    action: `STOCK_ADJUSTMENT_${normalizedAction}`,
+    target_table: 'inventory_products',
+    target_id: product.id,
+    details: {
+      device_type,
+      action: normalizedAction,
+      previous_usable: currentUsable,
+      new_usable: newUsable,
+      quantity_delta: qtyDelta,
+      move_to_damaged,
+      reason,
+    },
+  });
+
+  return {
+    success: true,
+    action: normalizedAction,
+    previous_usable: currentUsable,
+    usable_stock: newUsable,
+    damaged_stock: newDamaged,
+    transaction: transactionRecord,
+  };
+}
+
+/**
  * Deduct stock automatically when technician submits Device Carry Form.
  * Validates available stock for ALL items before making any deductions (Atomic).
  * Prevents duplicate deductions if already submitted for checklist.

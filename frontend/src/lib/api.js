@@ -332,6 +332,17 @@ export async function receiveInventoryStock(token, data) {
   return json;
 }
 
+export async function adjustInventoryStock(token, data) {
+  const res = await fetch(`${API_BASE}/admin/inventory/adjust`, {
+    method: 'POST',
+    headers: adminHeaders(token),
+    body: JSON.stringify(data),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to adjust stock');
+  return json;
+}
+
 export async function fetchAllStoreReturns(token) {
   const res = await fetch(`${API_BASE}/admin/inventory/returns`, {
     headers: adminHeaders(token),

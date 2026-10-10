@@ -10,6 +10,9 @@ import {
   CheckCircle2,
   X,
   Plus,
+  Minus,
+  SlidersHorizontal,
+  Edit3,
   RefreshCw,
   Search,
   Filter,
@@ -24,6 +27,7 @@ import {
   fetchInventorySummary,
   fetchInventoryTransactions,
   receiveInventoryStock,
+  adjustInventoryStock,
   fetchAllStoreReturns,
   verifyStoreReturnApi,
 } from '../../../lib/api';
@@ -75,6 +79,8 @@ export default function StoreWorkspace({ onSelectChecklist }) {
 
   // Verify Return Modal State
   const [verifyModalReturn, setVerifyModalReturn] = useState(null);
+  // Edit & Adjustment Modal State
+  const [editModalData, setEditModalData] = useState(null);
   const [toastMessage, setToastMessage] = useState('');
 
   const loadAllData = useCallback(async () => {
@@ -239,8 +245,8 @@ export default function StoreWorkspace({ onSelectChecklist }) {
               : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
           }`}
         >
-          <Plus className="w-4 h-4" />
-          <span>Add Stock</span>
+          <SlidersHorizontal className="w-4 h-4" />
+          <span>Add / Adjust Stock</span>
         </button>
 
         <button
@@ -425,15 +431,29 @@ export default function StoreWorkspace({ onSelectChecklist }) {
                             {item.updated_at ? new Date(item.updated_at).toLocaleDateString('en-IN') : 'Recently'}
                           </td>
                           <td className="py-3.5 px-4 text-center">
-                            <button
-                              onClick={() => {
-                                setAddDeviceType(item.device_type);
-                                setActiveTab('add_stock');
-                              }}
-                              className="px-2.5 py-1 text-[11px] font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg cursor-pointer transition-colors"
-                            >
-                              + Add Stock
-                            </button>
+                            <div className="flex items-center justify-center gap-1.5 whitespace-nowrap">
+                              <button
+                                onClick={() => setEditModalData({ item, action: 'ADD' })}
+                                className="px-2.5 py-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg cursor-pointer transition-colors flex items-center gap-1 shadow-2xs"
+                                title="Add stock to this device"
+                              >
+                                <Plus className="w-3 h-3 text-emerald-600" /> Add
+                              </button>
+                              <button
+                                onClick={() => setEditModalData({ item, action: 'REMOVE' })}
+                                className="px-2.5 py-1 text-[11px] font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-lg cursor-pointer transition-colors flex items-center gap-1 shadow-2xs"
+                                title="Remove / deduct stock from this device"
+                              >
+                                <Minus className="w-3 h-3 text-rose-600" /> Remove
+                              </button>
+                              <button
+                                onClick={() => setEditModalData({ item, action: 'SET' })}
+                                className="px-2 py-1 text-[11px] font-bold text-gray-700 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg cursor-pointer transition-colors flex items-center gap-1 shadow-2xs"
+                                title="Edit & adjust stock balance"
+                              >
+                                <SlidersHorizontal className="w-3 h-3 text-gray-500" /> Edit
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       );
@@ -841,6 +861,23 @@ export default function StoreWorkspace({ onSelectChecklist }) {
           }}
         />
       )}
+
+      {/* =========================================================================
+          STOCK EDIT & ADJUSTMENT MODAL (ADD / REMOVE / SET)
+          ========================================================================= */}
+      {editModalData && (
+        <StockEditModal
+          item={editModalData.item}
+          initialAction={editModalData.action}
+          token={token}
+          onClose={() => setEditModalData(null)}
+          onSuccess={(msg) => {
+            setEditModalData(null);
+            showToast(msg || 'Stock successfully updated!');
+            loadAllData();
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -1022,6 +1059,279 @@ function StoreReturnVerifyModal({ returnItem, token, user, onClose, onSuccess })
             >
               <CheckCircle2 className="w-4 h-4" />
               <span>{loading ? 'Verifying...' : 'Confirm & Update Stock'}</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function StockEditModal({ item, initialAction = 'ADD', token, onClose, onSuccess }) {
+  const [action, setAction] = useState(initialAction); // 'ADD' | 'REMOVE' | 'SET'
+  const [quantity, setQuantity] = useState('');
+  const [reason, setReason] = useState('');
+  const [moveToDamaged, setMoveToDamaged] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const currentUsable = Number(item.usable_stock) || 0;
+  const currentDamaged = Number(item.damaged_stock) || 0;
+  const qtyNum = parseInt(quantity, 10) || 0;
+
+  // Compute live projected balances
+  let projectedUsable = currentUsable;
+  let projectedDamaged = currentDamaged;
+
+  if (action === 'ADD') {
+    projectedUsable = currentUsable + (qtyNum > 0 ? qtyNum : 0);
+  } else if (action === 'REMOVE') {
+    projectedUsable = Math.max(0, currentUsable - (qtyNum > 0 ? qtyNum : 0));
+    if (moveToDamaged) {
+      projectedDamaged = currentDamaged + (qtyNum > 0 ? qtyNum : 0);
+    }
+  } else if (action === 'SET') {
+    projectedUsable = qtyNum >= 0 ? qtyNum : 0;
+  }
+
+  const isExcessiveRemoval = action === 'REMOVE' && qtyNum > currentUsable;
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+
+    if (isNaN(qtyNum) || (action !== 'SET' && qtyNum <= 0)) {
+      setError('Please enter a valid quantity greater than 0.');
+      return;
+    }
+
+    if (action === 'REMOVE' && qtyNum > currentUsable) {
+      setError(`Cannot remove ${qtyNum} units. Available usable stock is only ${currentUsable} units.`);
+      return;
+    }
+
+    if (!reason || !reason.trim()) {
+      setError('A valid reason is required for any stock edit or adjustment.');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      await adjustInventoryStock(token, {
+        device_type: item.device_type,
+        action,
+        quantity: qtyNum,
+        reason: reason.trim(),
+        move_to_damaged: action === 'REMOVE' && moveToDamaged,
+      });
+
+      onSuccess(
+        `Successfully updated ${item.device_type} (${action === 'ADD' ? '+' : action === 'REMOVE' ? '-' : '='}${qtyNum} units). New usable balance: ${projectedUsable}`
+      );
+    } catch (err) {
+      console.error('Error adjusting stock:', err);
+      setError(err.message || 'Failed to update stock.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-scale-in">
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+          <div>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-amber-700 bg-amber-50 px-2 py-0.5 rounded">
+              Inventory Edit & Adjust
+            </span>
+            <h3 className="text-base font-extrabold text-gray-900 mt-1 flex items-center gap-2">
+              <Package className="w-4 h-4 text-amber-600" /> {item.device_type}
+            </h3>
+          </div>
+          <button onClick={onClose} className="p-1 rounded text-gray-400 hover:text-gray-600 cursor-pointer">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Action Selector: Add, Remove, Set Balance */}
+        <div className="grid grid-cols-3 gap-1.5 p-1 bg-gray-100 rounded-xl text-xs font-bold">
+          <button
+            type="button"
+            onClick={() => {
+              setAction('ADD');
+              setError('');
+            }}
+            className={`py-2 px-2 rounded-lg flex items-center justify-center gap-1 transition-all cursor-pointer ${
+              action === 'ADD' ? 'bg-emerald-600 text-white shadow-xs' : 'text-gray-600 hover:text-emerald-700'
+            }`}
+          >
+            <Plus className="w-3.5 h-3.5" /> Add Stock
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setAction('REMOVE');
+              setError('');
+            }}
+            className={`py-2 px-2 rounded-lg flex items-center justify-center gap-1 transition-all cursor-pointer ${
+              action === 'REMOVE' ? 'bg-rose-600 text-white shadow-xs' : 'text-gray-600 hover:text-rose-700'
+            }`}
+          >
+            <Minus className="w-3.5 h-3.5" /> Remove Stock
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setAction('SET');
+              setError('');
+            }}
+            className={`py-2 px-2 rounded-lg flex items-center justify-center gap-1 transition-all cursor-pointer ${
+              action === 'SET' ? 'bg-blue-600 text-white shadow-xs' : 'text-gray-600 hover:text-blue-700'
+            }`}
+          >
+            <SlidersHorizontal className="w-3.5 h-3.5" /> Set Balance
+          </button>
+        </div>
+
+        {/* Live Balance Impact Preview */}
+        <div className="bg-gray-50 border border-gray-200 rounded-xl p-3 text-xs grid grid-cols-3 gap-2 text-center">
+          <div>
+            <span className="text-[10px] text-gray-500 block uppercase font-bold">Current Usable</span>
+            <span className="text-base font-black font-mono text-gray-900">{currentUsable}</span>
+          </div>
+          <div className="border-x border-gray-200">
+            <span className="text-[10px] text-gray-500 block uppercase font-bold">Adjustment</span>
+            <span
+              className={`text-base font-black font-mono ${
+                action === 'ADD' ? 'text-emerald-600' : action === 'REMOVE' ? 'text-rose-600' : 'text-blue-600'
+              }`}
+            >
+              {action === 'ADD' ? `+${qtyNum}` : action === 'REMOVE' ? `-${qtyNum}` : `=${qtyNum}`}
+            </span>
+          </div>
+          <div>
+            <span className="text-[10px] text-gray-500 block uppercase font-bold">New Usable</span>
+            <span
+              className={`text-base font-black font-mono ${
+                isExcessiveRemoval ? 'text-rose-600 underline' : 'text-emerald-700'
+              }`}
+            >
+              {projectedUsable}
+            </span>
+          </div>
+        </div>
+
+        {isExcessiveRemoval && (
+          <div className="p-2.5 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-lg flex items-center gap-2 font-medium">
+            <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+            <span>Quantity exceeds current usable stock ({currentUsable} units).</span>
+          </div>
+        )}
+
+        {error && (
+          <div className="p-2.5 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-lg flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+            <span>{error}</span>
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-3.5 text-xs">
+          <div>
+            <label className="block font-bold text-gray-800 mb-1">
+              {action === 'ADD'
+                ? 'Quantity to Add (Units) *'
+                : action === 'REMOVE'
+                ? 'Quantity to Remove / Deduct (Units) *'
+                : 'Set Exact Usable Balance (Units) *'}
+            </label>
+            <input
+              type="number"
+              min="1"
+              value={quantity}
+              onChange={(e) => setQuantity(e.target.value)}
+              placeholder="e.g. 5"
+              className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-amber-500 focus:outline-hidden font-mono font-bold text-sm"
+              required
+              autoFocus
+            />
+          </div>
+
+          {action === 'REMOVE' && (
+            <div className="bg-amber-50/70 p-3 rounded-xl border border-amber-200">
+              <label className="flex items-start gap-2.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={moveToDamaged}
+                  onChange={(e) => setMoveToDamaged(e.target.checked)}
+                  className="mt-0.5 rounded text-rose-600 focus:ring-rose-500"
+                />
+                <div>
+                  <span className="font-bold text-gray-900 block text-[11px]">
+                    Transfer removed units to Damaged Stock
+                  </span>
+                  <span className="text-[10px] text-gray-600 block">
+                    Check this if the removed devices were found damaged/faulty in the store so they remain accounted for.
+                  </span>
+                </div>
+              </label>
+            </div>
+          )}
+
+          <div>
+            <label className="block font-bold text-gray-800 mb-1">
+              Reason / Justification for {action === 'ADD' ? 'Addition' : action === 'REMOVE' ? 'Removal' : 'Edit'} *
+            </label>
+            <textarea
+              rows="2"
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder={
+                action === 'ADD'
+                  ? 'e.g. Additional batch received, physical count surplus found'
+                  : action === 'REMOVE'
+                  ? 'e.g. Damaged unit found in storage, discarded, internal test unit, stock correction'
+                  : 'e.g. Annual physical inventory audit reconciliation'
+              }
+              className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-amber-500 focus:outline-hidden text-xs"
+              required
+            />
+          </div>
+
+          <div className="pt-2 flex items-center justify-end gap-2 border-t border-gray-100">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-3.5 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-100 rounded-xl cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={loading || isExcessiveRemoval}
+              className={`px-4 py-2 text-xs font-bold text-white rounded-xl shadow-xs transition-all disabled:opacity-50 cursor-pointer flex items-center gap-1.5 ${
+                action === 'ADD'
+                  ? 'bg-emerald-600 hover:bg-emerald-700'
+                  : action === 'REMOVE'
+                  ? 'bg-rose-600 hover:bg-rose-700'
+                  : 'bg-blue-600 hover:bg-blue-700'
+              }`}
+            >
+              {loading ? (
+                <>Updating...</>
+              ) : (
+                <>
+                  <Check className="w-4 h-4" />
+                  {action === 'ADD'
+                    ? 'Add to Usable Stock'
+                    : action === 'REMOVE'
+                    ? 'Deduct / Remove Stock'
+                    : 'Confirm New Balance'}
+                </>
+              )}
             </button>
           </div>
         </form>

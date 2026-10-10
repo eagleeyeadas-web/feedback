@@ -5,6 +5,7 @@ import {
   getInventorySummary,
   getInventoryTransactions,
   receiveNewStock,
+  adjustStock,
 } from '../services/inventoryService.js';
 import {
   getAllStoreReturns,
@@ -78,6 +79,29 @@ router.post('/receive', requireRole('STORE_MANAGER'), async (req, res) => {
   } catch (err) {
     console.error('Error in POST /inventory/receive:', err);
     return res.status(400).json({ error: err.message || 'Failed to receive stock' });
+  }
+});
+
+/**
+ * POST /api/admin/inventory/adjust
+ * Adjust or Edit stock balances (Add or Remove stock with reason)
+ * Accessible to STORE_MANAGER, ADMIN
+ */
+router.post('/adjust', requireRole('STORE_MANAGER', 'ADMIN'), async (req, res) => {
+  try {
+    const { device_type, action, quantity, reason, move_to_damaged } = req.body;
+    const result = await adjustStock({
+      device_type,
+      action,
+      quantity,
+      reason,
+      move_to_damaged: Boolean(move_to_damaged),
+      user: req.profile,
+    });
+    return res.json(result);
+  } catch (err) {
+    console.error('Error in POST /inventory/adjust:', err);
+    return res.status(400).json({ error: err.message || 'Failed to adjust stock' });
   }
 });
 
