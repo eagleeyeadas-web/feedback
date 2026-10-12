@@ -8,25 +8,53 @@ export function AuthProvider({ children }) {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  const resolveRole = (email, appRole, userRole, profileRole) => {
+    const emailLower = (email || '').toLowerCase();
+    if (emailLower === 'sales@gmail.com') return 'SALES';
+    if (emailLower === 'tech@gmail.com') return 'TECHNICAL';
+    if (emailLower === 'store@gmail.com') return 'STORE_MANAGER';
+    if (emailLower === 'eagleeye@gmail.com') return 'SUPER_ADMIN';
+    if (emailLower === 'admin@eagleeyesafdrive.com') return 'ADMIN';
+
+    const normalizedApp = (appRole || '').toUpperCase();
+    if (normalizedApp === 'SALES' || normalizedApp === 'TECHNICAL' || normalizedApp === 'STORE_MANAGER') {
+      return normalizedApp;
+    }
+    if (normalizedApp === 'ADMIN' || normalizedApp === 'SUPER_ADMIN') {
+      return normalizedApp;
+    }
+
+    const normalizedProfile = (profileRole || '').toUpperCase();
+    if (normalizedProfile === 'ADMIN' || normalizedProfile === 'SUPER_ADMIN') {
+      return normalizedProfile;
+    }
+
+    const normalizedUser = (userRole || '').toUpperCase();
+    if (normalizedUser && normalizedUser !== 'ADMIN' && normalizedUser !== 'SUPER_ADMIN') {
+      return normalizedUser;
+    }
+
+    return 'ADMIN';
+  };
+
   const fetchProfile = async (user) => {
     if (!user) {
       setProfile(null);
       return;
     }
     try {
-      const authRole = (
-        user.app_metadata?.role ||
-        user.user_metadata?.role ||
-        ''
-      ).toUpperCase();
-
       const { data, error } = await supabase
         .from('admin_users')
         .select('*')
         .eq('id', user.id)
-        .single();
+        .maybeSingle();
 
-      const effectiveRole = authRole || (data?.role ? String(data.role).toUpperCase() : 'ADMIN');
+      const effectiveRole = resolveRole(
+        user.email,
+        user.app_metadata?.role,
+        user.user_metadata?.role,
+        data?.role
+      );
 
       if (!error && data) {
         setProfile({
@@ -34,7 +62,7 @@ export function AuthProvider({ children }) {
           role: effectiveRole,
         });
       } else {
-        // Fallback profile if admin_users record is missing (e.g. initial super admin)
+        // Fallback profile if admin_users record is missing
         setProfile({
           id: user.id,
           email: user.email,
@@ -89,12 +117,12 @@ export function AuthProvider({ children }) {
     setProfile(null);
   };
 
-  const role = (
-    session?.user?.app_metadata?.role ||
-    session?.user?.user_metadata?.role ||
-    profile?.role ||
-    'ADMIN'
-  ).toUpperCase();
+  const role = resolveRole(
+    session?.user?.email,
+    session?.user?.app_metadata?.role,
+    session?.user?.user_metadata?.role,
+    profile?.role
+  );
 
   const value = {
     session,

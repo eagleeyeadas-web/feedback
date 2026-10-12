@@ -127,11 +127,22 @@ export default function Login() {
     try {
       const authData = await signIn(email.trim(), password);
       const user = authData?.user;
-      const userRole = (
-        user?.app_metadata?.role ||
-        user?.user_metadata?.role ||
-        'ADMIN'
-      ).toUpperCase();
+      const emailLower = (user?.email || email.trim()).toLowerCase();
+
+      let userRole = 'ADMIN';
+      if (emailLower === 'sales@gmail.com') {
+        userRole = 'SALES';
+      } else if (emailLower === 'tech@gmail.com') {
+        userRole = 'TECHNICAL';
+      } else if (emailLower === 'store@gmail.com') {
+        userRole = 'STORE_MANAGER';
+      } else {
+        userRole = (
+          user?.app_metadata?.role ||
+          user?.user_metadata?.role ||
+          'ADMIN'
+        ).toUpperCase();
+      }
 
       // Determine destination tab based on user's authorized role
       let destinationTab = 'installation_checklists';

@@ -87,6 +87,71 @@ function AppRoutes() {
             </ProtectedRoute>
           }
         />
+        {/* 5. Direct Workspace & Resource URLs (Guarded) */}
+        <Route
+          path="/sales"
+          element={
+            <ProtectedRoute>
+              <Navigate to="/admin/dashboard?tab=sales_workspace" replace />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/technical"
+          element={
+            <ProtectedRoute>
+              <Navigate to="/admin/dashboard?tab=technical_workspace" replace />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/store-manager"
+          element={
+            <ProtectedRoute>
+              <Navigate to="/admin/dashboard?tab=store_workspace" replace />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/quotation-history"
+          element={
+            <ProtectedRoute>
+              <Navigate to="/admin/dashboard?tab=quotation_history" replace />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/quotation-generator"
+          element={
+            <ProtectedRoute>
+              <Navigate to="/admin/dashboard?tab=quotation_generator" replace />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/employee-accounts"
+          element={
+            <ProtectedRoute>
+              <Navigate to="/admin/dashboard?tab=users" replace />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/customers"
+          element={
+            <ProtectedRoute>
+              <Navigate to="/admin/dashboard?tab=customers" replace />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/audit-logs"
+          element={
+            <ProtectedRoute>
+              <Navigate to="/admin/dashboard?tab=audit_logs" replace />
+            </ProtectedRoute>
+          }
+        />
         <Route path="/admin" element={<Navigate to="/admin/dashboard" replace />} />
 
         {/* 404 fallback */}

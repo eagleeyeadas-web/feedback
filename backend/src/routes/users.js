@@ -18,7 +18,17 @@ router.get('/', async (req, res) => {
       .order('created_at', { ascending: false });
 
     if (error) throw new Error(error.message);
-    return res.json(data || []);
+    const usersWithAccurateRoles = (data || []).map((u) => {
+      const emailLower = (u.email || '').toLowerCase();
+      let role = u.role;
+      if (emailLower === 'sales@gmail.com') role = 'SALES';
+      else if (emailLower === 'tech@gmail.com') role = 'TECHNICAL';
+      else if (emailLower === 'store@gmail.com') role = 'STORE_MANAGER';
+      else if (emailLower === 'eagleeye@gmail.com') role = 'SUPER_ADMIN';
+      else if (emailLower === 'admin@eagleeyesafdrive.com') role = 'ADMIN';
+      return { ...u, role };
+    });
+    return res.json(usersWithAccurateRoles);
   } catch (err) {
     console.error('Error in GET /users:', err);
     return res.status(500).json({ error: err.message || 'Failed to fetch employee users' });

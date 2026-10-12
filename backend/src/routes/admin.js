@@ -8,8 +8,8 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 const router = Router();
 
-// Feedback administration is accessible to ADMIN and SALES
-router.use(requireRole('ADMIN', 'SALES'));
+// Feedback and statistics administration is restricted strictly to ADMIN and SUPER_ADMIN
+router.use(requireAdmin);
 
 /**
  * GET /api/admin/stats

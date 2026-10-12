@@ -53,20 +53,12 @@ import AccessDenied from '../../components/AccessDenied';
 const ROLE_PERMITTED_TABS = {
   SALES: [
     'sales_workspace',
-    'installation_checklists',
-    'quotation_generator',
-    'quotation_history',
-    'customers',
-    'feedback',
   ],
   TECHNICAL: [
     'technical_workspace',
-    'installation_checklists',
   ],
   STORE_MANAGER: [
     'store_workspace',
-    'inventory',
-    'installation_checklists',
   ],
   ADMIN: [
     'sales_workspace',
@@ -129,6 +121,7 @@ export default function Dashboard() {
 
   const [activeTab, setActiveTab] = useState(defaultTab);
   const [checklistSubView, setChecklistSubView] = useState({ type: 'list', id: null });
+  const [salesSubView, setSalesSubView] = useState(null);
   const [stats, setStats] = useState(null);
   const [installationStats, setInstallationStats] = useState(null);
   const [feedback, setFeedback] = useState({ data: [], pagination: {} });
@@ -549,20 +542,83 @@ export default function Dashboard() {
           return (
             <main className="p-4 lg:p-6">
               {activeTab === 'sales_workspace' && (
-            <SalesWorkspace
-              onSelectChecklist={(id) => {
-                setActiveTab('installation_checklists');
-                setChecklistSubView({ type: 'view', id });
-                navigate(`/admin/installation-checklists/${id}`);
-              }}
-              onCreateChecklist={() => {
-                setActiveTab('installation_checklists');
-                setChecklistSubView({ type: 'create', id: null });
-                navigate('/admin/installation-checklists/create');
-              }}
-              onNavigateTab={(tab) => setActiveTab(tab)}
-            />
-          )}
+                <div>
+                  {salesSubView?.type === 'create' && (
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between pb-3 border-b border-gray-200">
+                        <button
+                          onClick={() => setSalesSubView(null)}
+                          className="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-700 hover:text-navy bg-white hover:bg-gray-50 border border-gray-300 px-3 py-1.5 rounded-lg transition-colors cursor-pointer shadow-xs"
+                        >
+                          <ChevronLeft size={16} /> Back to Sales Workspace
+                        </button>
+                        <span className="text-xs font-bold text-blue-700 bg-blue-50 px-2.5 py-1 rounded-md border border-blue-200">
+                          New Installation Checklist
+                        </span>
+                      </div>
+                      <InstallationChecklistForm
+                        onSaved={(id) => setSalesSubView({ type: 'view', id })}
+                        onCancel={() => setSalesSubView(null)}
+                      />
+                    </div>
+                  )}
+
+                  {salesSubView?.type === 'edit' && (
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between pb-3 border-b border-gray-200">
+                        <button
+                          onClick={() => setSalesSubView(null)}
+                          className="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-700 hover:text-navy bg-white hover:bg-gray-50 border border-gray-300 px-3 py-1.5 rounded-lg transition-colors cursor-pointer shadow-xs"
+                        >
+                          <ChevronLeft size={16} /> Back to Sales Workspace
+                        </button>
+                        <span className="text-xs font-bold text-amber-700 bg-amber-50 px-2.5 py-1 rounded-md border border-amber-200">
+                          Edit Installation Checklist
+                        </span>
+                      </div>
+                      <InstallationChecklistForm
+                        id={salesSubView.id}
+                        onSaved={(id) => setSalesSubView({ type: 'view', id })}
+                        onCancel={() => setSalesSubView(null)}
+                      />
+                    </div>
+                  )}
+
+                  {salesSubView?.type === 'view' && (
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between pb-3 border-b border-gray-200">
+                        <button
+                          onClick={() => setSalesSubView(null)}
+                          className="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-700 hover:text-navy bg-white hover:bg-gray-50 border border-gray-300 px-3 py-1.5 rounded-lg transition-colors cursor-pointer shadow-xs"
+                        >
+                          <ChevronLeft size={16} /> Back to Sales Workspace
+                        </button>
+                        <span className="text-xs font-bold text-blue-700 bg-blue-50 px-2.5 py-1 rounded-md border border-blue-200">
+                          Checklist Details
+                        </span>
+                      </div>
+                      <InstallationChecklistDetails
+                        id={salesSubView.id}
+                        onEdit={(id) => setSalesSubView({ type: 'edit', id })}
+                        onBack={() => setSalesSubView(null)}
+                      />
+                    </div>
+                  )}
+
+                  {!salesSubView && (
+                    <SalesWorkspace
+                      onSelectChecklist={(id) => setSalesSubView({ type: 'view', id })}
+                      onCreateChecklist={() => setSalesSubView({ type: 'create', id: null })}
+                      onNavigateTab={(tab) => {
+                        if (allowedTabs.includes(tab)) {
+                          setActiveTab(tab);
+                          navigate(`/admin/dashboard?tab=${tab}`);
+                        }
+                      }}
+                    />
+                  )}
+                </div>
+              )}
           {activeTab === 'technical_workspace' && (
             <TechnicalWorkspace
               onSelectChecklist={(id) => {

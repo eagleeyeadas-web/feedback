@@ -18,9 +18,9 @@ const router = Router();
 
 /**
  * GET /api/admin/inventory
- * Accessible to STORE_MANAGER, SALES, TECHNICAL, ADMIN
+ * Accessible to STORE_MANAGER, ADMIN
  */
-router.get('/', requireRole('STORE_MANAGER', 'SALES', 'TECHNICAL'), async (req, res) => {
+router.get('/', requireRole('STORE_MANAGER'), async (req, res) => {
   try {
     const products = await getInventoryProducts();
     return res.json(products);
@@ -32,9 +32,9 @@ router.get('/', requireRole('STORE_MANAGER', 'SALES', 'TECHNICAL'), async (req, 
 
 /**
  * GET /api/admin/inventory/summary
- * Accessible to STORE_MANAGER, SALES, TECHNICAL, ADMIN
+ * Accessible to STORE_MANAGER, ADMIN
  */
-router.get('/summary', requireRole('STORE_MANAGER', 'SALES', 'TECHNICAL'), async (req, res) => {
+router.get('/summary', requireRole('STORE_MANAGER'), async (req, res) => {
   try {
     const summary = await getInventorySummary();
     return res.json(summary);

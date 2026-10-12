@@ -54,13 +54,36 @@ export async function requireAuth(req, res, next) {
       return res.status(403).json({ error: 'Access denied. Account is deactivated.' });
     }
 
-    // Resolve authoritative role from Supabase Auth metadata or admin_users profile
-    let role = (
-      user.app_metadata?.role ||
-      user.user_metadata?.role ||
-      adminUser?.role ||
-      'ADMIN'
-    ).toUpperCase();
+    // Resolve authoritative role using trusted server-side identity
+    const emailLower = (user.email || '').toLowerCase();
+    let role;
+
+    // Strict identity-to-role binding for operational staff (cannot be overridden)
+    if (emailLower === 'sales@gmail.com') {
+      role = 'SALES';
+    } else if (emailLower === 'tech@gmail.com') {
+      role = 'TECHNICAL';
+    } else if (emailLower === 'store@gmail.com') {
+      role = 'STORE_MANAGER';
+    } else {
+      // For other accounts, check Supabase auth app_metadata (signed in JWT) or verified adminUser
+      const appRole = (user.app_metadata?.role || '').toUpperCase();
+      if (appRole === 'SALES' || appRole === 'TECHNICAL' || appRole === 'STORE_MANAGER') {
+        role = appRole;
+      } else if (appRole === 'ADMIN' || appRole === 'SUPER_ADMIN') {
+        role = appRole;
+      } else if (adminUser?.role) {
+        const dbRole = String(adminUser.role).toUpperCase();
+        role = dbRole === 'SUPER_ADMIN' ? 'SUPER_ADMIN' : 'ADMIN';
+      } else {
+        const userMetaRole = (user.user_metadata?.role || '').toUpperCase();
+        if (userMetaRole && userMetaRole !== 'ADMIN' && userMetaRole !== 'SUPER_ADMIN') {
+          role = userMetaRole;
+        } else {
+          role = 'SALES'; // Default fallback operational role, NEVER grant unverified ADMIN
+        }
+      }
+    }
 
     const authData = {
       user,

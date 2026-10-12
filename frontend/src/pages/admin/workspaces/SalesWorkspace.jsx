@@ -63,12 +63,6 @@ export default function SalesWorkspace({ onSelectChecklist, onCreateChecklist, o
           >
             <Plus className="w-4 h-4" /> New Installation Checklist
           </button>
-          <button
-            onClick={() => onNavigateTab ? onNavigateTab('quotation_generator') : null}
-            className="px-4 py-2 text-xs font-bold text-navy bg-white rounded-xl hover:bg-gray-100 flex items-center gap-2 shadow-sm transition-all"
-          >
-            <FileText className="w-4 h-4 text-blue-600" /> Generate Quotation
-          </button>
         </div>
       </div>
 
