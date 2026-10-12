@@ -54,7 +54,6 @@ app.get('/api/admin/cleanup/status', handleCleanupStatusEndpoint);
 
 // Routes
 app.use('/api/feedback', feedbackRoutes);
-app.use('/api/admin', adminRoutes);
 app.use('/api/admin/quotations', quotationRoutes);
 app.use('/api/admin/quotation', quotationRoutes);
 app.use('/api/admin/installations', installationRoutes);
@@ -64,6 +63,7 @@ app.use('/api/inventory', inventoryRoutes);
 app.use('/api/admin/customers', customerRoutes);
 app.use('/api/admin/users', userRoutes);
 app.use('/api/admin/audit-logs', auditRoutes);
+app.use('/api/admin', adminRoutes);
 
 // Serve built static frontend files if present (fixes 404 on refresh)
 const frontendDistPath = path.resolve(__dirname, '../../frontend/dist');

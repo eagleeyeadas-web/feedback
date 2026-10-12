@@ -4,7 +4,7 @@ import supabase from '../services/supabase.js';
 import { generateQuotationPDF, numberToWordsIndian, getFullProductDescription } from '../services/quotationPdfGenerator.js';
 import { handleCleanupEndpoint, handleCleanupStatusEndpoint } from '../services/quotationCleanupService.js';
 import { peekNextQuotationNumber, generateAndReserveQuotationNumber, handleQuotationDeletion } from '../services/quotationSequenceService.js';
-import { requireAdmin } from '../middleware/auth.js';
+import { requireAdmin, requireRole } from '../middleware/auth.js';
 
 const router = Router();
 
@@ -15,10 +15,8 @@ const router = Router();
 router.post('/cleanup', handleCleanupEndpoint);
 router.get('/cleanup/status', handleCleanupStatusEndpoint);
 
-
-
-// Require admin authentication for remaining quotation endpoints
-router.use(requireAdmin);
+// Require SALES or ADMIN authentication for remaining quotation endpoints
+router.use(requireRole('SALES', 'ADMIN'));
 
 // Zod Validation Schema for Item
 const quotationItemSchema = z.object({

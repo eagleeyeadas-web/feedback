@@ -88,12 +88,20 @@ export default function StoreWorkspace({ onSelectChecklist }) {
     setLoading(true);
 
     try {
-      // 1. Fetch inventory products
-      const prodData = await fetchInventoryProducts(token).catch(() => []);
+      // Parallelize all 4 inventory API requests
+      const [prodData, sumData, txData, returnsData] = await Promise.all([
+        fetchInventoryProducts(token).catch(() => []),
+        fetchInventorySummary(token).catch(() => null),
+        fetchInventoryTransactions(token, {
+          type: txFilterType,
+          search: txSearch,
+          limit: 50,
+        }).catch(() => ({ transactions: [] })),
+        fetchAllStoreReturns(token).catch(() => []),
+      ]);
+
       setProducts(prodData || []);
 
-      // 2. Fetch inventory summary metrics
-      const sumData = await fetchInventorySummary(token).catch(() => null);
       if (sumData) {
         setSummary(sumData);
       } else {
@@ -107,16 +115,7 @@ export default function StoreWorkspace({ onSelectChecklist }) {
         setSummary((prev) => ({ ...prev, totalUsable: u, totalIssued: i, totalDamaged: d }));
       }
 
-      // 3. Fetch transactions
-      const txData = await fetchInventoryTransactions(token, {
-        type: txFilterType,
-        search: txSearch,
-        limit: 100,
-      }).catch(() => ({ transactions: [] }));
       setTransactions(txData.transactions || []);
-
-      // 4. Fetch all store returns
-      const returnsData = await fetchAllStoreReturns(token).catch(() => []);
       setStoreReturns(returnsData || []);
 
       // Update awaiting return count from returns list
@@ -385,7 +384,14 @@ export default function StoreWorkspace({ onSelectChecklist }) {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
-                  {filteredProducts.length === 0 ? (
+                  {loading ? (
+                    <tr>
+                      <td colSpan={8} className="py-12 text-center">
+                        <div className="w-7 h-7 border-3 border-amber-600 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+                        <p className="text-xs text-gray-500 font-medium">Loading inventory stock records...</p>
+                      </td>
+                    </tr>
+                  ) : filteredProducts.length === 0 ? (
                     <tr>
                       <td colSpan={8} className="py-8 text-center text-gray-400">
                         No matching device records found.

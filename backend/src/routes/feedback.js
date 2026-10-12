@@ -118,32 +118,39 @@ router.post('/', feedbackLimiter, validate(feedbackSchema), async (req, res) => 
 
     insertedFeedback = fbData;
 
+// In-memory cached logo for high-speed PDF generation
+let cachedLogoBase64 = null;
+async function getCachedLogoBase64() {
+  if (cachedLogoBase64) return cachedLogoBase64;
+  try {
+    const candidatePaths = [
+      path.resolve('assets/logo.png'),
+      path.resolve('../backend/assets/logo.png'),
+      path.resolve('../frontend/public/logo.png'),
+    ];
+    for (const p of candidatePaths) {
+      if (fs.existsSync(p)) {
+        cachedLogoBase64 = `data:image/png;base64,${fs.readFileSync(p).toString('base64')}`;
+        return cachedLogoBase64;
+      }
+    }
+  } catch {}
+
+  // Fallback to Supabase Storage if local files not found
+  try {
+    const { data: logoData } = await supabase.storage.from('assets').download('logo.png');
+    if (logoData) {
+      const logoBuffer = Buffer.from(await logoData.arrayBuffer());
+      cachedLogoBase64 = `data:image/png;base64,${logoBuffer.toString('base64')}`;
+      return cachedLogoBase64;
+    }
+  } catch {}
+  return null;
+}
+
     // Generate PDF (Handled separately so PDF errors never compromise database insertion)
     try {
-      let logoBase64 = null;
-      try {
-        const { data: logoData } = await supabase.storage
-          .from('assets')
-          .download('logo.png');
-        if (logoData) {
-          const logoBuffer = Buffer.from(await logoData.arrayBuffer());
-          logoBase64 = `data:image/png;base64,${logoBuffer.toString('base64')}`;
-        }
-      } catch (e) {
-        // Fallback to local logo
-      }
-
-      if (!logoBase64) {
-        try {
-          const localLogoPath = path.resolve('../frontend/public/logo.png');
-          if (fs.existsSync(localLogoPath)) {
-            const logoBuffer = fs.readFileSync(localLogoPath);
-            logoBase64 = `data:image/png;base64,${logoBuffer.toString('base64')}`;
-          }
-        } catch (err) {
-          // Continue if missing
-        }
-      }
+      const logoBase64 = await getCachedLogoBase64();
 
       const pdfData = {
         ...insertedFeedback,

@@ -1,20 +1,26 @@
+import { useEffect, lazy, Suspense } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './hooks/useAuth';
-import FeedbackForm from './pages/FeedbackForm';
-import AdminLogin from './pages/admin/Login';
-import Dashboard from './pages/admin/Dashboard';
 import ActiveSessionCleanupTracker from './components/ActiveSessionCleanupTracker';
+import { pingServerWakeup } from './lib/api';
+
+const FeedbackForm = lazy(() => import('./pages/FeedbackForm'));
+const AdminLogin = lazy(() => import('./pages/admin/Login'));
+const Dashboard = lazy(() => import('./pages/admin/Dashboard'));
+
+function PageLoader() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="w-8 h-8 border-3 border-navy border-t-transparent rounded-full animate-spin" />
+    </div>
+  );
+}
 
 function ProtectedRoute({ children }) {
-
   const { session, loading } = useAuth();
 
   if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="w-8 h-8 border-3 border-navy border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
+    return <PageLoader />;
   }
 
   if (!session) {
@@ -26,20 +32,21 @@ function ProtectedRoute({ children }) {
 
 function AppRoutes() {
   return (
-    <Routes>
-      {/* Customer Feedback Form */}
-      <Route path="/" element={<FeedbackForm />} />
+    <Suspense fallback={<PageLoader />}>
+      <Routes>
+        {/* Customer Feedback Form */}
+        <Route path="/" element={<FeedbackForm />} />
 
-      {/* Admin Routes */}
-      <Route path="/admin/login" element={<AdminLogin />} />
-      <Route
-        path="/admin/dashboard"
-        element={
-          <ProtectedRoute>
-            <Dashboard />
-          </ProtectedRoute>
-        }
-      />
+        {/* Admin Routes */}
+        <Route path="/admin/login" element={<AdminLogin />} />
+        <Route
+          path="/admin/dashboard"
+          element={
+            <ProtectedRoute>
+              <Dashboard />
+            </ProtectedRoute>
+          }
+        />
       <Route
         path="/admin/installation-checklists"
         element={
@@ -77,10 +84,16 @@ function AppRoutes() {
       {/* 404 fallback */}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
-  );
+  </Suspense>
+);
 }
 
 export default function App() {
+  // Proactively wake up backend on initial application boot
+  useEffect(() => {
+    pingServerWakeup();
+  }, []);
+
   return (
     <HashRouter>
       <AuthProvider>

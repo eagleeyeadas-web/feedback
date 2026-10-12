@@ -1,15 +1,15 @@
 import { Router } from 'express';
 import supabase from '../services/supabase.js';
 import { generateFeedbackPDF } from '../services/pdfGenerator.js';
-import { requireAdmin } from '../middleware/auth.js';
+import { requireAdmin, requireRole } from '../middleware/auth.js';
 
 // UUID v4 format check — avoids Postgres cast errors when querying the UUID `id` column
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const router = Router();
 
-// All admin routes require authentication
-router.use(requireAdmin);
+// Feedback administration is accessible to ADMIN and SALES
+router.use(requireRole('ADMIN', 'SALES'));
 
 /**
  * GET /api/admin/stats
@@ -17,36 +17,28 @@ router.use(requireAdmin);
  */
 router.get('/stats', async (req, res) => {
   try {
-    // Total submissions
-    const { count: totalCount, error: totalError } = await supabase
-      .from('feedback')
-      .select('*', { count: 'exact', head: true });
-
-    // Today's submissions (IST timezone)
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
-    const { count: todayCount, error: todayError } = await supabase
-      .from('feedback')
-      .select('*', { count: 'exact', head: true })
-      .gte('submitted_at', todayStart.toISOString());
 
-    // Average rating
-    const { data: ratingData, error: ratingError } = await supabase
-      .from('feedback')
-      .select('average_rating');
+    // Run all 4 queries concurrently in parallel
+    const [
+      { count: totalCount, error: totalError },
+      { count: todayCount, error: todayError },
+      { data: ratingData, error: ratingError },
+      { count: unresolvedCount, error: unresolvedError },
+    ] = await Promise.all([
+      supabase.from('feedback').select('*', { count: 'exact', head: true }),
+      supabase.from('feedback').select('*', { count: 'exact', head: true }).gte('submitted_at', todayStart.toISOString()),
+      supabase.from('feedback').select('average_rating').limit(500),
+      supabase.from('feedback').select('*', { count: 'exact', head: true }).in('issue_resolved', ['No', 'Partially']),
+    ]);
 
     let avgRating = 0;
     if (ratingData && ratingData.length > 0) {
       avgRating = (
-        ratingData.reduce((sum, r) => sum + parseFloat(r.average_rating), 0) / ratingData.length
+        ratingData.reduce((sum, r) => sum + (parseFloat(r.average_rating) || 0), 0) / ratingData.length
       ).toFixed(1);
     }
-
-    // Unresolved / Partially resolved
-    const { count: unresolvedCount, error: unresolvedError } = await supabase
-      .from('feedback')
-      .select('*', { count: 'exact', head: true })
-      .in('issue_resolved', ['No', 'Partially']);
 
     if (totalError || todayError || ratingError || unresolvedError) {
       console.error('Stats error:', { totalError, todayError, ratingError, unresolvedError });

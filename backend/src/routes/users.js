@@ -48,12 +48,13 @@ router.post('/', async (req, res) => {
       password,
       email_confirm: true,
       user_metadata: { full_name, role: normalizedRole },
+      app_metadata: { role: normalizedRole },
     });
 
     if (authErr) throw new Error(authErr.message);
 
-    // 2. Insert user profile into admin_users
-    const profile = {
+    // 2. Insert user profile into admin_users (fallback to 'admin' if check constraint requires it)
+    let profile = {
       id: authData.user.id,
       email,
       full_name: full_name || '',
@@ -61,13 +62,22 @@ router.post('/', async (req, res) => {
       is_active: true,
     };
 
-    const { data: created, error: profileErr } = await supabase
+    let { data: created, error: profileErr } = await supabase
       .from('admin_users')
       .upsert([profile])
       .select()
       .single();
 
-    if (profileErr) throw new Error(profileErr.message);
+    if (profileErr) {
+      profile.role = 'admin';
+      const fallbackResult = await supabase
+        .from('admin_users')
+        .upsert([profile])
+        .select()
+        .single();
+      if (fallbackResult.error) throw new Error(fallbackResult.error.message);
+      created = { ...fallbackResult.data, role: normalizedRole };
+    }
 
     await logAudit({
       actor_id: req.profile.id,
@@ -104,19 +114,38 @@ router.put('/:id', async (req, res) => {
         return res.status(400).json({ error: `Invalid role. Must be one of: ${validRoles.join(', ')}` });
       }
       updateData.role = normalizedRole;
+
+      // Synchronize authoritative role in Supabase Auth
+      await supabase.auth.admin.updateUserById(id, {
+        app_metadata: { role: normalizedRole },
+        user_metadata: { role: normalizedRole },
+      }).catch((err) => console.warn('Failed to sync auth metadata:', err.message));
     }
 
     if (typeof is_active === 'boolean') updateData.is_active = is_active;
     if (full_name !== undefined) updateData.full_name = full_name;
 
-    const { data: updated, error } = await supabase
+    let { data: updated, error } = await supabase
       .from('admin_users')
       .update({ ...updateData, updated_at: new Date().toISOString() })
       .eq('id', id)
       .select()
       .single();
 
-    if (error) throw new Error(error.message);
+    if (error && updateData.role) {
+      // If table constraint blocks custom role, keep 'admin' in table while Auth metadata is updated
+      const safeData = { ...updateData, role: 'admin' };
+      const fallbackResult = await supabase
+        .from('admin_users')
+        .update({ ...safeData, updated_at: new Date().toISOString() })
+        .eq('id', id)
+        .select()
+        .single();
+      if (fallbackResult.error) throw new Error(fallbackResult.error.message);
+      updated = { ...fallbackResult.data, role: updateData.role };
+    } else if (error) {
+      throw new Error(error.message);
+    }
 
     await logAudit({
       actor_id: req.profile.id,

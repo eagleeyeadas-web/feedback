@@ -1,6 +1,13 @@
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import supabase from './supabase.js';
 import { logAudit } from './auditService.js';
 import { deductStockForCarryRecord, creditStockForVerifiedReturn } from './inventoryService.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const STORAGE_FILE = path.resolve(__dirname, '../data/workflow_storage.json');
 
 /**
  * In-memory fallback stores for workflow records if Supabase tables are not yet migrated
@@ -8,6 +15,46 @@ import { deductStockForCarryRecord, creditStockForVerifiedReturn } from './inven
 const inMemoryCarryRecords = new Map();
 const inMemoryCompletionReports = new Map();
 const inMemoryReturns = new Map();
+
+function loadFallbackStorage() {
+  try {
+    if (fs.existsSync(STORAGE_FILE)) {
+      const raw = fs.readFileSync(STORAGE_FILE, 'utf-8');
+      const data = JSON.parse(raw);
+      if (data.carryRecords && typeof data.carryRecords === 'object') {
+        Object.entries(data.carryRecords).forEach(([k, v]) => inMemoryCarryRecords.set(k, v));
+      }
+      if (data.completionReports && typeof data.completionReports === 'object') {
+        Object.entries(data.completionReports).forEach(([k, v]) => inMemoryCompletionReports.set(k, v));
+      }
+      if (data.returns && typeof data.returns === 'object') {
+        Object.entries(data.returns).forEach(([k, v]) => inMemoryReturns.set(k, v));
+      }
+    }
+  } catch (err) {
+    console.warn('Could not load workflow fallback storage:', err.message);
+  }
+}
+
+function saveFallbackStorage() {
+  try {
+    const dir = path.dirname(STORAGE_FILE);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    const data = {
+      carryRecords: Object.fromEntries(inMemoryCarryRecords),
+      completionReports: Object.fromEntries(inMemoryCompletionReports),
+      returns: Object.fromEntries(inMemoryReturns),
+    };
+    fs.writeFileSync(STORAGE_FILE, JSON.stringify(data, null, 2), 'utf-8');
+  } catch (err) {
+    console.warn('Could not save workflow fallback storage:', err.message);
+  }
+}
+
+// Initialize on module load
+loadFallbackStorage();
 
 /**
  * Stage 2.5: Technical submits Pre-Installation Device Carry Form (Dynamic Device Selection)
@@ -105,20 +152,35 @@ export async function submitDeviceCarryRecord({ checklist_id, user, items, remar
     recordId = `carry-${checklist_id}-${Date.now()}`;
     const savedRecord = { ...carryRecord, id: recordId, items: processedItems };
     inMemoryCarryRecords.set(checklist_id, savedRecord);
+    saveFallbackStorage();
   }
 
   // 4. Update installation checklist status
   const updatedInstallationStatus = checklist.installation_status || 'Assigned';
 
-  await supabase
-    .from('installation_checklists')
-    .update({
-      carry_status: 'RECORDED',
-      installation_status: updatedInstallationStatus,
-      reconciliation_status: 'CARRY_RECORDED',
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', checklist_id);
+  try {
+    const { error: updErr } = await supabase
+      .from('installation_checklists')
+      .update({
+        carry_status: 'RECORDED',
+        installation_status: updatedInstallationStatus,
+        reconciliation_status: 'CARRY_RECORDED',
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', checklist_id);
+
+    if (updErr && updErr.code === 'PGRST204') {
+      await supabase
+        .from('installation_checklists')
+        .update({
+          installation_status: updatedInstallationStatus,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', checklist_id);
+    }
+  } catch (err) {
+    console.warn('DB update warning for carry_status:', err.message);
+  }
 
   await logAudit({
     actor_id: user.id,
@@ -300,6 +362,7 @@ export async function submitInstallationCompletionReport({
     reportId = `report-${checklist_id}-${Date.now()}`;
     const savedReport = { ...reportData, id: reportId, items: processedItems };
     inMemoryCompletionReports.set(checklist_id, savedReport);
+    saveFallbackStorage();
   }
 
   // Auto create return declaration if unused items exist
@@ -324,6 +387,14 @@ export async function submitInstallationCompletionReport({
     : totalUnused > 0
     ? 'PENDING_STORE_VERIFICATION'
     : 'FULLY_RECONCILED';
+
+  reportData.reconciliation_status = finalReconStatus;
+  const existingReport = inMemoryCompletionReports.get(checklist_id);
+  if (existingReport) {
+    existingReport.reconciliation_status = finalReconStatus;
+    inMemoryCompletionReports.set(checklist_id, existingReport);
+    saveFallbackStorage();
+  }
 
   const now = new Date().toISOString();
   try {
@@ -465,6 +536,7 @@ export async function declareDeviceReturns({
   }
 
   inMemoryReturns.set(returnRecord.id, returnRecord);
+  saveFallbackStorage();
 
   await supabase
     .from('installation_checklists')
@@ -552,6 +624,7 @@ export async function verifyStoreReturn({
   };
 
   inMemoryReturns.set(return_id, updatedReturn);
+  saveFallbackStorage();
 
   try {
     await supabase
@@ -739,34 +812,88 @@ export async function resolveDiscrepancy({
 }
 
 /**
- * Enrich installation checklists with persisted workflow status from in-memory fallback stores
+ * Enrich installation checklists with persisted workflow status from DB and fallback stores
  */
 export async function enrichChecklistsWithWorkflowStatus(checklists) {
-  if (!Array.isArray(checklists)) return checklists;
+  if (!Array.isArray(checklists) || checklists.length === 0) return checklists;
+
+  const ids = checklists.map((item) => item.id).filter(Boolean);
+
+  const dbCarrySet = new Set();
+  const dbReportMap = new Map();
+
+  if (ids.length > 0) {
+    try {
+      const { data: carryRows, error: carryErr } = await supabase
+        .from('job_device_carry_records')
+        .select('checklist_id')
+        .in('checklist_id', ids);
+
+      if (!carryErr && Array.isArray(carryRows)) {
+        carryRows.forEach((r) => dbCarrySet.add(r.checklist_id));
+      }
+    } catch (err) {
+      // Non-blocking fallback
+    }
+
+    try {
+      const { data: reportRows, error: repErr } = await supabase
+        .from('technical_installation_reports')
+        .select('id, checklist_id, reconciliation_status, completion_status')
+        .in('checklist_id', ids);
+
+      if (!repErr && Array.isArray(reportRows)) {
+        reportRows.forEach((r) => dbReportMap.set(r.checklist_id, r));
+      }
+    } catch (err) {
+      // Non-blocking fallback
+    }
+  }
 
   return checklists.map((item) => {
     let copy = { ...item };
 
-    // 1. Check carry record in-memory fallback store
-    const carryRecord = inMemoryCarryRecords.get(item.id);
-    if (carryRecord || item.carry_status === 'RECORDED') {
-      copy.carry_status = 'RECORDED';
-      if (!copy.reconciliation_status || copy.reconciliation_status === 'SALES_CREATED') {
-        copy.reconciliation_status = 'CARRY_RECORDED';
-      }
+    // 1. Check carry record in DB or in-memory fallback store
+    const inMemCarry = inMemoryCarryRecords.get(item.id);
+    const hasCarryRecord =
+      dbCarrySet.has(item.id) ||
+      Boolean(inMemCarry) ||
+      (item.carry_status && item.carry_status.toUpperCase() === 'RECORDED');
+
+    copy.carry_status = hasCarryRecord ? 'RECORDED' : 'NOT_RECORDED';
+    if (hasCarryRecord && (!copy.reconciliation_status || copy.reconciliation_status === 'SALES_CREATED')) {
+      copy.reconciliation_status = 'CARRY_RECORDED';
     }
 
-    // 2. Check completion report in-memory fallback store
-    const completionReport = inMemoryCompletionReports.get(item.id);
-    if (
-      completionReport ||
-      item.installation_status === 'Completed' ||
-      item.installation_status === 'Site Work Completed'
-    ) {
+    // 2. Check completion report in DB or in-memory fallback store
+    const dbReport = dbReportMap.get(item.id);
+    const inMemReport = inMemoryCompletionReports.get(item.id);
+    const hasCompletionReport = Boolean(dbReport || inMemReport);
+    copy.has_completion_report = hasCompletionReport;
+
+    if (dbReport?.reconciliation_status) {
+      copy.reconciliation_status = dbReport.reconciliation_status;
+    } else if (inMemReport?.reconciliation_status) {
+      copy.reconciliation_status = inMemReport.reconciliation_status;
+    }
+
+    // 3. PERSISTED INSTALLATION STATUS AS THE SOURCE OF TRUTH
+    // Check persisted installation_status on checklist record
+    const rawStatus = (item.installation_status || '').trim();
+    const instStatusNormalized = rawStatus.toLowerCase();
+    const isCompleted =
+      instStatusNormalized === 'completed' ||
+      instStatusNormalized === 'site work completed' ||
+      hasCompletionReport;
+
+    if (isCompleted) {
       copy.installation_status = 'Completed';
-      if (completionReport?.reconciliation_status) {
-        copy.reconciliation_status = completionReport.reconciliation_status;
-      }
+    } else if (instStatusNormalized === 'in progress') {
+      copy.installation_status = 'In Progress';
+    } else if (instStatusNormalized === 'cancelled') {
+      copy.installation_status = 'Cancelled';
+    } else {
+      copy.installation_status = rawStatus || 'Assigned';
     }
 
     return copy;

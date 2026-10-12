@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { History, Search, RefreshCw, ShieldAlert, Filter } from 'lucide-react';
+import { fetchAuditLogs } from '../../lib/api';
 
 export default function AuditLogs() {
   const { token } = useAuth();
@@ -9,15 +10,11 @@ export default function AuditLogs() {
   const [actionFilter, setActionFilter] = useState('');
 
   const fetchLogs = async () => {
+    if (!token) return;
     setLoading(true);
     try {
-      const res = await fetch(`/api/admin/audit-logs?action=${encodeURIComponent(actionFilter)}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setLogs(data.logs || []);
-      }
+      const data = await fetchAuditLogs(token, { action: actionFilter });
+      setLogs(data?.logs || []);
     } catch (err) {
       console.error('Failed to fetch audit logs:', err);
     } finally {

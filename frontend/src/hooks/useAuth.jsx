@@ -14,22 +14,32 @@ export function AuthProvider({ children }) {
       return;
     }
     try {
+      const authRole = (
+        user.app_metadata?.role ||
+        user.user_metadata?.role ||
+        ''
+      ).toUpperCase();
+
       const { data, error } = await supabase
         .from('admin_users')
         .select('*')
         .eq('id', user.id)
         .single();
 
+      const effectiveRole = authRole || (data?.role ? String(data.role).toUpperCase() : 'ADMIN');
+
       if (!error && data) {
-        setProfile(data);
+        setProfile({
+          ...data,
+          role: effectiveRole,
+        });
       } else {
         // Fallback profile if admin_users record is missing (e.g. initial super admin)
-        const metaRole = user.user_metadata?.role || 'ADMIN';
         setProfile({
           id: user.id,
           email: user.email,
           full_name: user.user_metadata?.full_name || user.email.split('@')[0],
-          role: String(metaRole).toUpperCase() === 'ADMIN' ? 'ADMIN' : String(metaRole).toUpperCase(),
+          role: effectiveRole,
         });
       }
     } catch (err) {
@@ -79,7 +89,12 @@ export function AuthProvider({ children }) {
     setProfile(null);
   };
 
-  const role = profile?.role ? String(profile.role).toUpperCase() : 'ADMIN';
+  const role = (
+    session?.user?.app_metadata?.role ||
+    session?.user?.user_metadata?.role ||
+    profile?.role ||
+    'ADMIN'
+  ).toUpperCase();
 
   const value = {
     session,

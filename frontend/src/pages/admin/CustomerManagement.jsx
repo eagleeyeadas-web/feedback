@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { Users, Search, Plus, Phone, MapPin, ExternalLink, RefreshCw, CheckCircle2 } from 'lucide-react';
+import { fetchCustomers, createCustomer } from '../../lib/api';
 
 export default function CustomerManagement() {
   const { token } = useAuth();
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [formData, setFormData] = useState({
     client_name: '',
@@ -19,16 +21,20 @@ export default function CustomerManagement() {
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
-  const fetchCustomers = async () => {
+  // 300ms search debounce
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  const loadCustomers = async () => {
+    if (!token) return;
     setLoading(true);
     try {
-      const res = await fetch(`/api/admin/customers?search=${encodeURIComponent(search)}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setCustomers(data.customers || []);
-      }
+      const data = await fetchCustomers(token, { search: debouncedSearch, limit: 50 });
+      setCustomers(data?.customers || []);
     } catch (err) {
       console.error('Failed to fetch customers:', err);
     } finally {
@@ -37,8 +43,8 @@ export default function CustomerManagement() {
   };
 
   useEffect(() => {
-    fetchCustomers();
-  }, [token, search]);
+    loadCustomers();
+  }, [token, debouncedSearch]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -50,18 +56,7 @@ export default function CustomerManagement() {
 
     setSubmitting(true);
     try {
-      const res = await fetch('/api/admin/customers', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(formData),
-      });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to save customer record');
-
+      await createCustomer(token, formData);
       setShowModal(false);
       setFormData({
         client_name: '',

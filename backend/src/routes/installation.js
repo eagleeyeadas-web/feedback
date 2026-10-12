@@ -10,6 +10,10 @@ import {
   getInstallationStats,
   getServiceEngineers,
 } from '../services/installationService.js';
+import {
+  getEngineersAvailabilityForRange,
+  getAvailabilityCalendar,
+} from '../services/engineerBookingService.js';
 import { generateInstallationChecklistPDF } from '../services/installationPdfGenerator.js';
 import { issueStockForJob } from '../services/inventoryService.js';
 import {
@@ -72,6 +76,8 @@ export const checklistValidationSchema = z.object({
     errorMap: () => ({ message: 'Installation or Service selection is required' }),
   }),
   service_engineer: z.string().min(1, 'Team Member 1 – Service Engineer is required'),
+  service_engineer_id: z.string().nullable().optional(),
+  booking_end_date: z.string().nullable().optional(),
   service_assistant: z.string().min(1, 'Team Member 2 – Service Assistant is required'),
   installation_status: z.enum(['Assigned', 'Completed'], {
     errorMap: () => ({ message: 'Installation Status must be either Assigned or Completed' }),
@@ -116,6 +122,41 @@ router.get('/engineers', requireRole('ADMIN', 'SALES', 'TECHNICAL', 'STORE_MANAG
   } catch (err) {
     console.error('Error fetching service engineers:', err);
     return res.status(500).json({ error: 'Failed to fetch service engineers' });
+  }
+});
+
+/**
+ * GET /api/admin/installations/engineers/availability
+ * Real-time availability for all service engineers across a date range
+ */
+router.get('/engineers/availability', requireRole('ADMIN', 'SALES', 'TECHNICAL', 'STORE_MANAGER'), async (req, res) => {
+  try {
+    const { startDate, endDate, duration, excludeChecklistId } = req.query;
+    const availability = await getEngineersAvailabilityForRange({
+      startDate,
+      endDate,
+      duration,
+      excludeChecklistId,
+    });
+    return res.json(availability);
+  } catch (err) {
+    console.error('Error fetching engineer availability:', err);
+    return res.status(400).json({ error: err.message || 'Failed to check engineer availability' });
+  }
+});
+
+/**
+ * GET /api/admin/installations/engineers/calendar
+ * Date-based calendar view of all service engineers and their booked dates
+ */
+router.get('/engineers/calendar', requireRole('ADMIN', 'SALES', 'TECHNICAL', 'STORE_MANAGER'), async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+    const calendar = await getAvailabilityCalendar({ startDate, endDate });
+    return res.json(calendar);
+  } catch (err) {
+    console.error('Error fetching engineer availability calendar:', err);
+    return res.status(500).json({ error: err.message || 'Failed to fetch availability calendar' });
   }
 });
 
@@ -211,7 +252,12 @@ router.post('/', requireRole('SALES', 'ADMIN'), async (req, res) => {
     return res.status(201).json(created);
   } catch (err) {
     console.error('Error in POST /installations:', err);
-    return res.status(500).json({ error: err.message || 'Failed to create installation checklist' });
+    const isConflict = err.statusCode === 409 || err.message?.includes('Booking Conflict') || err.message?.includes('already booked');
+    const status = isConflict ? 409 : 500;
+    return res.status(status).json({
+      error: err.message || 'Failed to create installation checklist',
+      conflict: err.conflict || null,
+    });
   }
 });
 
@@ -231,7 +277,12 @@ router.put('/:id', requireRole('SALES', 'ADMIN'), async (req, res) => {
     return res.json(updated);
   } catch (err) {
     console.error('Error in PUT /installations/:id:', err);
-    return res.status(500).json({ error: err.message || 'Failed to update installation checklist' });
+    const isConflict = err.statusCode === 409 || err.message?.includes('Booking Conflict') || err.message?.includes('already booked');
+    const status = isConflict ? 409 : 500;
+    return res.status(status).json({
+      error: err.message || 'Failed to update installation checklist',
+      conflict: err.conflict || null,
+    });
   }
 });
 

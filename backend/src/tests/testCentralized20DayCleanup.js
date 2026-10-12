@@ -183,7 +183,7 @@ async function runCentralized20DayCleanupTestSuite() {
 
   // Test 7c: Correct CRON_SECRET -> 200 Success
   const resValidSecret = mockRes();
-  await handleCleanupEndpoint({ headers: { 'x-cron-secret': process.env.CRON_SECRET }, query: {} }, resValidSecret);
+  await handleCleanupEndpoint({ headers: { 'x-cron-secret': process.env.CRON_SECRET }, query: { force: 'true' } }, resValidSecret);
   assert(resValidSecret.statusCode === 200, `Authorized CRON_SECRET accepted with status 200 (got ${resValidSecret.statusCode})`);
   assert(resValidSecret.data?.result?.policy === '20-Day Centralized Automatic Retention', 'Endpoint returned 20-day policy confirmation');
 

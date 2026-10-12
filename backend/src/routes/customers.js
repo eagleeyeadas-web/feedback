@@ -26,7 +26,27 @@ router.get('/', requireRole('SALES'), async (req, res) => {
     }
 
     const { data, count, error } = await query;
-    if (error) throw new Error(error.message);
+    if (error) {
+      console.warn('Customers table not available, falling back to installation_checklists:', error.message);
+      const { data: checklists } = await supabase
+        .from('installation_checklists')
+        .select('id, client_name, client_mobile, client_location, company_name, created_at')
+        .order('created_at', { ascending: false });
+
+      const map = new Map();
+      for (const item of (checklists || [])) {
+        if (item.client_mobile && !map.has(item.client_mobile)) {
+          map.set(item.client_mobile, item);
+        }
+      }
+      const uniqueList = Array.from(map.values());
+      return res.json({
+        customers: uniqueList.slice(offset, offset + limitNum),
+        totalCount: uniqueList.length,
+        page: pageNum,
+        totalPages: Math.ceil(uniqueList.length / limitNum) || 1,
+      });
+    }
 
     return res.json({
       customers: data || [],

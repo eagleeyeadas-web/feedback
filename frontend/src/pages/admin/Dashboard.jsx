@@ -48,12 +48,86 @@ import {
   Store,
 } from 'lucide-react';
 
+import AccessDenied from '../../components/AccessDenied';
+
+const ROLE_PERMITTED_TABS = {
+  SALES: [
+    'sales_workspace',
+    'installation_checklists',
+    'quotation_generator',
+    'quotation_history',
+    'customers',
+    'feedback',
+  ],
+  TECHNICAL: [
+    'technical_workspace',
+    'installation_checklists',
+  ],
+  STORE_MANAGER: [
+    'store_workspace',
+    'inventory',
+    'installation_checklists',
+  ],
+  ADMIN: [
+    'sales_workspace',
+    'technical_workspace',
+    'store_workspace',
+    'installation_checklists',
+    'inventory',
+    'quotation_generator',
+    'quotation_history',
+    'customers',
+    'users',
+    'audit_logs',
+    'feedback',
+  ],
+  SUPER_ADMIN: [
+    'sales_workspace',
+    'technical_workspace',
+    'store_workspace',
+    'installation_checklists',
+    'inventory',
+    'quotation_generator',
+    'quotation_history',
+    'customers',
+    'users',
+    'audit_logs',
+    'feedback',
+  ],
+};
+
+const DEFAULT_WORKSPACE_BY_ROLE = {
+  SALES: 'sales_workspace',
+  TECHNICAL: 'technical_workspace',
+  STORE_MANAGER: 'store_workspace',
+  ADMIN: 'installation_checklists',
+  SUPER_ADMIN: 'installation_checklists',
+};
+
+const TAB_RESOURCE_NAMES = {
+  sales_workspace: 'Sales & Customer Intake Workspace',
+  technical_workspace: 'Technical Team Job Workspace',
+  store_workspace: 'Store Manager & Stock Workspace',
+  inventory: 'Inventory & Device Movements',
+  quotation_generator: 'Quotation Generator (PDF)',
+  quotation_history: 'Quotation History & Records',
+  customers: 'Customer Records',
+  users: 'Employee Account Management',
+  audit_logs: 'System Audit Trail',
+  feedback: 'Customer Feedback Management',
+  installation_checklists: 'Installation Checklist Workflow',
+};
+
 export default function Dashboard() {
   const { token, user, role, profile, signOut } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
-  const [activeTab, setActiveTab] = useState('installation_checklists'); // default tab
+  const userRole = (role || 'ADMIN').toUpperCase();
+  const allowedTabs = ROLE_PERMITTED_TABS[userRole] || ROLE_PERMITTED_TABS.ADMIN;
+  const defaultTab = DEFAULT_WORKSPACE_BY_ROLE[userRole] || 'installation_checklists';
+
+  const [activeTab, setActiveTab] = useState(defaultTab);
   const [checklistSubView, setChecklistSubView] = useState({ type: 'list', id: null });
   const [stats, setStats] = useState(null);
   const [installationStats, setInstallationStats] = useState(null);
@@ -79,30 +153,37 @@ export default function Dashboard() {
 
   const loadData = useCallback(async () => {
     if (!token) return;
+    // Only load feedback table and stats when active tab is actually 'feedback'
+    if (activeTab !== 'feedback') {
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     try {
-      const [statsData, feedbackData, instStatsData] = await Promise.all([
+      const [statsData, feedbackData] = await Promise.all([
         fetchAdminStats(token).catch(() => null),
         fetchAdminFeedback(token, filters).catch(() => ({ data: [], pagination: {} })),
-        fetchInstallationStats(token).catch(() => null),
       ]);
       setStats(statsData);
       setFeedback(feedbackData);
-      setInstallationStats(instStatsData);
     } catch (err) {
-      console.error('Failed to load data:', err);
+      console.error('Failed to load feedback data:', err);
     } finally {
       setLoading(false);
     }
-  }, [token, filters]);
+  }, [token, filters, activeTab]);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
 
-  // Sync URL path with Active Tab and SubView
+  // Sync URL path and query parameters with Active Tab and SubView
   useEffect(() => {
     const path = location.pathname;
+    const searchParams = new URLSearchParams(location.search);
+    const queryTab = searchParams.get('tab');
+
     if (path.startsWith('/admin/installation-checklists')) {
       setActiveTab('installation_checklists');
       if (path === '/admin/installation-checklists/create') {
@@ -120,8 +201,12 @@ export default function Dashboard() {
           setChecklistSubView({ type: 'list', id: null });
         }
       }
+    } else if (queryTab) {
+      setActiveTab(queryTab);
+    } else if (path === '/admin/dashboard' || path === '/admin') {
+      setActiveTab(defaultTab);
     }
-  }, [location.pathname]);
+  }, [location.pathname, location.search, defaultTab]);
 
   const handleSearch = (e) => {
     e.preventDefault();
@@ -229,87 +314,99 @@ export default function Dashboard() {
             </div>
           </div>
           <nav className="p-4 space-y-1">
-            <button
-              onClick={() => {
-                setActiveTab('installation_checklists');
-                setChecklistSubView({ type: 'list', id: null });
-                navigate('/admin/installation-checklists');
-                setShowMobileSidebar(false);
-              }}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
-                activeTab === 'installation_checklists'
-                  ? 'bg-blue-600 text-white shadow-sm font-semibold'
-                  : 'text-white/70 hover:text-white hover:bg-white/5'
-              }`}
-            >
-              <Wrench size={18} />
-              Installation Jobs
-            </button>
-
-            {/* OPERATIONAL WORKSPACE PAGES (Single Admin Login Access) */}
-            <button
-              onClick={() => { setActiveTab('sales_workspace'); navigate('/admin/dashboard'); setShowMobileSidebar(false); }}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
-                activeTab === 'sales_workspace'
-                  ? 'bg-blue-600 text-white shadow-sm font-semibold'
-                  : 'text-white/70 hover:text-white hover:bg-white/5'
-              }`}
-            >
-              <Briefcase size={18} />
-              Sales Workspace
-            </button>
-
-            <button
-              onClick={() => { setActiveTab('technical_workspace'); navigate('/admin/dashboard'); setShowMobileSidebar(false); }}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
-                activeTab === 'technical_workspace'
-                  ? 'bg-purple-600 text-white shadow-sm font-semibold'
-                  : 'text-white/70 hover:text-white hover:bg-white/5'
-              }`}
-            >
-              <Wrench size={18} />
-              Technical Workspace
-            </button>
-
-            <button
-              onClick={() => { setActiveTab('store_workspace'); navigate('/admin/dashboard'); setShowMobileSidebar(false); }}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
-                activeTab === 'store_workspace' || activeTab === 'inventory'
-                  ? 'bg-amber-600 text-white shadow-sm font-semibold'
-                  : 'text-white/70 hover:text-white hover:bg-white/5'
-              }`}
-            >
-              <Store size={18} />
-              Store Manager Workspace
-            </button>
-
-            <button
-              onClick={() => { setActiveTab('quotation_generator'); navigate('/admin/dashboard'); setShowMobileSidebar(false); }}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
-                activeTab === 'quotation_generator'
-                  ? 'bg-white/15 text-white shadow-sm font-semibold'
-                  : 'text-white/70 hover:text-white hover:bg-white/5'
-              }`}
-            >
-              <FileText size={18} />
-              Quotation Generator
-            </button>
-
-            <button
-              onClick={() => { setActiveTab('quotation_history'); navigate('/admin/dashboard'); setShowMobileSidebar(false); }}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
-                activeTab === 'quotation_history'
-                  ? 'bg-white/15 text-white shadow-sm font-semibold'
-                  : 'text-white/70 hover:text-white hover:bg-white/5'
-              }`}
-            >
-              <History size={18} />
-              Quotation History
-            </button>
-
-            {(role === 'SALES' || role === 'ADMIN') && (
+            {/* Permitted Workspace Tabs */}
+            {allowedTabs.includes('sales_workspace') && (
               <button
-                onClick={() => { setActiveTab('customers'); navigate('/admin/dashboard'); setShowMobileSidebar(false); }}
+                onClick={() => { setActiveTab('sales_workspace'); navigate('/admin/dashboard?tab=sales_workspace'); setShowMobileSidebar(false); }}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
+                  activeTab === 'sales_workspace'
+                    ? 'bg-blue-600 text-white shadow-sm font-semibold'
+                    : 'text-white/70 hover:text-white hover:bg-white/5'
+                }`}
+              >
+                <Briefcase size={18} />
+                Sales Workspace
+              </button>
+            )}
+
+            {allowedTabs.includes('technical_workspace') && (
+              <button
+                onClick={() => { setActiveTab('technical_workspace'); navigate('/admin/dashboard?tab=technical_workspace'); setShowMobileSidebar(false); }}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
+                  activeTab === 'technical_workspace'
+                    ? 'bg-purple-600 text-white shadow-sm font-semibold'
+                    : 'text-white/70 hover:text-white hover:bg-white/5'
+                }`}
+              >
+                <Wrench size={18} />
+                Technical Workspace
+              </button>
+            )}
+
+            {allowedTabs.includes('store_workspace') && (
+              <button
+                onClick={() => { setActiveTab('store_workspace'); navigate('/admin/dashboard?tab=store_workspace'); setShowMobileSidebar(false); }}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
+                  activeTab === 'store_workspace' || activeTab === 'inventory'
+                    ? 'bg-amber-600 text-white shadow-sm font-semibold'
+                    : 'text-white/70 hover:text-white hover:bg-white/5'
+                }`}
+              >
+                <Store size={18} />
+                Store Manager Workspace
+              </button>
+            )}
+
+            {allowedTabs.includes('installation_checklists') && (
+              <button
+                onClick={() => {
+                  setActiveTab('installation_checklists');
+                  setChecklistSubView({ type: 'list', id: null });
+                  navigate('/admin/installation-checklists');
+                  setShowMobileSidebar(false);
+                }}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
+                  activeTab === 'installation_checklists'
+                    ? 'bg-blue-600 text-white shadow-sm font-semibold'
+                    : 'text-white/70 hover:text-white hover:bg-white/5'
+                }`}
+              >
+                <Wrench size={18} />
+                Installation Jobs
+              </button>
+            )}
+
+            {allowedTabs.includes('quotation_generator') && (
+              <button
+                onClick={() => { setActiveTab('quotation_generator'); navigate('/admin/dashboard?tab=quotation_generator'); setShowMobileSidebar(false); }}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
+                  activeTab === 'quotation_generator'
+                    ? 'bg-white/15 text-white shadow-sm font-semibold'
+                    : 'text-white/70 hover:text-white hover:bg-white/5'
+                }`}
+              >
+                <FileText size={18} />
+                Quotation Generator
+              </button>
+            )}
+
+            {allowedTabs.includes('quotation_history') && (
+              <button
+                onClick={() => { setActiveTab('quotation_history'); navigate('/admin/dashboard?tab=quotation_history'); setShowMobileSidebar(false); }}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
+                  activeTab === 'quotation_history'
+                    ? 'bg-white/15 text-white shadow-sm font-semibold'
+                    : 'text-white/70 hover:text-white hover:bg-white/5'
+                }`}
+              >
+                <History size={18} />
+                Quotation History
+              </button>
+            )}
+
+            {allowedTabs.includes('customers') && (
+              <button
+                onClick={() => { setActiveTab('customers'); navigate('/admin/dashboard?tab=customers'); setShowMobileSidebar(false); }}
                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
                   activeTab === 'customers'
                     ? 'bg-white/15 text-white shadow-sm font-semibold'
@@ -321,45 +418,47 @@ export default function Dashboard() {
               </button>
             )}
 
-            {role === 'ADMIN' && (
-              <>
-                <button
-                  onClick={() => { setActiveTab('users'); navigate('/admin/dashboard'); setShowMobileSidebar(false); }}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
-                    activeTab === 'users'
-                      ? 'bg-white/15 text-white shadow-sm font-semibold'
-                      : 'text-white/70 hover:text-white hover:bg-white/5'
-                  }`}
-                >
-                  <UserCheck size={18} />
-                  Employee Accounts
-                </button>
-
-                <button
-                  onClick={() => { setActiveTab('audit_logs'); navigate('/admin/dashboard'); setShowMobileSidebar(false); }}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
-                    activeTab === 'audit_logs'
-                      ? 'bg-white/15 text-white shadow-sm font-semibold'
-                      : 'text-white/70 hover:text-white hover:bg-white/5'
-                  }`}
-                >
-                  <Shield size={18} />
-                  System Audit Logs
-                </button>
-              </>
+            {allowedTabs.includes('users') && (
+              <button
+                onClick={() => { setActiveTab('users'); navigate('/admin/dashboard?tab=users'); setShowMobileSidebar(false); }}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
+                  activeTab === 'users'
+                    ? 'bg-white/15 text-white shadow-sm font-semibold'
+                    : 'text-white/70 hover:text-white hover:bg-white/5'
+                }`}
+              >
+                <UserCheck size={18} />
+                Employee Accounts
+              </button>
             )}
 
-            <button
-              onClick={() => { setActiveTab('feedback'); navigate('/admin/dashboard'); setShowMobileSidebar(false); }}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
-                activeTab === 'feedback'
-                  ? 'bg-white/15 text-white shadow-sm font-semibold'
-                  : 'text-white/70 hover:text-white hover:bg-white/5'
-              }`}
-            >
-              <BarChart3 size={18} />
-              Customer Feedback
-            </button>
+            {allowedTabs.includes('audit_logs') && (
+              <button
+                onClick={() => { setActiveTab('audit_logs'); navigate('/admin/dashboard?tab=audit_logs'); setShowMobileSidebar(false); }}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
+                  activeTab === 'audit_logs'
+                    ? 'bg-white/15 text-white shadow-sm font-semibold'
+                    : 'text-white/70 hover:text-white hover:bg-white/5'
+                }`}
+              >
+                <Shield size={18} />
+                System Audit Logs
+              </button>
+            )}
+
+            {allowedTabs.includes('feedback') && (
+              <button
+                onClick={() => { setActiveTab('feedback'); navigate('/admin/dashboard?tab=feedback'); setShowMobileSidebar(false); }}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
+                  activeTab === 'feedback'
+                    ? 'bg-white/15 text-white shadow-sm font-semibold'
+                    : 'text-white/70 hover:text-white hover:bg-white/5'
+                }`}
+              >
+                <BarChart3 size={18} />
+                Customer Feedback
+              </button>
+            )}
           </nav>
         </div>
 
@@ -403,8 +502,53 @@ export default function Dashboard() {
           </div>
         </header>
 
-        <main className="p-4 lg:p-6">
-          {activeTab === 'sales_workspace' && (
+        {/* Role Access Authorization Check */}
+        {(() => {
+          const isTabAllowed = allowedTabs.includes(activeTab);
+          const canCreateOrEditJob = userRole === 'SALES' || userRole === 'ADMIN' || userRole === 'SUPER_ADMIN';
+          const isSubViewDenied =
+            activeTab === 'installation_checklists' &&
+            ((checklistSubView.type === 'create' && !canCreateOrEditJob) ||
+             (checklistSubView.type === 'edit' && !canCreateOrEditJob));
+
+          const isAccessDenied = !isTabAllowed || isSubViewDenied;
+          const deniedResourceName = isSubViewDenied
+            ? (checklistSubView.type === 'create' ? 'Create Installation Job' : 'Edit Installation Job')
+            : (TAB_RESOURCE_NAMES[activeTab] || activeTab);
+
+          if (isAccessDenied) {
+            return (
+              <main className="p-4 lg:p-6">
+                <AccessDenied
+                  targetResource={deniedResourceName}
+                  onNavigateDefault={(tab) => {
+                    setActiveTab(tab);
+                    setChecklistSubView({ type: 'list', id: null });
+                    navigate(`/admin/dashboard?tab=${tab}`);
+                  }}
+                />
+              </main>
+            );
+          }
+
+          return null;
+        })()}
+
+        {(() => {
+          const isTabAllowed = allowedTabs.includes(activeTab);
+          const canCreateOrEditJob = userRole === 'SALES' || userRole === 'ADMIN' || userRole === 'SUPER_ADMIN';
+          const isSubViewDenied =
+            activeTab === 'installation_checklists' &&
+            ((checklistSubView.type === 'create' && !canCreateOrEditJob) ||
+             (checklistSubView.type === 'edit' && !canCreateOrEditJob));
+
+          if (!isTabAllowed || isSubViewDenied) {
+            return null;
+          }
+
+          return (
+            <main className="p-4 lg:p-6">
+              {activeTab === 'sales_workspace' && (
             <SalesWorkspace
               onSelectChecklist={(id) => {
                 setActiveTab('installation_checklists');
@@ -768,6 +912,8 @@ export default function Dashboard() {
           </>
           )}
         </main>
+      );
+    })()}
       </div>
 
       {/* Detail Drawer */}

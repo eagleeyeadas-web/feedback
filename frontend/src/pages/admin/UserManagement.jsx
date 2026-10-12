@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { UserCheck, Plus, Shield, Mail, CheckCircle2, XCircle, RefreshCw } from 'lucide-react';
+import { fetchUsers, createUser, updateUser } from '../../lib/api';
 
 export default function UserManagement() {
   const { token, role: currentUserRole } = useAuth();
@@ -17,16 +18,12 @@ export default function UserManagement() {
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
 
-  const fetchUsers = async () => {
+  const loadUsers = async () => {
+    if (!token) return;
     setLoading(true);
     try {
-      const res = await fetch('/api/admin/users', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setUsers(data || []);
-      }
+      const data = await fetchUsers(token);
+      setUsers(data || []);
     } catch (err) {
       console.error('Failed to fetch employee users:', err);
     } finally {
@@ -35,7 +32,7 @@ export default function UserManagement() {
   };
 
   useEffect(() => {
-    fetchUsers();
+    loadUsers();
   }, [token]);
 
   const handleCreateUser = async (e) => {
@@ -50,22 +47,11 @@ export default function UserManagement() {
 
     setSubmitting(true);
     try {
-      const res = await fetch('/api/admin/users', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(formData),
-      });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to create employee user');
-
+      await createUser(token, formData);
       setSuccessMsg(`Employee account for ${formData.email} created successfully with role ${formData.role}.`);
       setShowModal(false);
       setFormData({ email: '', password: '', full_name: '', role: 'SALES' });
-      fetchUsers();
+      loadUsers();
     } catch (err) {
       setErrorMsg(err.message);
     } finally {
@@ -75,17 +61,8 @@ export default function UserManagement() {
 
   const handleToggleActive = async (userId, currentActive) => {
     try {
-      const res = await fetch(`/api/admin/users/${userId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ is_active: !currentActive }),
-      });
-      if (res.ok) {
-        fetchUsers();
-      }
+      await updateUser(token, userId, { is_active: !currentActive });
+      loadUsers();
     } catch (err) {
       console.error('Failed to update status:', err);
     }
@@ -93,17 +70,8 @@ export default function UserManagement() {
 
   const handleChangeRole = async (userId, newRole) => {
     try {
-      const res = await fetch(`/api/admin/users/${userId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ role: newRole }),
-      });
-      if (res.ok) {
-        fetchUsers();
-      }
+      await updateUser(token, userId, { role: newRole });
+      loadUsers();
     } catch (err) {
       console.error('Failed to update role:', err);
     }

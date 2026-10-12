@@ -1,5 +1,18 @@
-const rawEnvUrl = import.meta.env.VITE_API_URL || '/api';
-const API_BASE = rawEnvUrl.endsWith('/api') ? rawEnvUrl : `${rawEnvUrl.replace(/\/+$/, '')}/api`;
+export const rawEnvUrl = import.meta.env.VITE_API_URL || '/api';
+export const API_BASE = rawEnvUrl.endsWith('/api') ? rawEnvUrl : `${rawEnvUrl.replace(/\/+$/, '')}/api`;
+
+/**
+ * Background non-blocking server wake-up ping for Render Free tier cold start
+ */
+let wakeupPromise = null;
+export function pingServerWakeup() {
+  if (!wakeupPromise) {
+    wakeupPromise = fetch(`${API_BASE.replace(/\/api$/, '')}/api/health`, { signal: AbortSignal.timeout(35000) })
+      .then((r) => r.json())
+      .catch(() => null);
+  }
+  return wakeupPromise;
+}
 
 /**
  * Submit customer feedback
@@ -237,6 +250,38 @@ export async function fetchServiceEngineers(token) {
   return res.json();
 }
 
+export async function fetchEngineersAvailability(token, { startDate, endDate, duration, excludeChecklistId } = {}) {
+  const params = new URLSearchParams();
+  if (startDate) params.set('startDate', startDate);
+  if (endDate) params.set('endDate', endDate);
+  if (duration) params.set('duration', duration);
+  if (excludeChecklistId) params.set('excludeChecklistId', excludeChecklistId);
+
+  const res = await fetch(`${API_BASE}/admin/installations/engineers/availability?${params.toString()}`, {
+    headers: adminHeaders(token),
+  });
+  if (!res.ok) {
+    const json = await res.json().catch(() => ({}));
+    throw new Error(json.error || 'Failed to check engineer availability');
+  }
+  return res.json();
+}
+
+export async function fetchEngineersCalendar(token, { startDate, endDate } = {}) {
+  const params = new URLSearchParams();
+  if (startDate) params.set('startDate', startDate);
+  if (endDate) params.set('endDate', endDate);
+
+  const res = await fetch(`${API_BASE}/admin/installations/engineers/calendar?${params.toString()}`, {
+    headers: adminHeaders(token),
+  });
+  if (!res.ok) {
+    const json = await res.json().catch(() => ({}));
+    throw new Error(json.error || 'Failed to fetch engineer calendar');
+  }
+  return res.json();
+}
+
 export async function fetchDeviceCarryRecord(token, checklistId) {
   const res = await fetch(`${API_BASE}/admin/installations/${checklistId}/carry-record`, {
     headers: adminHeaders(token),
@@ -384,6 +429,150 @@ export async function fetchCleanupStatus(token) {
   });
   const json = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(json.error || 'Failed to fetch cleanup status');
+  return json;
+}
+
+/**
+ * Customers API helpers
+ */
+export async function fetchCustomers(token, params = {}) {
+  const query = new URLSearchParams(params).toString();
+  const res = await fetch(`${API_BASE}/admin/customers?${query}`, {
+    headers: adminHeaders(token),
+  });
+  if (!res.ok) throw new Error('Failed to fetch customers');
+  return res.json();
+}
+
+export async function createCustomer(token, data) {
+  const res = await fetch(`${API_BASE}/admin/customers`, {
+    method: 'POST',
+    headers: adminHeaders(token),
+    body: JSON.stringify(data),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to save customer');
+  return json;
+}
+
+/**
+ * User & Employee Management APIs
+ */
+export async function fetchUsers(token) {
+  const res = await fetch(`${API_BASE}/admin/users`, {
+    headers: adminHeaders(token),
+  });
+  if (!res.ok) throw new Error('Failed to fetch employees');
+  return res.json();
+}
+
+export async function createUser(token, data) {
+  const res = await fetch(`${API_BASE}/admin/users`, {
+    method: 'POST',
+    headers: adminHeaders(token),
+    body: JSON.stringify(data),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to create employee');
+  return json;
+}
+
+export async function updateUser(token, id, data) {
+  const res = await fetch(`${API_BASE}/admin/users/${id}`, {
+    method: 'PUT',
+    headers: adminHeaders(token),
+    body: JSON.stringify(data),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to update employee');
+  return json;
+}
+
+export async function deleteUser(token, id) {
+  const res = await fetch(`${API_BASE}/admin/users/${id}`, {
+    method: 'DELETE',
+    headers: adminHeaders(token),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to delete employee');
+  return json;
+}
+
+/**
+ * Audit Logs API
+ */
+export async function fetchAuditLogs(token, params = {}) {
+  const query = new URLSearchParams(params).toString();
+  const res = await fetch(`${API_BASE}/admin/audit-logs?${query}`, {
+    headers: adminHeaders(token),
+  });
+  if (!res.ok) throw new Error('Failed to fetch audit logs');
+  return res.json();
+}
+
+/**
+ * Discrepancy & Checklist Workflow Action APIs
+ */
+export async function fetchInventoryDiscrepancies(token) {
+  const res = await fetch(`${API_BASE}/admin/inventory/discrepancies`, {
+    headers: adminHeaders(token),
+  });
+  if (!res.ok) throw new Error('Failed to fetch discrepancies');
+  return res.json();
+}
+
+export async function issueStockJob(token, checklistId, data) {
+  const res = await fetch(`${API_BASE}/admin/installations/${checklistId}/issue-stock`, {
+    method: 'POST',
+    headers: adminHeaders(token),
+    body: JSON.stringify(data),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to issue stock');
+  return json;
+}
+
+export async function submitTechnicalReportJob(token, checklistId, data) {
+  const res = await fetch(`${API_BASE}/admin/installations/${checklistId}/technical-report`, {
+    method: 'POST',
+    headers: adminHeaders(token),
+    body: JSON.stringify(data),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to submit technical report');
+  return json;
+}
+
+export async function declareReturnJob(token, checklistId, data) {
+  const res = await fetch(`${API_BASE}/admin/installations/${checklistId}/declare-return`, {
+    method: 'POST',
+    headers: adminHeaders(token),
+    body: JSON.stringify(data),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to declare returns');
+  return json;
+}
+
+export async function verifyReturnJob(token, checklistId, data) {
+  const res = await fetch(`${API_BASE}/admin/installations/${checklistId}/verify-return`, {
+    method: 'POST',
+    headers: adminHeaders(token),
+    body: JSON.stringify(data),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to verify return');
+  return json;
+}
+
+export async function resolveDiscrepancyJob(token, checklistId, data) {
+  const res = await fetch(`${API_BASE}/admin/installations/${checklistId}/resolve-discrepancy`, {
+    method: 'POST',
+    headers: adminHeaders(token),
+    body: JSON.stringify(data),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to resolve discrepancy');
   return json;
 }
 

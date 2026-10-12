@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../../../hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 import { Users, Plus, Wrench, FileText, Calendar, CreditCard, ArrowRight, Search, CheckCircle2 } from 'lucide-react';
+import { fetchInstallationChecklists, fetchCustomers } from '../../../lib/api';
+import EngineerAvailabilityCalendar from '../../../components/workspaces/EngineerAvailabilityCalendar';
 
 export default function SalesWorkspace({ onSelectChecklist, onCreateChecklist, onNavigateTab }) {
   const { token } = useAuth();
@@ -12,21 +14,16 @@ export default function SalesWorkspace({ onSelectChecklist, onCreateChecklist, o
   const [search, setSearch] = useState('');
 
   const loadData = async () => {
+    if (!token) return;
     setLoading(true);
     try {
-      const [checkRes, custRes] = await Promise.all([
-        fetch('/api/admin/installations', { headers: { Authorization: `Bearer ${token}` } }),
-        fetch('/api/admin/customers?limit=5', { headers: { Authorization: `Bearer ${token}` } }),
+      const [checkData, custData] = await Promise.all([
+        fetchInstallationChecklists(token, { limit: 25 }).catch(() => ({ checklists: [] })),
+        fetchCustomers(token, { limit: 5 }).catch(() => ({ customers: [] })),
       ]);
 
-      if (checkRes.ok) {
-        const cData = await checkRes.json();
-        setChecklists(cData.checklists || []);
-      }
-      if (custRes.ok) {
-        const custData = await custRes.json();
-        setCustomers(custData.customers || []);
-      }
+      setChecklists(checkData?.checklists || []);
+      setCustomers(custData?.customers || []);
     } catch (err) {
       console.error('Failed to load Sales workspace data:', err);
     } finally {
@@ -121,6 +118,16 @@ export default function SalesWorkspace({ onSelectChecklist, onCreateChecklist, o
           </div>
         </div>
       </div>
+
+      {/* FIELD ENGINEER AVAILABILITY CALENDAR */}
+      <EngineerAvailabilityCalendar
+        token={token}
+        onSelectChecklist={onSelectChecklist}
+        onCreateWithEngineer={(engName) => {
+          if (onCreateChecklist) onCreateChecklist();
+          else navigate('/admin/installation-checklists/create');
+        }}
+      />
 
       {/* Search & Actions */}
       <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-xs flex items-center gap-3">

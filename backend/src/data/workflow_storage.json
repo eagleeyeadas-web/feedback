@@ -1,0 +1,171 @@
+{
+  "carryRecords": {
+    "ed3b0342-b793-452f-815b-d8fe301d5342": {
+      "checklist_id": "ed3b0342-b793-452f-815b-d8fe301d5342",
+      "technician_user_id": "f3a5e467-a1bf-40ef-8878-ec64b29bbfd5",
+      "technician_name": "technician@eagleeye.com",
+      "status": "SUBMITTED",
+      "remarks": "2 units carried in van",
+      "submitted_at": "2026-10-12T04:33:50.258Z",
+      "id": "carry-ed3b0342-b793-452f-815b-d8fe301d5342-1791779630439",
+      "items": [
+        {
+          "checklist_id": "ed3b0342-b793-452f-815b-d8fe301d5342",
+          "device_type": "4 Channel Live",
+          "quantity_issued": 0,
+          "quantity_carried": 2,
+          "discrepancy_quantity": 2,
+          "discrepancy_reason": null
+        }
+      ]
+    },
+    "5377228a-faba-4d2f-93e9-23d38197cef5": {
+      "checklist_id": "5377228a-faba-4d2f-93e9-23d38197cef5",
+      "technician_user_id": "f3a5e467-a1bf-40ef-8878-ec64b29bbfd5",
+      "technician_name": "technician@eagleeye.com",
+      "status": "SUBMITTED",
+      "remarks": "2 units carried",
+      "submitted_at": "2026-10-12T04:37:21.099Z",
+      "id": "carry-5377228a-faba-4d2f-93e9-23d38197cef5-1791779841347",
+      "items": [
+        {
+          "checklist_id": "5377228a-faba-4d2f-93e9-23d38197cef5",
+          "device_type": "2 Channel Live",
+          "quantity_issued": 0,
+          "quantity_carried": 2,
+          "discrepancy_quantity": 2,
+          "discrepancy_reason": null
+        }
+      ]
+    },
+    "3d6f2090-047a-4645-83dd-7996f1bf6ea5": {
+      "checklist_id": "3d6f2090-047a-4645-83dd-7996f1bf6ea5",
+      "technician_user_id": "f3a5e467-a1bf-40ef-8878-ec64b29bbfd5",
+      "technician_name": "technician@eagleeye.com",
+      "status": "SUBMITTED",
+      "remarks": "2 units carried",
+      "submitted_at": "2026-10-12T04:37:57.187Z",
+      "id": "carry-3d6f2090-047a-4645-83dd-7996f1bf6ea5-1791779877358",
+      "items": [
+        {
+          "checklist_id": "3d6f2090-047a-4645-83dd-7996f1bf6ea5",
+          "device_type": "2 Channel Live",
+          "quantity_issued": 0,
+          "quantity_carried": 2,
+          "discrepancy_quantity": 2,
+          "discrepancy_reason": null
+        }
+      ]
+    }
+  },
+  "completionReports": {
+    "ed3b0342-b793-452f-815b-d8fe301d5342": {
+      "checklist_id": "ed3b0342-b793-452f-815b-d8fe301d5342",
+      "technician_id": "f3a5e467-a1bf-40ef-8878-ec64b29bbfd5",
+      "devices_carried_qty": 2,
+      "devices_installed_qty": 1,
+      "devices_unused_qty": 1,
+      "devices_damaged_qty": 0,
+      "devices_missing_qty": 0,
+      "completion_status": "Site Work Completed",
+      "remarks": "1 unit installed, 1 unit declared for return",
+      "submitted_at": "2026-10-12T04:33:52.268Z",
+      "id": "report-ed3b0342-b793-452f-815b-d8fe301d5342-1791779632439",
+      "items": [
+        {
+          "checklist_id": "ed3b0342-b793-452f-815b-d8fe301d5342",
+          "device_type": "4 Channel Live",
+          "quantity_carried": 2,
+          "quantity_installed": 1,
+          "quantity_to_return": 1,
+          "quantity_damaged": 0,
+          "quantity_missing": 0,
+          "discrepancy_reason": null
+        }
+      ]
+    },
+    "5377228a-faba-4d2f-93e9-23d38197cef5": {
+      "checklist_id": "5377228a-faba-4d2f-93e9-23d38197cef5",
+      "technician_id": "f3a5e467-a1bf-40ef-8878-ec64b29bbfd5",
+      "devices_carried_qty": 2,
+      "devices_installed_qty": 1,
+      "devices_unused_qty": 1,
+      "devices_damaged_qty": 0,
+      "devices_missing_qty": 0,
+      "completion_status": "Completed",
+      "remarks": "1 installed on vehicle TN-01-AB-1234, 1 returned",
+      "submitted_at": "2026-10-12T04:37:23.041Z",
+      "id": "report-5377228a-faba-4d2f-93e9-23d38197cef5-1791779843205",
+      "items": [
+        {
+          "checklist_id": "5377228a-faba-4d2f-93e9-23d38197cef5",
+          "device_type": "2 Channel Live",
+          "quantity_carried": 2,
+          "quantity_installed": 1,
+          "quantity_to_return": 1,
+          "quantity_damaged": 0,
+          "quantity_missing": 0,
+          "discrepancy_reason": null
+        }
+      ]
+    },
+    "3d6f2090-047a-4645-83dd-7996f1bf6ea5": {
+      "checklist_id": "3d6f2090-047a-4645-83dd-7996f1bf6ea5",
+      "technician_id": "f3a5e467-a1bf-40ef-8878-ec64b29bbfd5",
+      "devices_carried_qty": 2,
+      "devices_installed_qty": 1,
+      "devices_unused_qty": 1,
+      "devices_damaged_qty": 0,
+      "devices_missing_qty": 0,
+      "completion_status": "Completed",
+      "remarks": "1 installed on vehicle TN-01-AB-1234, 1 returned",
+      "submitted_at": "2026-10-12T04:37:59.189Z",
+      "id": "report-3d6f2090-047a-4645-83dd-7996f1bf6ea5-1791779879357",
+      "items": [
+        {
+          "checklist_id": "3d6f2090-047a-4645-83dd-7996f1bf6ea5",
+          "device_type": "2 Channel Live",
+          "quantity_carried": 2,
+          "quantity_installed": 1,
+          "quantity_to_return": 1,
+          "quantity_damaged": 0,
+          "quantity_missing": 0,
+          "discrepancy_reason": null
+        }
+      ],
+      "reconciliation_status": "PENDING_STORE_VERIFICATION"
+    }
+  },
+  "returns": {
+    "return-ed3b0342-b793-452f-815b-d8fe301d5342-1791779632441-6fu5": {
+      "id": "return-ed3b0342-b793-452f-815b-d8fe301d5342-1791779632441-6fu5",
+      "checklist_id": "ed3b0342-b793-452f-815b-d8fe301d5342",
+      "device_type": "4 Channel Live",
+      "declared_return_qty": 1,
+      "declared_by": "f3a5e467-a1bf-40ef-8878-ec64b29bbfd5",
+      "declared_at": "2026-10-12T04:33:52.441Z",
+      "status": "PENDING_STORE_VERIFICATION",
+      "verification_remarks": "Completion report return declaration: 1 unit installed, 1 unit declared for return"
+    },
+    "return-5377228a-faba-4d2f-93e9-23d38197cef5-1791779843206-21zb": {
+      "id": "return-5377228a-faba-4d2f-93e9-23d38197cef5-1791779843206-21zb",
+      "checklist_id": "5377228a-faba-4d2f-93e9-23d38197cef5",
+      "device_type": "2 Channel Live",
+      "declared_return_qty": 1,
+      "declared_by": "f3a5e467-a1bf-40ef-8878-ec64b29bbfd5",
+      "declared_at": "2026-10-12T04:37:23.206Z",
+      "status": "PENDING_STORE_VERIFICATION",
+      "verification_remarks": "Completion report return declaration: 1 installed on vehicle TN-01-AB-1234, 1 returned"
+    },
+    "return-3d6f2090-047a-4645-83dd-7996f1bf6ea5-1791779879358-boy3": {
+      "id": "return-3d6f2090-047a-4645-83dd-7996f1bf6ea5-1791779879358-boy3",
+      "checklist_id": "3d6f2090-047a-4645-83dd-7996f1bf6ea5",
+      "device_type": "2 Channel Live",
+      "declared_return_qty": 1,
+      "declared_by": "f3a5e467-a1bf-40ef-8878-ec64b29bbfd5",
+      "declared_at": "2026-10-12T04:37:59.358Z",
+      "status": "PENDING_STORE_VERIFICATION",
+      "verification_remarks": "Completion report return declaration: 1 installed on vehicle TN-01-AB-1234, 1 returned"
+    }
+  }
+}

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../../hooks/useAuth';
-import { fetchInstallationChecklistDetail, downloadInstallationPDF } from '../../../lib/api';
+import { fetchInstallationChecklistDetail, downloadInstallationPDF, API_BASE } from '../../../lib/api';
 import DeviceCarryModal from '../../../components/workspaces/DeviceCarryModal';
 import InstallationCompletionModal from '../../../components/workspaces/InstallationCompletionModal';
 import { downloadInstallationExcel } from '../../../lib/excelHelper';
@@ -769,7 +769,7 @@ function IssueStockModal({ checklist, token, onClose, onSuccess }) {
     setLoading(true);
 
     try {
-      const res = await fetch(`/api/admin/installations/${checklist.id}/issue-stock`, {
+      const res = await fetch(`${API_BASE}/admin/installations/${checklist.id}/issue-stock`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -864,7 +864,7 @@ function TechReportModal({ checklist, token, onClose, onSuccess }) {
     setLoading(true);
 
     try {
-      const res = await fetch(`/api/admin/installations/${checklist.id}/technical-report`, {
+      const res = await fetch(`${API_BASE}/admin/installations/${checklist.id}/technical-report`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -957,7 +957,7 @@ function DeclareReturnModal({ checklist, token, onClose, onSuccess }) {
     setLoading(true);
 
     try {
-      const res = await fetch(`/api/admin/installations/${checklist.id}/declare-return`, {
+      const res = await fetch(`${API_BASE}/admin/installations/${checklist.id}/declare-return`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1025,8 +1025,8 @@ function VerifyReturnModal({ checklist, token, onClose, onSuccess }) {
 
   useEffect(() => {
     // Fetch pending return for this checklist
-    fetch('/api/admin/inventory/discrepancies', { headers: { Authorization: `Bearer ${token}` } })
-      .then(() => fetch(`/api/admin/installations/${checklist.id}`, { headers: { Authorization: `Bearer ${token}` } }))
+    fetch(`${API_BASE}/admin/inventory/discrepancies`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(() => fetch(`${API_BASE}/admin/installations/${checklist.id}`, { headers: { Authorization: `Bearer ${token}` } }))
       .then((res) => res.json())
       .then((data) => {
         if (data.returns && data.returns.length > 0) {
@@ -1052,7 +1052,7 @@ function VerifyReturnModal({ checklist, token, onClose, onSuccess }) {
     setSubmitting(true);
 
     try {
-      const res = await fetch(`/api/admin/installations/${checklist.id}/verify-return`, {
+      const res = await fetch(`${API_BASE}/admin/installations/${checklist.id}/verify-return`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1139,7 +1139,7 @@ function ResolveDiscModal({ checklist, token, onClose, onSuccess }) {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    fetch('/api/admin/inventory/discrepancies', { headers: { Authorization: `Bearer ${token}` } })
+    fetch(`${API_BASE}/admin/inventory/discrepancies`, { headers: { Authorization: `Bearer ${token}` } })
       .then((res) => res.json())
       .then((data) => {
         const item = (data || []).find((d) => d.checklist_id === checklist.id && d.status === 'OPEN');
@@ -1159,7 +1159,7 @@ function ResolveDiscModal({ checklist, token, onClose, onSuccess }) {
     setLoading(true);
 
     try {
-      const res = await fetch(`/api/admin/installations/${checklist.id}/resolve-discrepancy`, {
+      const res = await fetch(`${API_BASE}/admin/installations/${checklist.id}/resolve-discrepancy`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

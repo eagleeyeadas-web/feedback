@@ -24,12 +24,17 @@ import {
 } from 'lucide-react';
 
 export default function InstallationChecklistList({ onSelectChecklist, onCreateNew }) {
-  const { session } = useAuth();
+  const { session, role } = useAuth();
   const token = session?.access_token;
   const navigate = useNavigate();
 
+  const userRole = (role || 'ADMIN').toUpperCase();
+  const canCreateOrEdit = userRole === 'SALES' || userRole === 'ADMIN' || userRole === 'SUPER_ADMIN';
+  const canDelete = userRole === 'ADMIN' || userRole === 'SUPER_ADMIN';
+
   const [checklists, setChecklists] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isWakingUp, setIsWakingUp] = useState(false);
   const [error, setError] = useState(null);
   const [toastMessage, setToastMessage] = useState(null);
 
@@ -81,6 +86,16 @@ export default function InstallationChecklistList({ onSelectChecklist, onCreateN
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  useEffect(() => {
+    let timer;
+    if (loading) {
+      timer = setTimeout(() => setIsWakingUp(true), 3000);
+    } else {
+      setIsWakingUp(false);
+    }
+    return () => clearTimeout(timer);
+  }, [loading]);
 
   const showToast = (msg) => {
     setToastMessage(msg);
@@ -190,16 +205,18 @@ export default function InstallationChecklistList({ onSelectChecklist, onCreateN
             <span>Export Excel</span>
           </button>
 
-          <button
-            onClick={() => {
-              if (onCreateNew) onCreateNew();
-              else navigate('/admin/installation-checklists/create');
-            }}
-            className="flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-5 py-2.5 rounded-xl shadow-sm transition-all cursor-pointer"
-          >
-            <Plus size={18} />
-            <span>Create Checklist</span>
-          </button>
+          {canCreateOrEdit && (
+            <button
+              onClick={() => {
+                if (onCreateNew) onCreateNew();
+                else navigate('/admin/installation-checklists/create');
+              }}
+              className="flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-5 py-2.5 rounded-xl shadow-sm transition-all cursor-pointer"
+            >
+              <Plus size={18} />
+              <span>Create Checklist</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -327,7 +344,14 @@ export default function InstallationChecklistList({ onSelectChecklist, onCreateN
         {loading ? (
           <div className="p-12 text-center">
             <div className="w-8 h-8 border-3 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-            <p className="text-xs text-gray-500">Loading installation checklists...</p>
+            <p className="text-xs font-semibold text-gray-700">
+              {isWakingUp
+                ? 'Connecting to backend... Free-tier server is spinning up (takes ~15-20s on initial load)'
+                : 'Loading installation checklists...'}
+            </p>
+            {isWakingUp && (
+              <p className="text-[11px] text-gray-400 mt-1">Please wait while the server container finishes starting.</p>
+            )}
           </div>
         ) : error ? (
           <div className="p-8 text-center text-rose-600">
@@ -441,16 +465,18 @@ export default function InstallationChecklistList({ onSelectChecklist, onCreateN
                         </button>
 
                         {/* Edit Action */}
-                        <button
-                          onClick={() => {
-                            if (onSelectChecklist) onSelectChecklist(item.id, 'edit');
-                            else navigate(`/admin/installation-checklists/${item.id}/edit`);
-                          }}
-                          title="Edit Checklist"
-                          className="p-1.5 text-amber-600 hover:bg-amber-50 rounded-lg transition-colors cursor-pointer"
-                        >
-                          <Edit size={16} />
-                        </button>
+                        {canCreateOrEdit && (
+                          <button
+                            onClick={() => {
+                              if (onSelectChecklist) onSelectChecklist(item.id, 'edit');
+                              else navigate(`/admin/installation-checklists/${item.id}/edit`);
+                            }}
+                            title="Edit Checklist"
+                            className="p-1.5 text-amber-600 hover:bg-amber-50 rounded-lg transition-colors cursor-pointer"
+                          >
+                            <Edit size={16} />
+                          </button>
+                        )}
 
                         {/* Download PDF Action */}
                         <button
@@ -477,13 +503,15 @@ export default function InstallationChecklistList({ onSelectChecklist, onCreateN
                         </button>
 
                         {/* Delete Action */}
-                        <button
-                          onClick={() => setDeleteTarget(item)}
-                          title="Delete Checklist"
-                          className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
-                        >
-                          <Trash2 size={16} />
-                        </button>
+                        {canDelete && (
+                          <button
+                            onClick={() => setDeleteTarget(item)}
+                            title="Delete Checklist"
+                            className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

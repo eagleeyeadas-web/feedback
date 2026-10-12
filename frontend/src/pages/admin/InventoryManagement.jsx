@@ -12,6 +12,12 @@ import {
   Clock,
   ShieldCheck,
 } from 'lucide-react';
+import {
+  fetchInventoryProducts,
+  fetchInventoryTransactions,
+  fetchInventoryDiscrepancies,
+  receiveInventoryStock,
+} from '../../lib/api';
 
 export default function InventoryManagement() {
   const { token, role } = useAuth();
@@ -38,35 +44,26 @@ export default function InventoryManagement() {
   const canManageStock = role === 'STORE_MANAGER' || role === 'ADMIN';
 
   const fetchData = async () => {
+    if (!token) return;
     setLoading(true);
     try {
-      // 1. Products
-      const prodRes = await fetch('/api/admin/inventory', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (prodRes.ok) {
-        const prodData = await prodRes.json();
-        setProducts(prodData);
+      const promises = [
+        fetchInventoryProducts(token).catch(() => []),
+      ];
+
+      if (canManageStock) {
+        promises.push(
+          fetchInventoryTransactions(token, { limit: 50 }).catch(() => ({ transactions: [] })),
+          fetchInventoryDiscrepancies(token).catch(() => [])
+        );
       }
 
-      // 2. Transactions
-      if (canManageStock) {
-        const txRes = await fetch('/api/admin/inventory/transactions', {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (txRes.ok) {
-          const txData = await txRes.json();
-          setTransactions(txData.transactions || []);
-        }
+      const results = await Promise.all(promises);
+      setProducts(results[0] || []);
 
-        // 3. Discrepancies
-        const discRes = await fetch('/api/admin/inventory/discrepancies', {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (discRes.ok) {
-          const discData = await discRes.json();
-          setDiscrepancies(discData || []);
-        }
+      if (canManageStock) {
+        setTransactions(results[1]?.transactions || []);
+        setDiscrepancies(results[2] || []);
       }
     } catch (err) {
       console.error('Failed to load inventory data:', err);
@@ -91,25 +88,15 @@ export default function InventoryManagement() {
 
     setSubmitting(true);
     try {
-      const res = await fetch('/api/admin/inventory/receive', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          device_type: selectedDeviceType,
-          quantity: qty,
-          supplier,
-          purchase_ref: purchaseRef,
-          unit_cost: unitCost ? parseFloat(unitCost) : null,
-          received_date: receivedDate,
-          remarks: receiveRemarks,
-        }),
+      await receiveInventoryStock(token, {
+        device_type: selectedDeviceType,
+        quantity: qty,
+        supplier,
+        purchase_ref: purchaseRef,
+        unit_cost: unitCost ? parseFloat(unitCost) : null,
+        received_date: receivedDate,
+        remarks: receiveRemarks,
       });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to receive stock');
 
       setSuccessMsg(`Successfully added ${qty} units of ${selectedDeviceType} to usable stock.`);
       setReceiveQty('');

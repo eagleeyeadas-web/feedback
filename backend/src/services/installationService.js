@@ -1,4 +1,11 @@
 import supabase from './supabase.js';
+import {
+  getAllServiceEngineers,
+  calculateBookingEndDate,
+  resolveEngineer,
+  reserveEngineerAtomic,
+  releaseEngineerBooking,
+} from './engineerBookingService.js';
 
 const DEVICE_TYPES = [
   '2 Channel Live',
@@ -91,6 +98,30 @@ export async function createChecklist(adminUserId, data) {
     paymentStatus = 'Partially Paid';
   }
 
+  // Calculate inclusive booking end date and validate engineer availability atomically
+  const engineerName = data.service_engineer ? data.service_engineer.trim() : '';
+  const startDate = data.expected_arrival_date || null;
+  const duration = data.installation_duration ? data.installation_duration.trim() : '1 Day';
+  let bookingEndDate = null;
+  let resolvedEng = null;
+
+  if (engineerName && startDate) {
+    resolvedEng = resolveEngineer(engineerName);
+    bookingEndDate = calculateBookingEndDate(startDate, duration);
+
+    // Concurrency-safe atomic reservation (throws 409 conflict if already booked)
+    await reserveEngineerAtomic({
+      engineerIdOrName: resolvedEng ? resolvedEng.id : engineerName,
+      checklistId: null,
+      checklistNumber,
+      startDate,
+      endDate: bookingEndDate,
+      duration,
+      user: { id: adminUserId },
+      status: data.installation_status || 'Assigned',
+    });
+  }
+
   const payload = {
     checklist_number: checklistNumber,
     created_by: adminUserId,
@@ -110,12 +141,14 @@ export async function createChecklist(adminUserId, data) {
     advance_amount: advanceAmount,
     pending_payment: Boolean(data.pending_payment),
     pending_amount: pendingAmount,
-    installation_duration: data.installation_duration ? data.installation_duration.trim() : '1 Day',
+    installation_duration: duration,
     vehicle_type: data.vehicle_type === 'Other' && data.custom_vehicle_type ? data.custom_vehicle_type.trim() : (data.vehicle_type || 'Truck'),
-    expected_arrival_date: data.expected_arrival_date || null,
+    expected_arrival_date: startDate,
     expected_arrival_time: data.expected_arrival_time || null,
     installation_or_service: data.installation_or_service,
-    service_engineer: data.service_engineer ? data.service_engineer.trim() : '',
+    service_engineer: engineerName,
+    service_engineer_id: resolvedEng ? resolvedEng.id : null,
+    booking_end_date: bookingEndDate,
     service_assistant: data.service_assistant ? data.service_assistant.trim() : '',
     installation_status: data.installation_status || 'Assigned',
     payment_status: paymentStatus,
@@ -125,18 +158,50 @@ export async function createChecklist(adminUserId, data) {
     updated_at: new Date().toISOString(),
   };
 
-  const { data: inserted, error } = await supabase
-    .from('installation_checklists')
-    .insert(payload)
-    .select()
-    .single();
+  let inserted;
+  try {
+    const { data: res, error } = await supabase
+      .from('installation_checklists')
+      .insert(payload)
+      .select()
+      .single();
 
-  if (error) {
-    console.error('Database insert error for checklist:', error);
-    if (error.code === 'PGRST205' || error.message?.includes("Could not find the table 'public.installation_checklists'")) {
-      throw new Error("Table 'installation_checklists' does not exist in Supabase database yet. Please execute the SQL migration script (supabase/migrations/008_installation_checklists_schema.sql) in the Supabase SQL Editor.");
+    if (error) throw error;
+    inserted = res;
+  } catch (error) {
+    // If service_engineer_id / booking_end_date columns are not migrated yet in PostgreSQL, retry without optional columns
+    if (error.code === 'PGRST204' || error.message?.includes('service_engineer_id') || error.message?.includes('booking_end_date')) {
+      const fallbackPayload = { ...payload };
+      delete fallbackPayload.service_engineer_id;
+      delete fallbackPayload.booking_end_date;
+      const { data: res2, error: err2 } = await supabase
+        .from('installation_checklists')
+        .insert(fallbackPayload)
+        .select()
+        .single();
+      if (err2) throw err2;
+      inserted = res2;
+    } else {
+      console.error('Database insert error for checklist:', error);
+      if (error.code === 'PGRST205' || error.message?.includes("Could not find the table 'public.installation_checklists'")) {
+        throw new Error("Table 'installation_checklists' does not exist in Supabase database yet. Please execute the SQL migration script (supabase/migrations/008_installation_checklists_schema.sql) in the Supabase SQL Editor.");
+      }
+      throw new Error(error.message || 'Failed to insert installation checklist');
     }
-    throw new Error(error.message || 'Failed to insert installation checklist');
+  }
+
+  // Associate created checklist ID with the booking
+  if (engineerName && startDate && inserted?.id) {
+    await reserveEngineerAtomic({
+      engineerIdOrName: resolvedEng ? resolvedEng.id : engineerName,
+      checklistId: inserted.id,
+      checklistNumber,
+      startDate,
+      endDate: bookingEndDate,
+      duration,
+      user: { id: adminUserId },
+      status: data.installation_status || 'Assigned',
+    }).catch((e) => console.warn('Could not associate checklist_id with booking:', e.message));
   }
 
   return inserted;
@@ -244,60 +309,7 @@ export async function getChecklists(params = {}) {
  * Fetch unique list of Service Engineers from database
  */
 export async function getServiceEngineers() {
-  const map = new Map();
-
-  // 1. Fetch from admin_users (TECHNICAL, ADMIN roles)
-  try {
-    const { data: users, error } = await supabase
-      .from('admin_users')
-      .select('id, full_name, email, role')
-      .in('role', ['TECHNICAL', 'ADMIN', 'admin', 'super_admin']);
-
-    if (!error && users) {
-      users.forEach((u) => {
-        const name = u.full_name || u.email || 'Unnamed Engineer';
-        map.set(u.id, {
-          id: u.id,
-          name,
-          role: u.role,
-          email: u.email,
-        });
-      });
-    }
-  } catch (err) {
-    console.warn('Error fetching engineers from admin_users:', err.message);
-  }
-
-  // 2. Fetch distinct service_engineer names from installation_checklists
-  try {
-    const { data: checklists, error } = await supabase
-      .from('installation_checklists')
-      .select('service_engineer')
-      .not('service_engineer', 'is', null);
-
-    if (!error && checklists) {
-      checklists.forEach((c) => {
-        if (c.service_engineer && c.service_engineer.trim()) {
-          const engName = c.service_engineer.trim();
-          const exists = Array.from(map.values()).some(
-            (e) => e.name.toLowerCase() === engName.toLowerCase() || e.id === engName
-          );
-          if (!exists) {
-            map.set(engName, {
-              id: engName,
-              name: engName,
-              role: 'TECHNICAL',
-              email: '',
-            });
-          }
-        }
-      });
-    }
-  } catch (err) {
-    console.warn('Error fetching distinct service_engineer from checklists:', err.message);
-  }
-
-  return Array.from(map.values());
+  return await getAllServiceEngineers();
 }
 
 /**
@@ -340,6 +352,34 @@ export async function updateChecklist(id, data) {
     paymentStatus = 'Partially Paid';
   }
 
+  const newEngName = data.service_engineer !== undefined ? (data.service_engineer ? data.service_engineer.trim() : '') : existing.service_engineer;
+  const newStartDate = data.expected_arrival_date !== undefined ? data.expected_arrival_date : existing.expected_arrival_date;
+  const newDuration = data.installation_duration !== undefined ? data.installation_duration : (existing.installation_duration || '1 Day');
+  const newStatus = data.installation_status !== undefined ? data.installation_status : existing.installation_status;
+
+  let newBookingEndDate = existing.booking_end_date;
+  let resolvedEng = existing.service_engineer_id ? { id: existing.service_engineer_id, name: existing.service_engineer } : resolveEngineer(newEngName);
+
+  if (newStatus === 'Cancelled') {
+    // Release booking if cancelled
+    await releaseEngineerBooking({ checklistId: existing.id });
+  } else if (newEngName && newStartDate) {
+    resolvedEng = resolveEngineer(newEngName);
+    newBookingEndDate = calculateBookingEndDate(newStartDate, newDuration);
+
+    // Atomically reserve the engineer (releasing previous booking for this checklist)
+    await reserveEngineerAtomic({
+      engineerIdOrName: resolvedEng ? resolvedEng.id : newEngName,
+      checklistId: existing.id,
+      checklistNumber: existing.checklist_number,
+      startDate: newStartDate,
+      endDate: newBookingEndDate,
+      duration: newDuration,
+      user: null,
+      status: (newStatus === 'Completed' || newStatus === 'Site Work Completed') ? 'COMPLETED' : 'ASSIGNED',
+    });
+  }
+
   const payload = {
     client_name: data.client_name ? data.client_name.trim() : existing.client_name,
     client_mobile: data.client_mobile ? data.client_mobile.trim() : existing.client_mobile,
@@ -357,12 +397,14 @@ export async function updateChecklist(id, data) {
     advance_amount: advanceAmount,
     pending_payment: Boolean(data.pending_payment),
     pending_amount: pendingAmount,
-    installation_duration: data.installation_duration ? data.installation_duration.trim() : existing.installation_duration,
+    installation_duration: newDuration,
     vehicle_type: data.vehicle_type === 'Other' && data.custom_vehicle_type ? data.custom_vehicle_type.trim() : (data.vehicle_type || existing.vehicle_type),
-    expected_arrival_date: data.expected_arrival_date || existing.expected_arrival_date,
+    expected_arrival_date: newStartDate,
     expected_arrival_time: data.expected_arrival_time || existing.expected_arrival_time,
     installation_or_service: data.installation_or_service || existing.installation_or_service,
-    service_engineer: data.service_engineer ? data.service_engineer.trim() : existing.service_engineer,
+    service_engineer: newEngName,
+    service_engineer_id: resolvedEng ? resolvedEng.id : null,
+    booking_end_date: newBookingEndDate,
     service_assistant: data.service_assistant ? data.service_assistant.trim() : existing.service_assistant,
     installation_status: ((existing.installation_status === 'Completed' || existing.installation_status === 'Site Work Completed') && (data.installation_status !== 'Completed'))
       ? 'Completed'
@@ -373,16 +415,34 @@ export async function updateChecklist(id, data) {
     updated_at: new Date().toISOString(),
   };
 
-  const { data: updated, error } = await supabase
-    .from('installation_checklists')
-    .update(payload)
-    .eq('id', existing.id)
-    .select()
-    .single();
+  let updated;
+  try {
+    const { data: res, error } = await supabase
+      .from('installation_checklists')
+      .update(payload)
+      .eq('id', existing.id)
+      .select()
+      .single();
 
-  if (error) {
-    console.error('Database update error for checklist:', error);
-    throw new Error(error.message || 'Failed to update installation checklist');
+    if (error) throw error;
+    updated = res;
+  } catch (error) {
+    if (error.code === 'PGRST204' || error.message?.includes('service_engineer_id') || error.message?.includes('booking_end_date')) {
+      const fallbackPayload = { ...payload };
+      delete fallbackPayload.service_engineer_id;
+      delete fallbackPayload.booking_end_date;
+      const { data: res2, error: err2 } = await supabase
+        .from('installation_checklists')
+        .update(fallbackPayload)
+        .eq('id', existing.id)
+        .select()
+        .single();
+      if (err2) throw err2;
+      updated = res2;
+    } else {
+      console.error('Database update error for checklist:', error);
+      throw new Error(error.message || 'Failed to update installation checklist');
+    }
   }
 
   return updated;
@@ -393,6 +453,8 @@ export async function updateChecklist(id, data) {
  */
 export async function deleteChecklist(id) {
   const existing = await getChecklistById(id);
+
+  await releaseEngineerBooking({ checklistId: existing.id });
 
   const { error } = await supabase
     .from('installation_checklists')
@@ -411,29 +473,19 @@ export async function deleteChecklist(id) {
  * Get installation checklist statistics for Admin Dashboard
  */
 export async function getInstallationStats() {
-  const { count: total } = await supabase
-    .from('installation_checklists')
-    .select('*', { count: 'exact', head: true });
-
-  const { count: assigned } = await supabase
-    .from('installation_checklists')
-    .select('*', { count: 'exact', head: true })
-    .in('installation_status', ['Assigned', 'Pending', 'In Progress']);
-
-  const { count: completed } = await supabase
-    .from('installation_checklists')
-    .select('*', { count: 'exact', head: true })
-    .in('installation_status', ['Completed', 'Site Work Completed']);
-
-  const { count: pending } = await supabase
-    .from('installation_checklists')
-    .select('*', { count: 'exact', head: true })
-    .eq('installation_status', 'Pending');
-
-  const { count: inProgress } = await supabase
-    .from('installation_checklists')
-    .select('*', { count: 'exact', head: true })
-    .eq('installation_status', 'In Progress');
+  const [
+    { count: total },
+    { count: assigned },
+    { count: completed },
+    { count: pending },
+    { count: inProgress },
+  ] = await Promise.all([
+    supabase.from('installation_checklists').select('*', { count: 'exact', head: true }),
+    supabase.from('installation_checklists').select('*', { count: 'exact', head: true }).in('installation_status', ['Assigned', 'Pending', 'In Progress']),
+    supabase.from('installation_checklists').select('*', { count: 'exact', head: true }).in('installation_status', ['Completed', 'Site Work Completed']),
+    supabase.from('installation_checklists').select('*', { count: 'exact', head: true }).eq('installation_status', 'Pending'),
+    supabase.from('installation_checklists').select('*', { count: 'exact', head: true }).eq('installation_status', 'In Progress'),
+  ]);
 
   return {
     total: total || 0,

@@ -5,6 +5,8 @@ import {
   createInstallationChecklist,
   updateInstallationChecklist,
   fetchInstallationChecklistDetail,
+  fetchEngineersAvailability,
+  fetchServiceEngineers,
 } from '../../../lib/api';
 import {
   ArrowLeft,
@@ -21,6 +23,8 @@ import {
   Link as LinkIcon,
   HelpCircle,
   CheckSquare,
+  Clock,
+  Sparkles,
 } from 'lucide-react';
 
 const DEVICE_OPTIONS = [
@@ -37,6 +41,18 @@ const VEHICLE_OPTIONS = ['Lorry', 'Truck', 'Bus', 'Heavy Vehicle', 'Other'];
 const PAYMENT_METHODS = ['Cash', 'UPI', 'Bank Transfer', 'Credit', 'Other'];
 const INSTALLATION_STATUSES = ['Assigned', 'Completed'];
 const PAYMENT_STATUSES = ['Paid', 'Partially Paid', 'Pending'];
+const DURATION_PRESETS = ['1 Day', '2 Days', '3 Days', '4 Days', '5 Days', 'Custom'];
+
+// Helper to compute inclusive booking end date
+function computeEndDate(startDate, durationStr) {
+  if (!startDate) return '';
+  const match = String(durationStr || '1 Day').match(/(\d+)/);
+  const days = match ? Math.max(1, parseInt(match[1], 10)) : 1;
+  const [y, m, d] = startDate.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(dt.getUTCDate() + (days - 1));
+  return dt.toISOString().split('T')[0];
+}
 
 export default function InstallationChecklistForm({ id: propId, onSaved, onCancel }) {
   const { session } = useAuth();
@@ -52,6 +68,11 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
   const [error, setError] = useState(null);
   const [successToast, setSuccessToast] = useState(null);
   const [isAuthoritativeCompleted, setIsAuthoritativeCompleted] = useState(false);
+
+  // Field Engineer Availability State
+  const [engineersList, setEngineersList] = useState([]);
+  const [engineersAvailability, setEngineersAvailability] = useState([]);
+  const [checkingAvailability, setCheckingAvailability] = useState(false);
 
   // Form State matching all 27 questions exactly
   const [formData, setFormData] = useState({
@@ -132,6 +153,40 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
     }
   }, [isEditMode, checklistId, token]);
 
+  // Load Engineers List on mount
+  useEffect(() => {
+    if (token) {
+      fetchServiceEngineers(token)
+        .then((list) => {
+          if (Array.isArray(list) && list.length > 0) {
+            setEngineersList(list);
+          }
+        })
+        .catch((err) => console.warn('Could not load service engineers:', err));
+    }
+  }, [token]);
+
+  // Fetch real-time engineer availability whenever expected_arrival_date or duration changes
+  useEffect(() => {
+    if (!token || !formData.expected_arrival_date) return;
+    const calculatedEnd = computeEndDate(formData.expected_arrival_date, formData.installation_duration);
+
+    setCheckingAvailability(true);
+    fetchEngineersAvailability(token, {
+      startDate: formData.expected_arrival_date,
+      endDate: calculatedEnd,
+      duration: formData.installation_duration,
+      excludeChecklistId: isEditMode ? checklistId : null,
+    })
+      .then((data) => {
+        setEngineersAvailability(data || []);
+      })
+      .catch((err) => {
+        console.warn('Could not fetch engineers availability:', err);
+      })
+      .finally(() => setCheckingAvailability(false));
+  }, [token, formData.expected_arrival_date, formData.installation_duration, isEditMode, checklistId]);
+
   const handleChange = (field, val) => {
     setFormData((prev) => {
       const next = { ...prev, [field]: val };
@@ -208,6 +263,33 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
 
     if (!formData.service_engineer.trim()) return 'Team Member 1 – Service Engineer is required';
     if (!formData.service_assistant.trim()) return 'Team Member 2 – Service Assistant is required';
+
+    // 1. Availability validation: check if chosen Service Engineer has a conflicting booking
+    const selectedEngStatus = engineersAvailability.find(
+      (e) => e.name.toLowerCase() === formData.service_engineer.trim().toLowerCase()
+    );
+    if (selectedEngStatus && !selectedEngStatus.available) {
+      const c = selectedEngStatus.conflict;
+      return `Booking Conflict: ${formData.service_engineer} is already booked for checklist ${c?.checklist_number || 'another job'} from ${c?.booking_start_date} to ${c?.booking_end_date}. Please select an available engineer.`;
+    }
+
+    // 2. Prevent assigning the same person as both Engineer and Assistant on the same job
+    if (
+      formData.service_engineer &&
+      formData.service_assistant &&
+      formData.service_engineer.trim().toLowerCase() === formData.service_assistant.trim().toLowerCase()
+    ) {
+      return 'Team Member 2 (Service Assistant) cannot be the same person as Team Member 1 (Service Engineer).';
+    }
+
+    // 3. Prevent double-booking assistant if assistant is a managed service engineer
+    const selectedAsstStatus = engineersAvailability.find(
+      (e) => e.name.toLowerCase() === formData.service_assistant.trim().toLowerCase()
+    );
+    if (selectedAsstStatus && !selectedAsstStatus.available) {
+      const c = selectedAsstStatus.conflict;
+      return `Booking Conflict: Assistant ${formData.service_assistant} is already booked for checklist ${c?.checklist_number} from ${c?.booking_start_date} to ${c?.booking_end_date}.`;
+    }
 
     if (!formData.installation_status || !INSTALLATION_STATUSES.includes(formData.installation_status)) {
       return 'Installation Status is required and must be either Assigned or Completed';
@@ -664,23 +746,102 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
         </div>
 
         {/* SECTION 9 — 4. INSTALLATION DETAILS */}
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4">
-          <h3 className="text-sm font-bold text-navy flex items-center gap-2 pb-3 border-b border-gray-100">
-            <Calendar className="text-blue-600" size={18} />
-            4. INSTALLATION DETAILS
-          </h3>
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-5">
+          <div className="flex items-center justify-between pb-3 border-b border-gray-100">
+            <h3 className="text-sm font-bold text-navy flex items-center gap-2">
+              <Calendar className="text-blue-600" size={18} />
+              4. INSTALLATION DETAILS & SCHEDULE
+            </h3>
+            {formData.expected_arrival_date && (
+              <span className="text-[11px] font-semibold text-blue-700 bg-blue-50 px-2.5 py-1 rounded-full border border-blue-100">
+                Inclusive Range: {formData.expected_arrival_date} &rarr; {computeEndDate(formData.expected_arrival_date, formData.installation_duration)}
+              </span>
+            )}
+          </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {/* Arrival Date (Start Date) */}
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1">
+                Expected Arrival Date (Start Date) <span className="text-rose-500">*</span>
+              </label>
+              <input
+                type="date"
+                required
+                value={formData.expected_arrival_date}
+                onChange={(e) => handleChange('expected_arrival_date', e.target.value)}
+                className="w-full text-xs p-2.5 border border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 font-medium"
+              />
+              <span className="text-[10px] text-gray-400 mt-1 block">Full-day inclusive arrival date</span>
+            </div>
+
+            {/* Duration Selector & Presets */}
             <div>
               <label className="block text-xs font-semibold text-gray-700 mb-1">
                 Installation Duration <span className="text-rose-500">*</span>
               </label>
+              <div className="space-y-1.5">
+                <input
+                  type="text"
+                  required
+                  value={formData.installation_duration}
+                  onChange={(e) => handleChange('installation_duration', e.target.value)}
+                  placeholder="e.g. 1 Day, 2 Days, 3 Days"
+                  className="w-full text-xs p-2.5 border border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 font-medium"
+                />
+                <div className="flex flex-wrap gap-1">
+                  {['1 Day', '2 Days', '3 Days', '4 Days', '5 Days'].map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => handleChange('installation_duration', preset)}
+                      className={`text-[10px] px-2 py-0.5 rounded-md font-semibold border transition-all ${
+                        formData.installation_duration === preset
+                          ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                          : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'
+                      }`}
+                    >
+                      {preset}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* End Date (Calculated or Editable) */}
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1">
+                Booking End Date (Inclusive)
+              </label>
               <input
-                type="text"
+                type="date"
+                min={formData.expected_arrival_date}
+                value={computeEndDate(formData.expected_arrival_date, formData.installation_duration)}
+                onChange={(e) => {
+                  const endVal = e.target.value;
+                  if (endVal && formData.expected_arrival_date && endVal >= formData.expected_arrival_date) {
+                    const startDt = new Date(formData.expected_arrival_date);
+                    const endDt = new Date(endVal);
+                    const diffDays = Math.max(1, Math.round((endDt - startDt) / (1000 * 3600 * 24)) + 1);
+                    handleChange('installation_duration', `${diffDays} ${diffDays === 1 ? 'Day' : 'Days'}`);
+                  }
+                }}
+                className="w-full text-xs p-2.5 border border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 bg-gray-50/70 font-medium"
+              />
+              <span className="text-[10px] text-gray-400 mt-1 block">Adjusts duration in full days</span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-1">
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1">
+                Expected Arrival Time <span className="text-rose-500">*</span>
+              </label>
+              <input
+                type="time"
                 required
-                value={formData.installation_duration}
-                onChange={(e) => handleChange('installation_duration', e.target.value)}
-                placeholder="e.g. 2 Hours / 1 Day / 2 Days"
+                value={formData.expected_arrival_time}
+                onChange={(e) => handleChange('expected_arrival_time', e.target.value)}
                 className="w-full text-xs p-2.5 border border-gray-200 rounded-xl focus:outline-none focus:border-blue-500"
               />
             </div>
@@ -701,22 +862,6 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
                 ))}
               </select>
             </div>
-
-            {formData.vehicle_type === 'Other' && (
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">
-                  Custom Vehicle Type <span className="text-rose-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={formData.custom_vehicle_type}
-                  onChange={(e) => handleChange('custom_vehicle_type', e.target.value)}
-                  placeholder="e.g. Crane / Tractor / Ambulance"
-                  className="w-full text-xs p-2.5 border border-gray-200 rounded-xl focus:outline-none focus:border-blue-500"
-                />
-              </div>
-            )}
 
             <div>
               <label className="block text-xs font-semibold text-gray-700 mb-1">
@@ -745,69 +890,225 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+          {formData.vehicle_type === 'Other' && (
             <div>
               <label className="block text-xs font-semibold text-gray-700 mb-1">
-                Expected Date of Arrival at Client Place <span className="text-rose-500">*</span>
-              </label>
-              <input
-                type="date"
-                required
-                value={formData.expected_arrival_date}
-                onChange={(e) => handleChange('expected_arrival_date', e.target.value)}
-                className="w-full text-xs p-2.5 border border-gray-200 rounded-xl focus:outline-none focus:border-blue-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">
-                Expected Time of Arrival at Client Place <span className="text-rose-500">*</span>
-              </label>
-              <input
-                type="time"
-                required
-                value={formData.expected_arrival_time}
-                onChange={(e) => handleChange('expected_arrival_time', e.target.value)}
-                className="w-full text-xs p-2.5 border border-gray-200 rounded-xl focus:outline-none focus:border-blue-500"
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* SECTION 10 — 5. INSTALLATION TEAM */}
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4">
-          <h3 className="text-sm font-bold text-navy flex items-center gap-2 pb-3 border-b border-gray-100">
-            <Users className="text-blue-600" size={18} />
-            5. INSTALLATION TEAM
-          </h3>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">
-                Team Member 1 – Service Engineer <span className="text-rose-500">*</span>
+                Custom Vehicle Type <span className="text-rose-500">*</span>
               </label>
               <input
                 type="text"
                 required
-                value={formData.service_engineer}
-                onChange={(e) => handleChange('service_engineer', e.target.value)}
-                placeholder="Name of Service Engineer"
+                value={formData.custom_vehicle_type}
+                onChange={(e) => handleChange('custom_vehicle_type', e.target.value)}
+                placeholder="e.g. Crane / Tractor / Ambulance"
                 className="w-full text-xs p-2.5 border border-gray-200 rounded-xl focus:outline-none focus:border-blue-500"
               />
             </div>
+          )}
+        </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">
+        {/* SECTION 10 — 5. INSTALLATION TEAM */}
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-gray-100">
+            <h3 className="text-sm font-bold text-navy flex items-center gap-2">
+              <Users className="text-blue-600" size={18} />
+              5. INSTALLATION TEAM & ENGINEER AVAILABILITY
+            </h3>
+            {checkingAvailability && (
+              <span className="text-[11px] text-blue-600 animate-pulse font-medium flex items-center gap-1">
+                <Clock size={12} /> Checking availability...
+              </span>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+            {/* Team Member 1 - Service Engineer with Availability-Aware Select */}
+            <div className="space-y-2">
+              <label className="block text-xs font-semibold text-gray-700">
+                Team Member 1 – Service Engineer <span className="text-rose-500">*</span>
+              </label>
+
+              <select
+                required
+                value={formData.service_engineer}
+                onChange={(e) => handleChange('service_engineer', e.target.value)}
+                className="w-full text-xs p-2.5 border border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 font-semibold bg-white"
+              >
+                <option value="">-- Select Service Engineer --</option>
+                {engineersAvailability && engineersAvailability.length > 0 ? (
+                  engineersAvailability.map((eng) => (
+                    <option
+                      key={eng.id || eng.name}
+                      value={eng.name}
+                      disabled={!eng.available}
+                      className={eng.available ? 'text-gray-900 font-medium' : 'text-gray-400 bg-gray-50 italic'}
+                    >
+                      {eng.available
+                        ? `✓ ${eng.name} — Available`
+                        : `🚫 ${eng.name} — Booked (${eng.conflict?.booking_start_date} to ${eng.conflict?.booking_end_date}, Job #${eng.conflict?.checklist_number || 'Reserved'})`}
+                    </option>
+                  ))
+                ) : (
+                  ['Mathi', 'Kamalesh', 'Dhinagaran', 'Sakthivel', 'Mithun'].map((name) => (
+                    <option key={name} value={name}>
+                      {name}
+                    </option>
+                  ))
+                )}
+              </select>
+
+              {/* Quick Select Engineer Chips */}
+              <div className="pt-1">
+                <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider block mb-1">
+                  Engineers Availability Status:
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {(engineersAvailability && engineersAvailability.length > 0
+                    ? engineersAvailability
+                    : [
+                        { name: 'Mathi', available: true },
+                        { name: 'Kamalesh', available: true },
+                        { name: 'Dhinagaran', available: true },
+                        { name: 'Sakthivel', available: true },
+                        { name: 'Mithun', available: true },
+                      ]
+                  ).map((eng) => {
+                    const isSelected = formData.service_engineer.toLowerCase() === eng.name.toLowerCase();
+                    return (
+                      <button
+                        key={eng.id || eng.name}
+                        type="button"
+                        disabled={!eng.available}
+                        onClick={() => {
+                          if (eng.available) {
+                            handleChange('service_engineer', eng.name);
+                          }
+                        }}
+                        title={
+                          eng.available
+                            ? `${eng.name} is available for this period`
+                            : `${eng.name} is booked for Job #${eng.conflict?.checklist_number || 'Busy'} (${eng.conflict?.booking_start_date} to ${eng.conflict?.booking_end_date})`
+                        }
+                        className={`text-[11px] px-2.5 py-1 rounded-lg font-medium border flex items-center gap-1.5 transition-all ${
+                          !eng.available
+                            ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed opacity-75 line-through'
+                            : isSelected
+                            ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                            : 'bg-white text-gray-700 border-gray-200 hover:border-blue-400 hover:bg-blue-50/50'
+                        }`}
+                      >
+                        <span
+                          className={`w-2 h-2 rounded-full ${
+                            eng.available ? 'bg-emerald-500' : 'bg-rose-500'
+                          }`}
+                        />
+                        {eng.name}
+                        <span className="text-[9px] font-bold">
+                          {eng.available ? 'Avail' : 'Booked'}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Active Conflict Warning Banner if current selected engineer is Booked */}
+              {(() => {
+                const selectedEng = engineersAvailability?.find(
+                  (e) => e.name.toLowerCase() === (formData.service_engineer || '').trim().toLowerCase()
+                );
+                if (selectedEng && !selectedEng.available) {
+                  return (
+                    <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-800 text-xs flex items-start gap-2 animate-in fade-in">
+                      <AlertTriangle size={16} className="text-rose-600 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="font-bold">Schedule Conflict Detected!</p>
+                        <p className="text-[11px] mt-0.5 text-rose-700">
+                          <strong>{selectedEng.name}</strong> is already assigned to Checklist{' '}
+                          <strong>#{selectedEng.conflict?.checklist_number || 'Reserved'}</strong> from{' '}
+                          <strong>{selectedEng.conflict?.booking_start_date}</strong> to{' '}
+                          <strong>{selectedEng.conflict?.booking_end_date}</strong> ({selectedEng.conflict?.client_name || 'Client'}). Please select an available engineer.
+                        </p>
+                      </div>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
+            </div>
+
+            {/* Team Member 2 - Service Assistant */}
+            <div className="space-y-2">
+              <label className="block text-xs font-semibold text-gray-700">
                 Team Member 2 – Service Assistant <span className="text-rose-500">*</span>
               </label>
+
               <input
                 type="text"
                 required
                 value={formData.service_assistant}
                 onChange={(e) => handleChange('service_assistant', e.target.value)}
                 placeholder="Name of Service Assistant"
-                className="w-full text-xs p-2.5 border border-gray-200 rounded-xl focus:outline-none focus:border-blue-500"
+                className="w-full text-xs p-2.5 border border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 font-medium"
               />
+
+              {/* Quick suggestions for assistant */}
+              <div className="pt-1">
+                <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider block mb-1">
+                  Quick Assistant Suggestions:
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {['Kamalesh', 'Dhinagaran', 'Sakthivel', 'Mithun', 'Mathi'].map((name) => {
+                    const isSelected = formData.service_assistant.toLowerCase() === name.toLowerCase();
+                    const isSameAsEng = formData.service_engineer.toLowerCase() === name.toLowerCase();
+                    return (
+                      <button
+                        key={name}
+                        type="button"
+                        disabled={isSameAsEng}
+                        onClick={() => handleChange('service_assistant', name)}
+                        className={`text-[11px] px-2.5 py-1 rounded-lg font-medium border transition-all ${
+                          isSameAsEng
+                            ? 'bg-gray-100 text-gray-300 border-gray-200 cursor-not-allowed opacity-50'
+                            : isSelected
+                            ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                            : 'bg-white text-gray-700 border-gray-200 hover:border-blue-400 hover:bg-blue-50/50'
+                        }`}
+                      >
+                        {name}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Warning if Assistant is the same person as Service Engineer */}
+              {formData.service_engineer &&
+                formData.service_assistant &&
+                formData.service_engineer.trim().toLowerCase() === formData.service_assistant.trim().toLowerCase() && (
+                  <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-xs flex items-center gap-2">
+                    <AlertTriangle size={15} className="text-amber-600 shrink-0" />
+                    <span>Team Member 2 cannot be the same person as Team Member 1.</span>
+                  </div>
+                )}
+
+              {/* Warning if Assistant is booked as engineer */}
+              {(() => {
+                const asstStatus = engineersAvailability?.find(
+                  (e) => e.name.toLowerCase() === (formData.service_assistant || '').trim().toLowerCase()
+                );
+                if (asstStatus && !asstStatus.available && formData.service_assistant.trim().toLowerCase() !== formData.service_engineer.trim().toLowerCase()) {
+                  return (
+                    <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-xs flex items-start gap-2">
+                      <AlertTriangle size={15} className="text-amber-600 shrink-0 mt-0.5" />
+                      <span className="text-[11px]">
+                        Notice: <strong>{asstStatus.name}</strong> has a scheduled booking for Job #{asstStatus.conflict?.checklist_number} ({asstStatus.conflict?.booking_start_date} to {asstStatus.conflict?.booking_end_date}). Double-booking should be avoided.
+                      </span>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
             </div>
           </div>
         </div>

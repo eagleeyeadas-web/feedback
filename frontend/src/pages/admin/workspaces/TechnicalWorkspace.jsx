@@ -12,8 +12,9 @@ import {
   FileCheck,
   UserCheck,
   Filter,
-  Play,
   RefreshCw,
+  Eye,
+  Archive,
 } from 'lucide-react';
 import DeviceCarryModal from '../../../components/workspaces/DeviceCarryModal';
 import InstallationCompletionModal from '../../../components/workspaces/InstallationCompletionModal';
@@ -24,10 +25,14 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
   const token = authToken || session?.access_token;
   const navigate = useNavigate();
 
+  // Tab State: 'assigned' (default) vs 'completed'
+  const [activeTab, setActiveTab] = useState('assigned');
+
   const [checklists, setChecklists] = useState([]);
   const [engineers, setEngineers] = useState([]);
   const [selectedEngineer, setSelectedEngineer] = useState('all');
   const [loading, setLoading] = useState(true);
+  const [isWakingUp, setIsWakingUp] = useState(false);
   const [error, setError] = useState(null);
   const [search, setSearch] = useState('');
   const [actionSuccessMsg, setActionSuccessMsg] = useState('');
@@ -49,12 +54,12 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
     setError(null);
 
     try {
-      // 1. Fetch all assigned installation checklists
-      const res = await fetchInstallationChecklists(token, { limit: 200 });
-      setChecklists(res.checklists || []);
-
-      // 2. Fetch engineers list for filter dropdown
-      const engList = await fetchServiceEngineers(token);
+      // Parallelize checklist and engineer fetching
+      const [res, engList] = await Promise.all([
+        fetchInstallationChecklists(token, { limit: 100 }),
+        fetchServiceEngineers(token).catch(() => []),
+      ]);
+      setChecklists(res?.checklists || []);
       setEngineers(engList || []);
     } catch (err) {
       console.error('Failed to load Technical workspace data:', err);
@@ -68,14 +73,39 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
     loadData();
   }, [loadData]);
 
+  useEffect(() => {
+    let timer;
+    if (loading) {
+      timer = setTimeout(() => setIsWakingUp(true), 3000);
+    } else {
+      setIsWakingUp(false);
+    }
+    return () => clearTimeout(timer);
+  }, [loading]);
+
   const showToast = (msg) => {
     setActionSuccessMsg(msg);
     setTimeout(() => setActionSuccessMsg(''), 3500);
   };
 
-  // Filter checklists by Service Engineer (primary filter) AND search query
-  const filteredChecklists = checklists.filter((item) => {
-    // 1. Service Engineer primary filter
+  // SOURCE OF TRUTH: Persisted installation_status determines Assigned vs Completed
+  const isJobCompleted = (item) => {
+    const status = (item.installation_status || '').trim().toLowerCase();
+    return status === 'completed' || status === 'site work completed';
+  };
+
+  const isJobAssigned = (item) => {
+    const status = (item.installation_status || '').trim().toLowerCase();
+    return !isJobCompleted(item) && status !== 'cancelled';
+  };
+
+  // Base partitions (mutual exclusivity strictly enforced)
+  const allAssignedJobs = checklists.filter(isJobAssigned);
+  const allCompletedJobs = checklists.filter(isJobCompleted);
+
+  // Filter helper matching Service Engineer AND search query
+  const matchesFilter = (item) => {
+    // 1. Service Engineer filter
     let matchesEngineer = true;
     if (selectedEngineer !== 'all') {
       const targetEng = engineers.find((e) => e.id === selectedEngineer);
@@ -101,30 +131,17 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
     }
 
     return matchesEngineer && matchesSearch;
-  });
-
-  // Calculate dynamic dashboard summary metrics
-  const assignedJobsCount = checklists.length;
-  const inProgressCount = checklists.filter(
-    (c) => c.installation_status === 'In Progress' || c.reconciliation_status === 'STORE_ISSUED'
-  ).length;
-  const siteCompletedCount = checklists.filter(
-    (c) =>
-      c.installation_status === 'Site Work Completed' ||
-      c.installation_status === 'Completed' ||
-      c.reconciliation_status === 'SITE_WORK_COMPLETED' ||
-      c.reconciliation_status === 'FULLY_RECONCILED'
-  ).length;
-
-  const handleStartInstallation = async (jobId) => {
-    try {
-      await startInstallationJob(token, jobId);
-      showToast('Installation status updated to In Progress.');
-      loadData();
-    } catch (err) {
-      alert(err.message || 'Failed to start installation job');
-    }
   };
+
+  const filteredAssignedJobs = allAssignedJobs.filter(matchesFilter);
+  const filteredCompletedJobs = allCompletedJobs.filter(matchesFilter);
+
+  // Dynamic Metrics Bar (Source of Truth counts)
+  const assignedJobsCount = allAssignedJobs.length;
+  const inProgressCount = checklists.filter(
+    (c) => (c.installation_status || '').trim().toLowerCase() === 'in progress'
+  ).length;
+  const completedJobsCount = allCompletedJobs.length;
 
   return (
     <div className="space-y-6">
@@ -146,7 +163,7 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
             <Wrench className="w-7 h-7 text-purple-400" /> Technical Team Job Workspace
           </h1>
           <p className="text-xs text-white/70 mt-1 max-w-xl">
-            View assigned installation jobs, record mandatory pre-installation devices carried, start site work, submit completion reports, and declare return items.
+            Manage assigned installation jobs, record pre-installation devices carried, submit post-installation reports, and view historical completed jobs.
           </p>
         </div>
 
@@ -162,12 +179,19 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
 
       {/* Metrics Bar */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-xs flex items-center gap-4">
+        <div
+          onClick={() => setActiveTab('assigned')}
+          className={`bg-white p-5 rounded-xl border shadow-xs flex items-center gap-4 cursor-pointer transition-all ${
+            activeTab === 'assigned'
+              ? 'border-purple-500 ring-2 ring-purple-100 bg-purple-50/20'
+              : 'border-gray-200 hover:border-purple-300'
+          }`}
+        >
           <div className="w-10 h-10 rounded-lg bg-purple-50 flex items-center justify-center text-purple-600">
             <Wrench className="w-5 h-5" />
           </div>
           <div>
-            <p className="text-xs text-gray-500 font-medium">Assigned Jobs</p>
+            <p className="text-xs text-gray-500 font-medium">Assigned Jobs (Active)</p>
             <p className="text-2xl font-bold text-gray-900">{assignedJobsCount}</p>
           </div>
         </div>
@@ -182,13 +206,20 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
           </div>
         </div>
 
-        <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-xs flex items-center gap-4">
+        <div
+          onClick={() => setActiveTab('completed')}
+          className={`bg-white p-5 rounded-xl border shadow-xs flex items-center gap-4 cursor-pointer transition-all ${
+            activeTab === 'completed'
+              ? 'border-emerald-500 ring-2 ring-emerald-100 bg-emerald-50/20'
+              : 'border-gray-200 hover:border-emerald-300'
+          }`}
+        >
           <div className="w-10 h-10 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600">
             <CheckCircle2 className="w-5 h-5" />
           </div>
           <div>
-            <p className="text-xs text-gray-500 font-medium">Site Work Completed</p>
-            <p className="text-2xl font-bold text-gray-900">{siteCompletedCount}</p>
+            <p className="text-xs text-gray-500 font-medium">Completed Jobs</p>
+            <p className="text-2xl font-bold text-gray-900">{completedJobsCount}</p>
           </div>
         </div>
       </div>
@@ -205,7 +236,7 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
             onChange={(e) => setSelectedEngineer(e.target.value)}
             className="w-full text-xs p-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:border-purple-500 font-semibold text-gray-800"
           >
-            <option value="all">All Engineers ({checklists.length} jobs)</option>
+            <option value="all">All Engineers ({checklists.length} total jobs)</option>
             {engineers.map((eng) => (
               <option key={eng.id} value={eng.id}>
                 {eng.name} {eng.role ? `(${eng.role})` : ''}
@@ -232,245 +263,494 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
         </div>
       </div>
 
-      {/* Technical Jobs Table */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden">
-        <div className="p-4 border-b border-gray-200 bg-gray-50/50 flex items-center justify-between">
-          <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
-            <Wrench className="w-4 h-4 text-purple-600" /> Assigned Technical Installation Jobs
-          </h3>
-          <span className="text-xs text-gray-500 font-medium">
-            Showing {filteredChecklists.length} of {checklists.length} jobs
-          </span>
+      {/* SEGMENTED TOGGLE SWITCH (Purple & Navy Eagle Eye SafDrive Theme) */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
+        <div className="inline-flex p-1.5 bg-slate-100/90 rounded-2xl border border-slate-200/90 shadow-inner max-w-fit">
+          {/* Toggle: Assigned Jobs */}
+          <button
+            type="button"
+            id="toggle-assigned-jobs"
+            onClick={() => setActiveTab('assigned')}
+            className={`px-5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
+              activeTab === 'assigned'
+                ? 'bg-gradient-to-r from-purple-900 to-indigo-950 text-white shadow-md font-extrabold'
+                : 'text-gray-600 hover:text-gray-900 hover:bg-white/70'
+            }`}
+          >
+            <Clock className={`w-3.5 h-3.5 ${activeTab === 'assigned' ? 'text-purple-300' : 'text-gray-400'}`} />
+            <span>Assigned Jobs</span>
+            <span
+              className={`px-2.5 py-0.5 rounded-full text-[11px] font-extrabold ${
+                activeTab === 'assigned'
+                  ? 'bg-purple-700/80 text-white border border-purple-400/30'
+                  : 'bg-gray-200 text-gray-700'
+              }`}
+            >
+              {filteredAssignedJobs.length}
+            </span>
+          </button>
+
+          {/* Toggle: Completed Jobs */}
+          <button
+            type="button"
+            id="toggle-completed-jobs"
+            onClick={() => setActiveTab('completed')}
+            className={`px-5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
+              activeTab === 'completed'
+                ? 'bg-gradient-to-r from-purple-900 to-indigo-950 text-white shadow-md font-extrabold'
+                : 'text-gray-600 hover:text-gray-900 hover:bg-white/70'
+            }`}
+          >
+            <CheckCircle2 className={`w-3.5 h-3.5 ${activeTab === 'completed' ? 'text-purple-300' : 'text-gray-400'}`} />
+            <span>Completed Jobs</span>
+            <span
+              className={`px-2.5 py-0.5 rounded-full text-[11px] font-extrabold ${
+                activeTab === 'completed'
+                  ? 'bg-purple-700/80 text-white border border-purple-400/30'
+                  : 'bg-gray-200 text-gray-700'
+              }`}
+            >
+              {filteredCompletedJobs.length}
+            </span>
+          </button>
         </div>
 
-        {loading ? (
-          <div className="p-12 text-center">
-            <div className="w-8 h-8 border-3 border-purple-600 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-            <p className="text-xs font-semibold text-gray-600">Loading Technical jobs...</p>
+        <div className="text-xs text-gray-500 font-medium">
+          {activeTab === 'assigned' ? (
+            <span>
+              Showing <strong className="text-gray-800">{filteredAssignedJobs.length}</strong> of{' '}
+              <strong className="text-gray-800">{allAssignedJobs.length}</strong> assigned jobs
+            </span>
+          ) : (
+            <span>
+              Showing <strong className="text-gray-800">{filteredCompletedJobs.length}</strong> of{' '}
+              <strong className="text-gray-800">{allCompletedJobs.length}</strong> completed jobs
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* SECTION 1: ASSIGNED JOBS TABLE */}
+      {activeTab === 'assigned' && (
+        <div className="bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden">
+          <div className="p-4 border-b border-gray-200 bg-gray-50/50 flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                <Clock className="w-4 h-4 text-purple-600" /> Assigned Technical Jobs
+              </h3>
+              <p className="text-[11px] text-gray-500 mt-0.5">
+                Jobs awaiting pre-installation device carry declaration, installation work, or completion report.
+              </p>
+            </div>
+            <span className="text-xs text-gray-500 font-medium">
+              Showing {filteredAssignedJobs.length} of {allAssignedJobs.length} assigned jobs
+            </span>
           </div>
-        ) : error ? (
-          <div className="p-8 text-center text-rose-600 space-y-3">
-            <AlertTriangle className="w-8 h-8 mx-auto text-rose-500" />
-            <p className="text-xs font-bold">{error}</p>
-            <button
-              onClick={loadData}
-              className="px-4 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs rounded-xl border border-rose-200 transition-colors cursor-pointer"
-            >
-              Retry Loading Jobs
-            </button>
-          </div>
-        ) : filteredChecklists.length === 0 ? (
-          <div className="p-12 text-center text-gray-400 space-y-2">
-            <Filter className="w-8 h-8 text-gray-300 mx-auto" />
-            <p className="font-semibold text-gray-600">No assigned technical jobs found</p>
-            <p className="text-[11px] text-gray-400">
-              {checklists.length === 0
-                ? 'No installation checklists exist in the database yet.'
-                : 'Try adjusting your Service Engineer filter or search query.'}
-            </p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse text-xs">
-              <thead>
-                <tr className="bg-gray-50 border-b border-gray-200 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                  <th className="py-3 px-4">Checklist No.</th>
-                  <th className="py-3 px-4">Client Details</th>
-                  <th className="py-3 px-4">Sales Device Request</th>
-                  <th className="py-3 px-4">Assigned Team</th>
-                  <th className="py-3 px-4">Arrival Date/Time</th>
-                  <th className="py-3 px-4">Carry Status</th>
-                  <th className="py-3 px-4">Installation Status</th>
-                  <th className="py-3 px-4">Reconciliation Status</th>
-                  <th className="py-3 px-4">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {filteredChecklists.map((item) => {
-                  const carryStatusUpper = (item.carry_status || '').toUpperCase();
-                  const reconStatusUpper = (item.reconciliation_status || '').toUpperCase();
-                  const instStatusUpper = (item.installation_status || '').toUpperCase();
 
-                  const isCarryDone =
-                    carryStatusUpper === 'RECORDED' ||
-                    reconStatusUpper === 'CARRY_RECORDED' ||
-                    reconStatusUpper === 'STORE_ISSUED';
+          {loading ? (
+            <div className="p-12 text-center">
+              <div className="w-8 h-8 border-3 border-purple-600 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+              <p className="text-xs font-semibold text-gray-700">
+                {isWakingUp
+                  ? 'Connecting to backend... Free-tier server is spinning up (takes ~15-20s on initial load)'
+                  : 'Loading Assigned jobs...'}
+              </p>
+              {isWakingUp && (
+                <p className="text-[11px] text-gray-400 mt-1">Please wait while the server container finishes starting.</p>
+              )}
+            </div>
+          ) : error ? (
+            <div className="p-8 text-center text-rose-600 space-y-3">
+              <AlertTriangle className="w-8 h-8 mx-auto text-rose-500" />
+              <p className="text-xs font-bold">{error}</p>
+              <button
+                onClick={loadData}
+                className="px-4 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs rounded-xl border border-rose-200 transition-colors cursor-pointer"
+              >
+                Retry Loading Jobs
+              </button>
+            </div>
+          ) : filteredAssignedJobs.length === 0 ? (
+            <div className="p-12 text-center text-gray-400 space-y-3">
+              {allAssignedJobs.length === 0 ? (
+                <>
+                  <CheckCircle2 className="w-10 h-10 text-emerald-500 mx-auto" />
+                  <p className="font-bold text-gray-800 text-sm">No pending assigned jobs</p>
+                  <p className="text-xs text-gray-500 max-w-md mx-auto">
+                    All assigned installation jobs have been completed, or no new jobs are assigned at this time.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <Search className="w-10 h-10 text-purple-400 mx-auto" />
+                  <p className="font-bold text-gray-800 text-sm">No matching assigned jobs found</p>
+                  <p className="text-xs text-gray-500 max-w-md mx-auto">
+                    No assigned jobs match your active Service Engineer filter or search query.
+                  </p>
+                  <button
+                    onClick={() => {
+                      setSelectedEngineer('all');
+                      setSearch('');
+                    }}
+                    className="px-3.5 py-1.5 text-xs font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 rounded-lg border border-purple-200 cursor-pointer"
+                  >
+                    Reset Filter & Search
+                  </button>
+                </>
+              )}
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="bg-gray-50 border-b border-gray-200 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                    <th className="py-3 px-4">Checklist No.</th>
+                    <th className="py-3 px-4">Client Details</th>
+                    <th className="py-3 px-4">Sales Device Request</th>
+                    <th className="py-3 px-4">Assigned Team</th>
+                    <th className="py-3 px-4">Arrival Date/Time</th>
+                    <th className="py-3 px-4">Carry Status</th>
+                    <th className="py-3 px-4">Installation Status</th>
+                    <th className="py-3 px-4">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {filteredAssignedJobs.map((item) => {
+                    const carryStatusUpper = (item.carry_status || '').toUpperCase();
+                    const isCarryDone = carryStatusUpper === 'RECORDED';
+                    const isJobInProgress = (item.installation_status || '').toLowerCase() === 'in progress';
 
-                  const isReportSubmitted =
-                    instStatusUpper === 'COMPLETED' ||
-                    instStatusUpper === 'SITE WORK COMPLETED' ||
-                    reconStatusUpper === 'SITE_WORK_COMPLETED' ||
-                    reconStatusUpper === 'PENDING_STORE_VERIFICATION' ||
-                    reconStatusUpper === 'DISCREPANCY_OPEN' ||
-                    reconStatusUpper === 'FULLY_RECONCILED';
+                    return (
+                      <tr key={item.id} className="hover:bg-gray-50/80 transition-colors">
+                        {/* Checklist No */}
+                        <td className="py-3 px-4 font-mono font-bold text-purple-700">
+                          {item.checklist_number}
+                        </td>
 
-                  return (
-                    <tr key={item.id} className="hover:bg-gray-50/80 transition-colors">
-                      {/* Checklist No */}
-                      <td className="py-3 px-4 font-mono font-bold text-purple-700">
-                        {item.checklist_number}
-                      </td>
+                        {/* Client Details */}
+                        <td className="py-3 px-4">
+                          <div className="font-bold text-gray-900">{item.client_name}</div>
+                          <div className="text-[11px] text-gray-500">{item.client_location}</div>
+                        </td>
 
-                      {/* Client Details */}
-                      <td className="py-3 px-4">
-                        <div className="font-bold text-gray-900">{item.client_name}</div>
-                        <div className="text-[11px] text-gray-500">{item.client_location}</div>
-                      </td>
+                        {/* Sales Device Request */}
+                        <td className="py-3 px-4">
+                          <span className="font-semibold text-gray-800">{item.device_type}</span>
+                          <div className="text-[10px] text-gray-400">Qty: {item.number_of_devices}</div>
+                          {item.extra_devices && item.extra_device_type && (
+                            <div className="text-[10px] text-purple-600 font-medium">
+                              + {item.extra_device_count} {item.extra_device_type}
+                            </div>
+                          )}
+                        </td>
 
-                      {/* Sales Device Request */}
-                      <td className="py-3 px-4">
-                        <span className="font-semibold text-gray-800">{item.device_type}</span>
-                        <div className="text-[10px] text-gray-400">Qty: {item.number_of_devices}</div>
-                        {item.extra_devices && item.extra_device_type && (
-                          <div className="text-[10px] text-purple-600 font-medium">
-                            + {item.extra_device_count} {item.extra_device_type}
+                        {/* Assigned Team */}
+                        <td className="py-3 px-4 text-gray-700">
+                          <div>
+                            <strong className="text-gray-900">Eng:</strong> {item.service_engineer || 'Unassigned'}
                           </div>
-                        )}
-                      </td>
+                          <div className="text-[10px] text-gray-500">
+                            <strong>Asst:</strong> {item.service_assistant || 'Unassigned'}
+                          </div>
+                        </td>
 
-                      {/* Assigned Team */}
-                      <td className="py-3 px-4 text-gray-700">
-                        <div>
-                          <strong className="text-gray-900">Eng:</strong> {item.service_engineer || 'Unassigned'}
-                        </div>
-                        <div className="text-[10px] text-gray-500">
-                          <strong>Asst:</strong> {item.service_assistant || 'Unassigned'}
-                        </div>
-                      </td>
+                        {/* Arrival Schedule */}
+                        <td className="py-3 px-4 text-gray-600">
+                          <div>{item.expected_arrival_date || 'TBD'}</div>
+                          <div className="text-[10px] text-gray-400">{item.expected_arrival_time}</div>
+                        </td>
 
-                      {/* Arrival Schedule */}
-                      <td className="py-3 px-4 text-gray-600">
-                        <div>{item.expected_arrival_date || 'TBD'}</div>
-                        <div className="text-[10px] text-gray-400">{item.expected_arrival_time}</div>
-                      </td>
+                        {/* Carry Status Badge */}
+                        <td className="py-3 px-4">
+                          <span
+                            className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${
+                              isCarryDone
+                                ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                : 'bg-amber-100 text-amber-800 border border-amber-300'
+                            }`}
+                          >
+                            {isCarryDone ? 'Recorded' : 'Not Recorded'}
+                          </span>
+                        </td>
 
-                      {/* Carry Status Badge */}
-                      <td className="py-3 px-4">
-                        <span
-                          className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${
-                            isCarryDone
-                              ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                              : 'bg-amber-100 text-amber-800 border border-amber-300'
-                          }`}
-                        >
-                          {isCarryDone ? 'Recorded' : 'Not Recorded'}
-                        </span>
-                      </td>
+                        {/* Installation Status Badge */}
+                        <td className="py-3 px-4">
+                          <span
+                            className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${
+                              isJobInProgress
+                                ? 'bg-blue-100 text-blue-800 border border-blue-300'
+                                : 'bg-purple-100 text-purple-800 border border-purple-300'
+                            }`}
+                          >
+                            {isJobInProgress ? 'In Progress' : 'Assigned'}
+                          </span>
+                        </td>
 
-                      {/* Installation Status Badge */}
-                      <td className="py-3 px-4">
-                        <span
-                          className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${
-                            isReportSubmitted
-                              ? item.reconciliation_status === 'PENDING_STORE_VERIFICATION'
+                        {/* Actions Column: Workflow Action based on state */}
+                        <td className="py-3 px-4">
+                          <div className="flex flex-col gap-1.5">
+                            {/* STAGE 1: Carry record not submitted */}
+                            {!isCarryDone && (
+                              <button
+                                onClick={() => setCarryModalJob(item)}
+                                className="px-3 py-1.5 text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 rounded-lg shadow-2xs flex items-center gap-1.5 cursor-pointer w-fit"
+                              >
+                                <Truck className="w-3.5 h-3.5" /> Record Devices Carried
+                              </button>
+                            )}
+
+                            {/* STAGE 2: Carry record submitted, completion report not yet recorded */}
+                            {isCarryDone && !item.has_completion_report && (
+                              <button
+                                onClick={() => setCompletionModalJob(item)}
+                                className="px-3 py-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-2xs flex items-center gap-1.5 cursor-pointer w-fit"
+                              >
+                                <FileCheck className="w-3.5 h-3.5" /> Record Installed & Returned Devices
+                              </button>
+                            )}
+
+                            {/* STAGE 3: If installation report is available for this assigned job */}
+                            {item.has_completion_report && (
+                              <button
+                                onClick={() => setViewReportModalJob(item)}
+                                className="px-3 py-1.5 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg flex items-center gap-1.5 cursor-pointer w-fit"
+                              >
+                                <FileCheck className="w-3.5 h-3.5 text-blue-600" /> View Installation Report
+                              </button>
+                            )}
+
+                            {/* SECONDARY LINKS */}
+                            <div className="flex items-center gap-2 text-[10px] mt-0.5 text-gray-500">
+                              <button
+                                onClick={() =>
+                                  onSelectChecklist
+                                    ? onSelectChecklist(item.id)
+                                    : navigate(`/admin/installation-checklists/${item.id}`)
+                                }
+                                className="font-semibold text-purple-700 hover:text-purple-900 flex items-center gap-0.5 cursor-pointer"
+                              >
+                                Job Details <ArrowRight className="w-3 h-3" />
+                              </button>
+
+                              {/* Optional edit carry record link prior to report submission */}
+                              {isCarryDone && !item.has_completion_report && (
+                                <>
+                                  <span>•</span>
+                                  <button
+                                    onClick={() => setCarryModalJob(item)}
+                                    className="text-gray-500 hover:text-gray-800 underline font-medium cursor-pointer"
+                                    title="Update physical device carry declaration prior to submitting report"
+                                  >
+                                    Edit Carry Record
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* SECTION 2: COMPLETED JOBS TABLE */}
+      {activeTab === 'completed' && (
+        <div className="bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden">
+          <div className="p-4 border-b border-gray-200 bg-gray-50/50 flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Completed Installation Jobs
+              </h3>
+              <p className="text-[11px] text-gray-500 mt-0.5">
+                Jobs where technical installation report has been submitted and verified.
+              </p>
+            </div>
+            <span className="text-xs text-gray-500 font-medium">
+              Showing {filteredCompletedJobs.length} of {allCompletedJobs.length} completed jobs
+            </span>
+          </div>
+
+          {loading ? (
+            <div className="p-12 text-center">
+              <div className="w-8 h-8 border-3 border-emerald-600 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+              <p className="text-xs font-semibold text-gray-700">Loading Completed jobs...</p>
+            </div>
+          ) : error ? (
+            <div className="p-8 text-center text-rose-600 space-y-3">
+              <AlertTriangle className="w-8 h-8 mx-auto text-rose-500" />
+              <p className="text-xs font-bold">{error}</p>
+            </div>
+          ) : filteredCompletedJobs.length === 0 ? (
+            <div className="p-12 text-center text-gray-400 space-y-3">
+              {allCompletedJobs.length === 0 ? (
+                <>
+                  <Archive className="w-10 h-10 text-gray-400 mx-auto" />
+                  <p className="font-bold text-gray-800 text-sm">No completed jobs found</p>
+                  <p className="text-xs text-gray-500 max-w-md mx-auto">
+                    Completed installation jobs are preserved permanently and will appear here once site work is finalized.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <Search className="w-10 h-10 text-purple-400 mx-auto" />
+                  <p className="font-bold text-gray-800 text-sm">No matching completed jobs found</p>
+                  <p className="text-xs text-gray-500 max-w-md mx-auto">
+                    No completed jobs match your active Service Engineer filter or search query.
+                  </p>
+                  <button
+                    onClick={() => {
+                      setSelectedEngineer('all');
+                      setSearch('');
+                    }}
+                    className="px-3.5 py-1.5 text-xs font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 rounded-lg border border-purple-200 cursor-pointer"
+                  >
+                    Reset Filter & Search
+                  </button>
+                </>
+              )}
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="bg-gray-50 border-b border-gray-200 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                    <th className="py-3 px-4">Checklist No.</th>
+                    <th className="py-3 px-4">Client Details</th>
+                    <th className="py-3 px-4">Sales Device Request</th>
+                    <th className="py-3 px-4">Assigned Team</th>
+                    <th className="py-3 px-4">Arrival Date/Time</th>
+                    <th className="py-3 px-4">Carry Status</th>
+                    <th className="py-3 px-4">Installation Status</th>
+                    <th className="py-3 px-4">Store Reconciliation</th>
+                    <th className="py-3 px-4">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {filteredCompletedJobs.map((item) => {
+                    const carryStatusUpper = (item.carry_status || '').toUpperCase();
+                    const isCarryDone = carryStatusUpper === 'RECORDED';
+
+                    return (
+                      <tr key={item.id} className="hover:bg-gray-50/80 transition-colors">
+                        {/* Checklist No */}
+                        <td className="py-3 px-4 font-mono font-bold text-purple-700">
+                          {item.checklist_number}
+                        </td>
+
+                        {/* Client Details */}
+                        <td className="py-3 px-4">
+                          <div className="font-bold text-gray-900">{item.client_name}</div>
+                          <div className="text-[11px] text-gray-500">{item.client_location}</div>
+                        </td>
+
+                        {/* Sales Device Request */}
+                        <td className="py-3 px-4">
+                          <span className="font-semibold text-gray-800">{item.device_type}</span>
+                          <div className="text-[10px] text-gray-400">Qty: {item.number_of_devices}</div>
+                          {item.extra_devices && item.extra_device_type && (
+                            <div className="text-[10px] text-purple-600 font-medium">
+                              + {item.extra_device_count} {item.extra_device_type}
+                            </div>
+                          )}
+                        </td>
+
+                        {/* Assigned Team */}
+                        <td className="py-3 px-4 text-gray-700">
+                          <div>
+                            <strong className="text-gray-900">Eng:</strong> {item.service_engineer || 'Unassigned'}
+                          </div>
+                          <div className="text-[10px] text-gray-500">
+                            <strong>Asst:</strong> {item.service_assistant || 'Unassigned'}
+                          </div>
+                        </td>
+
+                        {/* Arrival Schedule */}
+                        <td className="py-3 px-4 text-gray-600">
+                          <div>{item.expected_arrival_date || 'TBD'}</div>
+                          <div className="text-[10px] text-gray-400">{item.expected_arrival_time}</div>
+                        </td>
+
+                        {/* Carry Status Badge (Accurate historical status) */}
+                        <td className="py-3 px-4">
+                          <span
+                            className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${
+                              isCarryDone
+                                ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                : 'bg-gray-100 text-gray-700 border border-gray-300'
+                            }`}
+                          >
+                            {isCarryDone ? 'Recorded' : 'Not Recorded'}
+                          </span>
+                        </td>
+
+                        {/* Installation Status Badge: Persisted Completed Status */}
+                        <td className="py-3 px-4">
+                          <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1 w-fit">
+                            <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Completed
+                          </span>
+                        </td>
+
+                        {/* Store Return Reconciliation Badge */}
+                        <td className="py-3 px-4">
+                          <span
+                            className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${
+                              item.reconciliation_status === 'PENDING_STORE_VERIFICATION'
                                 ? 'bg-amber-100 text-amber-800 border border-amber-300'
                                 : item.reconciliation_status === 'DISCREPANCY_OPEN'
                                 ? 'bg-rose-100 text-rose-800 border border-rose-300'
-                                : 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                              : isCarryDone
-                              ? 'bg-blue-100 text-blue-800 border border-blue-300'
-                              : 'bg-purple-50 text-purple-700 border border-purple-200'
-                          }`}
-                        >
-                          {isReportSubmitted
-                            ? item.reconciliation_status === 'PENDING_STORE_VERIFICATION'
+                                : item.reconciliation_status === 'FULLY_RECONCILED'
+                                ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                : 'bg-blue-50 text-blue-700 border border-blue-200'
+                            }`}
+                          >
+                            {item.reconciliation_status === 'PENDING_STORE_VERIFICATION'
                               ? 'Awaiting Store Verification'
                               : item.reconciliation_status === 'DISCREPANCY_OPEN'
                               ? 'Requires Review'
-                              : 'Completed'
-                            : !isCarryDone
-                            ? 'Carry Form Required'
-                            : 'Ready for Report'}
-                        </span>
-                      </td>
+                              : item.reconciliation_status === 'FULLY_RECONCILED'
+                              ? 'Fully Reconciled'
+                              : 'Reconciled'}
+                          </span>
+                        </td>
 
-                      {/* Reconciliation Status Badge */}
-                      <td className="py-3 px-4">
-                        <span
-                          className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                            item.reconciliation_status === 'FULLY_RECONCILED'
-                              ? 'bg-emerald-100 text-emerald-800'
-                              : item.reconciliation_status === 'DISCREPANCY_OPEN'
-                              ? 'bg-rose-100 text-rose-800'
-                              : item.reconciliation_status === 'PENDING_STORE_VERIFICATION'
-                              ? 'bg-amber-100 text-amber-800'
-                              : 'bg-blue-50 text-blue-700'
-                          }`}
-                        >
-                          {item.reconciliation_status || 'SALES_CREATED'}
-                        </span>
-                      </td>
-
-                      {/* Actions Column: Single Primary Button per Workflow Stage */}
-                      <td className="py-3 px-4">
-                        <div className="flex flex-col gap-1.5">
-                          {/* STAGE 1: Carry record not submitted */}
-                          {!isCarryDone && !isReportSubmitted && (
-                            <button
-                              onClick={() => setCarryModalJob(item)}
-                              className="px-3 py-1.5 text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 rounded-lg shadow-2xs flex items-center gap-1.5 cursor-pointer w-fit"
-                            >
-                              <Truck className="w-3.5 h-3.5" /> Record Devices Carried
-                            </button>
-                          )}
-
-                          {/* STAGE 2: Carry record submitted, completion report not submitted */}
-                          {isCarryDone && !isReportSubmitted && (
-                            <button
-                              onClick={() => setCompletionModalJob(item)}
-                              className="px-3 py-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-2xs flex items-center gap-1.5 cursor-pointer w-fit"
-                            >
-                              <FileCheck className="w-3.5 h-3.5" /> Record Installed & Returned Devices
-                            </button>
-                          )}
-
-                          {/* STAGE 3: Completion report submitted */}
-                          {isReportSubmitted && (
+                        {/* Actions Column: View Installation Report */}
+                        <td className="py-3 px-4">
+                          <div className="flex flex-col gap-1.5">
                             <button
                               onClick={() => setViewReportModalJob(item)}
                               className="px-3 py-1.5 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg flex items-center gap-1.5 cursor-pointer w-fit"
                             >
                               <FileCheck className="w-3.5 h-3.5 text-blue-600" /> View Installation Report
                             </button>
-                          )}
 
-                          {/* SECONDARY LINKS */}
-                          <div className="flex items-center gap-2 text-[10px] mt-0.5 text-gray-500">
-                            <button
-                              onClick={() =>
-                                onSelectChecklist
-                                  ? onSelectChecklist(item.id)
-                                  : navigate(`/admin/installation-checklists/${item.id}`)
-                              }
-                              className="font-semibold text-purple-700 hover:text-purple-900 flex items-center gap-0.5 cursor-pointer"
-                            >
-                              Job Details <ArrowRight className="w-3 h-3" />
-                            </button>
-
-                            {/* Optional edit carry record link prior to report submission */}
-                            {isCarryDone && !isReportSubmitted && (
-                              <>
-                                <span>•</span>
-                                <button
-                                  onClick={() => setCarryModalJob(item)}
-                                  className="text-gray-500 hover:text-gray-800 underline font-medium cursor-pointer"
-                                  title="Update physical device carry declaration prior to submitting report"
-                                >
-                                  Edit Carry Record
-                                </button>
-                              </>
-                            )}
+                            <div className="flex items-center gap-2 text-[10px] mt-0.5 text-gray-500">
+                              <button
+                                onClick={() =>
+                                  onSelectChecklist
+                                    ? onSelectChecklist(item.id)
+                                    : navigate(`/admin/installation-checklists/${item.id}`)
+                                }
+                                className="font-semibold text-purple-700 hover:text-purple-900 flex items-center gap-0.5 cursor-pointer"
+                              >
+                                Job Details <ArrowRight className="w-3 h-3" />
+                              </button>
+                            </div>
                           </div>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* MODAL 1: Pre-Installation Device Carry Form */}
       {carryModalJob && (
@@ -480,6 +760,7 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
           onClose={() => setCarryModalJob(null)}
           onSuccess={() => {
             const targetId = carryModalJob.id;
+            // Optimistically update carry_status while remaining in Assigned Jobs
             setChecklists((prev) =>
               prev.map((item) =>
                 item.id === targetId
@@ -506,6 +787,7 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
               result?.reconciliation_status === 'PENDING_STORE_VERIFICATION' ||
               result?.summary?.devices_unused_qty > 0;
 
+            // Automatically move job from Assigned to Completed Jobs
             setChecklists((prev) =>
               prev.map((item) =>
                 item.id === targetId
@@ -521,7 +803,8 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
               )
             );
             setCompletionModalJob(null);
-            showToast('Post-installation completion report submitted!');
+            setActiveTab('completed');
+            showToast('Installation report submitted! Job moved to Completed Jobs.');
             loadData();
           }}
         />

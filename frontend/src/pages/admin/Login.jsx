@@ -24,8 +24,24 @@ export default function AdminLogin() {
     setError('');
 
     try {
-      await signIn(email, password);
-      navigate('/admin/dashboard');
+      const authData = await signIn(email, password);
+      const user = authData?.user;
+      const userRole = (
+        user?.app_metadata?.role ||
+        user?.user_metadata?.role ||
+        'ADMIN'
+      ).toUpperCase();
+
+      let defaultTab = 'installation_checklists';
+      if (userRole === 'SALES') {
+        defaultTab = 'sales_workspace';
+      } else if (userRole === 'TECHNICAL') {
+        defaultTab = 'technical_workspace';
+      } else if (userRole === 'STORE_MANAGER') {
+        defaultTab = 'store_workspace';
+      }
+
+      navigate(`/admin/dashboard?tab=${defaultTab}`, { replace: true });
     } catch (err) {
       setError(err.message || 'Invalid credentials');
     } finally {
