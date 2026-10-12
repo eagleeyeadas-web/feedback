@@ -4,8 +4,9 @@ import { AuthProvider, useAuth } from './hooks/useAuth';
 import ActiveSessionCleanupTracker from './components/ActiveSessionCleanupTracker';
 import { pingServerWakeup } from './lib/api';
 
+const LandingPage = lazy(() => import('./pages/LandingPage'));
 const FeedbackForm = lazy(() => import('./pages/FeedbackForm'));
-const AdminLogin = lazy(() => import('./pages/admin/Login'));
+const Login = lazy(() => import('./pages/admin/Login'));
 const Dashboard = lazy(() => import('./pages/admin/Dashboard'));
 
 function PageLoader() {
@@ -34,11 +35,18 @@ function AppRoutes() {
   return (
     <Suspense fallback={<PageLoader />}>
       <Routes>
-        {/* Customer Feedback Form */}
-        <Route path="/" element={<FeedbackForm />} />
+        {/* 1. Public Landing Page (Portal Selection) */}
+        <Route path="/" element={<LandingPage />} />
 
-        {/* Admin Routes */}
-        <Route path="/admin/login" element={<AdminLogin />} />
+        {/* 2. Public Customer Feedback Form */}
+        <Route path="/customer-form" element={<FeedbackForm />} />
+        <Route path="/feedback" element={<FeedbackForm />} />
+
+        {/* 3. Staff & Admin Login Routes */}
+        <Route path="/login" element={<Login />} />
+        <Route path="/admin/login" element={<Login />} />
+
+        {/* 4. Protected Workspace & Admin Dashboard Routes */}
         <Route
           path="/admin/dashboard"
           element={
@@ -47,45 +55,45 @@ function AppRoutes() {
             </ProtectedRoute>
           }
         />
-      <Route
-        path="/admin/installation-checklists"
-        element={
-          <ProtectedRoute>
-            <Dashboard />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/admin/installation-checklists/create"
-        element={
-          <ProtectedRoute>
-            <Dashboard />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/admin/installation-checklists/:id"
-        element={
-          <ProtectedRoute>
-            <Dashboard />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/admin/installation-checklists/:id/edit"
-        element={
-          <ProtectedRoute>
-            <Dashboard />
-          </ProtectedRoute>
-        }
-      />
-      <Route path="/admin" element={<Navigate to="/admin/dashboard" replace />} />
+        <Route
+          path="/admin/installation-checklists"
+          element={
+            <ProtectedRoute>
+              <Dashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/installation-checklists/create"
+          element={
+            <ProtectedRoute>
+              <Dashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/installation-checklists/:id"
+          element={
+            <ProtectedRoute>
+              <Dashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/installation-checklists/:id/edit"
+          element={
+            <ProtectedRoute>
+              <Dashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route path="/admin" element={<Navigate to="/admin/dashboard" replace />} />
 
-      {/* 404 fallback */}
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
-  </Suspense>
-);
+        {/* 404 fallback */}
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </Suspense>
+  );
 }
 
 export default function App() {
