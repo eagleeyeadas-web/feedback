@@ -180,6 +180,12 @@ export async function syncStoreRequirementForChecklist(checklist) {
     shortage_details: shortageDetails.length > 0 ? shortageDetails : null,
     material_issued_at: checklist.material_issued_at || null,
     material_issued_by: checklist.material_issued_by || null,
+    salesperson_name: checklist.salesperson_name || null,
+    service_engineer: checklist.service_engineer || null,
+    service_assistant: checklist.service_assistant || null,
+    expected_arrival_date: checklist.expected_arrival_date || null,
+    expected_arrival_time: checklist.expected_arrival_time || null,
+    installation_duration: checklist.installation_duration || null,
     submission_date: checklist.created_at || new Date().toISOString(),
     notes: checklist.remarks || null,
     updated_at: new Date().toISOString(),
@@ -196,6 +202,35 @@ export async function syncStoreRequirementForChecklist(checklist) {
     if (!error && res) {
       inMemoryStoreRequirements.set(checklistId, res);
       return res;
+    }
+
+    if (
+      error &&
+      (error.code === 'PGRST204' ||
+        error.message?.includes('salesperson_name') ||
+        error.message?.includes('service_engineer') ||
+        error.message?.includes('service_assistant') ||
+        error.message?.includes('expected_arrival_date') ||
+        error.message?.includes('expected_arrival_time') ||
+        error.message?.includes('installation_duration'))
+    ) {
+      const strippedPayload = { ...payload };
+      delete strippedPayload.salesperson_name;
+      delete strippedPayload.service_engineer;
+      delete strippedPayload.service_assistant;
+      delete strippedPayload.expected_arrival_date;
+      delete strippedPayload.expected_arrival_time;
+      delete strippedPayload.installation_duration;
+      const { data: res2, error: err2 } = await supabase
+        .from('store_material_requirements')
+        .upsert(strippedPayload, { onConflict: 'checklist_id' })
+        .select()
+        .maybeSingle();
+      if (!err2 && res2) {
+        const merged = { ...res2, ...payload };
+        inMemoryStoreRequirements.set(checklistId, merged);
+        return merged;
+      }
     }
   } catch (err) {
     console.warn('Upsert store_material_requirements exception:', err.message);
@@ -296,6 +331,35 @@ export async function getStoreMaterialRequirements(params = {}) {
     }
   }
 
+  // Backfill salesperson and assignment fields from checklists for any legacy records
+  const missingInfoIds = (dbRecords || [])
+    .filter((r) => (!r.salesperson_name || !r.service_engineer) && r.checklist_id)
+    .map((r) => r.checklist_id);
+  if (missingInfoIds.length > 0) {
+    try {
+      const { data: chkRows } = await supabase
+        .from('installation_checklists')
+        .select('id, checklist_number, salesperson_name, service_engineer, service_assistant, expected_arrival_date, expected_arrival_time, installation_duration')
+        .in('id', missingInfoIds);
+      if (Array.isArray(chkRows)) {
+        const chkMap = new Map(chkRows.map((c) => [c.id, c]));
+        (dbRecords || []).forEach((r) => {
+          const matched = chkMap.get(r.checklist_id);
+          if (matched) {
+            r.salesperson_name = r.salesperson_name || matched.salesperson_name || null;
+            r.service_engineer = r.service_engineer || matched.service_engineer || null;
+            r.service_assistant = r.service_assistant || matched.service_assistant || null;
+            r.expected_arrival_date = r.expected_arrival_date || matched.expected_arrival_date || null;
+            r.expected_arrival_time = r.expected_arrival_time || matched.expected_arrival_time || null;
+            r.installation_duration = r.installation_duration || matched.installation_duration || null;
+          }
+        });
+      }
+    } catch (e) {
+      console.warn('Could not backfill salesperson info from checklists:', e.message);
+    }
+  }
+
   // Enrich records with LIVE authoritative inventory stock & shortage
   const enrichedRecords = (dbRecords || []).map((rec) => {
     let liveHasShortage = false;
@@ -316,6 +380,11 @@ export async function getStoreMaterialRequirements(params = {}) {
       const currentStock = dev ? Number(dev.usable_stock) || 0 : 0;
       const requiredQty = Number(dItem.required_quantity) || 1;
       const shortage = rec.job_type === 'Installation' ? Math.max(0, requiredQty - currentStock) : 0;
+      const itemAvailability = currentStock >= requiredQty
+        ? 'Available'
+        : currentStock > 0
+        ? 'Partially Available'
+        : 'Out of Stock';
 
       if (shortage > 0) {
         liveHasShortage = true;
@@ -328,6 +397,7 @@ export async function getStoreMaterialRequirements(params = {}) {
           required_quantity: requiredQty,
           shortage,
           unit: 'Nos.',
+          availability_status: itemAvailability,
         });
       }
 
@@ -336,6 +406,7 @@ export async function getStoreMaterialRequirements(params = {}) {
         sku: dev?.sku || dItem.sku || null,
         available_stock: currentStock,
         shortage,
+        availability_status: itemAvailability,
       };
     });
 
@@ -346,6 +417,11 @@ export async function getStoreMaterialRequirements(params = {}) {
       const currentStock = inv ? Number(inv.current_stock) || 0 : 0;
       const requiredQty = Number(item.total_required_quantity) || 0;
       const shortage = rec.job_type === 'Installation' ? Math.max(0, requiredQty - currentStock) : 0;
+      const itemAvailability = currentStock >= requiredQty
+        ? 'Available'
+        : currentStock > 0
+        ? 'Partially Available'
+        : 'Out of Stock';
 
       if (shortage > 0) {
         liveHasShortage = true;
@@ -358,6 +434,7 @@ export async function getStoreMaterialRequirements(params = {}) {
           required_quantity: requiredQty,
           shortage,
           unit: item.unit || inv?.unit || 'Nos.',
+          availability_status: itemAvailability,
         });
       }
 
@@ -366,8 +443,27 @@ export async function getStoreMaterialRequirements(params = {}) {
         sku: inv?.sku || item.material_sku || null,
         available_stock: currentStock,
         shortage,
+        availability_status: itemAvailability,
       };
     });
+
+    // Calculate BOM availability status
+    let bomAvailabilityStatus = 'Available';
+    if (rec.job_type === 'Service') {
+      bomAvailabilityStatus = 'Not Applicable';
+    } else if (enrichedMaterials.length === 0) {
+      bomAvailabilityStatus = 'Available';
+    } else {
+      const allAvailable = enrichedMaterials.every((m) => m.availability_status === 'Available');
+      const allOutOfStock = enrichedMaterials.every((m) => m.availability_status === 'Out of Stock');
+      if (allAvailable) {
+        bomAvailabilityStatus = 'Available';
+      } else if (allOutOfStock) {
+        bomAvailabilityStatus = 'Out of Stock';
+      } else {
+        bomAvailabilityStatus = 'Partially Available';
+      }
+    }
 
     let liveStatus = rec.status;
     if (rec.job_type === 'Service') {
@@ -391,6 +487,7 @@ export async function getStoreMaterialRequirements(params = {}) {
       has_shortage: liveHasShortage,
       shortage_count: liveShortageCount,
       shortage_details: liveShortageDetails,
+      bom_availability_status: bomAvailabilityStatus,
       status: liveStatus,
     };
   });

@@ -465,6 +465,9 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
                           <div className="text-[10px] text-gray-500">
                             <strong>Asst:</strong> {item.service_assistant || 'Unassigned'}
                           </div>
+                          <div className="text-[10px] text-indigo-700 font-semibold mt-0.5">
+                            <strong>Sales:</strong> {item.salesperson_name || '—'}
+                          </div>
                         </td>
 
                         {/* Arrival Schedule */}
@@ -692,6 +695,9 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
                           </div>
                           <div className="text-[10px] text-gray-500">
                             <strong>Asst:</strong> {item.service_assistant || 'Unassigned'}
+                          </div>
+                          <div className="text-[10px] text-indigo-700 font-semibold mt-0.5">
+                            <strong>Sales:</strong> {item.salesperson_name || '—'}
                           </div>
                         </td>
 

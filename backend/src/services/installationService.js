@@ -205,6 +205,7 @@ export async function createChecklist(adminUserId, data) {
     expected_arrival_date: startDate,
     expected_arrival_time: data.expected_arrival_time || null,
     installation_or_service: data.installation_or_service,
+    salesperson_name: data.salesperson_name ? data.salesperson_name.trim() : null,
     service_engineer: engineerName,
     service_engineer_id: resolvedEng ? resolvedEng.id : null,
     booking_end_date: bookingEndDate,
@@ -230,14 +231,15 @@ export async function createChecklist(adminUserId, data) {
     if (error) throw error;
     inserted = res;
   } catch (error) {
-    // If device_configurations / service_engineer_id / booking_end_date / bom_snapshot / material_issuance_status columns are not migrated yet in PostgreSQL, retry without optional columns
+    // If device_configurations / service_engineer_id / booking_end_date / bom_snapshot / material_issuance_status / salesperson_name columns are not migrated yet in PostgreSQL, retry without optional columns
     if (
       error.code === 'PGRST204' ||
       error.message?.includes('device_configurations') ||
       error.message?.includes('service_engineer_id') ||
       error.message?.includes('booking_end_date') ||
       error.message?.includes('bom_snapshot') ||
-      error.message?.includes('material_issuance_status')
+      error.message?.includes('material_issuance_status') ||
+      error.message?.includes('salesperson_name')
     ) {
       const fallbackPayload = { ...payload };
       delete fallbackPayload.device_configurations;
@@ -245,6 +247,7 @@ export async function createChecklist(adminUserId, data) {
       delete fallbackPayload.booking_end_date;
       delete fallbackPayload.bom_snapshot;
       delete fallbackPayload.material_issuance_status;
+      delete fallbackPayload.salesperson_name;
       const { data: res2, error: err2 } = await supabase
         .from('installation_checklists')
         .insert(fallbackPayload)
@@ -576,6 +579,7 @@ export async function updateChecklist(id, data) {
     expected_arrival_date: newStartDate,
     expected_arrival_time: data.expected_arrival_time || existing.expected_arrival_time,
     installation_or_service: effectiveJobType,
+    salesperson_name: data.salesperson_name !== undefined ? (data.salesperson_name ? data.salesperson_name.trim() : existing.salesperson_name) : existing.salesperson_name,
     service_engineer: newEngName,
     service_engineer_id: resolvedEng ? resolvedEng.id : null,
     booking_end_date: newBookingEndDate,
@@ -611,7 +615,8 @@ export async function updateChecklist(id, data) {
       error.message?.includes('service_engineer_id') ||
       error.message?.includes('booking_end_date') ||
       error.message?.includes('bom_snapshot') ||
-      error.message?.includes('material_issuance_status')
+      error.message?.includes('material_issuance_status') ||
+      error.message?.includes('salesperson_name')
     ) {
       const fallbackPayload = { ...payload };
       delete fallbackPayload.device_configurations;
@@ -619,6 +624,7 @@ export async function updateChecklist(id, data) {
       delete fallbackPayload.booking_end_date;
       delete fallbackPayload.bom_snapshot;
       delete fallbackPayload.material_issuance_status;
+      delete fallbackPayload.salesperson_name;
       const { data: res2, error: err2 } = await supabase
         .from('installation_checklists')
         .update(fallbackPayload)

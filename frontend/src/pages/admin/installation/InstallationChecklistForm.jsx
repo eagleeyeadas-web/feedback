@@ -47,6 +47,14 @@ const INSTALLATION_STATUSES = ['Assigned', 'Completed'];
 const PAYMENT_STATUSES = ['Paid', 'Partially Paid', 'Pending'];
 const DURATION_PRESETS = ['1 Day', '2 Days', '3 Days', '4 Days', '5 Days', 'Custom'];
 
+export const SALESPERSON_OPTIONS = [
+  'Ranjith',
+  'Abinaya',
+  'Kavitha',
+  'Kavitha Balu',
+  'Padmapriya',
+];
+
 // Helper to compute inclusive booking end date
 function computeEndDate(startDate, durationStr) {
   if (!startDate) return '';
@@ -86,6 +94,7 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
 
   // Form State matching all 27 questions exactly
   const [formData, setFormData] = useState({
+    salesperson_name: '',
     client_name: '',
     client_mobile: '',
     client_location: '',
@@ -155,6 +164,7 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
           }
 
           setFormData({
+            salesperson_name: data.salesperson_name || '',
             client_name: data.client_name || '',
             client_mobile: data.client_mobile || '',
             client_location: data.client_location || '',
@@ -289,6 +299,9 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
   const totalDevices = deviceConfigs.reduce((sum, c) => sum + (parseInt(c.number_of_devices, 10) || 0), 0);
 
   const validateForm = () => {
+    if (!formData.salesperson_name || !SALESPERSON_OPTIONS.includes(formData.salesperson_name)) {
+      return 'Salesperson Name is required. Please select one of the authorized salespeople: Ranjith, Abinaya, Kavitha, Kavitha Balu, or Padmapriya.';
+    }
     if (!formData.client_name.trim()) return 'Client Name is required';
     if (!formData.client_mobile.trim()) return 'Client Mobile Number is required';
     
@@ -416,6 +429,7 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
         : normalizedConfigs.map((c) => `${c.device_type} (${c.number_of_devices})`).join(', ');
 
       const payload = {
+        salesperson_name: formData.salesperson_name,
         client_name: formData.client_name.trim(),
         client_mobile: formData.client_mobile.trim(),
         client_location: formData.client_location.trim(),
@@ -562,6 +576,37 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
             <User className="text-blue-600" size={18} />
             1. CLIENT DETAILS
           </h3>
+
+          {/* Salesperson Name Selection (Required) */}
+          <div className="p-4 bg-gradient-to-r from-blue-50/70 to-indigo-50/70 rounded-xl border border-blue-100">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex-1">
+                <label htmlFor="salesperson_name" className="block text-xs font-bold text-navy mb-1 flex items-center gap-1.5">
+                  <User className="w-3.5 h-3.5 text-blue-600" />
+                  <span>Salesperson Name</span>
+                  <span className="text-rose-500">*</span>
+                </label>
+                <select
+                  id="salesperson_name"
+                  name="salesperson_name"
+                  required
+                  value={formData.salesperson_name}
+                  onChange={(e) => handleChange('salesperson_name', e.target.value)}
+                  className="w-full sm:w-80 text-xs p-2.5 border border-blue-200 rounded-xl focus:outline-none focus:border-blue-500 font-bold text-gray-900 bg-white shadow-2xs"
+                >
+                  <option value="">-- Select Salesperson Name --</option>
+                  {SALESPERSON_OPTIONS.map((name) => (
+                    <option key={name} value={name}>
+                      {name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="text-[11px] text-blue-800 bg-blue-100/50 p-2.5 rounded-lg border border-blue-200/50 max-w-sm">
+                <strong>Sales Tracking:</strong> Select the authorized salesperson creating this checklist. This attribution is permanently saved and sent to Store Manager &amp; Technical teams.
+              </div>
+            </div>
+          </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>

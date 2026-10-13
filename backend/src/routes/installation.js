@@ -42,6 +42,14 @@ const DEVICE_TYPES = [
   '8 Channel Live',
 ];
 
+export const SALESPERSON_OPTIONS = [
+  'Ranjith',
+  'Abinaya',
+  'Kavitha',
+  'Kavitha Balu',
+  'Padmapriya',
+];
+
 const indianMobileRegex = /^[6-9]\d{9}$/;
 
 export const deviceConfigItemSchema = z.object({
@@ -53,6 +61,9 @@ export const deviceConfigItemSchema = z.object({
 });
 
 export const checklistValidationSchema = z.object({
+  salesperson_name: z.enum(SALESPERSON_OPTIONS, {
+    errorMap: () => ({ message: 'Salesperson Name is required. Please select one of the authorized salespeople: Ranjith, Abinaya, Kavitha, Kavitha Balu, or Padmapriya.' }),
+  }).optional().nullable(),
   client_name: z.string().min(1, 'Client name is required'),
   client_mobile: z.string().refine((val) => indianMobileRegex.test(val.replace(/\s+/g, '')), {
     message: 'Valid 10-digit Indian mobile number is required (starting with 6-9)',
@@ -142,6 +153,14 @@ router.get('/stats', requireRole('ADMIN', 'SALES', 'TECHNICAL', 'STORE_MANAGER')
     console.error('Error fetching installation stats:', err);
     return res.status(500).json({ error: 'Failed to fetch installation statistics' });
   }
+});
+
+/**
+ * GET /api/admin/installations/salespersons
+ * Dropdown options for authorized Salespeople
+ */
+router.get('/salespersons', requireRole('ADMIN', 'SALES', 'TECHNICAL', 'STORE_MANAGER'), (req, res) => {
+  return res.json(SALESPERSON_OPTIONS);
 });
 
 /**
@@ -279,6 +298,12 @@ router.post('/', requireRole('SALES', 'ADMIN'), async (req, res) => {
     if (!parsed.success) {
       const firstErr = parsed.error.errors[0]?.message || 'Validation failed';
       return res.status(400).json({ error: firstErr, details: parsed.error.format() });
+    }
+
+    if (!parsed.data.salesperson_name || !SALESPERSON_OPTIONS.includes(parsed.data.salesperson_name)) {
+      return res.status(400).json({
+        error: 'Salesperson Name is required. Please select one of the authorized salespeople: Ranjith, Abinaya, Kavitha, Kavitha Balu, or Padmapriya.',
+      });
     }
 
     const created = await createChecklist(req.profile.id, parsed.data);

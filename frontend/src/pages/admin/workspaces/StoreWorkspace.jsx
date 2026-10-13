@@ -434,7 +434,7 @@ export default function StoreWorkspace({ onSelectChecklist }) {
           }`}
         >
           <ClipboardList className="w-4 h-4" />
-          <span>Pending Requirements</span>
+          <span>Incoming Jobs & Material Requirements</span>
           {shortageJobs.length > 0 && (
             <span className="text-[10px] bg-rose-500 text-white px-1.5 py-0.2 rounded-full font-bold">
               {shortageJobs.length} short
@@ -865,7 +865,7 @@ export default function StoreWorkspace({ onSelectChecklist }) {
       )}
 
       {/* ============================================================
-          TAB 5: PENDING MATERIAL REQUIREMENTS
+          TAB 5: INCOMING INSTALLATION JOBS & MATERIAL REQUIREMENTS
           ============================================================ */}
       {activeTab === 'requirements' && (
         <StoreInstallationRequirements token={token} onSelectChecklist={onSelectChecklist} />

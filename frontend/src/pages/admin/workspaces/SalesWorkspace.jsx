@@ -41,6 +41,7 @@ export default function SalesWorkspace({ onSelectChecklist, onCreateChecklist, o
   const filteredChecklists = checklists.filter((c) =>
     (c.client_name || '').toLowerCase().includes(search.toLowerCase()) ||
     (c.checklist_number || '').toLowerCase().includes(search.toLowerCase()) ||
+    (c.salesperson_name || '').toLowerCase().includes(search.toLowerCase()) ||
     (c.client_location || '').toLowerCase().includes(search.toLowerCase())
   );
 
@@ -208,6 +209,9 @@ export default function SalesWorkspace({ onSelectChecklist, onCreateChecklist, o
                     <td className="py-3 px-4">
                       <div className="font-bold text-gray-900">{item.client_name}</div>
                       <div className="text-[11px] text-gray-500 font-mono">{item.client_mobile}</div>
+                      <div className="text-[10px] text-blue-700 font-semibold mt-0.5">
+                        Sales: {item.salesperson_name || '—'}
+                      </div>
                     </td>
                     <td className="py-3 px-4">
                       {Array.isArray(item.device_configurations) && item.device_configurations.length > 1 ? (
