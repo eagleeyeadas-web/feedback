@@ -3,95 +3,79 @@ import { supabase } from '../lib/supabase';
 
 const AuthContext = createContext(null);
 
+const VALID_STAFF_ROLES = ['SALES', 'TECHNICAL', 'STORE_MANAGER', 'ADMIN'];
+
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(null);
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  const resolveRole = (email, appRole, userRole, profileRole) => {
-    const emailLower = (email || '').toLowerCase();
-    if (emailLower === 'sales@gmail.com') return 'SALES';
-    if (emailLower === 'tech@gmail.com') return 'TECHNICAL';
-    if (emailLower === 'store@gmail.com') return 'STORE_MANAGER';
-    if (emailLower === 'eagleeye@gmail.com') return 'SUPER_ADMIN';
-    if (emailLower === 'admin@eagleeyesafdrive.com') return 'ADMIN';
-
-    const normalizedApp = (appRole || '').toUpperCase();
-    if (normalizedApp === 'SALES' || normalizedApp === 'TECHNICAL' || normalizedApp === 'STORE_MANAGER') {
-      return normalizedApp;
-    }
-    if (normalizedApp === 'ADMIN' || normalizedApp === 'SUPER_ADMIN') {
-      return normalizedApp;
-    }
-
-    const normalizedProfile = (profileRole || '').toUpperCase();
-    if (normalizedProfile === 'ADMIN' || normalizedProfile === 'SUPER_ADMIN') {
-      return normalizedProfile;
-    }
-
-    const normalizedUser = (userRole || '').toUpperCase();
-    if (normalizedUser && normalizedUser !== 'ADMIN' && normalizedUser !== 'SUPER_ADMIN') {
-      return normalizedUser;
-    }
-
-    return 'ADMIN';
-  };
-
   const fetchProfile = async (user) => {
     if (!user) {
       setProfile(null);
-      return;
+      return null;
     }
     try {
       const { data, error } = await supabase
         .from('admin_users')
-        .select('*')
+        .select('id, email, full_name, role, is_active')
         .eq('id', user.id)
         .maybeSingle();
 
-      const effectiveRole = resolveRole(
-        user.email,
-        user.app_metadata?.role,
-        user.user_metadata?.role,
-        data?.role
-      );
-
-      if (!error && data) {
-        setProfile({
-          ...data,
-          role: effectiveRole,
-        });
-      } else {
-        // Fallback profile if admin_users record is missing
-        setProfile({
-          id: user.id,
-          email: user.email,
-          full_name: user.user_metadata?.full_name || user.email.split('@')[0],
-          role: effectiveRole,
-        });
+      if (error || !data || data.is_active === false) {
+        if (data?.is_active === false) {
+          console.warn('Staff account is deactivated:', user.email);
+        }
+        setProfile(null);
+        return null;
       }
+
+      // Authoritative role from trusted database record & server-signed auth identity
+      let effectiveRole = null;
+      const dbRole = data.role ? String(data.role).trim().toUpperCase() : '';
+      const DEPARTMENT_ROLES = ['SALES', 'TECHNICAL', 'STORE_MANAGER'];
+      const appRole = (user.app_metadata?.role || '').toUpperCase();
+
+      if (DEPARTMENT_ROLES.includes(dbRole)) {
+        effectiveRole = dbRole;
+      } else if (DEPARTMENT_ROLES.includes(appRole)) {
+        effectiveRole = appRole;
+      } else if (dbRole === 'ADMIN' || dbRole === 'SUPER_ADMIN' || appRole === 'ADMIN' || appRole === 'SUPER_ADMIN') {
+        effectiveRole = 'ADMIN';
+      }
+
+      const verifiedProfile = {
+        ...data,
+        role: effectiveRole,
+      };
+
+      setProfile(verifiedProfile);
+      return verifiedProfile;
     } catch (err) {
-      console.warn('Failed to fetch user profile:', err);
+      console.warn('Failed to fetch trusted staff profile:', err);
+      setProfile(null);
+      return null;
     }
   };
 
   useEffect(() => {
     // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       setSession(session);
       if (session?.user) {
-        fetchProfile(session.user).finally(() => setLoading(false));
-      } else {
-        setLoading(false);
+        await fetchProfile(session.user);
       }
+      setLoading(false);
+    }).catch(() => {
+      setLoading(false);
     });
 
-    // Listen for auth changes
+    // Listen for auth state changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
-        setSession(session);
-        if (session?.user) {
-          await fetchProfile(session.user);
+      async (_event, newSession) => {
+        setSession(newSession);
+        if (newSession?.user) {
+          await fetchProfile(newSession.user);
         } else {
           setProfile(null);
         }
@@ -103,26 +87,39 @@ export function AuthProvider({ children }) {
 
   const signIn = async (email, password) => {
     const { data, error } = await supabase.auth.signInWithPassword({
-      email,
+      email: email.trim(),
       password,
     });
     if (error) throw error;
-    return data;
+
+    // Retrieve user's authorized role from trusted database record
+    const userProfile = await fetchProfile(data.user);
+    if (!userProfile || !userProfile.role) {
+      await supabase.auth.signOut();
+      setSession(null);
+      setProfile(null);
+      throw new Error('Access denied. Account has no authorized operational role assigned in the database.');
+    }
+
+    return {
+      ...data,
+      profile: userProfile,
+      role: userProfile.role,
+    };
   };
 
   const signOut = async () => {
-    const { error } = await supabase.auth.signOut();
-    if (error) throw error;
-    setSession(null);
-    setProfile(null);
+    try {
+      await supabase.auth.signOut();
+    } catch (err) {
+      console.warn('Sign out error:', err);
+    } finally {
+      setSession(null);
+      setProfile(null);
+    }
   };
 
-  const role = resolveRole(
-    session?.user?.email,
-    session?.user?.app_metadata?.role,
-    session?.user?.user_metadata?.role,
-    profile?.role
-  );
+  const role = profile?.role || null;
 
   const value = {
     session,

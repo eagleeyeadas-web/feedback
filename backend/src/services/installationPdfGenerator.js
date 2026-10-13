@@ -316,28 +316,68 @@ export async function generateInstallationChecklistPDF(item) {
   y += 5;
 
   // ============================================================
-  // SECTION 2 — 2. DEVICE DETAILS (4 Equal Columns)
+  // SECTION 2 — 2. DEVICE DETAILS (Multi-Device Table Support)
   // ============================================================
-  y = drawSectionHeader(doc, '2. DEVICE DETAILS', y);
+  y = drawSectionHeader(doc, '2. DEVICE CONFIGURATIONS & DETAILS', y);
 
-  const deviceRows = [
-    [
-      { label: 'Type of Device', value: item.device_type || '—' },
-      { label: 'Number of Devices', value: String(item.number_of_devices || '0') },
-      { label: 'Number of Vehicles', value: String(item.number_of_vehicles || '0') },
-    ],
-  ];
+  const configs = (item.device_configurations && Array.isArray(item.device_configurations) && item.device_configurations.length > 0)
+    ? item.device_configurations
+    : [{ device_type: item.device_type || '—', number_of_devices: item.number_of_devices || 0 }];
+
+  // Table Header for Devices
+  doc.setFillColor(...COLORS.grayBg);
+  doc.setDrawColor(...COLORS.borderColor);
+  doc.setLineWidth(0.2);
+  doc.rect(MARGIN_X, y, CONTENT_WIDTH, 6, 'FD');
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(7.5);
+  doc.setTextColor(...COLORS.navy);
+  doc.text('#', MARGIN_X + 3, y + 4.2);
+  doc.text('DEVICE TYPE', MARGIN_X + 12, y + 4.2);
+  doc.text('NUMBER OF DEVICES', MARGIN_X + 130, y + 4.2);
+  y += 6;
+
+  let totalD = 0;
+  configs.forEach((c, idx) => {
+    const numD = Number(c.number_of_devices) || 0;
+    totalD += numD;
+
+    doc.setFillColor(idx % 2 === 0 ? 255 : 248, idx % 2 === 0 ? 255 : 250, idx % 2 === 0 ? 255 : 252);
+    doc.rect(MARGIN_X, y, CONTENT_WIDTH, 5.5, 'FD');
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
+    doc.setTextColor(...COLORS.grayText);
+    doc.text(String(idx + 1), MARGIN_X + 3, y + 3.8);
+    doc.setTextColor(...COLORS.darkText);
+    doc.setFont('helvetica', 'bold');
+    doc.text(sanitizeText(c.device_type), MARGIN_X + 12, y + 3.8);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`${numD} units`, MARGIN_X + 130, y + 3.8);
+    y += 5.5;
+  });
+
+  // Summary Row
+  doc.setFillColor(...COLORS.blueHeader);
+  doc.rect(MARGIN_X, y, CONTENT_WIDTH, 6, 'FD');
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(7.5);
+  doc.setTextColor(...COLORS.navy);
+  doc.text('TOTAL', MARGIN_X + 12, y + 4.2);
+  doc.setTextColor(...COLORS.blueText);
+  doc.text(`${item.number_of_devices || totalD} Units Total`, MARGIN_X + 130, y + 4.2);
+  y += 6.5;
 
   if (item.extra_devices) {
-    deviceRows.push([
-      { label: 'Extra Devices Carried?', value: 'Yes', color: COLORS.blueText },
-      { label: 'Type of Extra Device', value: item.extra_device_type || '—' },
-      { label: 'Number of Extra Devices Carried', value: String(item.extra_device_count || '—') },
-    ]);
+    const extraRows = [
+      [
+        { label: 'Extra Devices Carried?', value: 'Yes', color: COLORS.blueText },
+        { label: 'Type of Extra Device', value: item.extra_device_type || '—' },
+        { label: 'Number of Extra Devices Carried', value: String(item.extra_device_count || '—') },
+      ],
+    ];
+    y = drawKeyValueGrid(doc, extraRows, y);
   }
-
-  y = drawKeyValueGrid(doc, deviceRows, y);
-  y += 5;
+  y += 4;
 
   // ============================================================
   // SECTION 3 — 3. PRICING & PAYMENT DETAILS (3 Equal Columns)
@@ -420,6 +460,48 @@ export async function generateInstallationChecklistPDF(item) {
 
   y = drawKeyValueGrid(doc, confirmationRows, y);
   y += 5;
+
+  // BILL OF MATERIALS (BOM) REQUIREMENTS TABLE (ONLY FOR INSTALLATION JOBS)
+  if (item.installation_or_service === 'Installation' && item.bom_snapshot?.items && Array.isArray(item.bom_snapshot.items) && item.bom_snapshot.items.length > 0) {
+    checkAddPage(30);
+    const bomVer = item.bom_snapshot.bom_version ? ` (VERSION v${item.bom_snapshot.bom_version})` : '';
+    y = drawSectionHeader(doc, `BILL OF MATERIALS (BOM) REQUIREMENTS${bomVer}`, y);
+
+    // Table Header
+    doc.setFillColor(...COLORS.grayBg);
+    doc.rect(MARGIN_X, y, CONTENT_WIDTH, 6, 'FD');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7.5);
+    doc.setTextColor(...COLORS.navy);
+    doc.text('#', MARGIN_X + 2, y + 4.2);
+    doc.text('MATERIAL NAME', MARGIN_X + 12, y + 4.2);
+    doc.text('QTY / DEVICE', MARGIN_X + 84, y + 4.2);
+    doc.text('DEVICES', MARGIN_X + 116, y + 4.2);
+    doc.text('TOTAL REQUIRED', MARGIN_X + 144, y + 4.2);
+    y += 6;
+
+    doc.setFont('helvetica', 'normal');
+    item.bom_snapshot.items.forEach((mat, idx) => {
+      checkAddPage(6);
+      doc.setFillColor(idx % 2 === 0 ? 255 : 248, idx % 2 === 0 ? 255 : 250, idx % 2 === 0 ? 255 : 252);
+      doc.rect(MARGIN_X, y, CONTENT_WIDTH, 5.5, 'FD');
+      doc.setFontSize(7);
+      doc.setTextColor(...COLORS.grayText);
+      doc.text(String(idx + 1), MARGIN_X + 2, y + 3.8);
+      doc.setTextColor(...COLORS.darkText);
+      doc.setFont('helvetica', 'bold');
+      doc.text(sanitizeText(mat.material_name), MARGIN_X + 12, y + 3.8);
+      doc.setFont('helvetica', 'normal');
+      const qtyPerDev = mat.quantity_per_device !== undefined ? `${mat.quantity_per_device} ${sanitizeText(mat.unit)}` : 'Shared / Combined';
+      doc.text(qtyPerDev, MARGIN_X + 84, y + 3.8);
+      doc.text(`${item.number_of_devices || 1} units`, MARGIN_X + 116, y + 3.8);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(...COLORS.blueText);
+      doc.text(`${mat.total_quantity} ${sanitizeText(mat.unit)}`, MARGIN_X + 144, y + 3.8);
+      y += 5.5;
+    });
+    y += 4;
+  }
 
   // REMARKS SECTION (IF PRESENT)
   if (item.remarks && item.remarks.trim()) {

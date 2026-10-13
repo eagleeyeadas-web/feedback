@@ -21,7 +21,11 @@ import {
   Truck,
   RotateCcw,
   Check,
+  Layers,
+  ClipboardList,
 } from 'lucide-react';
+import StoreBomManager from '../../../components/bom/StoreBomManager';
+import StoreInstallationRequirements from '../../../components/bom/StoreInstallationRequirements';
 import {
   fetchInventoryProducts,
   fetchInventorySummary,
@@ -237,6 +241,18 @@ export default function StoreWorkspace({ onSelectChecklist }) {
         </button>
 
         <button
+          onClick={() => setActiveTab('requirements')}
+          className={`flex-1 min-w-[140px] py-2.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+            activeTab === 'requirements'
+              ? 'bg-amber-600 text-white shadow-xs'
+              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+          }`}
+        >
+          <ClipboardList className="w-4 h-4" />
+          <span>Installation Requirements</span>
+        </button>
+
+        <button
           onClick={() => setActiveTab('add_stock')}
           className={`flex-1 min-w-[140px] py-2.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
             activeTab === 'add_stock'
@@ -282,6 +298,18 @@ export default function StoreWorkspace({ onSelectChecklist }) {
               {pendingReturns.length} pending
             </span>
           )}
+        </button>
+
+        <button
+          onClick={() => setActiveTab('bom')}
+          className={`flex-1 min-w-[140px] py-2.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+            activeTab === 'bom'
+              ? 'bg-amber-600 text-white shadow-xs'
+              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+          }`}
+        >
+          <Layers className="w-4 h-4" />
+          <span>BOM Management</span>
         </button>
       </div>
 
@@ -849,6 +877,20 @@ export default function StoreWorkspace({ onSelectChecklist }) {
             </table>
           </div>
         </div>
+      )}
+
+      {/* =========================================================================
+          SECTION 5: BOM MANAGEMENT
+          ========================================================================= */}
+      {activeTab === 'bom' && (
+        <StoreBomManager token={token} onSelectChecklist={onSelectChecklist} />
+      )}
+
+      {/* =========================================================================
+          SECTION 6: INSTALLATION MATERIAL REQUIREMENTS
+          ========================================================================= */}
+      {activeTab === 'requirements' && (
+        <StoreInstallationRequirements token={token} onSelectChecklist={onSelectChecklist} />
       )}
 
       {/* =========================================================================

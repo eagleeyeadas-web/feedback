@@ -42,53 +42,46 @@ export async function requireAuth(req, res, next) {
       return res.status(401).json({ error: 'Invalid or expired token' });
     }
 
-    // Query user profile from admin_users (if profile row exists)
-    const { data: adminUser } = await supabase
+    // Query user profile from admin_users (trusted database source)
+    const { data: adminUser, error: dbError } = await supabase
       .from('admin_users')
       .select('*')
       .eq('id', user.id)
       .maybeSingle();
 
-    if (adminUser && adminUser.is_active === false) {
+    if (!adminUser) {
+      authCache.delete(token);
+      return res.status(403).json({ error: 'Access denied. Account is not registered as an authorized staff user.' });
+    }
+
+    if (adminUser.is_active === false) {
       authCache.delete(token);
       return res.status(403).json({ error: 'Access denied. Account is deactivated.' });
     }
 
-    // Resolve authoritative role using trusted server-side identity
-    const emailLower = (user.email || '').toLowerCase();
-    let role;
+    // Resolve authoritative role from trusted database record & server-signed auth identity
+    let role = null;
+    const dbRole = adminUser.role ? String(adminUser.role).trim().toUpperCase() : '';
+    const DEPARTMENT_ROLES = ['SALES', 'TECHNICAL', 'STORE_MANAGER'];
+    const appRole = (user.app_metadata?.role || '').toUpperCase();
 
-    // Strict identity-to-role binding for operational staff (cannot be overridden)
-    if (emailLower === 'sales@gmail.com') {
-      role = 'SALES';
-    } else if (emailLower === 'tech@gmail.com') {
-      role = 'TECHNICAL';
-    } else if (emailLower === 'store@gmail.com') {
-      role = 'STORE_MANAGER';
-    } else {
-      // For other accounts, check Supabase auth app_metadata (signed in JWT) or verified adminUser
-      const appRole = (user.app_metadata?.role || '').toUpperCase();
-      if (appRole === 'SALES' || appRole === 'TECHNICAL' || appRole === 'STORE_MANAGER') {
-        role = appRole;
-      } else if (appRole === 'ADMIN' || appRole === 'SUPER_ADMIN') {
-        role = appRole;
-      } else if (adminUser?.role) {
-        const dbRole = String(adminUser.role).toUpperCase();
-        role = dbRole === 'SUPER_ADMIN' ? 'SUPER_ADMIN' : 'ADMIN';
-      } else {
-        const userMetaRole = (user.user_metadata?.role || '').toUpperCase();
-        if (userMetaRole && userMetaRole !== 'ADMIN' && userMetaRole !== 'SUPER_ADMIN') {
-          role = userMetaRole;
-        } else {
-          role = 'SALES'; // Default fallback operational role, NEVER grant unverified ADMIN
-        }
-      }
+    if (DEPARTMENT_ROLES.includes(dbRole)) {
+      role = dbRole;
+    } else if (DEPARTMENT_ROLES.includes(appRole)) {
+      role = appRole;
+    } else if (dbRole === 'ADMIN' || dbRole === 'SUPER_ADMIN' || appRole === 'ADMIN' || appRole === 'SUPER_ADMIN') {
+      role = 'ADMIN';
+    }
+
+    if (!role) {
+      authCache.delete(token);
+      return res.status(403).json({ error: 'Access denied. No valid operational role assigned to account.' });
     }
 
     const authData = {
       user,
-      adminUser: adminUser || { id: user.id, email: user.email, role },
-      profile: { ...(adminUser || {}), id: user.id, email: user.email, role },
+      adminUser: { ...adminUser, role },
+      profile: { ...adminUser, id: user.id, email: user.email, role },
       expiresAt: Date.now() + AUTH_CACHE_TTL_MS,
     };
 
@@ -110,13 +103,13 @@ export async function requireAuth(req, res, next) {
 }
 
 /**
- * Middleware requiring Admin or Super Admin role
+ * Middleware requiring Admin role
  */
 export const requireAdmin = [
   requireAuth,
   (req, res, next) => {
     const role = req.profile?.role;
-    if (role !== 'ADMIN' && role !== 'SUPER_ADMIN') {
+    if (role !== 'ADMIN') {
       return res.status(403).json({ error: 'Access denied. Admin privileges required.' });
     }
     next();
@@ -125,20 +118,22 @@ export const requireAdmin = [
 
 /**
  * Middleware requiring any of the specified roles.
- * Admins/Super Admins only pass if explicitly allowed or when 'ADMIN' is included in allowedRoles.
+ * Least-privilege access: denies by default unless the user's role is explicitly allowed.
  */
 export function requireRole(...allowedRoles) {
   return [
     requireAuth,
     (req, res, next) => {
       const userRole = req.profile?.role;
-      const isAllowed =
-        allowedRoles.includes(userRole) ||
-        (allowedRoles.includes('ADMIN') && (userRole === 'ADMIN' || userRole === 'SUPER_ADMIN'));
+      if (!userRole) {
+        return res.status(403).json({ error: 'Access denied. Missing authorized role.' });
+      }
 
-      if (isAllowed) {
+      const normalizedAllowed = allowedRoles.map((r) => String(r).toUpperCase());
+      if (normalizedAllowed.includes(userRole)) {
         return next();
       }
+
       return res.status(403).json({
         error: `Access denied. Required role: ${allowedRoles.join(' or ')}`,
       });

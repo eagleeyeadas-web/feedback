@@ -173,8 +173,21 @@ export default function SalesWorkspace({ onSelectChecklist, onCreateChecklist, o
                       <div className="text-[11px] text-gray-500 font-mono">{item.client_mobile}</div>
                     </td>
                     <td className="py-3 px-4">
-                      <span className="font-medium text-gray-800">{item.device_type}</span>
-                      <div className="text-[10px] text-gray-400">Qty: {item.number_of_devices}</div>
+                      {Array.isArray(item.device_configurations) && item.device_configurations.length > 1 ? (
+                        <div>
+                          <div className="font-bold text-gray-900 text-xs">
+                            {item.number_of_devices} Devices ({item.device_configurations.length} types)
+                          </div>
+                          <div className="text-[10px] text-indigo-700 font-medium leading-tight mt-0.5">
+                            {item.device_configurations.map((dc) => `${dc.device_type} (${dc.number_of_devices})`).join(', ')}
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <span className="font-medium text-gray-800">{item.device_type}</span>
+                          <div className="text-[10px] text-gray-400">Qty: {item.number_of_devices}</div>
+                        </>
+                      )}
                     </td>
                     <td className="py-3 px-4 font-medium text-gray-700">{item.number_of_vehicles} vehicles ({item.vehicle_type || 'Lorry'})</td>
                     <td className="py-3 px-4 font-mono font-bold text-gray-900">₹{item.confirmed_price || 0}</td>

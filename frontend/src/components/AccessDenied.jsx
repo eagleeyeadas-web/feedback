@@ -4,24 +4,20 @@ import { useAuth } from '../hooks/useAuth';
 
 const DEFAULT_WORKSPACE_BY_ROLE = {
   SALES: {
-    tab: 'sales_workspace',
+    path: '/sales',
     name: 'Sales Workspace',
   },
   TECHNICAL: {
-    tab: 'technical_workspace',
+    path: '/technical',
     name: 'Technical Workspace',
   },
   STORE_MANAGER: {
-    tab: 'store_workspace',
+    path: '/store-manager',
     name: 'Store Manager Workspace',
   },
   ADMIN: {
-    tab: 'installation_checklists',
-    name: 'Installation Jobs',
-  },
-  SUPER_ADMIN: {
-    tab: 'installation_checklists',
-    name: 'Installation Jobs',
+    path: '/sales',
+    name: 'Sales Workspace',
   },
 };
 
@@ -36,15 +32,15 @@ export default function AccessDenied({ targetResource = 'this workspace', onNavi
   const { user, role } = useAuth();
   const navigate = useNavigate();
 
-  const userRole = (role || 'ADMIN').toUpperCase();
-  const defaultTarget = DEFAULT_WORKSPACE_BY_ROLE[userRole] || DEFAULT_WORKSPACE_BY_ROLE.ADMIN;
+  const userRole = (role || '').toUpperCase();
+  const defaultTarget = DEFAULT_WORKSPACE_BY_ROLE[userRole] || DEFAULT_WORKSPACE_BY_ROLE.SALES;
   const permittedDesc = ROLE_PERMITTED_DESCRIPTIONS[userRole] || 'Your assigned workspace.';
 
   const handleReturn = () => {
     if (onNavigateDefault) {
-      onNavigateDefault(defaultTarget.tab);
+      onNavigateDefault(defaultTarget.path);
     } else {
-      navigate(`/admin/dashboard?tab=${defaultTarget.tab}`, { replace: true });
+      navigate(defaultTarget.path, { replace: true });
     }
   };
 

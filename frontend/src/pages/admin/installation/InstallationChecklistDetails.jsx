@@ -4,6 +4,7 @@ import { useAuth } from '../../../hooks/useAuth';
 import { fetchInstallationChecklistDetail, downloadInstallationPDF, API_BASE } from '../../../lib/api';
 import DeviceCarryModal from '../../../components/workspaces/DeviceCarryModal';
 import InstallationCompletionModal from '../../../components/workspaces/InstallationCompletionModal';
+import IssueMaterialsModal from '../../../components/bom/IssueMaterialsModal';
 import { downloadInstallationExcel } from '../../../lib/excelHelper';
 import {
   ArrowLeft,
@@ -25,6 +26,7 @@ import {
   Package,
   Wrench,
   ShieldCheck,
+  Layers,
 } from 'lucide-react';
 
 export default function InstallationChecklistDetails({ id: propId, onEdit, onBack }) {
@@ -53,6 +55,7 @@ export default function InstallationChecklistDetails({ id: propId, onEdit, onBac
   const [showReturnModal, setShowReturnModal] = useState(false);
   const [showVerifyModal, setShowVerifyModal] = useState(false);
   const [showDiscModal, setShowDiscModal] = useState(false);
+  const [showMaterialIssueModal, setShowMaterialIssueModal] = useState(false);
 
   useEffect(() => {
     autoDownloadedRef.current = false;
@@ -473,44 +476,183 @@ export default function InstallationChecklistDetails({ id: propId, onEdit, onBac
           </div>
         </div>
 
-        {/* SECTION 2: 2. DEVICE DETAILS & EXTRA DEVICE DETAILS */}
+        {/* SECTION 2: 2. DEVICE DETAILS & CONFIGURATIONS */}
         <div className="space-y-3">
-          <h3 className="text-xs font-black text-navy uppercase tracking-wider pb-1 border-b border-gray-200 flex items-center gap-2">
-            <HardDrive size={15} className="text-blue-600" />
-            2. DEVICE DETAILS
-          </h3>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs bg-gray-50/50 p-4 rounded-xl border border-gray-100">
-            <div>
-              <span className="text-gray-500 block text-[11px]">Type of Device</span>
-              <span className="font-bold text-gray-900">{checklist.device_type}</span>
+          <div className="flex items-center justify-between pb-1 border-b border-gray-200">
+            <h3 className="text-xs font-black text-navy uppercase tracking-wider flex items-center gap-2">
+              <HardDrive size={15} className="text-blue-600" />
+              2. DEVICE DETAILS & CONFIGURATIONS
+            </h3>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-800 border border-blue-200">
+                Total Devices: <span className="font-mono">{checklist.number_of_devices}</span>
+              </span>
             </div>
-            <div>
-              <span className="text-gray-500 block text-[11px]">Number of Devices</span>
-              <span className="font-bold text-gray-900">{checklist.number_of_devices}</span>
+          </div>
+
+          {Array.isArray(checklist.device_configurations) && checklist.device_configurations.length > 0 ? (
+            <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-xs">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="bg-gray-50/90 border-b border-gray-200 text-[11px] font-bold text-gray-600 uppercase">
+                    <th className="py-2.5 px-3 w-12 text-center">#</th>
+                    <th className="py-2.5 px-4">Device Type</th>
+                    <th className="py-2.5 px-4 text-center">Number of Devices</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {checklist.device_configurations.map((dc, idx) => (
+                    <tr key={idx} className="hover:bg-slate-50 transition-colors">
+                      <td className="py-2 px-3 text-center text-gray-400 font-mono text-[11px]">{idx + 1}</td>
+                      <td className="py-2 px-4 font-bold text-gray-900">{dc.device_type}</td>
+                      <td className="py-2 px-4 text-center font-mono font-semibold text-blue-900">
+                        <span className="px-2.5 py-0.5 rounded-md bg-blue-50 border border-blue-200">
+                          {dc.number_of_devices} units
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="bg-slate-100/80 font-bold border-t border-slate-200 text-gray-900 text-xs">
+                    <td colSpan={2} className="py-2.5 px-4 text-navy">TOTAL INSTALLATION SUMMARY</td>
+                    <td className="py-2.5 px-4 text-center font-mono text-blue-700">{checklist.number_of_devices} Devices Total</td>
+                  </tr>
+                </tfoot>
+              </table>
             </div>
-            <div>
-              <span className="text-gray-500 block text-[11px]">Number of Vehicles</span>
-              <span className="font-bold text-gray-900">{checklist.number_of_vehicles}</span>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs bg-gray-50/50 p-4 rounded-xl border border-gray-100">
+              <div>
+                <span className="text-gray-500 block text-[11px]">Type of Device</span>
+                <span className="font-bold text-gray-900">{checklist.device_type}</span>
+              </div>
+              <div>
+                <span className="text-gray-500 block text-[11px]">Number of Devices</span>
+                <span className="font-bold text-gray-900">{checklist.number_of_devices}</span>
+              </div>
+            </div>
+          )}
+
+          {checklist.extra_devices && (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs bg-blue-50/40 p-3.5 rounded-xl border border-blue-100">
+              <div>
+                <span className="text-gray-500 block text-[11px]">Extra Devices to be Carried?</span>
+                <span className="font-bold text-blue-700">Yes</span>
+              </div>
+              <div>
+                <span className="text-gray-500 block text-[11px]">Type of Extra Device</span>
+                <span className="font-bold text-gray-900">{checklist.extra_device_type || '—'}</span>
+              </div>
+              <div>
+                <span className="text-gray-500 block text-[11px]">Number of Extra Devices to be Carried</span>
+                <span className="font-bold text-gray-900">{checklist.extra_device_count || '—'}</span>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* SECTION 2B: BILL OF MATERIALS (BOM) REQUIREMENTS & STORE ISSUANCE (Installation Only) */}
+        {checklist.installation_or_service === 'Installation' && (
+          <div className="space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-1 border-b border-gray-200 gap-2">
+              <h3 className="text-xs font-black text-navy uppercase tracking-wider flex items-center gap-2">
+                <Layers size={15} className="text-indigo-600" />
+                Bill of Materials (BOM) Requirements & Store Issuance
+              </h3>
+              {checklist.bom_snapshot?.bom_version && (
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200 self-start sm:self-auto">
+                  Checklist BOM Snapshot: v{checklist.bom_snapshot.bom_version}
+                </span>
+              )}
             </div>
 
-            {checklist.extra_devices && (
-              <>
-                <div>
-                  <span className="text-gray-500 block text-[11px]">Extra Devices to be Carried?</span>
-                  <span className="font-bold text-blue-700">Yes</span>
+            {checklist.bom_snapshot?.configured && Array.isArray(checklist.bom_snapshot.items) && checklist.bom_snapshot.items.length > 0 ? (
+              <div className="bg-gray-50/60 p-4 rounded-xl border border-gray-200/80 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-[11px] text-gray-500 font-medium">Material Issuance Status:</span>
+                    {checklist.material_issuance_status === 'ISSUED' ? (
+                      <span className="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 font-bold text-[11px] flex items-center gap-1 border border-emerald-200">
+                        <CheckCircle2 size={13} /> Materials Issued from Store
+                      </span>
+                    ) : (
+                      <span className="px-2.5 py-1 rounded-full bg-amber-100 text-amber-800 font-bold text-[11px] flex items-center gap-1 border border-amber-200">
+                        <Clock size={13} /> Pending Store Issuance
+                      </span>
+                    )}
+                    {checklist.material_issued_at && (
+                      <span className="text-[11px] text-gray-400">
+                        ({new Date(checklist.material_issued_at).toLocaleString('en-IN')})
+                      </span>
+                    )}
+                  </div>
+
+                  {(role === 'STORE_MANAGER' || role === 'ADMIN' || role === 'SUPER_ADMIN') && checklist.material_issuance_status !== 'ISSUED' && (
+                    <button
+                      type="button"
+                      onClick={() => setShowMaterialIssueModal(true)}
+                      className="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer shrink-0"
+                    >
+                      <Package size={14} /> Authorize & Issue Materials
+                    </button>
+                  )}
                 </div>
-                <div>
-                  <span className="text-gray-500 block text-[11px]">Type of Extra Device</span>
-                  <span className="font-bold text-gray-900">{checklist.extra_device_type || '—'}</span>
+
+                {/* Table of BOM items */}
+                <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-xs">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className="bg-gray-50/90 border-b border-gray-200 text-[11px] font-bold text-gray-600 uppercase">
+                        <th className="py-2.5 px-3 text-center w-12">#</th>
+                        <th className="py-2.5 px-4">Material Name</th>
+                        <th className="py-2.5 px-4 text-center">Qty / Device</th>
+                        <th className="py-2.5 px-4 text-center">Total Devices</th>
+                        <th className="py-2.5 px-4 text-center">Total Required Qty</th>
+                        <th className="py-2.5 px-4 text-center">Unit</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {checklist.bom_snapshot.items.map((item, idx) => (
+                        <tr key={idx} className="hover:bg-indigo-50/20 transition-colors">
+                          <td className="py-2 px-3 text-center text-gray-400 font-mono text-[11px]">{idx + 1}</td>
+                          <td className="py-2 px-4 font-semibold text-gray-900">
+                            <div>{item.material_name}</div>
+                            {Array.isArray(item.breakdown) && item.breakdown.length > 1 && (
+                              <div className="text-[10px] text-gray-500 font-normal mt-0.5">
+                                {item.breakdown.map((b) => `${b.device_type}: ${b.subtotal} ${item.unit}`).join(' • ')}
+                              </div>
+                            )}
+                          </td>
+                          <td className="py-2 px-4 text-center font-mono text-gray-600">
+                            {item.quantity_per_device !== undefined ? item.quantity_per_device : 'Combined'}
+                          </td>
+                          <td className="py-2 px-4 text-center font-mono text-gray-600">{checklist.number_of_devices}</td>
+                          <td className="py-2 px-4 text-center font-mono font-bold text-indigo-900">
+                            <span className="px-2 py-0.5 rounded-md bg-indigo-50 border border-indigo-200">
+                              {item.total_quantity}
+                            </span>
+                          </td>
+                          <td className="py-2 px-4 text-center text-gray-600 font-medium">{item.unit}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
-                <div>
-                  <span className="text-gray-500 block text-[11px]">Number of Extra Devices to be Carried</span>
-                  <span className="font-bold text-gray-900">{checklist.extra_device_count || '—'}</span>
-                </div>
-              </>
+                <p className="text-[11px] text-gray-500">
+                  Note: Original BOM calculation snapshot preserved from time of checklist creation. Subsequent edits to Store BOM definitions do not alter saved requirements.
+                </p>
+              </div>
+            ) : (
+              <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 flex items-center gap-2">
+                <AlertTriangle size={16} className="text-amber-600 shrink-0" />
+                <span>
+                  No Bill of Materials (BOM) was configured for <strong>&ldquo;{checklist.device_type}&rdquo;</strong> when this checklist was initiated.
+                </span>
+              </div>
             )}
           </div>
-        </div>
+        )}
 
         {/* SECTION 3: 3. PRICING & PAYMENT */}
         <div className="space-y-3">
@@ -745,6 +887,20 @@ export default function InstallationChecklistDetails({ id: propId, onEdit, onBac
           onSuccess={() => {
             setShowDiscModal(false);
             showToast('Discrepancy resolved!');
+            fetchInstallationChecklistDetail(token, checklistId).then(setChecklist);
+          }}
+        />
+      )}
+
+      {/* STORE MANAGER: ISSUE MATERIALS MODAL */}
+      {showMaterialIssueModal && (
+        <IssueMaterialsModal
+          checklist={checklist}
+          token={token}
+          onClose={() => setShowMaterialIssueModal(false)}
+          onSuccess={() => {
+            setShowMaterialIssueModal(false);
+            showToast('Materials issued from store successfully!');
             fetchInstallationChecklistDetail(token, checklistId).then(setChecklist);
           }}
         />

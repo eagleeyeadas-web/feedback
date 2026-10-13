@@ -50,7 +50,9 @@ export function downloadInstallationExcel(item) {
     item.client_mobile,
     item.client_location || '',
     item.google_maps_location || '',
-    item.device_type,
+    (Array.isArray(item.device_configurations) && item.device_configurations.length > 1)
+      ? item.device_configurations.map((dc) => `${dc.device_type} (${dc.number_of_devices})`).join('; ')
+      : (item.device_type || ''),
     item.number_of_devices,
     item.number_of_vehicles,
     item.extra_devices ? 'Yes' : 'No',
@@ -136,7 +138,9 @@ export function downloadAllInstallationsExcel(items) {
     item.client_mobile,
     item.client_location || '',
     item.google_maps_location || '',
-    item.device_type,
+    (Array.isArray(item.device_configurations) && item.device_configurations.length > 1)
+      ? item.device_configurations.map((dc) => `${dc.device_type} (${dc.number_of_devices})`).join('; ')
+      : (item.device_type || ''),
     item.number_of_devices,
     item.number_of_vehicles,
     item.extra_devices ? 'Yes' : 'No',

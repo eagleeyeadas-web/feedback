@@ -435,10 +435,23 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
 
                         {/* Sales Device Request */}
                         <td className="py-3 px-4">
-                          <span className="font-semibold text-gray-800">{item.device_type}</span>
-                          <div className="text-[10px] text-gray-400">Qty: {item.number_of_devices}</div>
+                          {Array.isArray(item.device_configurations) && item.device_configurations.length > 1 ? (
+                            <div>
+                              <div className="font-bold text-gray-900 text-xs">
+                                {item.number_of_devices} Devices ({item.device_configurations.length} types)
+                              </div>
+                              <div className="text-[10px] text-blue-700 font-medium leading-tight mt-0.5">
+                                {item.device_configurations.map((dc) => `${dc.device_type} (${dc.number_of_devices})`).join(', ')}
+                              </div>
+                            </div>
+                          ) : (
+                            <>
+                              <span className="font-semibold text-gray-800">{item.device_type}</span>
+                              <div className="text-[10px] text-gray-400">Qty: {item.number_of_devices}</div>
+                            </>
+                          )}
                           {item.extra_devices && item.extra_device_type && (
-                            <div className="text-[10px] text-purple-600 font-medium">
+                            <div className="text-[10px] text-purple-600 font-medium mt-0.5">
                               + {item.extra_device_count} {item.extra_device_type}
                             </div>
                           )}
@@ -650,10 +663,23 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
 
                         {/* Sales Device Request */}
                         <td className="py-3 px-4">
-                          <span className="font-semibold text-gray-800">{item.device_type}</span>
-                          <div className="text-[10px] text-gray-400">Qty: {item.number_of_devices}</div>
+                          {Array.isArray(item.device_configurations) && item.device_configurations.length > 1 ? (
+                            <div>
+                              <div className="font-bold text-gray-900 text-xs">
+                                {item.number_of_devices} Devices ({item.device_configurations.length} types)
+                              </div>
+                              <div className="text-[10px] text-blue-700 font-medium leading-tight mt-0.5">
+                                {item.device_configurations.map((dc) => `${dc.device_type} (${dc.number_of_devices})`).join(', ')}
+                              </div>
+                            </div>
+                          ) : (
+                            <>
+                              <span className="font-semibold text-gray-800">{item.device_type}</span>
+                              <div className="text-[10px] text-gray-400">Qty: {item.number_of_devices}</div>
+                            </>
+                          )}
                           {item.extra_devices && item.extra_device_type && (
-                            <div className="text-[10px] text-purple-600 font-medium">
+                            <div className="text-[10px] text-purple-600 font-medium mt-0.5">
                               + {item.extra_device_count} {item.extra_device_type}
                             </div>
                           )}

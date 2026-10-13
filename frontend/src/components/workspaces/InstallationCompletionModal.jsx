@@ -85,15 +85,26 @@ export default function InstallationCompletionModal({ checklist, carryRecord: in
     }
 
     function setupFallbackItems() {
-      const fallbackItems = [
-        {
-          device_type: checklist.device_type || '2 Channel Live',
-          quantity_carried: checklist.number_of_devices || 1,
-        },
-        ...(checklist.extra_devices && checklist.extra_device_type
-          ? [{ device_type: checklist.extra_device_type, quantity_carried: checklist.extra_device_count || 1 }]
-          : []),
-      ];
+      let fallbackItems = [];
+      if (Array.isArray(checklist.device_configurations) && checklist.device_configurations.length > 0) {
+        fallbackItems = checklist.device_configurations.map((dc) => ({
+          device_type: dc.device_type,
+          quantity_carried: dc.number_of_devices || 1,
+        }));
+      } else {
+        fallbackItems = [
+          {
+            device_type: checklist.device_type || '2 Channel Live',
+            quantity_carried: checklist.number_of_devices || 1,
+          },
+        ];
+      }
+      if (checklist.extra_devices && checklist.extra_device_type) {
+        fallbackItems.push({
+          device_type: checklist.extra_device_type,
+          quantity_carried: checklist.extra_device_count || 1,
+        });
+      }
       setupItems(fallbackItems);
     }
 

@@ -17,13 +17,21 @@ export default function DeviceCarryModal({ checklist, token, onClose, onSuccess 
   const [error, setError] = useState('');
   const [generalRemarks, setGeneralRemarks] = useState('');
 
-  // Start with one empty row for dynamic device selection
-  const [items, setItems] = useState([
-    {
-      device_type: '',
-      quantity_carried: '',
-    },
-  ]);
+  // Start with rows pre-populated from checklist configuration, or one empty row
+  const [items, setItems] = useState(() => {
+    if (Array.isArray(checklist.device_configurations) && checklist.device_configurations.length > 0) {
+      return checklist.device_configurations.map((dc) => ({
+        device_type: dc.device_type,
+        quantity_carried: dc.number_of_devices || 1,
+      }));
+    }
+    return [
+      {
+        device_type: checklist.device_type || '',
+        quantity_carried: checklist.number_of_devices || '',
+      },
+    ];
+  });
 
   const handleAddRow = () => {
     if (items.length >= SUPPORTED_DEVICE_TYPES.length) {

@@ -1,14 +1,26 @@
 import { Router } from 'express';
 import supabase from '../services/supabase.js';
 import { generateFeedbackPDF } from '../services/pdfGenerator.js';
-import { requireAdmin, requireRole } from '../middleware/auth.js';
+import { requireAdmin, requireRole, requireAuth } from '../middleware/auth.js';
 
 // UUID v4 format check — avoids Postgres cast errors when querying the UUID `id` column
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const router = Router();
 
-// Feedback and statistics administration is restricted strictly to ADMIN and SUPER_ADMIN
+/**
+ * GET /api/admin/me
+ * Return authenticated profile and trusted role for any staff user
+ */
+router.get('/me', requireAuth, (req, res) => {
+  return res.json({
+    user: req.user,
+    profile: req.profile,
+    role: req.profile?.role,
+  });
+});
+
+// Feedback and statistics administration is restricted strictly to ADMIN
 router.use(requireAdmin);
 
 /**

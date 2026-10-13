@@ -576,6 +576,149 @@ export async function resolveDiscrepancyJob(token, checklistId, data) {
   return json;
 }
 
+/**
+ * Bill of Materials (BOM) API helpers
+ */
+export async function fetchBoms(token) {
+  const res = await fetch(`${API_BASE}/admin/bom`, {
+    headers: adminHeaders(token),
+  });
+  if (!res.ok) throw new Error('Failed to fetch BOM configurations');
+  return res.json();
+}
+
+export async function fetchBomByDeviceType(token, deviceType) {
+  const res = await fetch(`${API_BASE}/admin/bom/${encodeURIComponent(deviceType)}`, {
+    headers: adminHeaders(token),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.warning || err.error || 'Failed to fetch device BOM');
+  }
+  return res.json();
+}
+
+export async function calculateBomRequirements(token, data) {
+  const res = await fetch(`${API_BASE}/admin/bom/calculate`, {
+    method: 'POST',
+    headers: adminHeaders(token),
+    body: JSON.stringify(data),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to calculate BOM requirements');
+  return json;
+}
+
+export async function updateDeviceBom(token, deviceType, data) {
+  const res = await fetch(`${API_BASE}/admin/bom/${encodeURIComponent(deviceType)}`, {
+    method: 'PUT',
+    headers: adminHeaders(token),
+    body: JSON.stringify(data),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to update BOM configuration');
+  return json;
+}
+
+export async function resetDeviceBom(token, deviceType) {
+  const res = await fetch(`${API_BASE}/admin/bom/${encodeURIComponent(deviceType)}/reset`, {
+    method: 'POST',
+    headers: adminHeaders(token),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to reset BOM configuration');
+  return json;
+}
+
+export async function fetchBomUnits(token) {
+  const res = await fetch(`${API_BASE}/admin/bom/units`, {
+    headers: adminHeaders(token),
+  });
+  if (!res.ok) throw new Error('Failed to fetch BOM units');
+  return res.json();
+}
+
+export async function fetchChecklistBomHistory(token, params = {}) {
+  const query = new URLSearchParams(params).toString();
+  const res = await fetch(`${API_BASE}/admin/bom/history?${query}`, {
+    headers: adminHeaders(token),
+  });
+  if (!res.ok) throw new Error('Failed to fetch checklist BOM history');
+  return res.json();
+}
+
+/**
+ * Material Stock & Issuance API helpers
+ */
+export async function fetchMaterialInventory(token) {
+  const res = await fetch(`${API_BASE}/admin/materials`, {
+    headers: adminHeaders(token),
+  });
+  if (!res.ok) throw new Error('Failed to fetch material inventory');
+  return res.json();
+}
+
+export async function adjustMaterialStock(token, data) {
+  const res = await fetch(`${API_BASE}/admin/materials/adjust`, {
+    method: 'POST',
+    headers: adminHeaders(token),
+    body: JSON.stringify(data),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to adjust material stock');
+  return json;
+}
+
+export async function issueMaterialsForChecklist(token, data) {
+  const res = await fetch(`${API_BASE}/admin/materials/issue-for-checklist`, {
+    method: 'POST',
+    headers: adminHeaders(token),
+    body: JSON.stringify(data),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to issue materials');
+  return json;
+}
+
+export async function fetchMaterialTransactions(token, params = {}) {
+  const query = new URLSearchParams(params).toString();
+  const res = await fetch(`${API_BASE}/admin/materials/transactions?${query}`, {
+    headers: adminHeaders(token),
+  });
+  if (!res.ok) throw new Error('Failed to fetch material transactions');
+  return res.json();
+}
+
+/**
+ * Store Manager Material Requirements API helpers
+ */
+export async function fetchStoreMaterialRequirements(token, params = {}) {
+  const query = new URLSearchParams(params).toString();
+  const res = await fetch(`${API_BASE}/admin/materials/requirements?${query}`, {
+    headers: adminHeaders(token),
+  });
+  if (!res.ok) throw new Error('Failed to fetch store material requirements');
+  return res.json();
+}
+
+export async function fetchStoreMaterialRequirementDetail(token, id) {
+  const res = await fetch(`${API_BASE}/admin/materials/requirements/${id}`, {
+    headers: adminHeaders(token),
+  });
+  if (!res.ok) throw new Error('Failed to fetch requirement details');
+  return res.json();
+}
+
+export async function syncStoreMaterialRequirements(token) {
+  const res = await fetch(`${API_BASE}/admin/materials/requirements/sync`, {
+    method: 'POST',
+    headers: adminHeaders(token),
+  });
+  if (!res.ok) throw new Error('Failed to sync requirements');
+  return res.json();
+}
+
+
 
 
 

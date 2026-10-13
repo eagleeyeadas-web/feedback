@@ -44,6 +44,14 @@ const DEVICE_TYPES = [
 
 const indianMobileRegex = /^[6-9]\d{9}$/;
 
+export const deviceConfigItemSchema = z.object({
+  device_type: z.enum(DEVICE_TYPES, {
+    errorMap: () => ({ message: 'Invalid device type option selected' }),
+  }),
+  number_of_devices: z.coerce.number().int().gt(0, 'Number of devices must be a positive whole number greater than 0'),
+  number_of_vehicles: z.coerce.number().int().gt(0, 'Number of vehicles must be a positive whole number greater than 0').optional().default(1),
+});
+
 export const checklistValidationSchema = z.object({
   client_name: z.string().min(1, 'Client name is required'),
   client_mobile: z.string().refine((val) => indianMobileRegex.test(val.replace(/\s+/g, '')), {
@@ -51,11 +59,10 @@ export const checklistValidationSchema = z.object({
   }),
   client_location: z.string().min(1, 'Client location is required'),
   google_maps_location: z.string().nullable().optional(),
-  device_type: z.enum(DEVICE_TYPES, {
-    errorMap: () => ({ message: 'Invalid device type option selected' }),
-  }),
-  number_of_devices: z.number().int().gt(0, 'Number of devices must be greater than 0'),
-  number_of_vehicles: z.number().int().gt(0, 'Number of vehicles must be greater than 0'),
+  device_configurations: z.array(deviceConfigItemSchema).min(1, 'At least one device configuration is required').optional(),
+  device_type: z.string().optional(),
+  number_of_devices: z.coerce.number().int().gt(0, 'Number of devices must be greater than 0').optional(),
+  number_of_vehicles: z.coerce.number().int().gt(0, 'Number of vehicles must be greater than 0').optional().default(1),
   extra_devices: z.boolean().default(false),
   extra_device_type: z.string().nullable().optional(),
   extra_device_count: z.number().int().gt(0).nullable().optional(),
@@ -85,7 +92,33 @@ export const checklistValidationSchema = z.object({
   payment_status: z.enum(['Paid', 'Partially Paid', 'Pending']).default('Pending'),
   remarks: z.string().nullable().optional(),
   client_confirmation: z.enum(['Confirmed', 'Not Confirmed']).default('Confirmed'),
+  bom_snapshot: z.any().nullable().optional(),
+  material_issuance_status: z.enum(['PENDING', 'PARTIALLY_ISSUED', 'ISSUED', 'NOT_APPLICABLE']).optional(),
 }).superRefine((data, ctx) => {
+  // If device_configurations is not provided, enforce legacy device fields
+  if (!data.device_configurations || data.device_configurations.length === 0) {
+    if (!data.device_type) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['device_type'],
+        message: 'Type of Device is required',
+      });
+    } else if (!DEVICE_TYPES.includes(data.device_type)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['device_type'],
+        message: 'Invalid device type option selected',
+      });
+    }
+    if (!data.number_of_devices || data.number_of_devices <= 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['number_of_devices'],
+        message: 'Number of devices must be greater than 0',
+      });
+    }
+  }
+
   const adv = data.advance_received ? (data.advance_amount || 0) : 0;
   const pend = data.pending_payment ? (data.pending_amount || 0) : 0;
   if (adv + pend > data.confirmed_price) {

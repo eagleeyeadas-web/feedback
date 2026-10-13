@@ -1,13 +1,16 @@
 import { useEffect, lazy, Suspense } from 'react';
-import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { HashRouter, Routes, Route, Navigate, useParams, useSearchParams } from 'react-router-dom';
 import { AuthProvider, useAuth } from './hooks/useAuth';
+import RoleProtectedRoute from './components/RoleProtectedRoute';
 import ActiveSessionCleanupTracker from './components/ActiveSessionCleanupTracker';
 import { pingServerWakeup } from './lib/api';
 
 const LandingPage = lazy(() => import('./pages/LandingPage'));
 const FeedbackForm = lazy(() => import('./pages/FeedbackForm'));
 const Login = lazy(() => import('./pages/admin/Login'));
-const Dashboard = lazy(() => import('./pages/admin/Dashboard'));
+const SalesWorkspacePage = lazy(() => import('./pages/staff/SalesWorkspacePage'));
+const TechnicalWorkspacePage = lazy(() => import('./pages/staff/TechnicalWorkspacePage'));
+const StoreWorkspacePage = lazy(() => import('./pages/staff/StoreWorkspacePage'));
 
 function PageLoader() {
   return (
@@ -17,144 +20,153 @@ function PageLoader() {
   );
 }
 
-function ProtectedRoute({ children }) {
-  const { session, loading } = useAuth();
+/**
+ * Redirects authenticated staff to their specific authorized workspace.
+ * Prevents multiple workspaces from appearing together on an un-scoped dashboard.
+ */
+function DashboardRedirect() {
+  const { session, role, loading } = useAuth();
 
   if (loading) {
     return <PageLoader />;
   }
 
   if (!session) {
-    return <Navigate to="/admin/login" replace />;
+    return <Navigate to="/login" replace />;
   }
 
-  return children;
+  const userRole = (role || '').toUpperCase();
+  if (userRole === 'SALES') {
+    return <Navigate to="/sales" replace />;
+  }
+  if (userRole === 'TECHNICAL') {
+    return <Navigate to="/technical" replace />;
+  }
+  if (userRole === 'STORE_MANAGER') {
+    return <Navigate to="/store-manager" replace />;
+  }
+
+  // Fallback for Admin
+  return <Navigate to="/sales" replace />;
+}
+
+/**
+ * Helper to route checklist detail links to the user's authorized workspace
+ */
+function ChecklistDetailRedirect() {
+  const { id } = useParams();
+  const [searchParams] = useSearchParams();
+  const { session, role, loading } = useAuth();
+
+  if (loading) return <PageLoader />;
+  if (!session) return <Navigate to="/login" replace />;
+
+  const userRole = (role || '').toUpperCase();
+  const action = searchParams.get('action');
+  const actionQuery = action ? `&action=${action}` : '';
+
+  if (userRole === 'TECHNICAL') {
+    return <Navigate to={`/technical?view=${id}${actionQuery}`} replace />;
+  }
+  if (userRole === 'STORE_MANAGER') {
+    return <Navigate to={`/store-manager?view=${id}${actionQuery}`} replace />;
+  }
+  return <Navigate to={`/sales?view=${id}${actionQuery}`} replace />;
 }
 
 function AppRoutes() {
   return (
     <Suspense fallback={<PageLoader />}>
       <Routes>
-        {/* 1. Public Landing Page (Portal Selection) */}
+        {/* 1. Public Landing Page */}
         <Route path="/" element={<LandingPage />} />
 
-        {/* 2. Public Customer Feedback Form */}
+        {/* 2. Public Customer Evaluation & Feedback Form */}
         <Route path="/customer-form" element={<FeedbackForm />} />
         <Route path="/feedback" element={<FeedbackForm />} />
 
-        {/* 3. Staff & Admin Login Routes */}
+        {/* 3. Single Staff Login Page */}
         <Route path="/login" element={<Login />} />
-        <Route path="/admin/login" element={<Login />} />
+        <Route path="/admin/login" element={<Navigate to="/login" replace />} />
 
-        {/* 4. Protected Workspace & Admin Dashboard Routes */}
+        {/* 4. Dedicated Department Workspaces with Strict Role Route Protection */}
+        {/* Sales Workspace: Accessible ONLY to SALES */}
         <Route
-          path="/admin/dashboard"
+          path="/sales"
           element={
-            <ProtectedRoute>
-              <Dashboard />
-            </ProtectedRoute>
+            <RoleProtectedRoute
+              allowedRoles={['SALES', 'ADMIN']}
+              targetResource="Sales Workspace"
+            >
+              <SalesWorkspacePage />
+            </RoleProtectedRoute>
           }
         />
+
+        {/* Technical Workspace: Accessible ONLY to TECHNICAL */}
+        <Route
+          path="/technical"
+          element={
+            <RoleProtectedRoute
+              allowedRoles={['TECHNICAL', 'ADMIN']}
+              targetResource="Technical Workspace"
+            >
+              <TechnicalWorkspacePage />
+            </RoleProtectedRoute>
+          }
+        />
+
+        {/* Store Manager Workspace: Accessible ONLY to STORE_MANAGER */}
+        <Route
+          path="/store-manager"
+          element={
+            <RoleProtectedRoute
+              allowedRoles={['STORE_MANAGER', 'ADMIN']}
+              targetResource="Store Manager Workspace"
+            >
+              <StoreWorkspacePage />
+            </RoleProtectedRoute>
+          }
+        />
+        <Route path="/store" element={<Navigate to="/store-manager" replace />} />
+
+        {/* 5. Legacy / Nested Checklist Redirects */}
         <Route
           path="/admin/installation-checklists"
-          element={
-            <ProtectedRoute>
-              <Dashboard />
-            </ProtectedRoute>
-          }
+          element={<DashboardRedirect />}
         />
         <Route
           path="/admin/installation-checklists/create"
           element={
-            <ProtectedRoute>
-              <Dashboard />
-            </ProtectedRoute>
+            <RoleProtectedRoute
+              allowedRoles={['SALES', 'ADMIN']}
+              targetResource="Create Installation Checklist"
+            >
+              <Navigate to="/sales?create=true" replace />
+            </RoleProtectedRoute>
           }
         />
         <Route
           path="/admin/installation-checklists/:id"
-          element={
-            <ProtectedRoute>
-              <Dashboard />
-            </ProtectedRoute>
-          }
+          element={<ChecklistDetailRedirect />}
         />
         <Route
           path="/admin/installation-checklists/:id/edit"
           element={
-            <ProtectedRoute>
-              <Dashboard />
-            </ProtectedRoute>
+            <RoleProtectedRoute
+              allowedRoles={['SALES', 'ADMIN']}
+              targetResource="Edit Installation Checklist"
+            >
+              <Navigate to="/sales" replace />
+            </RoleProtectedRoute>
           }
         />
-        {/* 5. Direct Workspace & Resource URLs (Guarded) */}
-        <Route
-          path="/sales"
-          element={
-            <ProtectedRoute>
-              <Navigate to="/admin/dashboard?tab=sales_workspace" replace />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/technical"
-          element={
-            <ProtectedRoute>
-              <Navigate to="/admin/dashboard?tab=technical_workspace" replace />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/store-manager"
-          element={
-            <ProtectedRoute>
-              <Navigate to="/admin/dashboard?tab=store_workspace" replace />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/quotation-history"
-          element={
-            <ProtectedRoute>
-              <Navigate to="/admin/dashboard?tab=quotation_history" replace />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/quotation-generator"
-          element={
-            <ProtectedRoute>
-              <Navigate to="/admin/dashboard?tab=quotation_generator" replace />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/employee-accounts"
-          element={
-            <ProtectedRoute>
-              <Navigate to="/admin/dashboard?tab=users" replace />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/customers"
-          element={
-            <ProtectedRoute>
-              <Navigate to="/admin/dashboard?tab=customers" replace />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/audit-logs"
-          element={
-            <ProtectedRoute>
-              <Navigate to="/admin/dashboard?tab=audit_logs" replace />
-            </ProtectedRoute>
-          }
-        />
-        <Route path="/admin" element={<Navigate to="/admin/dashboard" replace />} />
 
-        {/* 404 fallback */}
+        {/* 6. Dashboard & Direct Admin URLs Route to Authorized Department Workspace */}
+        <Route path="/admin/dashboard" element={<DashboardRedirect />} />
+        <Route path="/admin" element={<DashboardRedirect />} />
+
+        {/* 7. 404 Fallback */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Suspense>
@@ -162,7 +174,7 @@ function AppRoutes() {
 }
 
 export default function App() {
-  // Proactively wake up backend on initial application boot
+  // Proactively wake up backend on initial boot
   useEffect(() => {
     pingServerWakeup();
   }, []);

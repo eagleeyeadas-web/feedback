@@ -8,6 +8,7 @@ import {
   fetchEngineersAvailability,
   fetchServiceEngineers,
 } from '../../../lib/api';
+import BomRequirementSummary from '../../../components/bom/BomRequirementSummary';
 import {
   ArrowLeft,
   Save,
@@ -25,6 +26,9 @@ import {
   CheckSquare,
   Clock,
   Sparkles,
+  Plus,
+  Trash2,
+  Info,
 } from 'lucide-react';
 
 const DEVICE_OPTIONS = [
@@ -68,11 +72,17 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
   const [error, setError] = useState(null);
   const [successToast, setSuccessToast] = useState(null);
   const [isAuthoritativeCompleted, setIsAuthoritativeCompleted] = useState(false);
+  const [bomSnapshot, setBomSnapshot] = useState(null);
 
   // Field Engineer Availability State
   const [engineersList, setEngineersList] = useState([]);
   const [engineersAvailability, setEngineersAvailability] = useState([]);
   const [checkingAvailability, setCheckingAvailability] = useState(false);
+
+  // Multi-Device Configurations State
+  const [deviceConfigs, setDeviceConfigs] = useState([
+    { id: 'dev-1', device_type: DEVICE_OPTIONS[0], number_of_devices: 1 },
+  ]);
 
   // Form State matching all 27 questions exactly
   const [formData, setFormData] = useState({
@@ -116,6 +126,33 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
           const isCompleted = data.installation_status === 'Completed' || data.installation_status === 'Site Work Completed';
           setIsAuthoritativeCompleted(isCompleted);
           const safeStatus = isCompleted ? 'Completed' : 'Assigned';
+          const jobType = data.installation_or_service || 'Installation';
+          if (jobType === 'Installation' && data.bom_snapshot) {
+            setBomSnapshot(data.bom_snapshot);
+          } else {
+            setBomSnapshot(null);
+          }
+
+          // Populate device configurations (backward-compatible)
+          if (Array.isArray(data.device_configurations) && data.device_configurations.length > 0) {
+            setDeviceConfigs(
+              data.device_configurations.map((dc, i) => ({
+                id: `dev-${i + 1}-${Date.now()}`,
+                device_type: dc.device_type || DEVICE_OPTIONS[0],
+                number_of_devices: dc.number_of_devices || 1,
+                number_of_vehicles: dc.number_of_vehicles || dc.number_of_devices || 1,
+              }))
+            );
+          } else {
+            setDeviceConfigs([
+              {
+                id: 'dev-1',
+                device_type: data.device_type || DEVICE_OPTIONS[0],
+                number_of_devices: data.number_of_devices || 1,
+                number_of_vehicles: data.number_of_vehicles || 1,
+              },
+            ]);
+          }
 
           setFormData({
             client_name: data.client_name || '',
@@ -198,6 +235,9 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
       if (field === 'pending_payment' && !val) {
         next.pending_amount = '';
       }
+      if (field === 'installation_or_service' && val === 'Service') {
+        setBomSnapshot(null);
+      }
 
       // Automatic payment status logic recalculation when prices change
       if (['confirmed_price', 'advance_received', 'advance_amount', 'pending_payment', 'pending_amount'].includes(field)) {
@@ -218,6 +258,36 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
     });
   };
 
+  // Device Configurations Handlers
+  const handleAddDeviceConfig = () => {
+    const selectedTypes = new Set(deviceConfigs.map((c) => c.device_type));
+    const availableOption = DEVICE_OPTIONS.find((opt) => !selectedTypes.has(opt)) || DEVICE_OPTIONS[0];
+    setDeviceConfigs((prev) => [
+      ...prev,
+      {
+        id: `dev-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+        device_type: availableOption,
+        number_of_devices: 1,
+      },
+    ]);
+  };
+
+  const handleRemoveDeviceConfig = (id) => {
+    if (deviceConfigs.length <= 1) return;
+    setDeviceConfigs((prev) => prev.filter((c) => c.id !== id));
+  };
+
+  const handleUpdateDeviceConfig = (id, field, value) => {
+    setDeviceConfigs((prev) =>
+      prev.map((c) => {
+        if (c.id !== id) return c;
+        return { ...c, [field]: value };
+      })
+    );
+  };
+
+  const totalDevices = deviceConfigs.reduce((sum, c) => sum + (parseInt(c.number_of_devices, 10) || 0), 0);
+
   const validateForm = () => {
     if (!formData.client_name.trim()) return 'Client Name is required';
     if (!formData.client_mobile.trim()) return 'Client Mobile Number is required';
@@ -230,8 +300,21 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
 
     if (!formData.client_location.trim()) return 'Client Location is required';
 
-    if (Number(formData.number_of_devices) <= 0) return 'Number of Devices must be greater than 0';
-    if (Number(formData.number_of_vehicles) <= 0) return 'Number of Vehicles must be greater than 0';
+    // Multi-Device Configurations Validation
+    if (!deviceConfigs || deviceConfigs.length === 0) {
+      return 'At least one device configuration is required.';
+    }
+
+    for (let i = 0; i < deviceConfigs.length; i++) {
+      const c = deviceConfigs[i];
+      if (!c.device_type || !DEVICE_OPTIONS.includes(c.device_type)) {
+        return `Device Configuration #${i + 1}: Please select a valid device type.`;
+      }
+      const numDev = Number(c.number_of_devices);
+      if (isNaN(numDev) || numDev <= 0 || !Number.isInteger(numDev)) {
+        return `Device Configuration #${i + 1} (${c.device_type}): Number of Devices must be a positive whole number greater than 0 (no zero, negative, or decimal quantities).`;
+      }
+    }
 
     const confPrice = Number(formData.confirmed_price);
     if (isNaN(confPrice) || confPrice < 0) return 'Please enter a valid Confirmed Price (>= 0)';
@@ -310,14 +393,37 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
 
     setLoading(true);
     try {
+      // Combine duplicates automatically if any
+      const combinedMap = new Map();
+      deviceConfigs.forEach((c) => {
+        const dt = (c.device_type || '').trim();
+        if (!dt) return;
+        const dQty = Math.max(1, parseInt(c.number_of_devices, 10) || 1);
+        const vQty = Math.max(1, parseInt(c.number_of_vehicles, 10) || dQty);
+        if (combinedMap.has(dt)) {
+          const ex = combinedMap.get(dt);
+          ex.number_of_devices += dQty;
+          ex.number_of_vehicles += vQty;
+        } else {
+          combinedMap.set(dt, { device_type: dt, number_of_devices: dQty, number_of_vehicles: vQty });
+        }
+      });
+      const normalizedConfigs = Array.from(combinedMap.values());
+      const totalDev = normalizedConfigs.reduce((acc, c) => acc + c.number_of_devices, 0);
+      const totalVeh = normalizedConfigs.reduce((acc, c) => acc + c.number_of_vehicles, 0);
+      const summaryDeviceType = normalizedConfigs.length === 1
+        ? normalizedConfigs[0].device_type
+        : normalizedConfigs.map((c) => `${c.device_type} (${c.number_of_devices})`).join(', ');
+
       const payload = {
         client_name: formData.client_name.trim(),
         client_mobile: formData.client_mobile.trim(),
         client_location: formData.client_location.trim(),
         google_maps_location: formData.google_maps_location.trim() || null,
-        device_type: formData.device_type,
-        number_of_devices: Number(formData.number_of_devices),
-        number_of_vehicles: Number(formData.number_of_vehicles),
+        device_type: summaryDeviceType,
+        number_of_devices: totalDev,
+        number_of_vehicles: totalVeh,
+        device_configurations: normalizedConfigs,
         extra_devices: false,
         extra_device_type: null,
         extra_device_count: null,
@@ -336,6 +442,8 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
         service_assistant: formData.service_assistant.trim(),
         installation_status: isAuthoritativeCompleted ? 'Completed' : formData.installation_status,
         payment_status: formData.payment_status,
+        bom_snapshot: formData.installation_or_service === 'Installation' ? (bomSnapshot || null) : null,
+        material_issuance_status: formData.installation_or_service === 'Installation' ? (formData.material_issuance_status || 'PENDING') : 'NOT_APPLICABLE',
         remarks: formData.remarks.trim() || null,
         client_confirmation: formData.client_confirmation,
       };
@@ -521,59 +629,141 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
           </div>
         </div>
 
-        {/* SECTION 3 — 2. DEVICE DETAILS */}
+        {/* SECTION 3 — 2. DEVICE DETAILS & CONFIGURATIONS */}
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4">
-          <h3 className="text-sm font-bold text-navy flex items-center gap-2 pb-3 border-b border-gray-100">
-            <HardDrive className="text-blue-600" size={18} />
-            2. DEVICE DETAILS
-          </h3>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">
-                Type of Device <span className="text-rose-500">*</span>
-              </label>
-              <select
-                value={formData.device_type}
-                onChange={(e) => handleChange('device_type', e.target.value)}
-                className="w-full text-xs p-2.5 border border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 font-medium"
-              >
-                {DEVICE_OPTIONS.map((opt) => (
-                  <option key={opt} value={opt}>
-                    {opt}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">
-                Number of Devices <span className="text-rose-500">*</span>
-              </label>
-              <input
-                type="number"
-                min="1"
-                required
-                value={formData.number_of_devices}
-                onChange={(e) => handleChange('number_of_devices', e.target.value)}
-                className="w-full text-xs p-2.5 border border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 font-semibold"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">
-                Number of Vehicles <span className="text-rose-500">*</span>
-              </label>
-              <input
-                type="number"
-                min="1"
-                required
-                value={formData.number_of_vehicles}
-                onChange={(e) => handleChange('number_of_vehicles', e.target.value)}
-                className="w-full text-xs p-2.5 border border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 font-semibold"
-              />
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-gray-100 gap-2">
+            <h3 className="text-sm font-bold text-navy flex items-center gap-2">
+              <HardDrive className="text-blue-600" size={18} />
+              2. DEVICE DETAILS & CONFIGURATIONS
+            </h3>
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] px-2.5 py-1 rounded-lg bg-blue-50 text-blue-800 font-bold border border-blue-200">
+                Total Devices: <span className="font-mono text-xs">{totalDevices}</span>
+              </span>
             </div>
           </div>
+
+          {/* Repeatable Device Configurations */}
+          <div className="space-y-3">
+            {deviceConfigs.map((config, idx) => {
+              const otherSelectedTypes = new Set(
+                deviceConfigs.filter((c) => c.id !== config.id).map((c) => c.device_type)
+              );
+
+              return (
+                <div
+                  key={config.id}
+                  className="p-4 bg-slate-50/70 border border-slate-200/80 rounded-2xl relative transition-all hover:border-slate-300"
+                >
+                  <div className="flex items-center justify-between pb-2.5 mb-3 border-b border-slate-200/70">
+                    <span className="text-xs font-bold text-gray-800 uppercase tracking-wider flex items-center gap-1.5">
+                      <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 font-mono text-[11px] flex items-center justify-center font-bold">
+                        {idx + 1}
+                      </span>
+                      Device Configuration #{idx + 1}
+                    </span>
+
+                    {/* Remove button (enforces at least 1 device configuration) */}
+                    {deviceConfigs.length > 1 ? (
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveDeviceConfig(config.id)}
+                        className="text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50 px-2.5 py-1 rounded-lg font-semibold flex items-center gap-1 transition-colors cursor-pointer border border-rose-200/60"
+                        title="Remove this device configuration"
+                      >
+                        <Trash2 size={13} />
+                        Remove
+                      </button>
+                    ) : (
+                      <span className="text-[10px] text-gray-400 font-medium italic">
+                        Minimum 1 configuration required
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-700 mb-1">
+                        Type of Device <span className="text-rose-500">*</span>
+                      </label>
+                      <select
+                        value={config.device_type}
+                        onChange={(e) => handleUpdateDeviceConfig(config.id, 'device_type', e.target.value)}
+                        className="w-full text-xs p-2.5 border border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 font-medium bg-white"
+                      >
+                        {DEVICE_OPTIONS.map((opt) => {
+                          const isAlreadySelected = otherSelectedTypes.has(opt);
+                          return (
+                            <option key={opt} value={opt} disabled={isAlreadySelected}>
+                              {opt} {isAlreadySelected ? '(Already added)' : ''}
+                            </option>
+                          );
+                        })}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-700 mb-1">
+                        Number of Devices <span className="text-rose-500">*</span>
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        step="1"
+                        required
+                        value={config.number_of_devices}
+                        onChange={(e) => handleUpdateDeviceConfig(config.id, 'number_of_devices', e.target.value)}
+                        placeholder="1"
+                        className="w-full text-xs p-2.5 border border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 font-semibold bg-white"
+                      />
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Add Another Device Type Button */}
+          <div className="pt-1 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <button
+              type="button"
+              onClick={handleAddDeviceConfig}
+              disabled={deviceConfigs.length >= DEVICE_OPTIONS.length}
+              className={`text-xs px-3.5 py-2 rounded-xl font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                deviceConfigs.length >= DEVICE_OPTIONS.length
+                  ? 'bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed'
+                  : 'bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 hover:border-blue-300'
+              }`}
+            >
+              <Plus size={14} />
+              Add Another Device Type
+            </button>
+          </div>
+
+          {/* Automatic Bill of Materials (BOM) Calculation Display (Installation Only) */}
+          {formData.installation_or_service === 'Installation' ? (
+            <div className="pt-2">
+              <BomRequirementSummary
+                deviceConfigurations={deviceConfigs}
+                token={token}
+                jobType={formData.installation_or_service}
+                onCalculated={(snapshot) => {
+                  if (formData.installation_or_service === 'Installation') {
+                    setBomSnapshot(snapshot);
+                  }
+                }}
+              />
+            </div>
+          ) : (
+            <div className="pt-2">
+              <div className="p-3.5 bg-blue-50/70 border border-blue-200/80 rounded-xl text-xs text-blue-900 flex items-center gap-2.5">
+                <Info size={16} className="text-blue-600 shrink-0" />
+                <span>
+                  <strong>Service Job Selected:</strong> Bill of Materials (BOM) calculation and automatic material issuance are applicable only for Installation jobs.
+                </span>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* SECTION 5 — 3. PRICING & PAYMENT */}
