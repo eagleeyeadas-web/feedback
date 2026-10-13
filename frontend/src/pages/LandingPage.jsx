@@ -26,7 +26,7 @@ export default function LandingPage() {
       buttonText: 'Sales Login',
       color: 'blue',
       badge: 'Sales & Quotations',
-      action: () => navigate('/login'),
+      action: () => navigate('/login?portal=sales'),
       buttonClass:
         'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-500/20 hover:shadow-blue-500/35',
       iconBg: 'bg-blue-50 text-blue-600 border-blue-200/60',
@@ -42,7 +42,7 @@ export default function LandingPage() {
       buttonText: 'Technical Login',
       color: 'teal',
       badge: 'Field Engineering',
-      action: () => navigate('/login'),
+      action: () => navigate('/login?portal=technical'),
       buttonClass:
         'bg-teal-600 hover:bg-teal-700 text-white shadow-teal-500/20 hover:shadow-teal-500/35',
       iconBg: 'bg-teal-50 text-teal-600 border-teal-200/60',
@@ -58,7 +58,7 @@ export default function LandingPage() {
       buttonText: 'Store Login',
       color: 'purple',
       badge: 'Stock & Logistics',
-      action: () => navigate('/login'),
+      action: () => navigate('/login?portal=store'),
       buttonClass:
         'bg-purple-600 hover:bg-purple-700 text-white shadow-purple-500/20 hover:shadow-purple-500/35',
       iconBg: 'bg-purple-50 text-purple-600 border-purple-200/60',

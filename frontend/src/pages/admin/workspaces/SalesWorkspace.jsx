@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../../hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
-import { Users, Plus, Wrench, FileText, Calendar, CreditCard, ArrowRight, Search, CheckCircle2 } from 'lucide-react';
-import { fetchInstallationChecklists, fetchCustomers } from '../../../lib/api';
+import { Users, Plus, Wrench, FileText, Calendar, CreditCard, ArrowRight, Search, CheckCircle2, History } from 'lucide-react';
+import { fetchInstallationChecklists, fetchCustomers, fetchAdminQuotations } from '../../../lib/api';
 import EngineerAvailabilityCalendar from '../../../components/workspaces/EngineerAvailabilityCalendar';
 
 export default function SalesWorkspace({ onSelectChecklist, onCreateChecklist, onNavigateTab }) {
@@ -10,6 +10,7 @@ export default function SalesWorkspace({ onSelectChecklist, onCreateChecklist, o
   const navigate = useNavigate();
   const [checklists, setChecklists] = useState([]);
   const [customers, setCustomers] = useState([]);
+  const [quotationsCount, setQuotationsCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
 
@@ -17,13 +18,15 @@ export default function SalesWorkspace({ onSelectChecklist, onCreateChecklist, o
     if (!token) return;
     setLoading(true);
     try {
-      const [checkData, custData] = await Promise.all([
+      const [checkData, custData, quoteData] = await Promise.all([
         fetchInstallationChecklists(token, { limit: 25 }).catch(() => ({ checklists: [] })),
         fetchCustomers(token, { limit: 5 }).catch(() => ({ customers: [] })),
+        fetchAdminQuotations(token, { limit: 1 }).catch(() => ({ totalCount: 0 })),
       ]);
 
       setChecklists(checkData?.checklists || []);
       setCustomers(custData?.customers || []);
+      setQuotationsCount(quoteData?.totalCount || 0);
     } catch (err) {
       console.error('Failed to load Sales workspace data:', err);
     } finally {
@@ -53,21 +56,41 @@ export default function SalesWorkspace({ onSelectChecklist, onCreateChecklist, o
             <Users className="w-7 h-7 text-blue-400" /> Sales & Customer Intake Workspace
           </h1>
           <p className="text-xs text-white/70 mt-1 max-w-xl">
-            Create customer records, initiate installation checklists with original client requirements, manage quotations, schedule arrival dates, and monitor job progress.
+            Create customer records, initiate installation checklists with original client requirements, generate official quotations, review quotation records, and monitor job progress.
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2.5">
           <button
-            onClick={() => onCreateChecklist ? onCreateChecklist() : navigate('/admin/installation-checklists/create')}
-            className="px-4 py-2 text-xs font-bold text-white bg-blue-600 rounded-xl hover:bg-blue-700 flex items-center gap-2 shadow-sm transition-all"
+            type="button"
+            onClick={() => onNavigateTab ? onNavigateTab('quotation-generator') : navigate('/sales?tab=quotation-generator')}
+            className="px-3.5 py-2 text-xs font-bold text-white bg-blue-700/80 hover:bg-blue-700 border border-blue-400/30 rounded-xl flex items-center gap-1.5 shadow-xs transition-all cursor-pointer"
           >
-            <Plus className="w-4 h-4" /> New Installation Checklist
+            <FileText className="w-3.5 h-3.5 text-blue-200" />
+            <span>Generate Quotation</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => onNavigateTab ? onNavigateTab('quotation-history') : navigate('/sales?tab=quotation-history')}
+            className="px-3.5 py-2 text-xs font-bold text-white bg-blue-700/80 hover:bg-blue-700 border border-blue-400/30 rounded-xl flex items-center gap-1.5 shadow-xs transition-all cursor-pointer"
+          >
+            <History className="w-3.5 h-3.5 text-blue-200" />
+            <span>Quotation History</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => onCreateChecklist ? onCreateChecklist() : navigate('/sales?create=true')}
+            className="px-4 py-2 text-xs font-bold text-white bg-blue-600 rounded-xl hover:bg-blue-700 flex items-center gap-2 shadow-sm transition-all cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            <span>New Installation Checklist</span>
           </button>
         </div>
       </div>
 
       {/* Quick Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
         <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-xs flex items-center gap-3">
           <div className="w-9 h-9 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600">
             <Wrench className="w-4 h-4" />
@@ -102,8 +125,22 @@ export default function SalesWorkspace({ onSelectChecklist, onCreateChecklist, o
           </div>
         </div>
 
-        <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-xs flex items-center gap-3">
+        <div
+          onClick={() => onNavigateTab ? onNavigateTab('quotation-history') : navigate('/sales?tab=quotation-history')}
+          className="bg-white p-4 rounded-xl border border-gray-200 hover:border-blue-300 shadow-xs flex items-center gap-3 cursor-pointer transition"
+          title="Click to view Quotation History"
+        >
           <div className="w-9 h-9 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600">
+            <FileText className="w-4 h-4" />
+          </div>
+          <div>
+            <p className="text-[11px] text-gray-500 font-medium">Quotations</p>
+            <p className="text-xl font-bold text-gray-900">{quotationsCount}</p>
+          </div>
+        </div>
+
+        <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-xs flex items-center gap-3">
+          <div className="w-9 h-9 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600">
             <Users className="w-4 h-4" />
           </div>
           <div>

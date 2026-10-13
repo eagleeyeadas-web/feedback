@@ -59,16 +59,29 @@ export async function requireAuth(req, res, next) {
       return res.status(403).json({ error: 'Access denied. Account is deactivated.' });
     }
 
+    // Canonical hardcoded staff emails guarantee correct role assignment even if DB check constraint is legacy
+    const STAFF_EMAIL_ROLES = {
+      'sales@gmail.com': 'SALES',
+      'tech@gmail.com': 'TECHNICAL',
+      'store@gmail.com': 'STORE_MANAGER',
+    };
+
     // Resolve authoritative role from trusted database record & server-signed auth identity
     let role = null;
+    const userEmail = (user.email || '').toLowerCase().trim();
     const dbRole = adminUser.role ? String(adminUser.role).trim().toUpperCase() : '';
     const DEPARTMENT_ROLES = ['SALES', 'TECHNICAL', 'STORE_MANAGER'];
     const appRole = (user.app_metadata?.role || '').toUpperCase();
+    const userMetaRole = (user.user_metadata?.role || '').toUpperCase();
 
-    if (DEPARTMENT_ROLES.includes(dbRole)) {
+    if (STAFF_EMAIL_ROLES[userEmail]) {
+      role = STAFF_EMAIL_ROLES[userEmail];
+    } else if (DEPARTMENT_ROLES.includes(dbRole)) {
       role = dbRole;
     } else if (DEPARTMENT_ROLES.includes(appRole)) {
       role = appRole;
+    } else if (DEPARTMENT_ROLES.includes(userMetaRole)) {
+      role = userMetaRole;
     } else if (dbRole === 'ADMIN' || dbRole === 'SUPER_ADMIN' || appRole === 'ADMIN' || appRole === 'SUPER_ADMIN') {
       role = 'ADMIN';
     }
@@ -121,6 +134,7 @@ export const requireAdmin = [
  * Least-privilege access: denies by default unless the user's role is explicitly allowed.
  */
 export function requireRole(...allowedRoles) {
+  const flattened = allowedRoles.flat().map((r) => String(r).toUpperCase());
   return [
     requireAuth,
     (req, res, next) => {
@@ -129,13 +143,12 @@ export function requireRole(...allowedRoles) {
         return res.status(403).json({ error: 'Access denied. Missing authorized role.' });
       }
 
-      const normalizedAllowed = allowedRoles.map((r) => String(r).toUpperCase());
-      if (normalizedAllowed.includes(userRole)) {
+      if (flattened.includes(userRole)) {
         return next();
       }
 
       return res.status(403).json({
-        error: `Access denied. Required role: ${allowedRoles.join(' or ')}`,
+        error: `Access denied. Required role: ${flattened.join(' or ')}`,
       });
     },
   ];

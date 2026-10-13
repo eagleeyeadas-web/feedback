@@ -162,7 +162,35 @@ function AppRoutes() {
           }
         />
 
-        {/* 6. Dashboard & Direct Admin URLs Route to Authorized Department Workspace */}
+        {/* 6. Quotation Routes mapped to Sales Workspace */}
+        <Route
+          path="/admin/quotations"
+          element={
+            <RoleProtectedRoute
+              allowedRoles={['SALES', 'ADMIN']}
+              targetResource="Quotation Records"
+            >
+              <Navigate to="/sales?tab=quotation-history" replace />
+            </RoleProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/quotation-generator"
+          element={
+            <RoleProtectedRoute
+              allowedRoles={['SALES', 'ADMIN']}
+              targetResource="Quotation Generator"
+            >
+              <Navigate to="/sales?tab=quotation-generator" replace />
+            </RoleProtectedRoute>
+          }
+        />
+        <Route
+          path="/quotations"
+          element={<Navigate to="/sales?tab=quotation-history" replace />}
+        />
+
+        {/* 7. Dashboard & Direct Admin URLs Route to Authorized Department Workspace */}
         <Route path="/admin/dashboard" element={<DashboardRedirect />} />
         <Route path="/admin" element={<DashboardRedirect />} />
 

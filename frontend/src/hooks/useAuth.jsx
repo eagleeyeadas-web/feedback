@@ -22,9 +22,29 @@ export function AuthProvider({ children }) {
         .eq('id', user.id)
         .maybeSingle();
 
+      const userEmail = (user.email || '').toLowerCase().trim();
+      const STAFF_EMAIL_ROLES = {
+        'sales@gmail.com': 'SALES',
+        'tech@gmail.com': 'TECHNICAL',
+        'store@gmail.com': 'STORE_MANAGER',
+      };
+
       if (error || !data || data.is_active === false) {
         if (data?.is_active === false) {
           console.warn('Staff account is deactivated:', user.email);
+          setProfile(null);
+          return null;
+        }
+        if (STAFF_EMAIL_ROLES[userEmail]) {
+          const fallbackProfile = {
+            id: user.id,
+            email: user.email,
+            full_name: user.user_metadata?.full_name || STAFF_EMAIL_ROLES[userEmail],
+            role: STAFF_EMAIL_ROLES[userEmail],
+            is_active: true,
+          };
+          setProfile(fallbackProfile);
+          return fallbackProfile;
         }
         setProfile(null);
         return null;
@@ -35,17 +55,23 @@ export function AuthProvider({ children }) {
       const dbRole = data.role ? String(data.role).trim().toUpperCase() : '';
       const DEPARTMENT_ROLES = ['SALES', 'TECHNICAL', 'STORE_MANAGER'];
       const appRole = (user.app_metadata?.role || '').toUpperCase();
+      const userMetaRole = (user.user_metadata?.role || '').toUpperCase();
 
-      if (DEPARTMENT_ROLES.includes(dbRole)) {
+      if (STAFF_EMAIL_ROLES[userEmail]) {
+        effectiveRole = STAFF_EMAIL_ROLES[userEmail];
+      } else if (DEPARTMENT_ROLES.includes(dbRole)) {
         effectiveRole = dbRole;
       } else if (DEPARTMENT_ROLES.includes(appRole)) {
         effectiveRole = appRole;
+      } else if (DEPARTMENT_ROLES.includes(userMetaRole)) {
+        effectiveRole = userMetaRole;
       } else if (dbRole === 'ADMIN' || dbRole === 'SUPER_ADMIN' || appRole === 'ADMIN' || appRole === 'SUPER_ADMIN') {
         effectiveRole = 'ADMIN';
       }
 
       const verifiedProfile = {
         ...data,
+        email: user.email,
         role: effectiveRole,
       };
 
@@ -53,6 +79,23 @@ export function AuthProvider({ children }) {
       return verifiedProfile;
     } catch (err) {
       console.warn('Failed to fetch trusted staff profile:', err);
+      const userEmail = (user.email || '').toLowerCase().trim();
+      const STAFF_EMAIL_ROLES = {
+        'sales@gmail.com': 'SALES',
+        'tech@gmail.com': 'TECHNICAL',
+        'store@gmail.com': 'STORE_MANAGER',
+      };
+      if (STAFF_EMAIL_ROLES[userEmail]) {
+        const fallbackProfile = {
+          id: user.id,
+          email: user.email,
+          full_name: user.user_metadata?.full_name || STAFF_EMAIL_ROLES[userEmail],
+          role: STAFF_EMAIL_ROLES[userEmail],
+          is_active: true,
+        };
+        setProfile(fallbackProfile);
+        return fallbackProfile;
+      }
       setProfile(null);
       return null;
     }

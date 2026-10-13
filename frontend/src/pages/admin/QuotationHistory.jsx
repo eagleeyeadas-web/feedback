@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { fetchAdminQuotations, downloadQuotationPDF, deleteQuotation, fetchQuotationDetail, exportQuotationCSV } from '../../lib/api';
-import { Search, Download, Trash2, Eye, FileText, ChevronLeft, ChevronRight, AlertTriangle, X, FileDown } from 'lucide-react';
+import { Search, Download, Trash2, Eye, FileText, ChevronLeft, ChevronRight, AlertTriangle, X, FileDown, Plus } from 'lucide-react';
 
-export default function QuotationHistory() {
+export default function QuotationHistory({ onNavigateToGenerator, onBackToChecklists } = {}) {
   const { session } = useAuth();
   const token = session?.access_token;
 
@@ -117,8 +117,29 @@ export default function QuotationHistory() {
         </div>
 
         {/* Search Bar & Export CSV */}
-        <div className="flex items-center gap-3 w-full sm:w-auto">
-          <div className="relative w-full sm:w-72">
+        <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto">
+          {onBackToChecklists && (
+            <button
+              type="button"
+              onClick={onBackToChecklists}
+              className="px-3.5 py-2 text-xs font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 border border-gray-200 rounded-lg flex items-center gap-1.5 transition cursor-pointer"
+            >
+              <span>&larr; Checklists</span>
+            </button>
+          )}
+
+          {onNavigateToGenerator && (
+            <button
+              type="button"
+              onClick={onNavigateToGenerator}
+              className="flex items-center gap-1.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 px-3.5 py-2 rounded-lg transition cursor-pointer shadow-xs whitespace-nowrap"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Generate Quotation</span>
+            </button>
+          )}
+
+          <div className="relative w-full sm:w-64">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
             <input
               type="text"
@@ -128,14 +149,14 @@ export default function QuotationHistory() {
                 setSearch(e.target.value);
                 setPage(1);
               }}
-              className="w-full pl-9 pr-4 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full pl-9 pr-4 py-2 border rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
 
           <button
             type="button"
             onClick={handleExportCSV}
-            className="flex items-center gap-1.5 text-xs font-semibold text-navy hover:bg-navy/5 px-3.5 py-2.5 rounded-lg border border-navy/20 transition cursor-pointer shadow-xs whitespace-nowrap"
+            className="flex items-center gap-1.5 text-xs font-semibold text-navy hover:bg-navy/5 px-3.5 py-2 rounded-lg border border-navy/20 transition cursor-pointer shadow-xs whitespace-nowrap"
           >
             <FileDown className="w-4 h-4" />
             <span>Export CSV</span>

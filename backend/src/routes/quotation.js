@@ -15,8 +15,8 @@ const router = Router();
 router.post('/cleanup', handleCleanupEndpoint);
 router.get('/cleanup/status', handleCleanupStatusEndpoint);
 
-// Quotation generator and history endpoints are restricted strictly to ADMIN and SUPER_ADMIN
-router.use(requireAdmin);
+// Quotation generator and history endpoints are accessible to SALES and ADMIN
+router.use(requireRole('ADMIN', 'SALES'));
 
 // Zod Validation Schema for Item
 const quotationItemSchema = z.object({

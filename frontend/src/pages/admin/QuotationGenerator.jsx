@@ -15,7 +15,7 @@ const DEFAULT_TERMS = [
   'This warranty does not cover normal wear and tear, misuse, or damage caused by improper handling.',
 ];
 
-export default function QuotationGenerator() {
+export default function QuotationGenerator({ onNavigateToHistory, onBackToChecklists } = {}) {
   const { session } = useAuth();
   const token = session?.access_token;
 
@@ -342,22 +342,43 @@ export default function QuotationGenerator() {
             Create traditional professional Eagle Eye Safdrive quotations with exact reference layout and GST calculations.
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+          {onBackToChecklists && (
+            <button
+              type="button"
+              onClick={onBackToChecklists}
+              className="px-3.5 py-2 text-xs font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 border border-gray-200 rounded-lg flex items-center gap-1.5 transition cursor-pointer"
+            >
+              <span>&larr; Back to Checklists</span>
+            </button>
+          )}
+
+          {onNavigateToHistory && (
+            <button
+              type="button"
+              onClick={onNavigateToHistory}
+              className="px-3.5 py-2 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg flex items-center gap-1.5 transition cursor-pointer"
+            >
+              <FileText className="w-3.5 h-3.5" />
+              <span>Quotation History</span>
+            </button>
+          )}
+
           <button
             type="button"
             onClick={resetForm}
-            className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg flex items-center gap-2 transition"
+            className="px-3.5 py-2 text-xs font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg flex items-center gap-1.5 transition cursor-pointer"
           >
-            <RefreshCw className="w-4 h-4" /> Reset Form
+            <RefreshCw className="w-3.5 h-3.5" /> Reset Form
           </button>
 
           {createdQuotationId && (
             <button
               type="button"
               onClick={() => triggerDownload(createdQuotationId, quotationNumber)}
-              className="px-4 py-2 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-lg flex items-center gap-2 transition shadow-sm"
+              className="px-4 py-2 text-xs font-bold text-white bg-green-600 hover:bg-green-700 rounded-lg flex items-center gap-1.5 transition shadow-sm cursor-pointer"
             >
-              <Download className="w-4 h-4" /> Download PDF
+              <Download className="w-3.5 h-3.5" /> Download PDF
             </button>
           )}
         </div>
@@ -365,9 +386,20 @@ export default function QuotationGenerator() {
 
       {/* Notifications */}
       {successMsg && (
-        <div className="p-4 bg-green-50 border border-green-200 text-green-800 rounded-xl flex items-center gap-3">
-          <CheckCircle2 className="w-5 h-5 text-green-600 flex-shrink-0" />
-          <span>{successMsg}</span>
+        <div className="p-4 bg-green-50 border border-green-200 text-green-800 rounded-xl flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <CheckCircle2 className="w-5 h-5 text-green-600 flex-shrink-0" />
+            <span className="font-medium text-sm">{successMsg}</span>
+          </div>
+          {onNavigateToHistory && (
+            <button
+              type="button"
+              onClick={onNavigateToHistory}
+              className="text-xs font-bold text-green-800 hover:text-green-950 underline cursor-pointer shrink-0"
+            >
+              View in Quotation History &rarr;
+            </button>
+          )}
         </div>
       )}
 
