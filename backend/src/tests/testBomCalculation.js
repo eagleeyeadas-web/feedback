@@ -30,11 +30,12 @@ async function runTests() {
     if (!bom || !bom.is_configured) {
       throw new Error(`Device type "${type}" should be configured`);
     }
-    if (bom.items.length !== 9) {
-      throw new Error(`Device type "${type}" should have 9 materials, found ${bom.items.length}`);
+    const expectedMaterials = type === '8 Channel Live' ? 8 : 9;
+    if (bom.items.length !== expectedMaterials) {
+      throw new Error(`Device type "${type}" should have ${expectedMaterials} materials, found ${bom.items.length}`);
     }
   }
-  console.log('✓ Test 1 Passed: All 7 standard device types configured with 9 materials.');
+  console.log('✓ Test 1 Passed: Standard device types configured (8 Channel Live has 8 materials without Memory Card; others have 9).');
 
   // Test 2: Live BOM calculation for 5 devices of '2 Channel Live'
   console.log('\n[Test 2] Test Live BOM calculation formula (Configured Qty * Number of Devices)');

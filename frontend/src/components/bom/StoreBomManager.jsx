@@ -12,6 +12,7 @@ import {
   Package,
   HardDrive,
   Check,
+  Info,
 } from 'lucide-react';
 import {
   fetchBoms,
@@ -375,6 +376,16 @@ export default function StoreBomManager({ token, onSelectChecklist }) {
             </button>
           </div>
         </div>
+
+        {/* 8 Channel Live Notice */}
+        {selectedDeviceType === '8 Channel Live' && (
+          <div className="mx-5 mt-4 p-3 bg-blue-50/80 border border-blue-200 rounded-xl text-xs text-blue-900 flex items-center gap-2">
+            <Info className="w-4 h-4 text-blue-600 shrink-0" />
+            <span>
+              <strong>BOM Rule:</strong> 8 Channel Live does not require a Memory Card for installation. Memory Card is excluded from its BOM configuration.
+            </span>
+          </div>
+        )}
 
         {/* Materials Table */}
         <div className="overflow-x-auto">

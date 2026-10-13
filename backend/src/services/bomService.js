@@ -53,6 +53,20 @@ export function areUnitsCompatible(unit1, unit2) {
 }
 
 /**
+ * Returns default BOM template items for a device type.
+ * Requirement: 8 Channel Live does not require a Memory Card for installation.
+ */
+export function getInitialBomTemplateForDevice(deviceType) {
+  const is8ChannelLive = (deviceType || '').trim().toLowerCase() === '8 channel live';
+  if (is8ChannelLive) {
+    return INITIAL_BOM_TEMPLATE.filter(
+      (item) => (item.material_name || '').toLowerCase() !== 'memory card'
+    );
+  }
+  return INITIAL_BOM_TEMPLATE;
+}
+
+/**
  * Resilient in-memory fallback store
  * Initialized with material_id references to STANDARD_MATERIALS
  */
@@ -67,7 +81,7 @@ const inMemoryBoms = new Map(
       notes: 'Initial business-confirmed BOM configuration',
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
-      items: INITIAL_BOM_TEMPLATE.map((item, itemIdx) => ({
+      items: getInitialBomTemplateForDevice(type).map((item, itemIdx) => ({
         id: `bom-item-${idx + 1}-${itemIdx + 1}`,
         bom_id: `bom-${idx + 1}`,
         material_id: item.material_id,
@@ -114,7 +128,7 @@ async function ensureDbBomsSeeded() {
             .single();
 
           if (newBom) {
-            const bomItemsToInsert = INITIAL_BOM_TEMPLATE.map((item) => {
+            const bomItemsToInsert = getInitialBomTemplateForDevice(mType).map((item) => {
               const matchedMat = matMap.get(item.material_name.toLowerCase());
               return {
                 bom_id: newBom.id,
@@ -129,6 +143,18 @@ async function ensureDbBomsSeeded() {
           }
         }
       }
+
+      // Ensure 8 Channel Live in DB does not contain Memory Card
+      const eightLiveBom = dbBoms.find((b) => (b.device_type || '').toLowerCase() === '8 channel live');
+      if (eightLiveBom) {
+        await supabase
+          .from('bom_items')
+          .delete()
+          .eq('bom_id', eightLiveBom.id)
+          .ilike('material_name', '%memory card%')
+          .catch(() => null);
+      }
+
       bomsDbSeeded = true;
     }
   } catch (err) {
@@ -154,8 +180,15 @@ export async function getAllBoms() {
       const matNameMap = new Map(materials.map((m) => [m.material_name.toLowerCase(), m]));
 
       dbBoms.forEach((b) => {
+        const is8Channel = (b.device_type || '').trim().toLowerCase() === '8 channel live';
         const sortedItems = (b.items || [])
           .sort((x, y) => (x.sort_order || 0) - (y.sort_order || 0))
+          .filter((item) => {
+            if (is8Channel && (item.material_name || '').toLowerCase().includes('memory card')) {
+              return false;
+            }
+            return true;
+          })
           .map((item) => {
             const matched = matNameMap.get((item.material_name || '').toLowerCase());
             return {
@@ -187,6 +220,7 @@ export async function getAllBoms() {
 export async function getBomByDeviceType(deviceType) {
   if (!deviceType) return null;
   const normalized = deviceType.trim();
+  const is8Channel = normalized.toLowerCase() === '8 channel live';
 
   try {
     const { data: dbBom, error } = await supabase
@@ -201,6 +235,12 @@ export async function getBomByDeviceType(deviceType) {
 
       const sortedItems = (dbBom.items || [])
         .sort((x, y) => (x.sort_order || 0) - (y.sort_order || 0))
+        .filter((item) => {
+          if (is8Channel && (item.material_name || '').toLowerCase().includes('memory card')) {
+            return false;
+          }
+          return true;
+        })
         .map((item) => {
           const matched = matNameMap.get((item.material_name || '').toLowerCase());
           return {
@@ -219,7 +259,14 @@ export async function getBomByDeviceType(deviceType) {
     console.warn(`DB fetch for BOM "${normalized}" failed:`, err.message);
   }
 
-  return inMemoryBoms.get(normalized) || null;
+  const memBom = inMemoryBoms.get(normalized);
+  if (memBom && is8Channel) {
+    return {
+      ...memBom,
+      items: (memBom.items || []).filter((item) => !(item.material_name || '').toLowerCase().includes('memory card')),
+    };
+  }
+  return memBom || null;
 }
 
 /**
@@ -319,31 +366,41 @@ export async function calculateBomRequirements(param1, param2) {
       continue;
     }
 
-    const deviceItems = bom.items.map((it) => {
-      const perDevice = Number(it.quantity_per_device) || 0;
-      const subtotal = Math.round((perDevice * qty) * 100) / 100;
-      const matchedMat = (it.material_id && matIdMap.get(it.material_id)) || matNameMap.get((it.material_name || '').toLowerCase());
-      const effectiveMatId = it.material_id || matchedMat?.id || null;
+    const is8Channel = (c.device_type || '').trim().toLowerCase() === '8 channel live';
 
-      // Validate unit matches inventory unit
-      const inventoryUnit = matchedMat?.unit || it.unit;
-      if (!areUnitsCompatible(it.unit, inventoryUnit)) {
-        console.warn(`Unit warning: BOM item "${it.material_name}" uses "${it.unit}" but inventory specifies "${inventoryUnit}".`);
-      }
+    const deviceItems = (bom.items || [])
+      .filter((it) => {
+        // Requirement: 8 Channel Live does not require a Memory Card for installation
+        if (is8Channel && (it.material_name || '').toLowerCase().includes('memory card')) {
+          return false;
+        }
+        return true;
+      })
+      .map((it) => {
+        const perDevice = Number(it.quantity_per_device) || 0;
+        const subtotal = Math.round((perDevice * qty) * 100) / 100;
+        const matchedMat = (it.material_id && matIdMap.get(it.material_id)) || matNameMap.get((it.material_name || '').toLowerCase());
+        const effectiveMatId = it.material_id || matchedMat?.id || null;
 
-      return {
-        id: it.id,
-        material_id: effectiveMatId,
-        material_sku: matchedMat?.sku || null,
-        material_name: it.material_name,
-        quantity_per_device: perDevice,
-        number_of_devices: qty,
-        total_quantity: subtotal,
-        unit: it.unit,
-        inventory_unit: inventoryUnit,
-        sort_order: it.sort_order || 0,
-      };
-    });
+        // Validate unit matches inventory unit
+        const inventoryUnit = matchedMat?.unit || it.unit;
+        if (!areUnitsCompatible(it.unit, inventoryUnit)) {
+          console.warn(`Unit warning: BOM item "${it.material_name}" uses "${it.unit}" but inventory specifies "${inventoryUnit}".`);
+        }
+
+        return {
+          id: it.id,
+          material_id: effectiveMatId,
+          material_sku: matchedMat?.sku || null,
+          material_name: it.material_name,
+          quantity_per_device: perDevice,
+          number_of_devices: qty,
+          total_quantity: subtotal,
+          unit: it.unit,
+          inventory_unit: inventoryUnit,
+          sort_order: it.sort_order || 0,
+        };
+      });
 
     perDeviceBreakdowns.push({
       bom_id: bom.id,
@@ -408,10 +465,12 @@ export async function calculateBomRequirements(param1, param2) {
     };
   }
 
-  const combinedItems = Array.from(combinedMaterialsMap.values()).sort((a, b) => {
-    if (a.sort_order !== b.sort_order) return (a.sort_order || 0) - (b.sort_order || 0);
-    return a.material_name.localeCompare(b.material_name);
-  });
+  const combinedItems = Array.from(combinedMaterialsMap.values())
+    .filter((it) => it.total_quantity > 0)
+    .sort((a, b) => {
+      if (a.sort_order !== b.sort_order) return (a.sort_order || 0) - (b.sort_order || 0);
+      return a.material_name.localeCompare(b.material_name);
+    });
 
   const summaryDeviceType =
     normalizedConfigs.length === 1
@@ -472,6 +531,11 @@ export async function updateDeviceBom(deviceType, { items, notes = '', is_config
 
     if (!name) {
       throw new Error(`Material at row #${i + 1} has an empty name.`);
+    }
+
+    // Requirement: 8 Channel Live does not require a Memory Card for installation
+    if (normalizedType.toLowerCase() === '8 channel live' && name.toLowerCase().includes('memory card')) {
+      continue;
     }
 
     if (isNaN(qtyPerDevice) || qtyPerDevice <= 0) {
@@ -624,7 +688,8 @@ export async function resetBomToTemplate(deviceType, user) {
   const inventoryMaterials = await getMaterialInventory().catch(() => []);
   const matNameMap = new Map(inventoryMaterials.map((m) => [m.material_name.toLowerCase(), m]));
 
-  const templateWithIds = INITIAL_BOM_TEMPLATE.map((it) => {
+  const template = getInitialBomTemplateForDevice(normalized);
+  const templateWithIds = template.map((it) => {
     const matched = matNameMap.get(it.material_name.toLowerCase());
     return {
       ...it,
