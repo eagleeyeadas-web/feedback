@@ -2,7 +2,6 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../../hooks/useAuth';
 import { fetchInstallationChecklistDetail, downloadInstallationPDF, API_BASE } from '../../../lib/api';
-import DeviceCarryModal from '../../../components/workspaces/DeviceCarryModal';
 import InstallationCompletionModal from '../../../components/workspaces/InstallationCompletionModal';
 import IssueMaterialsModal from '../../../components/bom/IssueMaterialsModal';
 import { downloadInstallationExcel } from '../../../lib/excelHelper';
@@ -50,7 +49,6 @@ export default function InstallationChecklistDetails({ id: propId, onEdit, onBac
   // Workflow Modal States
   const [showIssueModal, setShowIssueModal] = useState(false);
   const [showTechModal, setShowTechModal] = useState(false);
-  const [showCarryModal, setShowCarryModal] = useState(false);
   const [showCompletionModal, setShowCompletionModal] = useState(false);
   const [showReturnModal, setShowReturnModal] = useState(false);
   const [showVerifyModal, setShowVerifyModal] = useState(false);
@@ -236,25 +234,14 @@ export default function InstallationChecklistDetails({ id: propId, onEdit, onBac
             </button>
           )}
 
-          {/* Stage 2.5: Record Carry Devices */}
-          {(role === 'TECHNICAL' || role === 'ADMIN') && (
-            <button
-              onClick={() => setShowCarryModal(true)}
-              className="flex items-center gap-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold px-3 py-2 rounded-xl shadow-xs transition-colors cursor-pointer"
-            >
-              <Package size={15} />
-              <span>Record Carry Devices</span>
-            </button>
-          )}
-
-          {/* Stage 3: Technical Completion Report */}
+          {/* Stage 3: Technical Post-Installation Report */}
           {(role === 'TECHNICAL' || role === 'ADMIN') && (
             <button
               onClick={() => setShowCompletionModal(true)}
               className="flex items-center gap-1.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold px-3 py-2 rounded-xl shadow-xs transition-colors cursor-pointer"
             >
               <Wrench size={15} />
-              <span>Complete Installation Report</span>
+              <span>Post-Installation Report</span>
             </button>
           )}
 
@@ -480,81 +467,165 @@ export default function InstallationChecklistDetails({ id: propId, onEdit, onBac
           </div>
         </div>
 
-        {/* SECTION 2: 2. DEVICE DETAILS & CONFIGURATIONS */}
-        <div className="space-y-3">
-          <div className="flex items-center justify-between pb-1 border-b border-gray-200">
-            <h3 className="text-xs font-black text-navy uppercase tracking-wider flex items-center gap-2">
-              <HardDrive size={15} className="text-blue-600" />
-              2. DEVICE DETAILS & CONFIGURATIONS
-            </h3>
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-800 border border-blue-200">
-                Total Devices: <span className="font-mono">{checklist.number_of_devices}</span>
-              </span>
-            </div>
-          </div>
+        {/* SECTION 2: DEVICE DETAILS & CONFIGURATIONS (REQUIRED FOR INSTALLATION) */}
+        {(() => {
+          const reqConfigs = Array.isArray(checklist.device_configurations) && checklist.device_configurations.length > 0
+            ? checklist.device_configurations
+            : (checklist.device_type ? [{ device_type: checklist.device_type, number_of_devices: checklist.number_of_devices || 1 }] : []);
+          const totalRequiredDevices = checklist.total_devices_required ?? reqConfigs.reduce((sum, c) => sum + (Number(c.number_of_devices) || 1), 0);
 
-          {Array.isArray(checklist.device_configurations) && checklist.device_configurations.length > 0 ? (
-            <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-xs">
-              <table className="w-full text-left border-collapse text-xs">
-                <thead>
-                  <tr className="bg-gray-50/90 border-b border-gray-200 text-[11px] font-bold text-gray-600 uppercase">
-                    <th className="py-2.5 px-3 w-12 text-center">#</th>
-                    <th className="py-2.5 px-4">Device Type</th>
-                    <th className="py-2.5 px-4 text-center">Number of Devices</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {checklist.device_configurations.map((dc, idx) => (
-                    <tr key={idx} className="hover:bg-slate-50 transition-colors">
-                      <td className="py-2 px-3 text-center text-gray-400 font-mono text-[11px]">{idx + 1}</td>
-                      <td className="py-2 px-4 font-bold text-gray-900">{dc.device_type}</td>
-                      <td className="py-2 px-4 text-center font-mono font-semibold text-blue-900">
-                        <span className="px-2.5 py-0.5 rounded-md bg-blue-50 border border-blue-200">
-                          {dc.number_of_devices} units
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr className="bg-slate-100/80 font-bold border-t border-slate-200 text-gray-900 text-xs">
-                    <td colSpan={2} className="py-2.5 px-4 text-navy">TOTAL INSTALLATION SUMMARY</td>
-                    <td className="py-2.5 px-4 text-center font-mono text-blue-700">{checklist.number_of_devices} Devices Total</td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs bg-gray-50/50 p-4 rounded-xl border border-gray-100">
-              <div>
-                <span className="text-gray-500 block text-[11px]">Type of Device</span>
-                <span className="font-bold text-gray-900">{checklist.device_type}</span>
-              </div>
-              <div>
-                <span className="text-gray-500 block text-[11px]">Number of Devices</span>
-                <span className="font-bold text-gray-900">{checklist.number_of_devices}</span>
-              </div>
-            </div>
-          )}
+          let extraConfigs = [];
+          if (Array.isArray(checklist.extra_device_configurations) && checklist.extra_device_configurations.length > 0) {
+            extraConfigs = checklist.extra_device_configurations;
+          } else if (checklist.extra_devices && checklist.extra_device_type) {
+            extraConfigs = [{ device_type: checklist.extra_device_type, extra_quantity: checklist.extra_device_count || 1 }];
+          }
+          const hasExtra = Boolean(checklist.extra_devices) || extraConfigs.length > 0;
+          const totalExtraDevices = hasExtra
+            ? (checklist.total_extra_devices ?? extraConfigs.reduce((sum, c) => sum + (Number(c.extra_quantity) || 1), 0))
+            : 0;
+          const totalCarriedToSite = checklist.total_devices_carried ?? (totalRequiredDevices + totalExtraDevices);
 
-          {checklist.extra_devices && (
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs bg-blue-50/40 p-3.5 rounded-xl border border-blue-100">
-              <div>
-                <span className="text-gray-500 block text-[11px]">Extra Devices to be Carried?</span>
-                <span className="font-bold text-blue-700">Yes</span>
+          return (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between pb-1 border-b border-gray-200">
+                <h3 className="text-xs font-black text-navy uppercase tracking-wider flex items-center gap-2">
+                  <HardDrive size={15} className="text-blue-600" />
+                  2. DEVICE DETAILS & CONFIGURATIONS (REQUIRED FOR INSTALLATION)
+                </h3>
+                <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-800 border border-blue-200">
+                  Required for Installation: <span className="font-mono">{totalRequiredDevices} Units</span>
+                </span>
               </div>
-              <div>
-                <span className="text-gray-500 block text-[11px]">Type of Extra Device</span>
-                <span className="font-bold text-gray-900">{checklist.extra_device_type || '—'}</span>
+
+              {reqConfigs.length > 0 ? (
+                <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-xs">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className="bg-blue-50/70 border-b border-blue-100 text-[11px] font-bold text-blue-900 uppercase">
+                        <th className="py-2.5 px-3 w-12 text-center">#</th>
+                        <th className="py-2.5 px-4">Device Type</th>
+                        <th className="py-2.5 px-4 text-center">Number of Devices (Installation Requirement)</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {reqConfigs.map((dc, idx) => (
+                        <tr key={idx} className="hover:bg-slate-50 transition-colors">
+                          <td className="py-2 px-3 text-center text-gray-400 font-mono text-[11px]">{idx + 1}</td>
+                          <td className="py-2 px-4 font-bold text-gray-900">{dc.device_type}</td>
+                          <td className="py-2 px-4 text-center font-mono font-semibold text-blue-900">
+                            <span className="px-2.5 py-0.5 rounded-md bg-blue-50 text-blue-800 border border-blue-200 font-bold">
+                              {dc.number_of_devices || 1} units required
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="bg-blue-50/50 font-bold border-t border-blue-200 text-blue-950 text-xs">
+                        <td colSpan={2} className="py-2.5 px-4">TOTAL DEVICES REQUIRED FOR INSTALLATION</td>
+                        <td className="py-2.5 px-4 text-center font-mono text-blue-800">{totalRequiredDevices} Units</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs bg-gray-50/50 p-4 rounded-xl border border-gray-100">
+                  <div>
+                    <span className="text-gray-500 block text-[11px]">Type of Device</span>
+                    <span className="font-bold text-gray-900">{checklist.device_type}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-500 block text-[11px]">Number of Devices</span>
+                    <span className="font-bold text-gray-900">{checklist.number_of_devices} units</span>
+                  </div>
+                </div>
+              )}
+
+              {/* SECTION 2A: EXTRA DEVICES CARRIED */}
+              <div className="pt-2 space-y-3">
+                <div className="flex items-center justify-between pb-1 border-b border-gray-200">
+                  <h3 className="text-xs font-black text-navy uppercase tracking-wider flex items-center gap-2">
+                    <Package size={15} className="text-amber-600" />
+                    EXTRA DEVICES CARRIED (BACKUP STOCK)
+                  </h3>
+                  <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${
+                    hasExtra
+                      ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                      : 'bg-gray-100 text-gray-600 border border-gray-200'
+                  }`}>
+                    {hasExtra ? `Extra Backup: ${totalExtraDevices} Units` : 'No Extra Devices Carried'}
+                  </span>
+                </div>
+
+                {hasExtra && extraConfigs.length > 0 ? (
+                  <div className="overflow-x-auto rounded-xl border border-amber-200 bg-white shadow-xs">
+                    <table className="w-full text-left border-collapse text-xs">
+                      <thead>
+                        <tr className="bg-amber-50 border-b border-amber-200 text-[11px] font-bold text-amber-900 uppercase">
+                          <th className="py-2.5 px-3 w-12 text-center">#</th>
+                          <th className="py-2.5 px-4">Type of Device</th>
+                          <th className="py-2.5 px-4 text-center">Extra Quantity Carried</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-amber-100">
+                        {extraConfigs.map((ec, idx) => (
+                          <tr key={idx} className="hover:bg-amber-50/40 transition-colors">
+                            <td className="py-2 px-3 text-center text-amber-700 font-mono text-[11px]">{idx + 1}</td>
+                            <td className="py-2 px-4 font-bold text-gray-900">{ec.device_type}</td>
+                            <td className="py-2 px-4 text-center font-mono font-semibold text-amber-900">
+                              <span className="px-2.5 py-0.5 rounded-md bg-amber-100/80 text-amber-900 border border-amber-300 font-bold">
+                                +{ec.extra_quantity || 1} units backup
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr className="bg-amber-100/60 font-bold border-t border-amber-300 text-amber-950 text-xs">
+                          <td colSpan={2} className="py-2.5 px-4">TOTAL EXTRA DEVICES CARRIED</td>
+                          <td className="py-2.5 px-4 text-center font-mono text-amber-900">+{totalExtraDevices} Units</td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="p-3 bg-gray-50 rounded-xl border border-gray-200 text-xs text-gray-500 flex items-center justify-between">
+                    <span>Are you carrying any extra devices?</span>
+                    <span className="font-bold text-gray-700 bg-gray-200/80 px-2 py-0.5 rounded text-[11px]">No</span>
+                  </div>
+                )}
               </div>
-              <div>
-                <span className="text-gray-500 block text-[11px]">Number of Extra Devices to be Carried</span>
-                <span className="font-bold text-gray-900">{checklist.extra_device_count || '—'}</span>
+
+              {/* 3-CARD ALLOCATION SUMMARY */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
+                <div className="p-3.5 rounded-xl border border-blue-200 bg-blue-50/60 flex items-center justify-between">
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-blue-700 block">Devices Required for Installation</span>
+                    <span className="text-lg font-black font-mono text-blue-950">{totalRequiredDevices}</span>
+                  </div>
+                  <span className="text-[10px] font-bold text-blue-700 bg-blue-100 px-2 py-0.5 rounded">Customer Required</span>
+                </div>
+
+                <div className="p-3.5 rounded-xl border border-amber-200 bg-amber-50/70 flex items-center justify-between">
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-amber-800 block">Extra Devices Carried</span>
+                    <span className="text-lg font-black font-mono text-amber-950">+{totalExtraDevices}</span>
+                  </div>
+                  <span className="text-[10px] font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded">Backup Stock</span>
+                </div>
+
+                <div className="p-3.5 rounded-xl border border-purple-200 bg-purple-50/70 flex items-center justify-between">
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-purple-700 block">Total Devices Carried to Site</span>
+                    <span className="text-lg font-black font-mono text-purple-950">{totalCarriedToSite}</span>
+                  </div>
+                  <span className="text-[10px] font-bold text-purple-700 bg-purple-100 px-2 py-0.5 rounded">Total Dispatch</span>
+                </div>
               </div>
             </div>
-          )}
-        </div>
+          );
+        })()}
 
         {/* SECTION 2B: BILL OF MATERIALS (BOM) REQUIREMENTS & STORE ISSUANCE (Installation Only) */}
         {checklist.installation_or_service === 'Installation' && (
@@ -811,20 +882,6 @@ export default function InstallationChecklistDetails({ id: propId, onEdit, onBac
           onSuccess={() => {
             setShowIssueModal(false);
             showToast('Stock issued successfully!');
-            fetchInstallationChecklistDetail(token, checklistId).then(setChecklist);
-          }}
-        />
-      )}
-
-      {/* PRE-INSTALLATION CARRY FORM MODAL */}
-      {showCarryModal && (
-        <DeviceCarryModal
-          checklist={checklist}
-          token={token}
-          onClose={() => setShowCarryModal(false)}
-          onSuccess={() => {
-            setShowCarryModal(false);
-            showToast('Device carry record submitted!');
             fetchInstallationChecklistDetail(token, checklistId).then(setChecklist);
           }}
         />

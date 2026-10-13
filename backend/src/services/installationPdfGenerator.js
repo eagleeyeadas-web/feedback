@@ -2,7 +2,7 @@ import { jsPDF } from 'jspdf';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { parseDeviceConfigurations } from './bomService.js';
+import { parseDeviceConfigurations, parseExtraDeviceConfigurations } from './bomService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -374,11 +374,19 @@ export async function generateInstallationChecklistPDF(item) {
   y += 6.5;
 
   if (item.extra_devices) {
+    const extraConfigs = parseExtraDeviceConfigurations(item);
+    const extraCount = extraConfigs.reduce((s, c) => s + (Number(c.extra_quantity) || 1), 0) || Number(item.extra_device_count) || 1;
+    const reqCount = item.number_of_devices || totalD;
+    const totalSiteCarried = reqCount + extraCount;
+    const extraTypeStr = extraConfigs.length > 0
+      ? extraConfigs.map((c) => `${c.device_type} (${c.extra_quantity})`).join(', ')
+      : (item.extra_device_type || '—');
+
     const extraRows = [
       [
-        { label: 'Extra Devices Carried?', value: 'Yes', color: COLORS.blueText },
-        { label: 'Type of Extra Device', value: item.extra_device_type || '—' },
-        { label: 'Number of Extra Devices Carried', value: String(item.extra_device_count || '—') },
+        { label: 'Devices Required for Installation', value: `${reqCount} Units` },
+        { label: 'Extra Devices Carried (Backup)', value: `${extraCount} Units (${extraTypeStr})`, color: COLORS.blueText },
+        { label: 'Total Devices Carried to Site', value: `${totalSiteCarried} Units`, color: COLORS.emerald },
       ],
     ];
     y = drawKeyValueGrid(doc, extraRows, y);

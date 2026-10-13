@@ -4,6 +4,14 @@ import { fileURLToPath } from 'url';
 import supabase from './supabase.js';
 import { logAudit } from './auditService.js';
 import { deductStockForCarryRecord, creditStockForVerifiedReturn } from './inventoryService.js';
+import {
+  parseDeviceConfigurations,
+  parseExtraDeviceConfigurations,
+  combineCarriedDevicesAllocation,
+  calculateJobFinalBom,
+} from './bomService.js';
+import { creditMaterialStockForVerifiedReturn } from './materialStockService.js';
+import { normalizeChecklistDeviceConfigs, inMemoryChecklistBomSnapshots } from './installationService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -15,6 +23,8 @@ const STORAGE_FILE = path.resolve(__dirname, '../data/workflow_storage.json');
 const inMemoryCarryRecords = new Map();
 const inMemoryCompletionReports = new Map();
 const inMemoryReturns = new Map();
+const inMemoryMaterialReturns = new Map();
+export const inMemoryChecklistFinalBoms = new Map();
 
 function loadFallbackStorage() {
   try {
@@ -29,6 +39,12 @@ function loadFallbackStorage() {
       }
       if (data.returns && typeof data.returns === 'object') {
         Object.entries(data.returns).forEach(([k, v]) => inMemoryReturns.set(k, v));
+      }
+      if (data.materialReturns && typeof data.materialReturns === 'object') {
+        Object.entries(data.materialReturns).forEach(([k, v]) => inMemoryMaterialReturns.set(k, v));
+      }
+      if (data.finalBoms && typeof data.finalBoms === 'object') {
+        Object.entries(data.finalBoms).forEach(([k, v]) => inMemoryChecklistFinalBoms.set(k, v));
       }
     }
   } catch (err) {
@@ -46,6 +62,8 @@ function saveFallbackStorage() {
       carryRecords: Object.fromEntries(inMemoryCarryRecords),
       completionReports: Object.fromEntries(inMemoryCompletionReports),
       returns: Object.fromEntries(inMemoryReturns),
+      materialReturns: Object.fromEntries(inMemoryMaterialReturns),
+      finalBoms: Object.fromEntries(inMemoryChecklistFinalBoms),
     };
     fs.writeFileSync(STORAGE_FILE, JSON.stringify(data, null, 2), 'utf-8');
   } catch (err) {
@@ -220,7 +238,57 @@ export async function getDeviceCarryRecord(checklist_id) {
     console.warn('Error fetching carry record from DB, checking in-memory store:', err.message);
   }
 
-  return inMemoryCarryRecords.get(checklist_id) || null;
+  const inMem = inMemoryCarryRecords.get(checklist_id);
+  if (inMem) return inMem;
+
+  // Fallback: Authoritative carry record derived directly from Sales checklist device allocation
+  try {
+    const { data: checklist } = await supabase
+      .from('installation_checklists')
+      .select('*')
+      .eq('id', checklist_id)
+      .maybeSingle();
+
+    if (checklist) {
+      const normalized = normalizeChecklistDeviceConfigs(checklist);
+      const reqConfigs = normalized.device_configurations || [];
+      const extraConfigs = normalized.extra_device_configurations || [];
+      const combined = normalized.devices_carried || combineCarriedDevicesAllocation(reqConfigs, extraConfigs);
+      const totalCarried = normalized.total_devices_carried || combined.reduce((sum, c) => sum + (Number(c.quantity_carried) || 0), 0);
+
+      return {
+        id: `carry-${checklist.id}`,
+        checklist_id: checklist.id,
+        checklist_number: checklist.checklist_number,
+        source: 'SALES_CHECKLIST',
+        status: 'SUBMITTED',
+        total_devices_required: normalized.total_devices_required || reqConfigs.reduce((sum, c) => sum + (Number(c.number_of_devices) || 0), 0),
+        total_extra_devices: normalized.total_extra_devices || extraConfigs.reduce((sum, c) => sum + (Number(c.extra_quantity) || 0), 0),
+        total_devices_carried: totalCarried,
+        required_items: reqConfigs.map((c) => ({
+          device_type: c.device_type,
+          quantity: Number(c.number_of_devices) || 1,
+          number_of_devices: Number(c.number_of_devices) || 1,
+        })),
+        extra_items: extraConfigs.map((c) => ({
+          device_type: c.device_type,
+          quantity: Number(c.extra_quantity) || 1,
+          extra_quantity: Number(c.extra_quantity) || 1,
+        })),
+        items: combined.map((c) => ({
+          device_type: c.device_type,
+          required_quantity: Number(c.required_quantity) || 0,
+          extra_quantity: Number(c.extra_quantity) || 0,
+          quantity_carried: Number(c.quantity_carried) || 1,
+          quantity_declared_to_carry: Number(c.quantity_carried) || 1,
+        })),
+      };
+    }
+  } catch (e) {
+    // Non-blocking
+  }
+
+  return null;
 }
 
 /**
@@ -260,13 +328,22 @@ export async function startInstallationJob({ checklist_id, user }) {
 /**
  * Stage 3: Technical submits Post-Installation Completion Form
  */
-export async function submitInstallationCompletionReport({
-  checklist_id,
-  user,
-  items,
-  completion_status = 'Site Work Completed',
-  remarks = '',
-}) {
+export async function submitInstallationCompletionReport(param1, param2) {
+  let opts = {};
+  if (param2 && typeof param2 === 'object') {
+    const userObj = typeof param1 === 'object' ? param1 : { id: param1, email: 'tech@eagleeye.com', role: 'TECHNICAL' };
+    opts = { ...param2, user: userObj };
+  } else if (param1 && typeof param1 === 'object') {
+    opts = param1;
+  }
+
+  const checklist_id = opts.checklist_id;
+  const user = opts.user || { id: 'tech-user', email: 'tech@eagleeye.com', role: 'TECHNICAL' };
+  const items = opts.items || opts.device_items;
+  const rawMaterialItems = opts.material_items || opts.materials || [];
+  const completion_status = opts.completion_status || 'Site Work Completed';
+  const remarks = opts.remarks || opts.completion_notes || '';
+
   if (!items || !Array.isArray(items) || items.length === 0) {
     throw new Error('Completion report items are required');
   }
@@ -283,6 +360,8 @@ export async function submitInstallationCompletionReport({
 
   let totalCarried = 0;
   let totalInstalled = 0;
+  let totalInstalledRequired = 0;
+  let totalInstalledExtra = 0;
   let totalUnused = 0;
   let totalDamaged = 0;
   let totalMissing = 0;
@@ -290,7 +369,16 @@ export async function submitInstallationCompletionReport({
 
   const processedItems = items.map((item) => {
     const qtyCarried = Math.max(0, parseInt(item.quantity_carried, 10) || 0);
-    const qtyInstalled = Math.max(0, parseInt(item.quantity_installed, 10) || 0);
+    const qtyInstalledReq = parseInt(item.quantity_installed_required, 10);
+    const qtyInstalledExt = parseInt(item.quantity_installed_extra, 10);
+    const hasReqExtSplit = !isNaN(qtyInstalledReq) || !isNaN(qtyInstalledExt);
+    const safeInstalledReq = Math.max(0, qtyInstalledReq || 0);
+    const safeInstalledExt = Math.max(0, qtyInstalledExt || 0);
+
+    const qtyInstalled = hasReqExtSplit
+      ? (safeInstalledReq + safeInstalledExt)
+      : Math.max(0, parseInt(item.quantity_installed, 10) || 0);
+
     const qtyUnused = Math.max(0, parseInt(item.quantity_to_return, 10) || 0);
     const qtyDamaged = Math.max(0, parseInt(item.quantity_damaged, 10) || 0);
     const qtyMissing = Math.max(0, parseInt(item.quantity_missing, 10) || 0);
@@ -303,16 +391,25 @@ export async function submitInstallationCompletionReport({
     const diff = qtyCarried - totalAccounted;
 
     if (diff !== 0) {
+      throw new Error(
+        `Reconciliation mismatch for ${item.device_type}: Quantity carried (${qtyCarried}) must equal Quantity installed (${qtyInstalled}) + Quantity returned (${qtyUnused}) + Damaged (${qtyDamaged}) + Missing (${qtyMissing}). Report cannot be submitted when quantities do not reconcile.`
+      );
+    }
+
+    if ((qtyDamaged > 0 || qtyMissing > 0) && (!item.discrepancy_reason || !item.discrepancy_reason.trim())) {
+      throw new Error(
+        `Explanation remark is required for ${item.device_type} when recording damaged (${qtyDamaged}) or missing (${qtyMissing}) devices.`
+      );
+    }
+
+    if (qtyDamaged > 0 || qtyMissing > 0) {
       hasDiscrepancy = true;
-      if (!item.discrepancy_reason || !item.discrepancy_reason.trim()) {
-        throw new Error(
-          `Reconciliation mismatch for ${item.device_type}: Carried (${qtyCarried}) != Installed (${qtyInstalled}) + Return (${qtyUnused}) + Damaged (${qtyDamaged}) + Missing (${qtyMissing}). Explanation remark is required.`
-        );
-      }
     }
 
     totalCarried += qtyCarried;
     totalInstalled += qtyInstalled;
+    totalInstalledRequired += safeInstalledReq;
+    totalInstalledExtra += safeInstalledExt;
     totalUnused += qtyUnused;
     totalDamaged += qtyDamaged;
     totalMissing += qtyMissing;
@@ -322,6 +419,8 @@ export async function submitInstallationCompletionReport({
       device_type: item.device_type,
       quantity_carried: qtyCarried,
       quantity_installed: qtyInstalled,
+      quantity_installed_required: safeInstalledReq,
+      quantity_installed_extra: safeInstalledExt,
       quantity_to_return: qtyUnused,
       quantity_damaged: qtyDamaged,
       quantity_missing: qtyMissing,
@@ -329,14 +428,70 @@ export async function submitInstallationCompletionReport({
     };
   });
 
+  // Process fitting materials items (issued, used, returned, damaged, missing)
+  let totalMaterialsReturned = 0;
+  const processedMaterialItems = (Array.isArray(rawMaterialItems) ? rawMaterialItems : []).map((m) => {
+    const rawIssued = parseFloat(m.quantity_issued ?? m.issued_quantity) || 0;
+    const rawUsed = parseFloat(m.quantity_used ?? m.used_quantity) || 0;
+    const rawReturned = parseFloat(m.quantity_returned ?? m.returned_quantity ?? m.declared_return_qty) || 0;
+    const rawDamaged = parseFloat(m.quantity_damaged ?? m.damaged_qty) || 0;
+    const rawMissing = parseFloat(m.quantity_missing ?? m.missing_qty) || 0;
+
+    if (rawDamaged > 0 || rawMissing > 0) {
+      hasDiscrepancy = true;
+    }
+    if (rawReturned > 0) {
+      totalMaterialsReturned += rawReturned;
+    }
+
+    return {
+      material_id: m.material_id || null,
+      material_name: (m.material_name || '').trim(),
+      unit: m.unit || 'Nos.',
+      quantity_issued: rawIssued,
+      quantity_used: rawUsed,
+      quantity_returned: rawReturned,
+      quantity_damaged: rawDamaged,
+      quantity_missing: rawMissing,
+      remarks: m.remarks ? m.remarks.trim() : null,
+    };
+  });
+
+  // 3. Calculate Final BOM based on ALL devices actually installed (including extra devices installed)
+  // Formula: Final BOM = Sum of (actual installed quantity for each device type × configured BOM quantity per device type)
+  const installedConfigs = processedItems
+    .filter((i) => i.quantity_installed > 0)
+    .map((i) => ({
+      device_type: i.device_type,
+      number_of_devices: i.quantity_installed,
+      number_of_vehicles: i.quantity_installed,
+    }));
+
+  let finalBomSnapshot = null;
+  try {
+    finalBomSnapshot = await calculateJobFinalBom({
+      installedDeviceConfigs: installedConfigs,
+      preliminaryBomSnapshot: checklist.bom_snapshot || inMemoryChecklistBomSnapshots?.get(checklist_id),
+      actualMaterialsIssued: processedMaterialItems,
+      actualMaterialsUsed: processedMaterialItems.filter((m) => m.quantity_used > 0),
+      actualMaterialsReturned: processedMaterialItems.filter((m) => m.quantity_returned > 0),
+    });
+  } catch (bomErr) {
+    console.warn('Could not calculate final BOM snapshot:', bomErr.message);
+  }
+
   const reportData = {
     checklist_id,
     technician_id: user.id,
     devices_carried_qty: totalCarried,
     devices_installed_qty: totalInstalled,
+    devices_installed_required_qty: totalInstalledRequired,
+    devices_installed_extra_qty: totalInstalledExtra,
     devices_unused_qty: totalUnused,
     devices_damaged_qty: totalDamaged,
     devices_missing_qty: totalMissing,
+    material_items: processedMaterialItems,
+    final_bom: finalBomSnapshot,
     completion_status: completion_status === 'Completed' ? 'Completed' : 'Site Work Completed',
     remarks: remarks ? remarks.trim() : null,
     submitted_at: new Date().toISOString(),
@@ -365,7 +520,7 @@ export async function submitInstallationCompletionReport({
     saveFallbackStorage();
   }
 
-  // Auto create return declaration if unused items exist
+  // Auto create return declaration if unused devices exist
   if (totalUnused > 0) {
     for (const item of processedItems) {
       if (item.quantity_to_return > 0) {
@@ -380,11 +535,22 @@ export async function submitInstallationCompletionReport({
     }
   }
 
+  // Auto create material return declaration if unused fitting materials exist
+  const returnedMaterialItems = processedMaterialItems.filter((m) => m.quantity_returned > 0);
+  if (returnedMaterialItems.length > 0) {
+    await declareMaterialReturns({
+      checklist_id,
+      items: returnedMaterialItems,
+      user,
+      remarks: remarks || 'Unused fitting materials returned from installation work',
+    });
+  }
+
   // Update checklist status automatically across all workspaces
   const finalInstStatus = 'Completed';
   const finalReconStatus = hasDiscrepancy
     ? 'DISCREPANCY_OPEN'
-    : totalUnused > 0
+    : (totalUnused > 0 || returnedMaterialItems.length > 0)
     ? 'PENDING_STORE_VERIFICATION'
     : 'FULLY_RECONCILED';
 
@@ -396,25 +562,37 @@ export async function submitInstallationCompletionReport({
     saveFallbackStorage();
   }
 
+  if (finalBomSnapshot) {
+    inMemoryChecklistFinalBoms.set(checklist_id, finalBomSnapshot);
+    saveFallbackStorage();
+  }
+
   const now = new Date().toISOString();
   try {
-    const { error: err1 } = await supabase
+    const { error: updErr } = await supabase
       .from('installation_checklists')
       .update({
         installation_status: finalInstStatus,
+        reconciliation_status: finalReconStatus,
+        final_bom_snapshot: finalBomSnapshot,
+        actual_materials_used: processedMaterialItems.filter((m) => m.quantity_used > 0),
+        actual_materials_returned: returnedMaterialItems,
+        material_return_status: returnedMaterialItems.length > 0 ? 'PENDING_STORE_VERIFICATION' : 'NOT_APPLICABLE',
         updated_at: now,
       })
       .eq('id', checklist_id);
 
-    if (err1) console.warn('Could not update installation_status in DB:', err1.message);
-
-    // Try updating optional reconciliation_status if column exists
-    await supabase
-      .from('installation_checklists')
-      .update({
-        reconciliation_status: finalReconStatus,
-      })
-      .eq('id', checklist_id);
+    if (updErr) {
+      console.warn('DB update warning for checklist status, falling back to core status update:', updErr.message);
+      await supabase
+        .from('installation_checklists')
+        .update({
+          installation_status: finalInstStatus,
+          reconciliation_status: finalReconStatus,
+          updated_at: now,
+        })
+        .eq('id', checklist_id);
+    }
   } catch (err) {
     console.warn('DB update warning for checklist status:', err.message);
   }
@@ -426,16 +604,37 @@ export async function submitInstallationCompletionReport({
     action: 'SUBMIT_INSTALLATION_COMPLETION_REPORT',
     target_table: 'technical_installation_reports',
     target_id: reportId,
-    details: { checklist_id, totalInstalled, totalUnused, totalDamaged, totalMissing, hasDiscrepancy },
+    details: {
+      checklist_id,
+      totalInstalled,
+      totalInstalledRequired,
+      totalInstalledExtra,
+      totalUnused,
+      totalDamaged,
+      totalMissing,
+      materialsReturnedCount: returnedMaterialItems.length,
+      hasDiscrepancy,
+    },
   });
 
   return {
     id: reportId,
     checklist_id,
     items: processedItems,
+    device_items: processedItems,
+    material_items: processedMaterialItems,
     summary: reportData,
+    final_bom_snapshot: finalBomSnapshot,
     status: finalInstStatus,
     reconciliation_status: finalReconStatus,
+    total_devices_installed: totalInstalled,
+    total_devices_installed_required: totalInstalledRequired,
+    total_devices_installed_extra: totalInstalledExtra,
+    total_devices_to_return: totalUnused,
+    total_devices_carried: totalCarried,
+    total_devices_damaged: totalDamaged,
+    total_devices_missing: totalMissing,
+    materials_returned: returnedMaterialItems,
   };
 }
 
@@ -560,6 +759,107 @@ export async function declareDeviceReturns({
 }
 
 /**
+ * Stage 4B: Technical declares unused fitting materials returned to store
+ */
+export async function declareMaterialReturns({
+  checklist_id,
+  items = [],
+  user,
+  remarks = '',
+}) {
+  if (!checklist_id) {
+    throw new Error('Checklist ID is required to declare material returns');
+  }
+  if (!Array.isArray(items) || items.length === 0) {
+    return [];
+  }
+
+  const createdRecords = [];
+
+  for (const item of items) {
+    const declaredQty = parseFloat(item.quantity_returned ?? item.declared_return_qty) || 0;
+    if (declaredQty <= 0) continue;
+
+    const returnId = `matret-${checklist_id}-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
+    const returnRecord = {
+      id: returnId,
+      checklist_id,
+      material_id: item.material_id || null,
+      material_name: (item.material_name || '').trim(),
+      unit: item.unit || 'Nos.',
+      quantity_issued: parseFloat(item.quantity_issued) || 0,
+      quantity_used: parseFloat(item.quantity_used) || 0,
+      declared_return_qty: declaredQty,
+      accepted_usable_qty: 0,
+      damaged_qty: parseFloat(item.quantity_damaged ?? item.damaged_qty) || 0,
+      missing_qty: parseFloat(item.quantity_missing ?? item.missing_qty) || 0,
+      status: 'PENDING_STORE_VERIFICATION',
+      declared_by: user?.id || null,
+      declared_at: new Date().toISOString(),
+      verification_remarks: remarks,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    try {
+      const { data: created, error } = await supabase
+        .from('job_material_returns')
+        .insert([{
+          checklist_id,
+          material_id: returnRecord.material_id,
+          material_name: returnRecord.material_name,
+          unit: returnRecord.unit,
+          quantity_issued: returnRecord.quantity_issued,
+          quantity_used: returnRecord.quantity_used,
+          declared_return_qty: returnRecord.declared_return_qty,
+          status: 'PENDING_STORE_VERIFICATION',
+          declared_by: returnRecord.declared_by,
+          declared_at: returnRecord.declared_at,
+          verification_remarks: remarks,
+        }])
+        .select()
+        .single();
+
+      if (!error && created) {
+        returnRecord.id = created.id;
+      }
+    } catch (dbErr) {
+      console.warn('DB job_material_returns not available, using in-memory store:', dbErr.message);
+    }
+
+    inMemoryMaterialReturns.set(returnRecord.id, returnRecord);
+    createdRecords.push(returnRecord);
+  }
+
+  saveFallbackStorage();
+
+  try {
+    await supabase
+      .from('installation_checklists')
+      .update({
+        material_return_status: 'PENDING_STORE_VERIFICATION',
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', checklist_id);
+  } catch (chkErr) {
+    // Non-blocking
+  }
+
+  await logAudit({
+    actor_id: user?.id,
+    actor_email: user?.email,
+    actor_role: user?.role,
+    action: 'DECLARE_MATERIAL_RETURNS',
+    target_table: 'job_material_returns',
+    target_id: checklist_id,
+    details: { checklist_id, count: createdRecords.length },
+  }).catch(() => null);
+
+  return createdRecords;
+}
+
+
+/**
  * Stage 5: Store Manager physically verifies returned devices
  */
 export async function verifyStoreReturn({
@@ -646,6 +946,19 @@ export async function verifyStoreReturn({
   }
 
   // 3. Create Discrepancy if flagged
+  const pendingForJob = Array.from(inMemoryReturns.values()).filter(
+    (r) => r.checklist_id === ret.checklist_id && r.status === 'PENDING_STORE_VERIFICATION' && r.id !== return_id
+  );
+  const checklistFinalStatus = isDiscrepancy
+    ? 'DISCREPANCY_OPEN'
+    : (pendingForJob.length > 0 ? 'PENDING_STORE_VERIFICATION' : 'FULLY_RECONCILED');
+
+  const completionRep = inMemoryCompletionReports.get(ret.checklist_id);
+  if (completionRep) {
+    completionRep.reconciliation_status = checklistFinalStatus;
+    inMemoryCompletionReports.set(ret.checklist_id, completionRep);
+  }
+
   if (isDiscrepancy) {
     try {
       await supabase.from('inventory_discrepancies').insert([{
@@ -666,7 +979,7 @@ export async function verifyStoreReturn({
     await supabase
       .from('installation_checklists')
       .update({
-        reconciliation_status: 'DISCREPANCY_OPEN',
+        reconciliation_status: checklistFinalStatus,
         updated_at: new Date().toISOString(),
       })
       .eq('id', ret.checklist_id);
@@ -674,7 +987,7 @@ export async function verifyStoreReturn({
     await supabase
       .from('installation_checklists')
       .update({
-        reconciliation_status: 'FULLY_RECONCILED',
+        reconciliation_status: checklistFinalStatus,
         updated_at: new Date().toISOString(),
       })
       .eq('id', ret.checklist_id);
@@ -692,6 +1005,204 @@ export async function verifyStoreReturn({
 
   return updatedReturn;
 }
+
+/**
+ * Helper to update checklist reconciliation and material return status
+ */
+async function updateChecklistReconciliationAfterMaterialVerification(checklist_id) {
+  const pendingDeviceReturns = Array.from(inMemoryReturns.values()).filter(
+    (r) => r.checklist_id === checklist_id && r.status === 'PENDING_STORE_VERIFICATION'
+  );
+  const pendingMatReturns = Array.from(inMemoryMaterialReturns.values()).filter(
+    (r) => r.checklist_id === checklist_id && r.status === 'PENDING_STORE_VERIFICATION'
+  );
+
+  const hasPending = pendingDeviceReturns.length > 0 || pendingMatReturns.length > 0;
+  const newReconStatus = hasPending ? 'PENDING_STORE_VERIFICATION' : 'FULLY_RECONCILED';
+  const newMatStatus = pendingMatReturns.length > 0 ? 'PENDING_STORE_VERIFICATION' : 'VERIFIED_AND_RECONCILED';
+
+  const compRep = inMemoryCompletionReports.get(checklist_id);
+  if (compRep) {
+    compRep.reconciliation_status = newReconStatus;
+    inMemoryCompletionReports.set(checklist_id, compRep);
+  }
+
+  try {
+    await supabase
+      .from('installation_checklists')
+      .update({
+        reconciliation_status: newReconStatus,
+        material_return_status: newMatStatus,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', checklist_id);
+  } catch (e) {
+    // Non-blocking
+  }
+}
+
+/**
+ * Stage 5B: Store Manager physically verifies returned materials and updates inventory
+ *
+ * Rules:
+ * - Store Manager must physically verify returned materials before updating inventory.
+ * - Add usable returned materials to their corresponding inventory balances.
+ * - Record damaged materials separately in damaged stock.
+ * - Do not add missing items to stock.
+ * - Only add quantities that were actually issued from inventory and physically returned.
+ * - Do not add unused materials to inventory if they were never issued from inventory.
+ * - Reject duplicate return verification and duplicate stock additions.
+ */
+export async function verifyStoreMaterialReturn({
+  return_id,
+  checklist_id,
+  items,
+  accepted_usable_qty,
+  damaged_qty = 0,
+  missing_qty = 0,
+  user,
+  remarks = '',
+}) {
+  if (return_id) {
+    let ret = inMemoryMaterialReturns.get(return_id);
+    if (!ret) {
+      try {
+        const { data: dbRet, error } = await supabase
+          .from('job_material_returns')
+          .select('*')
+          .eq('id', return_id)
+          .single();
+        if (!error && dbRet) ret = dbRet;
+      } catch (e) {
+        console.warn('Could not fetch material return from DB:', e.message);
+      }
+    }
+
+    if (!ret) {
+      throw new Error('Material return declaration record not found');
+    }
+
+    if (ret.status !== 'PENDING_STORE_VERIFICATION') {
+      throw new Error('Material return declaration has already been verified and reconciled. Duplicate return verification rejected.');
+    }
+
+    const usable = Math.max(0, parseFloat(accepted_usable_qty !== undefined ? accepted_usable_qty : ret.declared_return_qty) || 0);
+    const dmg = Math.max(0, parseFloat(damaged_qty) || 0);
+    const miss = Math.max(0, parseFloat(missing_qty) || 0);
+    const totalAccounted = usable + dmg + miss;
+    const isDiscrepancy = totalAccounted !== Number(ret.declared_return_qty);
+
+    await creditMaterialStockForVerifiedReturn({
+      checklist_id: ret.checklist_id,
+      items: [
+        {
+          material_id: ret.material_id,
+          material_name: ret.material_name,
+          unit: ret.unit,
+          quantity_issued: ret.quantity_issued,
+          accepted_usable_qty: usable,
+          damaged_qty: dmg,
+          missing_qty: miss,
+        },
+      ],
+      user,
+      remarks,
+      return_id: ret.id,
+    });
+
+    const returnStatus = isDiscrepancy ? 'DISCREPANCY_FLAGGED' : 'VERIFIED_AND_RECONCILED';
+    const updatedReturn = {
+      ...ret,
+      accepted_usable_qty: usable,
+      damaged_qty: dmg,
+      missing_qty: miss,
+      status: returnStatus,
+      verification_remarks: remarks,
+      verified_by: user?.id,
+      verified_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    inMemoryMaterialReturns.set(return_id, updatedReturn);
+    saveFallbackStorage();
+
+    try {
+      await supabase
+        .from('job_material_returns')
+        .update({
+          accepted_usable_qty: usable,
+          damaged_qty: dmg,
+          missing_qty: miss,
+          status: returnStatus,
+          verification_remarks: remarks,
+          verified_by: user?.id,
+          verified_at: updatedReturn.verified_at,
+          updated_at: updatedReturn.updated_at,
+        })
+        .eq('id', return_id);
+    } catch (e) {
+      console.warn('Could not update job_material_returns in DB:', e.message);
+    }
+
+    await updateChecklistReconciliationAfterMaterialVerification(ret.checklist_id);
+
+    return updatedReturn;
+  }
+
+  // Batch verification for checklist
+  if (checklist_id && Array.isArray(items) && items.length > 0) {
+    const verifiedItems = [];
+    for (const item of items) {
+      const returnRecordId = item.return_id || item.id;
+      let matchedReturn = returnRecordId ? inMemoryMaterialReturns.get(returnRecordId) : null;
+      if (!matchedReturn) {
+        matchedReturn = Array.from(inMemoryMaterialReturns.values()).find(
+          (r) => r.checklist_id === checklist_id && (r.material_id === item.material_id || r.material_name.toLowerCase() === (item.material_name || '').toLowerCase())
+        );
+      }
+
+      if (matchedReturn && matchedReturn.status !== 'PENDING_STORE_VERIFICATION') {
+        throw new Error(`Material return for "${item.material_name}" has already been verified and reconciled. Duplicate return verification rejected.`);
+      }
+
+      verifiedItems.push({
+        ...item,
+        return_id: matchedReturn?.id || `batch-${checklist_id}-${item.material_name}`,
+      });
+    }
+
+    await creditMaterialStockForVerifiedReturn({
+      checklist_id,
+      items: verifiedItems,
+      user,
+      remarks,
+      return_id: `MAT-VERIFY-BATCH-${checklist_id}`,
+    });
+
+    for (const vItem of verifiedItems) {
+      const retId = vItem.return_id;
+      const existing = inMemoryMaterialReturns.get(retId);
+      if (existing) {
+        existing.accepted_usable_qty = parseFloat(vItem.accepted_usable_qty ?? vItem.quantity_returned) || 0;
+        existing.damaged_qty = parseFloat(vItem.damaged_qty) || 0;
+        existing.missing_qty = parseFloat(vItem.missing_qty) || 0;
+        existing.status = 'VERIFIED_AND_RECONCILED';
+        existing.verified_by = user?.id;
+        existing.verified_at = new Date().toISOString();
+        existing.updated_at = new Date().toISOString();
+        inMemoryMaterialReturns.set(retId, existing);
+      }
+    }
+    saveFallbackStorage();
+
+    await updateChecklistReconciliationAfterMaterialVerification(checklist_id);
+
+    return { success: true, checklist_id, verified_items: verifiedItems };
+  }
+
+  throw new Error('Either return_id or (checklist_id and items) must be provided.');
+}
+
 
 /**
  * Fetch all pending store returns
@@ -749,6 +1260,64 @@ export async function getAllStoreReturns() {
 
   return returns;
 }
+
+/**
+ * Fetch all pending store material returns
+ */
+export async function getPendingStoreMaterialReturns() {
+  const returns = [];
+
+  try {
+    const { data: dbReturns, error } = await supabase
+      .from('job_material_returns')
+      .select('*, installation_checklists(checklist_number, client_name, service_engineer)')
+      .eq('status', 'PENDING_STORE_VERIFICATION')
+      .order('created_at', { ascending: false });
+
+    if (!error && dbReturns) {
+      returns.push(...dbReturns);
+    }
+  } catch (e) {
+    console.warn('Error fetching pending material returns from DB:', e.message);
+  }
+
+  for (const [id, ret] of inMemoryMaterialReturns.entries()) {
+    if (ret.status === 'PENDING_STORE_VERIFICATION' && !returns.some((r) => r.id === id)) {
+      returns.push(ret);
+    }
+  }
+
+  return returns;
+}
+
+/**
+ * Fetch all declared store material returns
+ */
+export async function getAllStoreMaterialReturns() {
+  const returns = [];
+
+  try {
+    const { data: dbReturns, error } = await supabase
+      .from('job_material_returns')
+      .select('*, installation_checklists(checklist_number, client_name, service_engineer)')
+      .order('created_at', { ascending: false });
+
+    if (!error && dbReturns) {
+      returns.push(...dbReturns);
+    }
+  } catch (e) {
+    console.warn('Error fetching all material returns from DB:', e.message);
+  }
+
+  for (const [id, ret] of inMemoryMaterialReturns.entries()) {
+    if (!returns.some((r) => r.id === id)) {
+      returns.push(ret);
+    }
+  }
+
+  return returns;
+}
+
 
 /**
  * Stage 6: Admin resolves an open discrepancy
@@ -853,16 +1422,18 @@ export async function enrichChecklistsWithWorkflowStatus(checklists) {
   return checklists.map((item) => {
     let copy = { ...item };
 
-    // 1. Check carry record in DB or in-memory fallback store
+    // 1. Check carry record in DB or in-memory fallback store, or automatically true from Sales allocation
     const inMemCarry = inMemoryCarryRecords.get(item.id);
     const hasCarryRecord =
       dbCarrySet.has(item.id) ||
       Boolean(inMemCarry) ||
+      (Array.isArray(item.device_configurations) && item.device_configurations.length > 0) ||
+      Boolean(item.device_type) ||
       (item.carry_status && item.carry_status.toUpperCase() === 'RECORDED');
 
     copy.carry_status = hasCarryRecord ? 'RECORDED' : 'NOT_RECORDED';
-    if (hasCarryRecord && (!copy.reconciliation_status || copy.reconciliation_status === 'SALES_CREATED')) {
-      copy.reconciliation_status = 'CARRY_RECORDED';
+    if (!copy.reconciliation_status || copy.reconciliation_status === 'SALES_CREATED') {
+      copy.reconciliation_status = hasCarryRecord ? 'SALES_ALLOCATED' : 'SALES_CREATED';
     }
 
     // 2. Check completion report in DB or in-memory fallback store
@@ -876,6 +1447,46 @@ export async function enrichChecklistsWithWorkflowStatus(checklists) {
     } else if (inMemReport?.reconciliation_status) {
       copy.reconciliation_status = inMemReport.reconciliation_status;
     }
+
+    const itemReturns = Array.from(inMemoryReturns.values()).filter((r) => r.checklist_id === item.id);
+    copy.returns = itemReturns;
+    copy.device_returns = itemReturns;
+
+    const itemMatReturns = Array.from(inMemoryMaterialReturns.values()).filter((r) => r.checklist_id === item.id);
+    copy.material_returns = itemMatReturns;
+
+    if (inMemReport) {
+      if (!copy.final_bom_snapshot && (inMemReport.final_bom || inMemReport.final_bom_snapshot)) {
+        copy.final_bom_snapshot = inMemReport.final_bom || inMemReport.final_bom_snapshot;
+      }
+      if (!copy.actual_materials_used && inMemReport.material_items) {
+        copy.actual_materials_used = inMemReport.material_items.filter((m) => m.quantity_used > 0);
+      }
+      if (!copy.actual_materials_returned && inMemReport.material_items) {
+        copy.actual_materials_returned = inMemReport.material_items.filter((m) => m.quantity_returned > 0);
+      }
+    }
+
+    if (itemReturns.length > 0) {
+      const anyPending = itemReturns.some((r) => r.status === 'PENDING_STORE_VERIFICATION');
+      const anyDiscrepancy = itemReturns.some((r) => r.status === 'DISCREPANCY_FLAGGED');
+      if (anyPending) {
+        copy.reconciliation_status = 'PENDING_STORE_VERIFICATION';
+      } else if (anyDiscrepancy) {
+        copy.reconciliation_status = 'DISCREPANCY_OPEN';
+      } else {
+        copy.reconciliation_status = 'FULLY_RECONCILED';
+      }
+    }
+
+    if (itemMatReturns.length > 0) {
+      const anyMatPending = itemMatReturns.some((r) => r.status === 'PENDING_STORE_VERIFICATION');
+      if (anyMatPending) {
+        copy.reconciliation_status = 'PENDING_STORE_VERIFICATION';
+        copy.material_return_status = 'PENDING_STORE_VERIFICATION';
+      }
+    }
+
 
     // 3. PERSISTED INSTALLATION STATUS AS THE SOURCE OF TRUTH
     // Check persisted installation_status on checklist record

@@ -704,17 +704,22 @@ export async function handleCleanupEndpoint(req, res) {
       const token = authHeader.split(' ')[1];
       const { data: { user } } = await supabase.auth.getUser(token);
       if (user) {
-        isAuthenticatedUser = true;
-        userId = user.id;
+        const { data: profile } = await supabase
+          .from('admin_users')
+          .select('role')
+          .eq('id', user.id)
+          .maybeSingle();
+
+        const role = (profile?.role || '').toUpperCase();
+        if (role === 'ADMIN' || role === 'SUPER_ADMIN' || user.email === 'eagleeye@gmail.com') {
+          isAuthenticatedUser = true;
+          userId = user.id;
+        }
       }
     }
 
     if (!isCronAuthorized && !isAuthenticatedUser) {
-      if (!cronSecret && !authHeader) {
-        console.error('[Cleanup API] CRON_SECRET environment variable is not configured on the server.');
-        return res.status(500).json({ error: 'CRON_SECRET environment variable is not configured on the server' });
-      }
-      return res.status(401).json({ error: 'Unauthorized cleanup request: Valid user authentication or x-cron-secret required.' });
+      return res.status(401).json({ error: 'Unauthorized cleanup request: Valid Admin authentication or x-cron-secret required.' });
     }
 
     // Force run only allowed if explicit force query is passed by authorized secret/admin
@@ -771,11 +776,22 @@ export async function handleCleanupStatusEndpoint(req, res) {
     if (authHeader && authHeader.startsWith('Bearer ')) {
       const token = authHeader.split(' ')[1];
       const { data: { user } } = await supabase.auth.getUser(token);
-      if (user) authorized = true;
+      if (user) {
+        const { data: profile } = await supabase
+          .from('admin_users')
+          .select('role')
+          .eq('id', user.id)
+          .maybeSingle();
+
+        const role = (profile?.role || '').toUpperCase();
+        if (role === 'ADMIN' || role === 'SUPER_ADMIN' || user.email === 'eagleeye@gmail.com') {
+          authorized = true;
+        }
+      }
     }
 
     if (!authorized) {
-      return res.status(401).json({ error: 'Unauthorized status request' });
+      return res.status(401).json({ error: 'Unauthorized status request: Valid Admin authentication or x-cron-secret required.' });
     }
 
     const state = await getCleanupState();

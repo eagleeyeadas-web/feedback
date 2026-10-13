@@ -4,6 +4,8 @@ import {
   getAllBoms,
   getBomByDeviceType,
   calculateBomRequirements,
+  calculateJobPreliminaryBom,
+  calculateJobFinalBom,
   updateDeviceBom,
   resetBomToTemplate,
   getChecklistBomHistory,
@@ -42,14 +44,24 @@ router.get('/history', requireRole('STORE_MANAGER', 'ADMIN'), async (req, res) =
 
 /**
  * POST /api/admin/bom/calculate
- * Live calculation endpoint for Sales Installation Checklist:
- * Whenever Sales selects a device type and enters device quantity,
- * returns calculated material requirement summary immediately.
+ * Live preliminary calculation endpoint for Sales Installation Checklist:
+ * Calculates BOM for required devices, extra devices, and combined preliminary BOM for all carried devices.
  * Accessible to all roles (SALES, ADMIN, STORE_MANAGER, TECHNICAL)
  */
 router.post('/calculate', requireRole('ADMIN', 'SALES', 'TECHNICAL', 'STORE_MANAGER'), async (req, res) => {
   try {
-    const { device_type, number_of_devices, device_configurations, job_type, installation_or_service } = req.body;
+    const {
+      device_type,
+      number_of_devices,
+      device_configurations,
+      extra_device_configurations,
+      extra_devices,
+      extra_device_type,
+      extra_device_count,
+      has_extra_devices,
+      job_type,
+      installation_or_service,
+    } = req.body;
     const effectiveJobType = job_type || installation_or_service;
 
     // Reject or ignore BOM calculation requests for Service jobs
@@ -69,11 +81,50 @@ router.post('/calculate', requireRole('ADMIN', 'SALES', 'TECHNICAL', 'STORE_MANA
       return res.status(400).json({ error: 'device_configurations or device_type is required' });
     }
 
-    const calculation = await calculateBomRequirements(device_configurations || device_type, number_of_devices);
+    const requiredConfigs = device_configurations || [{ device_type, number_of_devices: number_of_devices || 1 }];
+    const extraConfigs = extra_device_configurations || ((has_extra_devices || extra_devices) ? req.body : []);
+
+    const calculation = await calculateJobPreliminaryBom({
+      requiredConfigs,
+      extraConfigs,
+    });
+
     return res.json(calculation);
   } catch (err) {
-    console.error('Error calculating BOM:', err);
-    return res.status(500).json({ error: err.message || 'Failed to calculate BOM' });
+    console.error('Error calculating preliminary BOM:', err);
+    return res.status(500).json({ error: err.message || 'Failed to calculate preliminary BOM' });
+  }
+});
+
+/**
+ * POST /api/admin/bom/calculate-final
+ * Calculates Final BOM for devices actually installed, including extra devices installed.
+ * Excludes unused extra devices.
+ * Returns Preliminary vs Final BOM comparison with differences and actual material usage.
+ */
+router.post('/calculate-final', requireRole('ADMIN', 'SALES', 'TECHNICAL', 'STORE_MANAGER'), async (req, res) => {
+  try {
+    const {
+      installed_device_configurations,
+      device_items,
+      preliminary_bom_snapshot,
+      actual_materials_issued,
+      actual_materials_used,
+      actual_materials_returned,
+    } = req.body;
+
+    const calculation = await calculateJobFinalBom({
+      installedDeviceConfigs: installed_device_configurations || device_items || [],
+      preliminaryBomSnapshot: preliminary_bom_snapshot,
+      actualMaterialsIssued: actual_materials_issued || [],
+      actualMaterialsUsed: actual_materials_used || [],
+      actualMaterialsReturned: actual_materials_returned || [],
+    });
+
+    return res.json(calculation);
+  } catch (err) {
+    console.error('Error calculating Final BOM:', err);
+    return res.status(500).json({ error: err.message || 'Failed to calculate Final BOM' });
   }
 });
 

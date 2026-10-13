@@ -87,9 +87,15 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
   const [engineersAvailability, setEngineersAvailability] = useState([]);
   const [checkingAvailability, setCheckingAvailability] = useState(false);
 
-  // Multi-Device Configurations State
+  // Multi-Device Configurations (Required for Customer Installation)
   const [deviceConfigs, setDeviceConfigs] = useState([
-    { id: 'dev-1', device_type: DEVICE_OPTIONS[0], number_of_devices: 1 },
+    { id: 'dev-1', device_type: DEVICE_OPTIONS[0], number_of_devices: 1, quantity_carried: 1 },
+  ]);
+
+  // Extra Devices Carried State
+  const [hasExtraDevices, setHasExtraDevices] = useState(false);
+  const [extraDeviceConfigs, setExtraDeviceConfigs] = useState([
+    { id: 'extra-1', device_type: DEVICE_OPTIONS[0], extra_quantity: 1 },
   ]);
 
   // Form State matching all 27 questions exactly
@@ -145,21 +151,73 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
           // Populate device configurations (backward-compatible)
           if (Array.isArray(data.device_configurations) && data.device_configurations.length > 0) {
             setDeviceConfigs(
-              data.device_configurations.map((dc, i) => ({
-                id: `dev-${i + 1}-${Date.now()}`,
-                device_type: dc.device_type || DEVICE_OPTIONS[0],
-                number_of_devices: dc.number_of_devices || 1,
-                number_of_vehicles: dc.number_of_vehicles || dc.number_of_devices || 1,
-              }))
+              data.device_configurations.map((dc, i) => {
+                const qty = dc.quantity_carried || dc.number_of_devices || 1;
+                return {
+                  id: `dev-${i + 1}-${Date.now()}`,
+                  device_type: dc.device_type || DEVICE_OPTIONS[0],
+                  quantity_carried: qty,
+                  number_of_devices: qty,
+                  number_of_vehicles: dc.number_of_vehicles || qty,
+                };
+              })
             );
           } else {
+            const qty = data.number_of_devices || 1;
             setDeviceConfigs([
               {
                 id: 'dev-1',
                 device_type: data.device_type || DEVICE_OPTIONS[0],
-                number_of_devices: data.number_of_devices || 1,
+                quantity_carried: qty,
+                number_of_devices: qty,
                 number_of_vehicles: data.number_of_vehicles || 1,
               },
+            ]);
+          }
+
+          // Populate Extra Devices (if present)
+          if (data.extra_devices) {
+            setHasExtraDevices(true);
+            if (Array.isArray(data.extra_device_configurations) && data.extra_device_configurations.length > 0) {
+              setExtraDeviceConfigs(
+                data.extra_device_configurations.map((ed, i) => ({
+                  id: `extra-${i + 1}-${Date.now()}`,
+                  device_type: ed.device_type || DEVICE_OPTIONS[0],
+                  extra_quantity: Math.max(1, parseInt(ed.extra_quantity || ed.quantity || 1, 10)),
+                }))
+              );
+            } else if (data.extra_device_type) {
+              const parts = String(data.extra_device_type).split(/[,;\n]+/).map((p) => p.trim()).filter(Boolean);
+              if (parts.length > 1) {
+                const parsed = parts.map((p, i) => {
+                  const qtyMatch = p.match(/\((\d+)(?:\s*devices?)?\)/i) || p.match(/(?:x|[:\-])\s*(\d+)/i);
+                  const qty = qtyMatch ? parseInt(qtyMatch[1], 10) : 1;
+                  const nameClean = p.replace(/\(.*?\)/g, '').replace(/(?:x|[:\-])\s*\d+/gi, '').trim();
+                  return {
+                    id: `extra-${i + 1}-${Date.now()}`,
+                    device_type: nameClean || DEVICE_OPTIONS[0],
+                    extra_quantity: Math.max(1, isNaN(qty) ? 1 : qty),
+                  };
+                });
+                setExtraDeviceConfigs(parsed);
+              } else {
+                setExtraDeviceConfigs([
+                  {
+                    id: 'extra-1',
+                    device_type: data.extra_device_type,
+                    extra_quantity: Math.max(1, parseInt(data.extra_device_count, 10) || 1),
+                  },
+                ]);
+              }
+            } else {
+              setExtraDeviceConfigs([
+                { id: 'extra-1', device_type: DEVICE_OPTIONS[0], extra_quantity: 1 },
+              ]);
+            }
+          } else {
+            setHasExtraDevices(false);
+            setExtraDeviceConfigs([
+              { id: 'extra-1', device_type: DEVICE_OPTIONS[0], extra_quantity: 1 },
             ]);
           }
 
@@ -268,7 +326,7 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
     });
   };
 
-  // Device Configurations Handlers
+  // Device Configurations (Required for Customer Installation) Handlers
   const handleAddDeviceConfig = () => {
     const selectedTypes = new Set(deviceConfigs.map((c) => c.device_type));
     const availableOption = DEVICE_OPTIONS.find((opt) => !selectedTypes.has(opt)) || DEVICE_OPTIONS[0];
@@ -277,6 +335,7 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
       {
         id: `dev-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
         device_type: availableOption,
+        quantity_carried: 1,
         number_of_devices: 1,
       },
     ]);
@@ -291,12 +350,69 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
     setDeviceConfigs((prev) =>
       prev.map((c) => {
         if (c.id !== id) return c;
+        const updated = { ...c, [field]: value };
+        if (field === 'quantity_carried' || field === 'number_of_devices') {
+          const parsed = value === '' ? '' : parseInt(value, 10);
+          updated.number_of_devices = isNaN(parsed) ? '' : Math.max(1, parsed);
+          updated.quantity_carried = updated.number_of_devices;
+        }
+        return updated;
+      })
+    );
+  };
+
+  // Extra Devices Carried Handlers
+  const handleExtraToggle = (isYes) => {
+    setHasExtraDevices(isYes);
+    if (isYes && extraDeviceConfigs.length === 0) {
+      setExtraDeviceConfigs([
+        { id: `extra-${Date.now()}`, device_type: DEVICE_OPTIONS[0], extra_quantity: 1 },
+      ]);
+    }
+  };
+
+  const handleAddExtraDevice = () => {
+    const selectedTypes = new Set(extraDeviceConfigs.map((c) => c.device_type));
+    const availableOption = DEVICE_OPTIONS.find((opt) => !selectedTypes.has(opt)) || DEVICE_OPTIONS[0];
+    setExtraDeviceConfigs((prev) => [
+      ...prev,
+      {
+        id: `extra-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+        device_type: availableOption,
+        extra_quantity: 1,
+      },
+    ]);
+  };
+
+  const handleRemoveExtraDevice = (id) => {
+    if (extraDeviceConfigs.length <= 1) {
+      setHasExtraDevices(false);
+      return;
+    }
+    setExtraDeviceConfigs((prev) => prev.filter((c) => c.id !== id));
+  };
+
+  const handleUpdateExtraDevice = (id, field, value) => {
+    setExtraDeviceConfigs((prev) =>
+      prev.map((c) => {
+        if (c.id !== id) return c;
+        if (field === 'extra_quantity') {
+          const parsed = value === '' ? '' : parseInt(value, 10);
+          return { ...c, extra_quantity: isNaN(parsed) ? '' : Math.max(1, parsed) };
+        }
         return { ...c, [field]: value };
       })
     );
   };
 
-  const totalDevices = deviceConfigs.reduce((sum, c) => sum + (parseInt(c.number_of_devices, 10) || 0), 0);
+  const totalRequiredDevices = deviceConfigs.reduce(
+    (sum, c) => sum + (parseInt(c.number_of_devices || c.quantity_carried, 10) || 0),
+    0
+  );
+  const totalExtraDevices = hasExtraDevices
+    ? extraDeviceConfigs.reduce((sum, c) => sum + (parseInt(c.extra_quantity, 10) || 0), 0)
+    : 0;
+  const totalDevicesCarried = totalRequiredDevices + totalExtraDevices;
 
   const validateForm = () => {
     if (!formData.salesperson_name || !SALESPERSON_OPTIONS.includes(formData.salesperson_name)) {
@@ -313,7 +429,7 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
 
     if (!formData.client_location.trim()) return 'Client Location is required';
 
-    // Multi-Device Configurations Validation
+    // Multi-Device Configurations Validation (Required Installation Devices)
     if (!deviceConfigs || deviceConfigs.length === 0) {
       return 'At least one device configuration is required.';
     }
@@ -326,6 +442,23 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
       const numDev = Number(c.number_of_devices);
       if (isNaN(numDev) || numDev <= 0 || !Number.isInteger(numDev)) {
         return `Device Configuration #${i + 1} (${c.device_type}): Number of Devices must be a positive whole number greater than 0 (no zero, negative, or decimal quantities).`;
+      }
+    }
+
+    // Extra Devices Carried Validation
+    if (hasExtraDevices) {
+      if (!extraDeviceConfigs || extraDeviceConfigs.length === 0) {
+        return 'Please specify at least one extra device or toggle "Are you carrying any extra devices?" to No.';
+      }
+      for (let i = 0; i < extraDeviceConfigs.length; i++) {
+        const ec = extraDeviceConfigs[i];
+        if (!ec.device_type || !DEVICE_OPTIONS.includes(ec.device_type)) {
+          return `Extra Device #${i + 1}: Please select a valid device type.`;
+        }
+        const eq = Number(ec.extra_quantity);
+        if (isNaN(eq) || eq <= 0 || !Number.isInteger(eq)) {
+          return `Extra Device #${i + 1} (${ec.device_type}): Extra Quantity must be a positive whole number greater than 0.`;
+        }
       }
     }
 
@@ -406,27 +539,80 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
 
     setLoading(true);
     try {
-      // Combine duplicates automatically if any
-      const combinedMap = new Map();
+      // Combine duplicates in required devices automatically if any
+      const combinedReqMap = new Map();
       deviceConfigs.forEach((c) => {
         const dt = (c.device_type || '').trim();
         if (!dt) return;
-        const dQty = Math.max(1, parseInt(c.number_of_devices, 10) || 1);
+        const dQty = Math.max(1, parseInt(c.number_of_devices || c.quantity_carried, 10) || 1);
         const vQty = Math.max(1, parseInt(c.number_of_vehicles, 10) || dQty);
-        if (combinedMap.has(dt)) {
-          const ex = combinedMap.get(dt);
+        if (combinedReqMap.has(dt)) {
+          const ex = combinedReqMap.get(dt);
+          ex.quantity_carried += dQty;
           ex.number_of_devices += dQty;
           ex.number_of_vehicles += vQty;
         } else {
-          combinedMap.set(dt, { device_type: dt, number_of_devices: dQty, number_of_vehicles: vQty });
+          combinedReqMap.set(dt, { device_type: dt, quantity_carried: dQty, number_of_devices: dQty, number_of_vehicles: vQty });
         }
       });
-      const normalizedConfigs = Array.from(combinedMap.values());
-      const totalDev = normalizedConfigs.reduce((acc, c) => acc + c.number_of_devices, 0);
-      const totalVeh = normalizedConfigs.reduce((acc, c) => acc + c.number_of_vehicles, 0);
-      const summaryDeviceType = normalizedConfigs.length === 1
-        ? normalizedConfigs[0].device_type
-        : normalizedConfigs.map((c) => `${c.device_type} (${c.number_of_devices})`).join(', ');
+      const normalizedReqConfigs = Array.from(combinedReqMap.values());
+      const totalReq = normalizedReqConfigs.reduce((acc, c) => acc + c.number_of_devices, 0);
+      const totalVeh = normalizedReqConfigs.reduce((acc, c) => acc + c.number_of_vehicles, 0);
+      const summaryDeviceType = normalizedReqConfigs.length === 1
+        ? normalizedReqConfigs[0].device_type
+        : normalizedReqConfigs.map((c) => `${c.device_type} (${c.number_of_devices})`).join(', ');
+
+      // Combine duplicates in extra devices if any
+      let normalizedExtraConfigs = [];
+      let totalExtra = 0;
+      let extraTypeSummary = null;
+
+      if (hasExtraDevices && extraDeviceConfigs.length > 0) {
+        const combinedExtraMap = new Map();
+        extraDeviceConfigs.forEach((c) => {
+          const dt = (c.device_type || '').trim();
+          if (!dt) return;
+          const eq = Math.max(1, parseInt(c.extra_quantity, 10) || 1);
+          if (combinedExtraMap.has(dt)) {
+            const ex = combinedExtraMap.get(dt);
+            ex.extra_quantity += eq;
+          } else {
+            combinedExtraMap.set(dt, { device_type: dt, extra_quantity: eq });
+          }
+        });
+        normalizedExtraConfigs = Array.from(combinedExtraMap.values());
+        totalExtra = normalizedExtraConfigs.reduce((acc, c) => acc + c.extra_quantity, 0);
+        extraTypeSummary = normalizedExtraConfigs.length === 1
+          ? normalizedExtraConfigs[0].device_type
+          : normalizedExtraConfigs.map((c) => `${c.device_type} (${c.extra_quantity})`).join(', ');
+      }
+
+      // Authoritative combined carried list for Technical & Store reconciliation
+      const combinedCarriedMap = new Map();
+      normalizedReqConfigs.forEach((r) => {
+        combinedCarriedMap.set(r.device_type, {
+          device_type: r.device_type,
+          required_quantity: r.number_of_devices,
+          extra_quantity: 0,
+          quantity_carried: r.number_of_devices,
+        });
+      });
+      normalizedExtraConfigs.forEach((e) => {
+        if (combinedCarriedMap.has(e.device_type)) {
+          const ex = combinedCarriedMap.get(e.device_type);
+          ex.extra_quantity += e.extra_quantity;
+          ex.quantity_carried += e.extra_quantity;
+        } else {
+          combinedCarriedMap.set(e.device_type, {
+            device_type: e.device_type,
+            required_quantity: 0,
+            extra_quantity: e.extra_quantity,
+            quantity_carried: e.extra_quantity,
+          });
+        }
+      });
+      const combinedCarriedList = Array.from(combinedCarriedMap.values());
+      const totalCarried = totalReq + totalExtra;
 
       const payload = {
         salesperson_name: formData.salesperson_name,
@@ -435,12 +621,15 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
         client_location: formData.client_location.trim(),
         google_maps_location: formData.google_maps_location.trim() || null,
         device_type: summaryDeviceType,
-        number_of_devices: totalDev,
+        number_of_devices: totalReq, // Customer installation requirements
+        total_devices_carried: totalCarried,
         number_of_vehicles: totalVeh,
-        device_configurations: normalizedConfigs,
-        extra_devices: false,
-        extra_device_type: null,
-        extra_device_count: null,
+        device_configurations: normalizedReqConfigs,
+        extra_devices: Boolean(hasExtraDevices && normalizedExtraConfigs.length > 0),
+        extra_device_type: extraTypeSummary,
+        extra_device_count: hasExtraDevices ? totalExtra : null,
+        extra_device_configurations: hasExtraDevices ? normalizedExtraConfigs : [],
+        devices_carried: combinedCarriedList,
         confirmed_price: Number(formData.confirmed_price) || 0,
         payment_method: formData.payment_method,
         advance_received: formData.advance_received,
@@ -674,21 +863,26 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
           </div>
         </div>
 
-        {/* SECTION 3 — 2. DEVICE DETAILS & CONFIGURATIONS */}
+        {/* SECTION 2 — 2. DEVICE DETAILS & CONFIGURATIONS */}
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-gray-100 gap-2">
-            <h3 className="text-sm font-bold text-navy flex items-center gap-2">
-              <HardDrive className="text-blue-600" size={18} />
-              2. DEVICE DETAILS & CONFIGURATIONS
-            </h3>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-1 border-b border-gray-200 gap-2">
+            <div>
+              <h3 className="text-sm font-bold text-navy flex items-center gap-2">
+                <HardDrive className="text-blue-600" size={18} />
+                2. DEVICE DETAILS &amp; CONFIGURATIONS
+              </h3>
+              <p className="text-[11px] text-gray-500 mt-0.5">
+                Devices required for customer installation. Standard installation BOM materials are calculated from these devices.
+              </p>
+            </div>
             <div className="flex items-center gap-2">
               <span className="text-[11px] px-2.5 py-1 rounded-lg bg-blue-50 text-blue-800 font-bold border border-blue-200">
-                Total Devices: <span className="font-mono text-xs">{totalDevices}</span>
+                Required for Installation: <span className="font-mono text-xs">{totalRequiredDevices}</span>
               </span>
             </div>
           </div>
 
-          {/* Repeatable Device Configurations */}
+          {/* Repeatable Device Configuration Rows */}
           <div className="space-y-3">
             {deviceConfigs.map((config, idx) => {
               const otherSelectedTypes = new Set(
@@ -708,20 +902,20 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
                       Device Configuration #{idx + 1}
                     </span>
 
-                    {/* Remove button (enforces at least 1 device configuration) */}
+                    {/* Remove button (enforces at least 1 device row) */}
                     {deviceConfigs.length > 1 ? (
                       <button
                         type="button"
                         onClick={() => handleRemoveDeviceConfig(config.id)}
                         className="text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50 px-2.5 py-1 rounded-lg font-semibold flex items-center gap-1 transition-colors cursor-pointer border border-rose-200/60"
-                        title="Remove this device configuration"
+                        title="Remove this device row"
                       >
                         <Trash2 size={13} />
                         Remove
                       </button>
                     ) : (
                       <span className="text-[10px] text-gray-400 font-medium italic">
-                        Minimum 1 configuration required
+                        Minimum 1 device type required
                       </span>
                     )}
                   </div>
@@ -756,7 +950,7 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
                         min="1"
                         step="1"
                         required
-                        value={config.number_of_devices}
+                        value={config.number_of_devices !== undefined ? config.number_of_devices : 1}
                         onChange={(e) => handleUpdateDeviceConfig(config.id, 'number_of_devices', e.target.value)}
                         placeholder="1"
                         className="w-full text-xs p-2.5 border border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 font-semibold bg-white"
@@ -790,6 +984,7 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
             <div className="pt-2">
               <BomRequirementSummary
                 deviceConfigurations={deviceConfigs}
+                extraDeviceConfigurations={hasExtraDevices ? extraDeviceConfigs : []}
                 token={token}
                 jobType={formData.installation_or_service}
                 onCalculated={(snapshot) => {
@@ -809,6 +1004,175 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
               </div>
             </div>
           )}
+        </div>
+
+        {/* SECTION 2A — EXTRA DEVICES CARRIED */}
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-2 border-b border-gray-200 gap-2">
+            <div>
+              <h3 className="text-sm font-bold text-navy flex items-center gap-2">
+                <Sparkles className="text-amber-500" size={18} />
+                EXTRA DEVICES CARRIED
+              </h3>
+              <p className="text-[11px] text-gray-500 mt-0.5">
+                Record extra backup hardware carried to site beyond customer-requested quantities. Backup stock does not increase installation BOM requirements.
+              </p>
+            </div>
+          </div>
+
+          {/* Question: Are you carrying any extra devices? */}
+          <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <span className="block text-xs font-bold text-gray-900">
+                Are you carrying any extra devices?
+              </span>
+              <span className="text-[11px] text-gray-500">
+                Select "Yes" to record backup camera units taken to the site.
+              </span>
+            </div>
+            <div className="flex items-center gap-4">
+              <label className="inline-flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="hasExtraDevicesRadio"
+                  checked={!hasExtraDevices}
+                  onChange={() => handleExtraToggle(false)}
+                  className="w-4 h-4 text-blue-600 focus:ring-blue-500"
+                />
+                <span className="text-xs font-semibold text-gray-700">No</span>
+              </label>
+              <label className="inline-flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="hasExtraDevicesRadio"
+                  checked={hasExtraDevices}
+                  onChange={() => handleExtraToggle(true)}
+                  className="w-4 h-4 text-blue-600 focus:ring-blue-500"
+                />
+                <span className="text-xs font-bold text-blue-700">Yes</span>
+              </label>
+            </div>
+          </div>
+
+          {/* Repeatable Extra Devices Form when Yes is selected */}
+          {hasExtraDevices && (
+            <div className="space-y-3 pt-2">
+              {extraDeviceConfigs.map((extraRow, idx) => {
+                const otherSelectedExtraTypes = new Set(
+                  extraDeviceConfigs.filter((c) => c.id !== extraRow.id).map((c) => c.device_type)
+                );
+
+                return (
+                  <div
+                    key={extraRow.id}
+                    className="p-4 bg-amber-50/40 border border-amber-200/70 rounded-2xl relative transition-all hover:border-amber-300"
+                  >
+                    <div className="flex items-center justify-between pb-2.5 mb-3 border-b border-amber-200/50">
+                      <span className="text-xs font-bold text-amber-900 uppercase tracking-wider flex items-center gap-1.5">
+                        <span className="w-5 h-5 rounded-full bg-amber-200 text-amber-900 font-mono text-[11px] flex items-center justify-center font-bold">
+                          {idx + 1}
+                        </span>
+                        Extra Device #{idx + 1}
+                      </span>
+
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveExtraDevice(extraRow.id)}
+                        className="text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50 px-2.5 py-1 rounded-lg font-semibold flex items-center gap-1 transition-colors cursor-pointer border border-rose-200/60"
+                        title="Remove this extra device row"
+                      >
+                        <Trash2 size={13} />
+                        Remove
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-700 mb-1">
+                          Type of Device <span className="text-rose-500">*</span>
+                        </label>
+                        <select
+                          value={extraRow.device_type}
+                          onChange={(e) => handleUpdateExtraDevice(extraRow.id, 'device_type', e.target.value)}
+                          className="w-full text-xs p-2.5 border border-gray-200 rounded-xl focus:outline-none focus:border-amber-500 font-medium bg-white"
+                        >
+                          {DEVICE_OPTIONS.map((opt) => (
+                            <option key={opt} value={opt}>
+                              {opt} {otherSelectedExtraTypes.has(opt) ? '(Already added)' : ''}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-700 mb-1">
+                          Extra Quantity <span className="text-rose-500">*</span>
+                        </label>
+                        <input
+                          type="number"
+                          min="1"
+                          step="1"
+                          required
+                          value={extraRow.extra_quantity}
+                          onChange={(e) => handleUpdateExtraDevice(extraRow.id, 'extra_quantity', e.target.value)}
+                          placeholder="1"
+                          className="w-full text-xs p-2.5 border border-gray-200 rounded-xl focus:outline-none focus:border-amber-500 font-semibold bg-white"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {/* Add Another Extra Device Button */}
+              <div className="pt-1 flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={handleAddExtraDevice}
+                  className="text-xs px-3.5 py-2 rounded-xl font-bold flex items-center gap-1.5 transition-all cursor-pointer bg-amber-50 text-amber-800 hover:bg-amber-100 border border-amber-200 hover:border-amber-300 shadow-2xs"
+                >
+                  <Plus size={14} />
+                  Add Another Extra Device
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Authoritative Device Allocation KPI Summary Card */}
+          <div className="mt-4 p-4 bg-gradient-to-r from-slate-50 via-blue-50/30 to-slate-50 rounded-2xl border border-slate-200">
+            <h4 className="text-[11px] font-bold text-gray-600 uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
+              <HardDrive size={13} className="text-blue-600" />
+              Device Allocation Summary
+            </h4>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-center">
+              <div className="p-3 bg-white rounded-xl border border-blue-100 shadow-2xs">
+                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">
+                  Devices Required for Installation
+                </span>
+                <span className="text-lg font-black font-mono text-blue-900 mt-0.5 block">
+                  {totalRequiredDevices} <span className="text-xs font-normal text-gray-500">Units</span>
+                </span>
+              </div>
+
+              <div className="p-3 bg-white rounded-xl border border-amber-100 shadow-2xs">
+                <span className="text-[10px] font-bold text-amber-800 uppercase tracking-wider block">
+                  Extra Devices Carried
+                </span>
+                <span className="text-lg font-black font-mono text-amber-700 mt-0.5 block">
+                  {totalExtraDevices} <span className="text-xs font-normal text-gray-500">Units</span>
+                </span>
+              </div>
+
+              <div className="p-3 bg-white rounded-xl border border-emerald-100 shadow-2xs">
+                <span className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider block">
+                  Total Devices Carried to Site
+                </span>
+                <span className="text-lg font-black font-mono text-emerald-700 mt-0.5 block">
+                  {totalDevicesCarried} <span className="text-xs font-normal text-gray-500">Units</span>
+                </span>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* SECTION 5 — 3. PRICING & PAYMENT */}

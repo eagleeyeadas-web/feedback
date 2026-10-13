@@ -63,62 +63,76 @@ async function runLandingAndPortalLoginTests() {
 
   // 3. Test Sales Login Flow
   console.log('\n--- TEST 3: Test Sales Login Flow ---');
-  const { data: salesAuth, error: salesErr } = await supabase.auth.signInWithPassword({
-    email: 'sales@gmail.com',
-    password: 'sales@2026',
-  });
-
-  if (salesErr || !salesAuth?.user) {
-    throw new Error(`Sales login failed: ${salesErr?.message}`);
-  }
-
-  const salesRole = (
-    salesAuth.user.app_metadata?.role ||
-    salesAuth.user.user_metadata?.role ||
-    'UNKNOWN'
-  ).toUpperCase();
-
-  if (salesRole === 'SALES') {
-    console.log('✅ Passed: Sales account authenticated successfully. Role: SALES -> Maps to Sales Workspace.');
-    passed++;
+  const salesPass = process.env.SALES_ACCOUNT_PASSWORD;
+  if (!salesPass) {
+    console.log('⚠️ Skipped: SALES_ACCOUNT_PASSWORD not set in environment.');
   } else {
-    throw new Error(`Expected role SALES, got ${salesRole}`);
+    const { data: salesAuth, error: salesErr } = await supabase.auth.signInWithPassword({
+      email: 'sales@gmail.com',
+      password: salesPass,
+    });
+
+    if (salesErr || !salesAuth?.user) {
+      throw new Error(`Sales login failed: ${salesErr?.message}`);
+    }
+
+    const salesRole = (
+      salesAuth.user.app_metadata?.role ||
+      salesAuth.user.user_metadata?.role ||
+      'UNKNOWN'
+    ).toUpperCase();
+
+    if (salesRole === 'SALES') {
+      console.log('✅ Passed: Sales account authenticated successfully. Role: SALES -> Maps to Sales Workspace.');
+      passed++;
+    } else {
+      throw new Error(`Expected role SALES, got ${salesRole}`);
+    }
   }
 
   // 4. Test Technical Login Flow
   console.log('\n--- TEST 4: Test Technical Team Login Flow ---');
-  const { data: techAuth, error: techErr } = await supabase.auth.signInWithPassword({
-    email: 'tech@gmail.com',
-    password: 'camera@2026',
-  });
-
-  if (techErr || !techAuth?.user) {
-    throw new Error(`Technical login failed: ${techErr?.message}`);
-  }
-
-  const techRole = (
-    techAuth.user.app_metadata?.role ||
-    techAuth.user.user_metadata?.role ||
-    'UNKNOWN'
-  ).toUpperCase();
-
-  if (techRole === 'TECHNICAL') {
-    console.log('✅ Passed: Technical account authenticated successfully. Role: TECHNICAL -> Maps to Technical Workspace.');
-    passed++;
+  const techPass = process.env.TECH_ACCOUNT_PASSWORD;
+  if (!techPass) {
+    console.log('⚠️ Skipped: TECH_ACCOUNT_PASSWORD not set in environment.');
   } else {
-    throw new Error(`Expected role TECHNICAL, got ${techRole}`);
+    const { data: techAuth, error: techErr } = await supabase.auth.signInWithPassword({
+      email: 'tech@gmail.com',
+      password: techPass,
+    });
+
+    if (techErr || !techAuth?.user) {
+      throw new Error(`Technical login failed: ${techErr?.message}`);
+    }
+
+    const techRole = (
+      techAuth.user.app_metadata?.role ||
+      techAuth.user.user_metadata?.role ||
+      'UNKNOWN'
+    ).toUpperCase();
+
+    if (techRole === 'TECHNICAL') {
+      console.log('✅ Passed: Technical account authenticated successfully. Role: TECHNICAL -> Maps to Technical Workspace.');
+      passed++;
+    } else {
+      throw new Error(`Expected role TECHNICAL, got ${techRole}`);
+    }
   }
 
   // 5. Test Store Manager Login Flow
   console.log('\n--- TEST 5: Test Store Manager Login Flow ---');
-  const { data: storeAuth, error: storeErr } = await supabase.auth.signInWithPassword({
-    email: 'store@gmail.com',
-    password: 'adas@2026',
-  });
+  const storePass = process.env.STORE_ACCOUNT_PASSWORD;
+  if (!storePass) {
+    console.log('⚠️ Skipped: STORE_ACCOUNT_PASSWORD not set in environment.');
+  } else {
+    const { data: storeAuth, error: storeErr } = await supabase.auth.signInWithPassword({
+      email: 'store@gmail.com',
+      password: storePass,
+    });
 
-  if (storeErr || !storeAuth?.user) {
-    throw new Error(`Store Manager login failed: ${storeErr?.message}`);
-  }
+    if (storeErr || !storeAuth?.user) {
+      throw new Error(`Store Manager login failed: ${storeErr?.message}`);
+    }
 
   const storeRole = (
     storeAuth.user.app_metadata?.role ||
@@ -131,6 +145,7 @@ async function runLandingAndPortalLoginTests() {
     passed++;
   } else {
     throw new Error(`Expected role STORE_MANAGER, got ${storeRole}`);
+  }
   }
 
   // 6. Test App.jsx Routes Configuration

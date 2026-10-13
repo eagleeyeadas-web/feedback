@@ -16,9 +16,37 @@ import {
   Eye,
   Archive,
 } from 'lucide-react';
-import DeviceCarryModal from '../../../components/workspaces/DeviceCarryModal';
 import InstallationCompletionModal from '../../../components/workspaces/InstallationCompletionModal';
 import { fetchInstallationChecklists, fetchServiceEngineers, startInstallationJob } from '../../../lib/api';
+
+// Helper to extract separated required and extra device allocations
+function getDeviceAllocationSummary(item) {
+  if (!item) return { reqConfigs: [], extraConfigs: [], totalReq: 0, totalExtra: 0, totalCarried: 0 };
+  const reqConfigs = Array.isArray(item.device_configurations) && item.device_configurations.length > 0
+    ? item.device_configurations
+    : (item.device_type ? [{ device_type: item.device_type, number_of_devices: item.number_of_devices || 1 }] : []);
+
+  let extraConfigs = [];
+  if (item.extra_devices) {
+    if (Array.isArray(item.extra_device_configurations) && item.extra_device_configurations.length > 0) {
+      extraConfigs = item.extra_device_configurations;
+    } else if (item.extra_device_type) {
+      const parts = String(item.extra_device_type).split(/[,;\n]+/).map((p) => p.trim()).filter(Boolean);
+      extraConfigs = parts.map((p) => {
+        const m = p.match(/\((\d+)/);
+        const q = m ? parseInt(m[1], 10) : (item.extra_device_count || 1);
+        const name = p.replace(/\(.*?\)/g, '').trim();
+        return { device_type: name, extra_quantity: q };
+      });
+    }
+  }
+
+  const totalReq = reqConfigs.reduce((sum, c) => sum + (Number(c.number_of_devices ?? c.quantity_carried) || 1), 0);
+  const totalExtra = extraConfigs.reduce((sum, c) => sum + (Number(c.extra_quantity ?? c.quantity) || 1), 0);
+  const totalCarried = item.total_devices_carried || (totalReq + totalExtra);
+
+  return { reqConfigs, extraConfigs, totalReq, totalExtra, totalCarried };
+}
 
 export default function TechnicalWorkspace({ onSelectChecklist }) {
   const { session, token: authToken, loading: authLoading } = useAuth();
@@ -38,7 +66,6 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
   const [actionSuccessMsg, setActionSuccessMsg] = useState('');
 
   // Active Modals State
-  const [carryModalJob, setCarryModalJob] = useState(null);
   const [completionModalJob, setCompletionModalJob] = useState(null);
   const [viewReportModalJob, setViewReportModalJob] = useState(null);
 
@@ -163,7 +190,7 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
             <Wrench className="w-7 h-7 text-purple-400" /> Technical Team Job Workspace
           </h1>
           <p className="text-xs text-white/70 mt-1 max-w-xl">
-            Manage assigned installation jobs, record pre-installation devices carried, submit post-installation reports, and view historical completed jobs.
+            Manage assigned installation jobs, view Sales device allocations, submit post-installation device reports, and view historical completed jobs.
           </p>
         </div>
 
@@ -339,7 +366,7 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
                 <Clock className="w-4 h-4 text-purple-600" /> Assigned Technical Jobs
               </h3>
               <p className="text-[11px] text-gray-500 mt-0.5">
-                Jobs awaiting pre-installation device carry declaration, installation work, or completion report.
+                Jobs awaiting installation site work or post-installation device reporting. Devices carried are recorded by Sales.
               </p>
             </div>
             <span className="text-xs text-gray-500 font-medium">
@@ -406,19 +433,20 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
                   <tr className="bg-gray-50 border-b border-gray-200 text-xs font-semibold text-gray-500 uppercase tracking-wider">
                     <th className="py-3 px-4">Checklist No.</th>
                     <th className="py-3 px-4">Client Details</th>
-                    <th className="py-3 px-4">Sales Device Request</th>
+                    <th className="py-3 px-4">Devices Carried to Site</th>
                     <th className="py-3 px-4">Assigned Team</th>
                     <th className="py-3 px-4">Arrival Date/Time</th>
-                    <th className="py-3 px-4">Carry Status</th>
                     <th className="py-3 px-4">Installation Status</th>
                     <th className="py-3 px-4">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
                   {filteredAssignedJobs.map((item) => {
-                    const carryStatusUpper = (item.carry_status || '').toUpperCase();
-                    const isCarryDone = carryStatusUpper === 'RECORDED';
                     const isJobInProgress = (item.installation_status || '').toLowerCase() === 'in progress';
+                    const configs = Array.isArray(item.device_configurations) && item.device_configurations.length > 0
+                      ? item.device_configurations
+                      : (item.device_type ? [{ device_type: item.device_type, number_of_devices: item.number_of_devices || 1, quantity_carried: item.number_of_devices || 1 }] : []);
+                    const totalCarried = configs.reduce((sum, c) => sum + (Number(c.quantity_carried ?? c.number_of_devices) || 0), 0) || item.number_of_devices || 0;
 
                     return (
                       <tr key={item.id} className="hover:bg-gray-50/80 transition-colors">
@@ -433,28 +461,53 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
                           <div className="text-[11px] text-gray-500">{item.client_location}</div>
                         </td>
 
-                        {/* Sales Device Request */}
+                        {/* Devices Carried to Site (Sales Allocation - Read-Only) */}
                         <td className="py-3 px-4">
-                          {Array.isArray(item.device_configurations) && item.device_configurations.length > 1 ? (
-                            <div>
-                              <div className="font-bold text-gray-900 text-xs">
-                                {item.number_of_devices} Devices ({item.device_configurations.length} types)
+                          {(() => {
+                            const { reqConfigs, extraConfigs, totalReq, totalExtra, totalCarried } = getDeviceAllocationSummary(item);
+                            return (
+                              <div className="space-y-1.5 min-w-[200px]">
+                                <div className="flex items-center justify-between gap-1 text-xs font-mono font-bold text-gray-900 border-b border-gray-100 pb-1">
+                                  <span>Total Carried:</span>
+                                  <span className="text-purple-700 bg-purple-50 px-2 py-0.5 rounded border border-purple-200">
+                                    {totalCarried} Units
+                                  </span>
+                                </div>
+
+                                {/* Required Devices */}
+                                <div className="space-y-1">
+                                  <span className="text-[10px] font-bold text-blue-700 uppercase tracking-wider block">
+                                    Required ({totalReq}):
+                                  </span>
+                                  {reqConfigs.map((dc, idx) => (
+                                    <div key={idx} className="flex items-center justify-between gap-1 text-[11px] bg-blue-50/60 px-2 py-0.5 rounded border border-blue-100">
+                                      <span className="font-semibold text-gray-800 truncate">{dc.device_type}</span>
+                                      <span className="font-mono font-bold text-blue-800 shrink-0">
+                                        {dc.number_of_devices ?? dc.quantity_carried} req
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+
+                                {/* Extra Devices Carried */}
+                                {extraConfigs.length > 0 && (
+                                  <div className="space-y-1 pt-0.5">
+                                    <span className="text-[10px] font-bold text-amber-800 uppercase tracking-wider block">
+                                      Extra Backup ({totalExtra}):
+                                    </span>
+                                    {extraConfigs.map((ec, idx) => (
+                                      <div key={idx} className="flex items-center justify-between gap-1 text-[11px] bg-amber-50/80 px-2 py-0.5 rounded border border-amber-200">
+                                        <span className="font-semibold text-gray-800 truncate">{ec.device_type}</span>
+                                        <span className="font-mono font-bold text-amber-800 shrink-0">
+                                          +{ec.extra_quantity ?? 1} extra
+                                        </span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
                               </div>
-                              <div className="text-[10px] text-blue-700 font-medium leading-tight mt-0.5">
-                                {item.device_configurations.map((dc) => `${dc.device_type} (${dc.number_of_devices})`).join(', ')}
-                              </div>
-                            </div>
-                          ) : (
-                            <>
-                              <span className="font-semibold text-gray-800">{item.device_type}</span>
-                              <div className="text-[10px] text-gray-400">Qty: {item.number_of_devices}</div>
-                            </>
-                          )}
-                          {item.extra_devices && item.extra_device_type && (
-                            <div className="text-[10px] text-purple-600 font-medium mt-0.5">
-                              + {item.extra_device_count} {item.extra_device_type}
-                            </div>
-                          )}
+                            );
+                          })()}
                         </td>
 
                         {/* Assigned Team */}
@@ -476,19 +529,6 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
                           <div className="text-[10px] text-gray-400">{item.expected_arrival_time}</div>
                         </td>
 
-                        {/* Carry Status Badge */}
-                        <td className="py-3 px-4">
-                          <span
-                            className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${
-                              isCarryDone
-                                ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                                : 'bg-amber-100 text-amber-800 border border-amber-300'
-                            }`}
-                          >
-                            {isCarryDone ? 'Recorded' : 'Not Recorded'}
-                          </span>
-                        </td>
-
                         {/* Installation Status Badge */}
                         <td className="py-3 px-4">
                           <span
@@ -502,31 +542,17 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
                           </span>
                         </td>
 
-                        {/* Actions Column: Workflow Action based on state */}
+                        {/* Actions Column: Direct Post-Installation Device Report */}
                         <td className="py-3 px-4">
                           <div className="flex flex-col gap-1.5">
-                            {/* STAGE 1: Carry record not submitted */}
-                            {!isCarryDone && (
-                              <button
-                                onClick={() => setCarryModalJob(item)}
-                                className="px-3 py-1.5 text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 rounded-lg shadow-2xs flex items-center gap-1.5 cursor-pointer w-fit"
-                              >
-                                <Truck className="w-3.5 h-3.5" /> Record Devices Carried
-                              </button>
-                            )}
-
-                            {/* STAGE 2: Carry record submitted, completion report not yet recorded */}
-                            {isCarryDone && !item.has_completion_report && (
+                            {!item.has_completion_report ? (
                               <button
                                 onClick={() => setCompletionModalJob(item)}
-                                className="px-3 py-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-2xs flex items-center gap-1.5 cursor-pointer w-fit"
+                                className="px-3 py-1.5 text-xs font-bold text-white bg-purple-700 hover:bg-purple-800 rounded-lg shadow-2xs flex items-center gap-1.5 cursor-pointer w-fit"
                               >
-                                <FileCheck className="w-3.5 h-3.5" /> Record Installed & Returned Devices
+                                <FileCheck className="w-3.5 h-3.5" /> Post-Installation Device Report
                               </button>
-                            )}
-
-                            {/* STAGE 3: If installation report is available for this assigned job */}
-                            {item.has_completion_report && (
+                            ) : (
                               <button
                                 onClick={() => setViewReportModalJob(item)}
                                 className="px-3 py-1.5 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg flex items-center gap-1.5 cursor-pointer w-fit"
@@ -535,7 +561,7 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
                               </button>
                             )}
 
-                            {/* SECONDARY LINKS */}
+                            {/* Job Details Link */}
                             <div className="flex items-center gap-2 text-[10px] mt-0.5 text-gray-500">
                               <button
                                 onClick={() =>
@@ -547,20 +573,6 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
                               >
                                 Job Details <ArrowRight className="w-3 h-3" />
                               </button>
-
-                              {/* Optional edit carry record link prior to report submission */}
-                              {isCarryDone && !item.has_completion_report && (
-                                <>
-                                  <span>•</span>
-                                  <button
-                                    onClick={() => setCarryModalJob(item)}
-                                    className="text-gray-500 hover:text-gray-800 underline font-medium cursor-pointer"
-                                    title="Update physical device carry declaration prior to submitting report"
-                                  >
-                                    Edit Carry Record
-                                  </button>
-                                </>
-                              )}
                             </div>
                           </div>
                         </td>
@@ -637,10 +649,9 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
                   <tr className="bg-gray-50 border-b border-gray-200 text-xs font-semibold text-gray-500 uppercase tracking-wider">
                     <th className="py-3 px-4">Checklist No.</th>
                     <th className="py-3 px-4">Client Details</th>
-                    <th className="py-3 px-4">Sales Device Request</th>
+                    <th className="py-3 px-4">Devices Carried to Site</th>
                     <th className="py-3 px-4">Assigned Team</th>
                     <th className="py-3 px-4">Arrival Date/Time</th>
-                    <th className="py-3 px-4">Carry Status</th>
                     <th className="py-3 px-4">Installation Status</th>
                     <th className="py-3 px-4">Store Reconciliation</th>
                     <th className="py-3 px-4">Actions</th>
@@ -648,8 +659,10 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
                 </thead>
                 <tbody className="divide-y divide-gray-200">
                   {filteredCompletedJobs.map((item) => {
-                    const carryStatusUpper = (item.carry_status || '').toUpperCase();
-                    const isCarryDone = carryStatusUpper === 'RECORDED';
+                    const configs = Array.isArray(item.device_configurations) && item.device_configurations.length > 0
+                      ? item.device_configurations
+                      : (item.device_type ? [{ device_type: item.device_type, number_of_devices: item.number_of_devices || 1, quantity_carried: item.number_of_devices || 1 }] : []);
+                    const totalCarried = configs.reduce((sum, c) => sum + (Number(c.quantity_carried ?? c.number_of_devices) || 0), 0) || item.number_of_devices || 0;
 
                     return (
                       <tr key={item.id} className="hover:bg-gray-50/80 transition-colors">
@@ -664,28 +677,53 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
                           <div className="text-[11px] text-gray-500">{item.client_location}</div>
                         </td>
 
-                        {/* Sales Device Request */}
+                        {/* Devices Carried to Site */}
                         <td className="py-3 px-4">
-                          {Array.isArray(item.device_configurations) && item.device_configurations.length > 1 ? (
-                            <div>
-                              <div className="font-bold text-gray-900 text-xs">
-                                {item.number_of_devices} Devices ({item.device_configurations.length} types)
+                          {(() => {
+                            const { reqConfigs, extraConfigs, totalReq, totalExtra, totalCarried } = getDeviceAllocationSummary(item);
+                            return (
+                              <div className="space-y-1.5 min-w-[200px]">
+                                <div className="flex items-center justify-between gap-1 text-xs font-mono font-bold text-gray-900 border-b border-gray-100 pb-1">
+                                  <span>Total Carried:</span>
+                                  <span className="text-purple-700 bg-purple-50 px-2 py-0.5 rounded border border-purple-200">
+                                    {totalCarried} Units
+                                  </span>
+                                </div>
+
+                                {/* Required Devices */}
+                                <div className="space-y-1">
+                                  <span className="text-[10px] font-bold text-blue-700 uppercase tracking-wider block">
+                                    Required ({totalReq}):
+                                  </span>
+                                  {reqConfigs.map((dc, idx) => (
+                                    <div key={idx} className="flex items-center justify-between gap-1 text-[11px] bg-blue-50/60 px-2 py-0.5 rounded border border-blue-100">
+                                      <span className="font-semibold text-gray-800 truncate">{dc.device_type}</span>
+                                      <span className="font-mono font-bold text-blue-800 shrink-0">
+                                        {dc.number_of_devices ?? dc.quantity_carried} req
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+
+                                {/* Extra Devices Carried */}
+                                {extraConfigs.length > 0 && (
+                                  <div className="space-y-1 pt-0.5">
+                                    <span className="text-[10px] font-bold text-amber-800 uppercase tracking-wider block">
+                                      Extra Backup ({totalExtra}):
+                                    </span>
+                                    {extraConfigs.map((ec, idx) => (
+                                      <div key={idx} className="flex items-center justify-between gap-1 text-[11px] bg-amber-50/80 px-2 py-0.5 rounded border border-amber-200">
+                                        <span className="font-semibold text-gray-800 truncate">{ec.device_type}</span>
+                                        <span className="font-mono font-bold text-amber-800 shrink-0">
+                                          +{ec.extra_quantity ?? 1} extra
+                                        </span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
                               </div>
-                              <div className="text-[10px] text-blue-700 font-medium leading-tight mt-0.5">
-                                {item.device_configurations.map((dc) => `${dc.device_type} (${dc.number_of_devices})`).join(', ')}
-                              </div>
-                            </div>
-                          ) : (
-                            <>
-                              <span className="font-semibold text-gray-800">{item.device_type}</span>
-                              <div className="text-[10px] text-gray-400">Qty: {item.number_of_devices}</div>
-                            </>
-                          )}
-                          {item.extra_devices && item.extra_device_type && (
-                            <div className="text-[10px] text-purple-600 font-medium mt-0.5">
-                              + {item.extra_device_count} {item.extra_device_type}
-                            </div>
-                          )}
+                            );
+                          })()}
                         </td>
 
                         {/* Assigned Team */}
@@ -705,19 +743,6 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
                         <td className="py-3 px-4 text-gray-600">
                           <div>{item.expected_arrival_date || 'TBD'}</div>
                           <div className="text-[10px] text-gray-400">{item.expected_arrival_time}</div>
-                        </td>
-
-                        {/* Carry Status Badge (Accurate historical status) */}
-                        <td className="py-3 px-4">
-                          <span
-                            className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${
-                              isCarryDone
-                                ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                                : 'bg-gray-100 text-gray-700 border border-gray-300'
-                            }`}
-                          >
-                            {isCarryDone ? 'Recorded' : 'Not Recorded'}
-                          </span>
                         </td>
 
                         {/* Installation Status Badge: Persisted Completed Status */}
@@ -782,29 +807,6 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
             </div>
           )}
         </div>
-      )}
-
-      {/* MODAL 1: Pre-Installation Device Carry Form */}
-      {carryModalJob && (
-        <DeviceCarryModal
-          checklist={carryModalJob}
-          token={token}
-          onClose={() => setCarryModalJob(null)}
-          onSuccess={() => {
-            const targetId = carryModalJob.id;
-            // Optimistically update carry_status while remaining in Assigned Jobs
-            setChecklists((prev) =>
-              prev.map((item) =>
-                item.id === targetId
-                  ? { ...item, carry_status: 'RECORDED', reconciliation_status: 'CARRY_RECORDED' }
-                  : item
-              )
-            );
-            setCarryModalJob(null);
-            showToast('Device carry record submitted successfully!');
-            loadData();
-          }}
-        />
       )}
 
       {/* MODAL 2: Post-Installation Completion Form (Editable) */}

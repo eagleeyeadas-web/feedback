@@ -8,18 +8,24 @@ dotenv.config({ path: path.resolve(__dirname, '.env') });
 
 const supabaseUrl = process.env.SUPABASE_URL;
 
-// Use public anon key for sign in simulation like frontend
-const anonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh3ZHJka3lrZ2FoaWxwcW9id2lzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA1NjkwNjIsImV4cCI6MjEwNjE0NTA2Mn0.anonKeyPlaceholder';
+// Use anon key from environment for sign in simulation like frontend
+const anonKey = process.env.SUPABASE_ANON_KEY;
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 const supabase = createClient(supabaseUrl, serviceKey);
 
 async function testLogin() {
-  console.log('Testing Admin Sign In for eagleeye@gmail.com with pass: 123456 ...');
+  const adminPassword = process.env.TEST_ADMIN_PASSWORD || process.env.ADMIN_PASSWORD;
+  if (!adminPassword) {
+    console.error('TEST_ADMIN_PASSWORD or ADMIN_PASSWORD environment variable is required to run this test.');
+    process.exit(1);
+  }
+
+  console.log('Testing Admin Sign In for eagleeye@gmail.com ...');
 
   const { data, error } = await supabase.auth.signInWithPassword({
     email: 'eagleeye@gmail.com',
-    password: '123456',
+    password: adminPassword,
   });
 
   if (error) {

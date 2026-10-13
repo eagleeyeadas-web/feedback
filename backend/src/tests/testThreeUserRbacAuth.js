@@ -52,10 +52,10 @@ async function runTests() {
 
   const authClient = createClient(supabaseUrl, serviceKey);
 
-  // Define credentials for the three accounts
-  const salesCreds = { email: 'sales@gmail.com', pass: 'sales@2026', expectedRole: 'SALES' };
-  const techCreds = { email: 'tech@gmail.com', pass: 'camera@2026', expectedRole: 'TECHNICAL' };
-  const storeCreds = { email: 'store@gmail.com', pass: 'adas@2026', expectedRole: 'STORE_MANAGER' };
+  // Define credentials for the three accounts from environment variables
+  const salesCreds = { email: 'sales@gmail.com', pass: process.env.SALES_ACCOUNT_PASSWORD, expectedRole: 'SALES' };
+  const techCreds = { email: 'tech@gmail.com', pass: process.env.TECH_ACCOUNT_PASSWORD, expectedRole: 'TECHNICAL' };
+  const storeCreds = { email: 'store@gmail.com', pass: process.env.STORE_ACCOUNT_PASSWORD, expectedRole: 'STORE_MANAGER' };
 
   let salesToken = null;
   let techToken = null;
@@ -66,7 +66,11 @@ async function runTests() {
   // --------------------------------------------------------------------------
   console.log('[Test Group 1] Supabase Auth Credentials & Sign In');
 
-  await itAsync('Account 1 (Sales: sales@gmail.com) authenticates successfully with sales@2026', async () => {
+  await itAsync('Account 1 (Sales: sales@gmail.com) authenticates successfully with environment credentials', async () => {
+    if (!salesCreds.pass) {
+      console.log('    ⚠️ Skipped: SALES_ACCOUNT_PASSWORD not set in environment');
+      return;
+    }
     const { data, error } = await authClient.auth.signInWithPassword({
       email: salesCreds.email,
       password: salesCreds.pass,
@@ -77,7 +81,11 @@ async function runTests() {
     salesToken = data.session.access_token;
   });
 
-  await itAsync('Account 2 (Technical: tech@gmail.com) authenticates successfully with camera@2026', async () => {
+  await itAsync('Account 2 (Technical: tech@gmail.com) authenticates successfully with environment credentials', async () => {
+    if (!techCreds.pass) {
+      console.log('    ⚠️ Skipped: TECH_ACCOUNT_PASSWORD not set in environment');
+      return;
+    }
     const { data, error } = await authClient.auth.signInWithPassword({
       email: techCreds.email,
       password: techCreds.pass,
@@ -88,7 +96,11 @@ async function runTests() {
     techToken = data.session.access_token;
   });
 
-  await itAsync('Account 3 (Store Manager: store@gmail.com) authenticates successfully with adas@2026', async () => {
+  await itAsync('Account 3 (Store Manager: store@gmail.com) authenticates successfully with environment credentials', async () => {
+    if (!storeCreds.pass) {
+      console.log('    ⚠️ Skipped: STORE_ACCOUNT_PASSWORD not set in environment');
+      return;
+    }
     const { data, error } = await authClient.auth.signInWithPassword({
       email: storeCreds.email,
       password: storeCreds.pass,

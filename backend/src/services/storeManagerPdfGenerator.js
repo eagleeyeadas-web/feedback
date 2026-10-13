@@ -4,7 +4,12 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { getMaterialInventory } from './materialStockService.js';
 import { getInventoryProducts } from './inventoryService.js';
-import { calculateBomRequirements, parseDeviceConfigurations } from './bomService.js';
+import {
+  calculateBomRequirements,
+  parseDeviceConfigurations,
+  parseExtraDeviceConfigurations,
+  combineCarriedDevicesAllocation,
+} from './bomService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -187,7 +192,7 @@ export async function generateStoreManagerRequirementPDF(data) {
     console.warn('Could not load inventory maps in PDF generator:', e.message);
   }
 
-  // Normalize Device Configurations using robust parser
+  // Normalize Device Configurations using robust parser (Required for Installation)
   let deviceConfigs = parseDeviceConfigurations(data);
   if (deviceConfigs.length === 0 && data.device_type) {
     deviceConfigs = [{
@@ -197,7 +202,13 @@ export async function generateStoreManagerRequirementPDF(data) {
     }];
   }
 
-  const totalDevices = deviceConfigs.reduce((sum, d) => sum + (Number(d.number_of_devices) || 1), 0);
+  // Parse Extra Devices Carried separately (Backup Stock)
+  const extraConfigs = parseExtraDeviceConfigurations(data);
+  const combinedAllocation = combineCarriedDevicesAllocation(deviceConfigs, extraConfigs);
+
+  const totalRequiredDevices = deviceConfigs.reduce((sum, d) => sum + (Number(d.number_of_devices) || 1), 0);
+  const totalExtraDevices = extraConfigs.reduce((sum, d) => sum + (Number(d.extra_quantity) || 0), 0);
+  const totalCarriedDevices = combinedAllocation.reduce((sum, d) => sum + (Number(d.quantity_carried) || 0), 0);
   const totalVehicles = deviceConfigs.reduce((sum, d) => sum + (Number(d.number_of_vehicles) || 1), 0);
 
   // Normalize BOM Material Items
@@ -438,72 +449,221 @@ export async function generateStoreManagerRequirementPDF(data) {
   y += teamCellH + 5;
 
   // ============================================================
-  // 4. CAMERA DEVICE REQUIREMENTS TABLE
+  // 3. CAMERA DEVICE ALLOCATION (REQUIRED & EXTRA BACKUP DEVICES)
   // ============================================================
   checkAddPage(30);
-  y = drawSectionHeader(doc, '3. CAMERA DEVICE REQUIREMENTS', 'Physical camera hardware to be allocated from store', y);
+  y = drawSectionHeader(doc, '3. CAMERA DEVICE ALLOCATION & STORE DISPATCH REQUIREMENTS', 'Authoritative device requirement showing installation devices, extra backup devices, and total issue quantities', y);
 
-  // Device Table Header
-  const devColWidths = [12, 100, 35, 35];
-  const devColX = [
+  // --- 3A. REQUIRED INSTALLATION DEVICES ---
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(7.5);
+  doc.setTextColor(...COLORS.navy);
+  doc.text('3A. REQUIRED INSTALLATION DEVICES (CUSTOMER ORDER)', MARGIN_X, y + 3.5);
+  y += 5;
+
+  const reqColWidths = [12, 100, 35, 35];
+  const reqColX = [
     MARGIN_X,
-    MARGIN_X + devColWidths[0],
-    MARGIN_X + devColWidths[0] + devColWidths[1],
-    MARGIN_X + devColWidths[0] + devColWidths[1] + devColWidths[2],
+    MARGIN_X + reqColWidths[0],
+    MARGIN_X + reqColWidths[0] + reqColWidths[1],
+    MARGIN_X + reqColWidths[0] + reqColWidths[1] + reqColWidths[2],
   ];
 
   doc.setFillColor(...COLORS.navy);
-  doc.rect(MARGIN_X, y, CONTENT_WIDTH, 6, 'F');
+  doc.rect(MARGIN_X, y, CONTENT_WIDTH, 5.5, 'F');
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(7);
   doc.setTextColor(...COLORS.white);
 
-  doc.text('#', devColX[0] + 6, y + 4.2, { align: 'center' });
-  doc.text('DEVICE MODEL / TYPE', devColX[1] + 3, y + 4.2);
-  doc.text('REQUIRED QUANTITY', devColX[2] + 17, y + 4.2, { align: 'center' });
-  doc.text('UNIT', devColX[3] + 17, y + 4.2, { align: 'center' });
+  doc.text('#', reqColX[0] + 6, y + 3.8, { align: 'center' });
+  doc.text('DEVICE MODEL / TYPE', reqColX[1] + 3, y + 3.8);
+  doc.text('REQUIRED QUANTITY', reqColX[2] + 17, y + 3.8, { align: 'center' });
+  doc.text('UNIT', reqColX[3] + 17, y + 3.8, { align: 'center' });
 
-  y += 6;
+  y += 5.5;
 
-  // Device Rows
   deviceConfigs.forEach((cfg, idx) => {
     checkAddPage(6);
     const dType = sanitizeText(cfg.device_type || '2 Channel Live');
-    const dQty = Number(cfg.number_of_devices) || 1;
+    const dQty = Number(cfg.number_of_devices || cfg.quantity_carried) || 1;
 
     doc.setFillColor(...(idx % 2 === 0 ? COLORS.white : COLORS.grayBg));
     doc.setDrawColor(...COLORS.borderColor);
     doc.setLineWidth(0.2);
-    doc.rect(MARGIN_X, y, CONTENT_WIDTH, 5.8, 'FD');
+    doc.rect(MARGIN_X, y, CONTENT_WIDTH, 5.5, 'FD');
 
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(7.5);
     doc.setTextColor(...COLORS.grayText);
-    doc.text(String(idx + 1), devColX[0] + 6, y + 4, { align: 'center' });
+    doc.text(String(idx + 1), reqColX[0] + 6, y + 3.8, { align: 'center' });
 
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(...COLORS.darkText);
-    doc.text(dType, devColX[1] + 3, y + 4);
+    doc.text(dType, reqColX[1] + 3, y + 3.8);
 
-    doc.text(`${dQty} Nos.`, devColX[2] + 17, y + 4, { align: 'center' });
+    doc.text(`${dQty} Nos.`, reqColX[2] + 17, y + 3.8, { align: 'center' });
     doc.setFont('helvetica', 'normal');
-    doc.text('Nos.', devColX[3] + 17, y + 4, { align: 'center' });
+    doc.text('Nos.', reqColX[3] + 17, y + 3.8, { align: 'center' });
 
-    y += 5.8;
+    y += 5.5;
   });
 
-  // Device Total Row
+  // Required Subtotal
   doc.setFillColor(...COLORS.blueHeader);
+  doc.setDrawColor(...COLORS.borderColor);
+  doc.setLineWidth(0.2);
+  doc.rect(MARGIN_X, y, CONTENT_WIDTH, 5.5, 'FD');
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(7.2);
+  doc.setTextColor(...COLORS.navy);
+  doc.text('SUBTOTAL (DEVICES REQUIRED FOR INSTALLATION):', reqColX[1] + 3, y + 3.8);
+  doc.text(`${totalRequiredDevices} Units`, reqColX[2] + 17, y + 3.8, { align: 'center' });
+  doc.text(`Vehicles: ${totalVehicles}`, reqColX[3] + 17, y + 3.8, { align: 'center' });
+  y += 8;
+
+  // --- 3B. EXTRA / BACKUP DEVICES CARRIED ---
+  checkAddPage(20);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(7.5);
+  doc.setTextColor(...COLORS.navy);
+  doc.text('3B. EXTRA / BACKUP DEVICES CARRIED (ADDITIONAL STOCK TO SITE)', MARGIN_X, y + 3.5);
+  y += 5;
+
+  if (extraConfigs.length > 0) {
+    doc.setFillColor(...COLORS.navy);
+    doc.rect(MARGIN_X, y, CONTENT_WIDTH, 5.5, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7);
+    doc.setTextColor(...COLORS.white);
+
+    doc.text('#', reqColX[0] + 6, y + 3.8, { align: 'center' });
+    doc.text('EXTRA DEVICE MODEL / TYPE', reqColX[1] + 3, y + 3.8);
+    doc.text('EXTRA QUANTITY CARRIED', reqColX[2] + 17, y + 3.8, { align: 'center' });
+    doc.text('UNIT', reqColX[3] + 17, y + 3.8, { align: 'center' });
+
+    y += 5.5;
+
+    extraConfigs.forEach((cfg, idx) => {
+      checkAddPage(6);
+      const dType = sanitizeText(cfg.device_type || '2 Channel Live');
+      const dQty = Number(cfg.extra_quantity || cfg.quantity) || 1;
+
+      doc.setFillColor(...(idx % 2 === 0 ? COLORS.white : COLORS.grayBg));
+      doc.setDrawColor(...COLORS.borderColor);
+      doc.setLineWidth(0.2);
+      doc.rect(MARGIN_X, y, CONTENT_WIDTH, 5.5, 'FD');
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7.5);
+      doc.setTextColor(...COLORS.grayText);
+      doc.text(String(idx + 1), reqColX[0] + 6, y + 3.8, { align: 'center' });
+
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(...COLORS.darkText);
+      doc.text(dType, reqColX[1] + 3, y + 3.8);
+
+      doc.text(`${dQty} Nos.`, reqColX[2] + 17, y + 3.8, { align: 'center' });
+      doc.setFont('helvetica', 'normal');
+      doc.text('Nos.', reqColX[3] + 17, y + 3.8, { align: 'center' });
+
+      y += 5.5;
+    });
+
+    // Extra Subtotal
+    doc.setFillColor(...COLORS.blueHeader);
+    doc.setDrawColor(...COLORS.borderColor);
+    doc.setLineWidth(0.2);
+    doc.rect(MARGIN_X, y, CONTENT_WIDTH, 5.5, 'FD');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7.2);
+    doc.setTextColor(...COLORS.navy);
+    doc.text('SUBTOTAL (EXTRA / BACKUP DEVICES CARRIED):', reqColX[1] + 3, y + 3.8);
+    doc.text(`${totalExtraDevices} Units`, reqColX[2] + 17, y + 3.8, { align: 'center' });
+    doc.text('Backup Stock', reqColX[3] + 17, y + 3.8, { align: 'center' });
+    y += 8;
+  } else {
+    doc.setFillColor(...COLORS.grayBg);
+    doc.setDrawColor(...COLORS.borderColor);
+    doc.setLineWidth(0.2);
+    doc.rect(MARGIN_X, y, CONTENT_WIDTH, 7, 'FD');
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
+    doc.setTextColor(...COLORS.grayText);
+    doc.text('No extra or backup devices carried for this installation job. (0 extra units)', MARGIN_X + 4, y + 4.5);
+    y += 10;
+  }
+
+  // --- 3C. TOTAL QUANTITY TO ISSUE FOR EACH DEVICE TYPE (DISPATCH SUMMARY) ---
+  checkAddPage(25);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(7.5);
+  doc.setTextColor(...COLORS.navy);
+  doc.text('3C. TOTAL QUANTITY TO ISSUE FOR EACH DEVICE TYPE (STORE DISPATCH TOTAL)', MARGIN_X, y + 3.5);
+  y += 5;
+
+  const issueColWidths = [12, 70, 30, 30, 40];
+  const issueColX = [
+    MARGIN_X,
+    MARGIN_X + issueColWidths[0],
+    MARGIN_X + issueColWidths[0] + issueColWidths[1],
+    MARGIN_X + issueColWidths[0] + issueColWidths[1] + issueColWidths[2],
+    MARGIN_X + issueColWidths[0] + issueColWidths[1] + issueColWidths[2] + issueColWidths[3],
+  ];
+
+  doc.setFillColor(...COLORS.navy);
+  doc.rect(MARGIN_X, y, CONTENT_WIDTH, 5.5, 'F');
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(7);
+  doc.setTextColor(...COLORS.white);
+
+  doc.text('#', issueColX[0] + 6, y + 3.8, { align: 'center' });
+  doc.text('DEVICE MODEL / TYPE', issueColX[1] + 3, y + 3.8);
+  doc.text('REQUIRED', issueColX[2] + 15, y + 3.8, { align: 'center' });
+  doc.text('EXTRA / BACKUP', issueColX[3] + 15, y + 3.8, { align: 'center' });
+  doc.text('TOTAL TO ISSUE', issueColX[4] + 20, y + 3.8, { align: 'center' });
+
+  y += 5.5;
+
+  combinedAllocation.forEach((item, idx) => {
+    checkAddPage(6);
+    doc.setFillColor(...(idx % 2 === 0 ? COLORS.white : COLORS.grayBg));
+    doc.setDrawColor(...COLORS.borderColor);
+    doc.setLineWidth(0.2);
+    doc.rect(MARGIN_X, y, CONTENT_WIDTH, 5.5, 'FD');
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
+    doc.setTextColor(...COLORS.grayText);
+    doc.text(String(idx + 1), issueColX[0] + 6, y + 3.8, { align: 'center' });
+
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...COLORS.darkText);
+    doc.text(sanitizeText(item.device_type), issueColX[1] + 3, y + 3.8);
+
+    doc.setFont('helvetica', 'normal');
+    doc.text(`${item.required_quantity || 0} Nos.`, issueColX[2] + 15, y + 3.8, { align: 'center' });
+    doc.text(`${item.extra_quantity || 0} Nos.`, issueColX[3] + 15, y + 3.8, { align: 'center' });
+
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...COLORS.blueText);
+    doc.text(`${item.quantity_carried} Nos.`, issueColX[4] + 20, y + 3.8, { align: 'center' });
+
+    y += 5.5;
+  });
+
+  // Grand Total Expected to Leave Store Row
+  doc.setFillColor(...COLORS.navy);
   doc.setDrawColor(...COLORS.borderColor);
   doc.setLineWidth(0.3);
   doc.rect(MARGIN_X, y, CONTENT_WIDTH, 6, 'FD');
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(7.5);
-  doc.setTextColor(...COLORS.navy);
-  doc.text('TOTAL DEVICES TO ISSUE:', devColX[1] + 3, y + 4.2);
-  doc.text(`${totalDevices} Units`, devColX[2] + 17, y + 4.2, { align: 'center' });
-  doc.text(`Vehicles: ${totalVehicles}`, devColX[3] + 17, y + 4.2, { align: 'center' });
+  doc.setTextColor(...COLORS.white);
+  doc.text('TOTAL UNITS EXPECTED TO LEAVE STORE (ALL CARRIED):', issueColX[1] + 3, y + 4.2);
+  doc.text(`${totalRequiredDevices} Req.`, issueColX[2] + 15, y + 4.2, { align: 'center' });
+  doc.text(`${totalExtraDevices} Extra`, issueColX[3] + 15, y + 4.2, { align: 'center' });
+  doc.text(`${totalCarriedDevices} Units Total`, issueColX[4] + 20, y + 4.2, { align: 'center' });
 
   y += 10;
 

@@ -121,8 +121,8 @@ export async function requireAuth(req, res, next) {
 export const requireAdmin = [
   requireAuth,
   (req, res, next) => {
-    const role = req.profile?.role;
-    if (role !== 'ADMIN') {
+    const role = (req.profile?.role || '').toUpperCase();
+    if (role !== 'ADMIN' && role !== 'SUPER_ADMIN') {
       return res.status(403).json({ error: 'Access denied. Admin privileges required.' });
     }
     next();

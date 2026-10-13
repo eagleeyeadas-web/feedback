@@ -21,12 +21,15 @@ import {
   Info,
   FileDown,
   Calendar,
+  ShieldCheck,
+  X,
 } from 'lucide-react';
 import {
   fetchStoreMaterialRequirements,
   syncStoreMaterialRequirements,
   downloadStoreRequirementPDF,
   downloadInstallationPDF,
+  verifyStoreMaterialReturnApi,
 } from '../../lib/api';
 import IssueMaterialsModal from './IssueMaterialsModal';
 
@@ -51,6 +54,17 @@ export default function StoreInstallationRequirements({ token, onSelectChecklist
   const [expandedCards, setExpandedCards] = useState(new Set());
   const [issueModalChecklist, setIssueModalChecklist] = useState(null);
   const [toastMessage, setToastMessage] = useState('');
+
+  // Physical Return Verification Modal State
+  const [returnVerificationModal, setReturnVerificationModal] = useState(null);
+  const [returnForm, setReturnForm] = useState({
+    accepted_usable_qty: '',
+    damaged_qty: '0',
+    missing_qty: '0',
+    remarks: '',
+  });
+  const [submittingVerification, setSubmittingVerification] = useState(false);
+  const [verificationError, setVerificationError] = useState('');
 
   const loadRequirements = useCallback(async () => {
     if (!token) return;
@@ -120,6 +134,29 @@ export default function StoreInstallationRequirements({ token, onSelectChecklist
     } catch (err) {
       console.error('PDF download error:', err);
       alert('Failed to download Store Manager PDF. Please try again.');
+    }
+  };
+
+  const handleVerifyMaterialReturn = async (e) => {
+    e.preventDefault();
+    if (!token || !returnVerificationModal) return;
+    setVerificationError('');
+    setSubmittingVerification(true);
+    try {
+      await verifyStoreMaterialReturnApi(token, returnVerificationModal.checklistId, {
+        return_id: returnVerificationModal.return_id,
+        accepted_usable_qty: parseFloat(returnForm.accepted_usable_qty) || 0,
+        damaged_qty: parseFloat(returnForm.damaged_qty) || 0,
+        missing_qty: parseFloat(returnForm.missing_qty) || 0,
+        remarks: returnForm.remarks.trim(),
+      });
+      showToast(`Physical return verified for ${returnVerificationModal.checklistNumber}! Usable warehouse stock updated.`);
+      setReturnVerificationModal(null);
+      loadRequirements();
+    } catch (err) {
+      setVerificationError(err.message || 'Failed to verify material return');
+    } finally {
+      setSubmittingVerification(false);
     }
   };
 
@@ -329,15 +366,24 @@ export default function StoreInstallationRequirements({ token, onSelectChecklist
             const hasShortage = Boolean(req.has_shortage);
             const isExpanded = expandedCards.has(req.id || req.checklist_id);
             const materialItems = Array.isArray(req.material_items) ? req.material_items : [];
-            const deviceItems = Array.isArray(req.device_items) && req.device_items.length > 0
-              ? req.device_items
+            const reqDeviceItems = Array.isArray(req.required_device_items) && req.required_device_items.length > 0
+              ? req.required_device_items
               : (req.device_configurations || []).map((c) => ({
                   device_type: c.device_type,
-                  required_quantity: c.number_of_devices,
+                  quantity: c.number_of_devices || 1,
+                }));
+            const extraDeviceItems = Array.isArray(req.extra_device_items)
+              ? req.extra_device_items
+              : [];
+            const deviceItems = Array.isArray(req.device_items) && req.device_items.length > 0
+              ? req.device_items
+              : (reqDeviceItems.length > 0 ? reqDeviceItems.map((d) => ({
+                  device_type: d.device_type,
+                  required_quantity: d.quantity || 1,
                   unit: 'Nos.',
                   available_stock: 0,
                   shortage: 0,
-                }));
+                })) : []);
 
             return (
               <div
@@ -527,22 +573,39 @@ export default function StoreInstallationRequirements({ token, onSelectChecklist
                     </div>
                   </div>
 
-                  {/* Col 3: Device Models & Quantities */}
+                  {/* Col 3: Device Models & Quantities Carried */}
                   <div>
-                    <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">Device Models &amp; Quantities</span>
-                    <div className="mt-1 space-y-1">
-                      {deviceItems.map((d, idx) => (
-                        <div key={idx} className="flex items-center justify-between text-[11px]">
-                          <span className="font-semibold text-gray-900 flex items-center gap-1">
-                            <HardDrive className="w-3 h-3 text-blue-600" />
-                            {d.device_type}
-                          </span>
-                          <span className="font-mono text-gray-600 font-bold">{d.required_quantity} Nos.</span>
+                    <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">Devices Carried to Site</span>
+                    <div className="mt-1 space-y-1.5 min-w-[170px]">
+                      {/* Required Devices */}
+                      <div className="space-y-0.5">
+                        <span className="text-[10px] font-bold text-blue-700 block uppercase">Required for Installation:</span>
+                        {reqDeviceItems.map((d, idx) => (
+                          <div key={idx} className="flex items-center justify-between text-[11px] bg-blue-50/60 px-1.5 py-0.5 rounded border border-blue-100">
+                            <span className="font-semibold text-gray-900 truncate">{d.device_type}</span>
+                            <span className="font-mono text-blue-800 font-bold shrink-0">{d.quantity ?? d.number_of_devices ?? 1} req</span>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Extra Backup Devices */}
+                      {extraDeviceItems.length > 0 && (
+                        <div className="space-y-0.5 pt-0.5">
+                          <span className="text-[10px] font-bold text-amber-800 block uppercase">Extra / Backup:</span>
+                          {extraDeviceItems.map((d, idx) => (
+                            <div key={idx} className="flex items-center justify-between text-[11px] bg-amber-50/70 px-1.5 py-0.5 rounded border border-amber-200">
+                              <span className="font-semibold text-gray-900 truncate">{d.device_type}</span>
+                              <span className="font-mono text-amber-900 font-bold shrink-0">+{d.extra_quantity ?? 1} extra</span>
+                            </div>
+                          ))}
                         </div>
-                      ))}
+                      )}
+
                       <div className="pt-1 border-t border-gray-200/80 flex items-center justify-between font-bold text-[11px]">
-                        <span className="text-navy">Total Devices:</span>
-                        <span className="font-mono text-blue-900">{req.number_of_devices} Units</span>
+                        <span className="text-navy">Total to Issue:</span>
+                        <span className="font-mono text-purple-800 bg-purple-50 px-2 py-0.5 rounded border border-purple-200">
+                          {req.total_devices_carried || req.number_of_devices || 0} Units
+                        </span>
                       </div>
                       {req.number_of_vehicles && (
                         <div className="text-[10px] text-gray-500">
@@ -615,62 +678,128 @@ export default function StoreInstallationRequirements({ token, onSelectChecklist
                 {/* Expanded Detailed Breakdown (Separating Camera Devices & Materials) */}
                 {!isService && isExpanded && (
                   <div className="border-t border-gray-200 p-5 space-y-6 bg-white">
-                    {/* SECTION 1: Camera Devices Availability */}
-                    <div className="space-y-2">
+                    {/* SECTION 1: Camera Devices Allocation & Store Dispatch */}
+                    <div className="space-y-4">
                       <div className="flex items-center justify-between">
                         <h4 className="text-xs font-bold text-gray-800 flex items-center gap-2">
                           <HardDrive className="w-4 h-4 text-blue-600" />
-                          <span>1. Camera Devices Stock &amp; Availability</span>
+                          <span>1. Camera Devices Allocation &amp; Store Issuance</span>
                         </h4>
-                        <span className="text-[11px] text-gray-500">Tracked separately from materials</span>
+                        <span className="text-[11px] text-gray-500">Tracked separately from installation materials</span>
                       </div>
 
-                      <div className="border border-gray-200 rounded-xl overflow-x-auto">
-                        <table className="w-full text-left border-collapse text-xs">
-                          <thead className="bg-gray-50 border-b border-gray-200 text-[10px] font-bold text-gray-600 uppercase">
-                            <tr>
-                              <th className="py-2.5 px-3">Device Model</th>
-                              <th className="py-2.5 px-3">SKU</th>
-                              <th className="py-2.5 px-3 text-center">Required Quantity</th>
-                              <th className="py-2.5 px-3 text-center">Available Usable Stock</th>
-                              <th className="py-2.5 px-3 text-center">Shortage</th>
-                              <th className="py-2.5 px-3 text-center">Warehouse Status</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-gray-100">
-                            {deviceItems.map((d, idx) => {
-                              const dShortage = Number(d.shortage) || 0;
-                              const dAvail = Number(d.available_stock) || 0;
-                              const dReq = Number(d.required_quantity) || 1;
-                              const devStatus = d.availability_status || (dAvail >= dReq ? 'Available' : dAvail > 0 ? 'Partially Available' : 'Out of Stock');
-
-                              return (
-                                <tr key={idx} className={devStatus === 'Out of Stock' ? 'bg-rose-50/40' : devStatus === 'Partially Available' ? 'bg-amber-50/30' : 'hover:bg-gray-50/50'}>
-                                  <td className="py-2.5 px-3 font-bold text-gray-900">{d.device_type}</td>
-                                  <td className="py-2.5 px-3 font-mono text-[11px] text-gray-500">{d.sku || 'N/A'}</td>
-                                  <td className="py-2.5 px-3 text-center font-bold text-gray-900">{dReq} Nos.</td>
-                                  <td className="py-2.5 px-3 text-center font-mono font-bold text-gray-800">{dAvail} Nos.</td>
-                                  <td className="py-2.5 px-3 text-center font-mono font-bold text-rose-700">{dShortage > 0 ? `${dShortage} Nos.` : '0'}</td>
-                                  <td className="py-2.5 px-3 text-center">
-                                    {devStatus === 'Available' ? (
-                                      <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 border border-emerald-300 px-2.5 py-0.5 rounded-full inline-flex items-center gap-1">
-                                        <Check className="w-3 h-3 text-emerald-600" /> Available
-                                      </span>
-                                    ) : devStatus === 'Partially Available' ? (
-                                      <span className="text-[10px] font-bold text-amber-800 bg-amber-100 border border-amber-300 px-2.5 py-0.5 rounded-full inline-flex items-center gap-1">
-                                        <Clock className="w-3 h-3 text-amber-600" /> Partially Available
-                                      </span>
-                                    ) : (
-                                      <span className="text-[10px] font-bold text-rose-800 bg-rose-100 border border-rose-300 px-2.5 py-0.5 rounded-full inline-flex items-center gap-1">
-                                        <AlertTriangle className="w-3 h-3 text-rose-600" /> Out of Stock
-                                      </span>
-                                    )}
+                      {/* 1A. Required Installation Devices */}
+                      <div className="space-y-1.5">
+                        <span className="text-[11px] font-bold text-blue-900 uppercase tracking-wider block">
+                          1A. Required Installation Devices (Customer Job)
+                        </span>
+                        <div className="border border-blue-200 rounded-xl overflow-x-auto">
+                          <table className="w-full text-left border-collapse text-xs">
+                            <thead className="bg-blue-50/80 border-b border-blue-100 text-[10px] font-bold text-blue-900 uppercase">
+                              <tr>
+                                <th className="py-2 px-3 w-12 text-center">#</th>
+                                <th className="py-2 px-3">Device Model</th>
+                                <th className="py-2 px-3 text-center">Required Quantity</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-blue-50">
+                              {reqDeviceItems.map((d, idx) => (
+                                <tr key={idx} className="hover:bg-blue-50/40">
+                                  <td className="py-2 px-3 text-center font-mono text-gray-400">{idx + 1}</td>
+                                  <td className="py-2 px-3 font-bold text-gray-900">{d.device_type}</td>
+                                  <td className="py-2 px-3 text-center font-bold text-blue-900 font-mono">
+                                    {d.quantity ?? d.number_of_devices ?? 1} Nos.
                                   </td>
                                 </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+
+                      {/* 1B. Extra / Backup Devices Carried */}
+                      {extraDeviceItems.length > 0 && (
+                        <div className="space-y-1.5">
+                          <span className="text-[11px] font-bold text-amber-900 uppercase tracking-wider block">
+                            1B. Extra / Backup Devices Carried to Site
+                          </span>
+                          <div className="border border-amber-200 rounded-xl overflow-x-auto">
+                            <table className="w-full text-left border-collapse text-xs">
+                              <thead className="bg-amber-50 border-b border-amber-200 text-[10px] font-bold text-amber-900 uppercase">
+                                <tr>
+                                  <th className="py-2 px-3 w-12 text-center">#</th>
+                                  <th className="py-2 px-3">Device Model</th>
+                                  <th className="py-2 px-3 text-center">Extra Quantity Carried</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-amber-100">
+                                {extraDeviceItems.map((d, idx) => (
+                                  <tr key={idx} className="hover:bg-amber-50/40">
+                                    <td className="py-2 px-3 text-center font-mono text-amber-600">{idx + 1}</td>
+                                    <td className="py-2 px-3 font-bold text-gray-900">{d.device_type}</td>
+                                    <td className="py-2 px-3 text-center font-bold text-amber-900 font-mono">
+                                      +{d.extra_quantity ?? 1} Nos.
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* 1C. Total Device Quantity to Issue & Stock Availability */}
+                      <div className="space-y-1.5">
+                        <span className="text-[11px] font-bold text-purple-900 uppercase tracking-wider block">
+                          1C. Total Quantity to Issue for Each Device Type &amp; Usable Stock
+                        </span>
+                        <div className="border border-purple-200 rounded-xl overflow-x-auto">
+                          <table className="w-full text-left border-collapse text-xs">
+                            <thead className="bg-purple-50 border-b border-purple-100 text-[10px] font-bold text-purple-900 uppercase">
+                              <tr>
+                                <th className="py-2.5 px-3">Device Model</th>
+                                <th className="py-2.5 px-3">SKU</th>
+                                <th className="py-2.5 px-3 text-center">Total Quantity to Issue</th>
+                                <th className="py-2.5 px-3 text-center">Available Usable Stock</th>
+                                <th className="py-2.5 px-3 text-center">Shortage</th>
+                                <th className="py-2.5 px-3 text-center">Warehouse Status</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-purple-50">
+                              {deviceItems.map((d, idx) => {
+                                const dShortage = Number(d.shortage) || 0;
+                                const dAvail = Number(d.available_stock) || 0;
+                                const dReq = Number(d.required_quantity ?? d.quantity_carried) || 1;
+                                const devStatus = d.availability_status || (dAvail >= dReq ? 'Available' : dAvail > 0 ? 'Partially Available' : 'Out of Stock');
+
+                                return (
+                                  <tr key={idx} className={devStatus === 'Out of Stock' ? 'bg-rose-50/40' : devStatus === 'Partially Available' ? 'bg-amber-50/30' : 'hover:bg-purple-50/20'}>
+                                    <td className="py-2.5 px-3 font-bold text-gray-900">{d.device_type}</td>
+                                    <td className="py-2.5 px-3 font-mono text-[11px] text-gray-500">{d.sku || 'N/A'}</td>
+                                    <td className="py-2.5 px-3 text-center font-bold text-purple-900 font-mono">{dReq} Nos.</td>
+                                    <td className="py-2.5 px-3 text-center font-mono font-bold text-gray-800">{dAvail} Nos.</td>
+                                    <td className="py-2.5 px-3 text-center font-mono font-bold text-rose-700">{dShortage > 0 ? `${dShortage} Nos.` : '0'}</td>
+                                    <td className="py-2.5 px-3 text-center">
+                                      {devStatus === 'Available' ? (
+                                        <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 border border-emerald-300 px-2.5 py-0.5 rounded-full inline-flex items-center gap-1">
+                                          <Check className="w-3 h-3 text-emerald-600" /> Available
+                                        </span>
+                                      ) : devStatus === 'Partially Available' ? (
+                                        <span className="text-[10px] font-bold text-amber-800 bg-amber-100 border border-amber-300 px-2.5 py-0.5 rounded-full inline-flex items-center gap-1">
+                                          <Clock className="w-3 h-3 text-amber-600" /> Partially Available
+                                        </span>
+                                      ) : (
+                                        <span className="text-[10px] font-bold text-rose-800 bg-rose-100 border border-rose-300 px-2.5 py-0.5 rounded-full inline-flex items-center gap-1">
+                                          <AlertTriangle className="w-3 h-3 text-rose-600" /> Out of Stock
+                                        </span>
+                                      )}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
                       </div>
                     </div>
 
@@ -742,6 +871,180 @@ export default function StoreInstallationRequirements({ token, onSelectChecklist
                         </div>
                       </div>
                     )}
+
+                    {/* SECTION 3: Installation Completion, Final Installed BOM & Physical Returns Verification */}
+                    {(req.final_bom_snapshot || req.completion_report || req.is_completion_submitted || req.installation_status === 'Completed' || (Array.isArray(req.actual_materials_used) && req.actual_materials_used.length > 0)) && (
+                      <div className="space-y-4 pt-4 border-t border-gray-200">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-gradient-to-r from-blue-900 to-indigo-950 p-3.5 rounded-xl text-white">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 uppercase tracking-wider">
+                                Technical Installation Completed
+                              </span>
+                              {req.material_return_status === 'PENDING_STORE_VERIFICATION' ? (
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-500/30 text-amber-200 border border-amber-400/40 uppercase tracking-wider flex items-center gap-1">
+                                  <Clock className="w-3 h-3 text-amber-300" /> Pending Physical Return Verification
+                                </span>
+                              ) : req.material_return_status === 'VERIFIED_ACCEPTED' ? (
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-500/30 text-emerald-200 border border-emerald-400/40 uppercase tracking-wider flex items-center gap-1">
+                                  <CheckCircle2 className="w-3 h-3 text-emerald-300" /> Verified &amp; Credited
+                                </span>
+                              ) : null}
+                            </div>
+                            <h4 className="text-sm font-black mt-1 text-white flex items-center gap-1.5">
+                              <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                              <span>3. Actual Installation Report, Final BOM &amp; Physical Stock Returns</span>
+                            </h4>
+                          </div>
+
+                          {/* Action button if pending return verification */}
+                          {req.material_return_status === 'PENDING_STORE_VERIFICATION' && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const retItems = req.actual_materials_returned || [];
+                                const firstRet = retItems[0] || {};
+                                setReturnVerificationModal({
+                                  checklistId: req.checklist_id || req.id,
+                                  checklistNumber: req.checklist_number,
+                                  return_id: req.material_returns?.[0]?.id,
+                                  items: retItems,
+                                  total_qty: retItems.reduce((acc, m) => acc + (Number(m.quantity_returned) || 0), 0),
+                                });
+                                setReturnForm({
+                                  accepted_usable_qty: String(firstRet.quantity_returned || firstRet.declared_return_qty || ''),
+                                  damaged_qty: '0',
+                                  missing_qty: '0',
+                                  remarks: '',
+                                });
+                                setVerificationError('');
+                              }}
+                              className="px-3.5 py-1.5 text-xs font-bold text-navy bg-amber-400 hover:bg-amber-300 rounded-xl transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
+                            >
+                              <ShieldCheck className="w-3.5 h-3.5" />
+                              <span>Verify Physical Returns</span>
+                            </button>
+                          )}
+                        </div>
+
+                        {/* 3A: Device Reconciliation Breakdown */}
+                        <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-2">
+                          <span className="text-[11px] font-bold text-gray-800 uppercase tracking-wider block">
+                            3A. Carried Devices vs Installed &amp; Returned Reconciliation
+                          </span>
+                          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 text-center text-xs">
+                            <div className="bg-white p-2.5 rounded-lg border border-gray-200">
+                              <span className="text-[10px] text-gray-500 font-semibold uppercase block">Total Carried</span>
+                              <span className="text-base font-black text-gray-900 mt-0.5 block font-mono">
+                                {req.final_bom_snapshot?.summary?.total_carried_devices ?? req.total_devices_carried ?? req.number_of_devices ?? 0} Nos.
+                              </span>
+                            </div>
+                            <div className="bg-white p-2.5 rounded-lg border border-blue-200 bg-blue-50/30">
+                              <span className="text-[10px] text-blue-700 font-semibold uppercase block">Req. Installed</span>
+                              <span className="text-base font-black text-blue-900 mt-0.5 block font-mono">
+                                {req.final_bom_snapshot?.summary?.required_installed_count ?? (req.device_items?.length || 1)} Nos.
+                              </span>
+                            </div>
+                            <div className="bg-white p-2.5 rounded-lg border border-indigo-200 bg-indigo-50/30">
+                              <span className="text-[10px] text-indigo-700 font-semibold uppercase block">Extra Installed</span>
+                              <span className="text-base font-black text-indigo-900 mt-0.5 block font-mono">
+                                {req.final_bom_snapshot?.summary?.extra_installed_count ?? 0} Nos.
+                              </span>
+                            </div>
+                            <div className="bg-white p-2.5 rounded-lg border border-emerald-200 bg-emerald-50/30">
+                              <span className="text-[10px] text-emerald-700 font-semibold uppercase block">Total Installed</span>
+                              <span className="text-base font-black text-emerald-900 mt-0.5 block font-mono">
+                                {req.final_bom_snapshot?.summary?.total_installed_devices ?? req.number_of_devices ?? 0} Nos.
+                              </span>
+                            </div>
+                            <div className="bg-white p-2.5 rounded-lg border border-amber-200 bg-amber-50/40">
+                              <span className="text-[10px] text-amber-700 font-semibold uppercase block">Unused Returned</span>
+                              <span className="text-base font-black text-amber-900 mt-0.5 block font-mono">
+                                {req.final_bom_snapshot?.summary?.unused_returned_devices ?? 0} Nos.
+                              </span>
+                            </div>
+                            <div className="bg-white p-2.5 rounded-lg border border-rose-200 bg-rose-50/30">
+                              <span className="text-[10px] text-rose-700 font-semibold uppercase block">Damaged / Missing</span>
+                              <span className="text-base font-black text-rose-900 mt-0.5 block font-mono">
+                                {(req.final_bom_snapshot?.summary?.damaged_devices || 0) + (req.final_bom_snapshot?.summary?.missing_devices || 0)} Nos.
+                              </span>
+                            </div>
+                          </div>
+                          <p className="text-[11px] text-slate-600 italic">
+                            Formula: Final BOM is strictly computed for the {req.final_bom_snapshot?.summary?.total_installed_devices ?? 'actually installed'} devices. Unused extra devices do not contribute to final BOM materials.
+                          </p>
+                        </div>
+
+                        {/* 3B: Preliminary BOM vs Final BOM & Actual Usage Comparison Table */}
+                        <div className="space-y-1.5">
+                          <span className="text-[11px] font-bold text-gray-800 uppercase tracking-wider block">
+                            3B. Preliminary BOM vs Final Installed BOM &amp; Actual Material Consumption
+                          </span>
+                          <div className="border border-gray-200 rounded-xl overflow-x-auto">
+                            <table className="w-full text-left border-collapse text-xs">
+                              <thead className="bg-slate-100 border-b border-gray-200 text-[10px] font-bold text-gray-700 uppercase">
+                                <tr>
+                                  <th className="py-2.5 px-3">#</th>
+                                  <th className="py-2.5 px-3">Material Name</th>
+                                  <th className="py-2.5 px-3 text-center">Unit</th>
+                                  <th className="py-2.5 px-3 text-center bg-blue-50/50">Preliminary BOM (Carried)</th>
+                                  <th className="py-2.5 px-3 text-center bg-emerald-50/50">Final BOM (Installed)</th>
+                                  <th className="py-2.5 px-3 text-center">Variance (Diff)</th>
+                                  <th className="py-2.5 px-3 text-center">Actual Issued</th>
+                                  <th className="py-2.5 px-3 text-center">Actual Used</th>
+                                  <th className="py-2.5 px-3 text-center">Unused Returned</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-gray-100">
+                                {((req.final_bom_snapshot?.comparison && req.final_bom_snapshot.comparison.length > 0)
+                                  ? req.final_bom_snapshot.comparison
+                                  : (req.material_items || []).map((m) => ({
+                                      material_name: m.material_name,
+                                      unit: m.unit,
+                                      preliminary_quantity: m.total_required_quantity || 0,
+                                      final_quantity: m.total_required_quantity || 0,
+                                      difference: 0,
+                                      actual_quantity_issued: m.total_required_quantity || 0,
+                                      actual_quantity_used: m.total_required_quantity || 0,
+                                      actual_quantity_returned: 0,
+                                    }))
+                                ).map((row, idx) => (
+                                  <tr key={idx} className="hover:bg-slate-50/50">
+                                    <td className="py-2 px-3 text-gray-400 font-mono">{idx + 1}</td>
+                                    <td className="py-2 px-3 font-semibold text-gray-900">{row.material_name}</td>
+                                    <td className="py-2 px-3 text-center text-gray-500">{row.unit}</td>
+                                    <td className="py-2 px-3 text-center font-bold text-blue-900 font-mono bg-blue-50/30">
+                                      {row.preliminary_quantity}
+                                    </td>
+                                    <td className="py-2 px-3 text-center font-bold text-emerald-900 font-mono bg-emerald-50/30">
+                                      {row.final_quantity}
+                                    </td>
+                                    <td className="py-2 px-3 text-center font-mono">
+                                      {row.difference > 0 ? (
+                                        <span className="text-amber-700 font-bold">-{row.difference} (reduced)</span>
+                                      ) : row.difference < 0 ? (
+                                        <span className="text-purple-700 font-bold">+{Math.abs(row.difference)}</span>
+                                      ) : (
+                                        <span className="text-gray-400">0</span>
+                                      )}
+                                    </td>
+                                    <td className="py-2 px-3 text-center font-mono text-gray-700">
+                                      {row.actual_quantity_issued ?? '—'}
+                                    </td>
+                                    <td className="py-2 px-3 text-center font-mono font-bold text-indigo-900">
+                                      {row.actual_quantity_used ?? '—'}
+                                    </td>
+                                    <td className="py-2 px-3 text-center font-mono font-bold text-amber-800">
+                                      {row.actual_quantity_returned > 0 ? `${row.actual_quantity_returned} ${row.unit}` : '0'}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -769,6 +1072,128 @@ export default function StoreInstallationRequirements({ token, onSelectChecklist
             >
               Next
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Physical Return Verification Modal */}
+      {returnVerificationModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 border border-gray-100">
+            <div className="flex items-center justify-between pb-2 border-b border-gray-100">
+              <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                <span>Verify Returned Stock: {returnVerificationModal.checklistNumber}</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setReturnVerificationModal(null)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {verificationError && (
+              <div className="p-3 bg-rose-50 text-rose-800 border border-rose-200 rounded-xl text-xs">
+                {verificationError}
+              </div>
+            )}
+
+            <form onSubmit={handleVerifyMaterialReturn} className="space-y-3 text-xs">
+              <div className="p-3 bg-amber-50 rounded-xl text-amber-900 border border-amber-200">
+                <span className="font-bold block">Technician Declared Unused Material Returns:</span>
+                {returnVerificationModal.items && returnVerificationModal.items.length > 0 ? (
+                  <ul className="list-disc list-inside mt-1 space-y-0.5 text-[11px]">
+                    {returnVerificationModal.items.map((it, i) => (
+                      <li key={i}>
+                        {it.material_name}: <strong>{it.quantity_returned} {it.unit}</strong>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <span className="text-[11px] block mt-0.5">Unused fitting materials declared by technical team upon installation completion.</span>
+                )}
+              </div>
+
+              <div>
+                <label className="block font-bold text-gray-700 mb-1">
+                  Accepted Usable Quantity *
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="any"
+                  required
+                  value={returnForm.accepted_usable_qty}
+                  onChange={(e) => setReturnForm({ ...returnForm, accepted_usable_qty: e.target.value })}
+                  placeholder="e.g. 5"
+                  className="w-full p-2.5 border border-gray-200 rounded-xl font-bold font-mono focus:outline-none focus:border-amber-500"
+                />
+                <span className="text-[10px] text-gray-400 mt-1 block">
+                  Only credited if previously issued from store and physically confirmed usable.
+                </span>
+              </div>
+
+              <div>
+                <label className="block font-bold text-gray-700 mb-1">Damaged Quantity</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="any"
+                  value={returnForm.damaged_qty}
+                  onChange={(e) => setReturnForm({ ...returnForm, damaged_qty: e.target.value })}
+                  className="w-full p-2.5 border border-gray-200 rounded-xl font-bold font-mono focus:outline-none focus:border-amber-500"
+                />
+                <span className="text-[10px] text-gray-400 mt-1 block">
+                  Routed separately to damaged stock (never added to usable stock).
+                </span>
+              </div>
+
+              <div>
+                <label className="block font-bold text-gray-700 mb-1">Missing / Unreturned Quantity</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="any"
+                  value={returnForm.missing_qty}
+                  onChange={(e) => setReturnForm({ ...returnForm, missing_qty: e.target.value })}
+                  placeholder="0"
+                  className="w-full p-2.5 border border-gray-200 rounded-xl font-bold font-mono focus:outline-none focus:border-amber-500"
+                />
+                <span className="text-[10px] text-gray-400 mt-1 block">
+                  Do not add missing items to stock; logged as audit discrepancy.
+                </span>
+              </div>
+
+              <div>
+                <label className="block font-bold text-gray-700 mb-1">Verification Remarks</label>
+                <input
+                  type="text"
+                  value={returnForm.remarks}
+                  onChange={(e) => setReturnForm({ ...returnForm, remarks: e.target.value })}
+                  placeholder="e.g. Physical count confirmed on shelf"
+                  className="w-full p-2.5 border border-gray-200 rounded-xl focus:outline-none focus:border-amber-500"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setReturnVerificationModal(null)}
+                  className="px-4 py-2 font-semibold text-gray-600 hover:bg-gray-100 rounded-xl"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingVerification}
+                  className="px-5 py-2 font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-xs cursor-pointer disabled:opacity-50"
+                >
+                  {submittingVerification ? 'Updating Stock...' : 'Confirm Verification & Credit Stock'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

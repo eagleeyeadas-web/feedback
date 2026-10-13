@@ -1,11 +1,24 @@
 import { useState, useEffect, useRef } from 'react';
 import { calculateBomRequirements } from '../../lib/api';
-import { Layers, AlertTriangle, CheckCircle2, Calculator, Info, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
+import {
+  Layers,
+  AlertTriangle,
+  CheckCircle2,
+  Calculator,
+  Info,
+  Loader2,
+  ChevronDown,
+  ChevronUp,
+  Sparkles,
+  HardDrive,
+  PackageCheck,
+} from 'lucide-react';
 
 export default function BomRequirementSummary({
   deviceType,
   numberOfDevices,
   deviceConfigurations,
+  extraDeviceConfigurations,
   token,
   jobType = 'Installation',
   onCalculated,
@@ -14,24 +27,32 @@ export default function BomRequirementSummary({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [showBreakdown, setShowBreakdown] = useState(false);
+  const [activeGroupTab, setActiveGroupTab] = useState('combined'); // 'combined' | 'required' | 'extra'
   const lastRequestRef = useRef('');
 
   // Service jobs do not perform BOM calculations
   const isServiceJob = jobType === 'Service';
 
-  // Normalize inputs: either deviceConfigurations array or legacy deviceType + numberOfDevices
+  // Normalize required device inputs
   const configs = Array.isArray(deviceConfigurations) && deviceConfigurations.length > 0
     ? deviceConfigurations
     : deviceType
       ? [{ device_type: deviceType, number_of_devices: numberOfDevices, number_of_vehicles: numberOfDevices }]
       : [];
 
+  // Normalize extra device inputs
+  const extraConfigs = Array.isArray(extraDeviceConfigurations) && extraDeviceConfigurations.length > 0
+    ? extraDeviceConfigurations
+    : [];
+
   const hasEmptyOrInvalid = configs.some((c) => {
     const qty = parseInt(c.number_of_devices, 10);
     return isNaN(qty) || qty <= 0;
   });
 
-  const totalDevicesCount = configs.reduce((sum, c) => sum + (parseInt(c.number_of_devices, 10) || 0), 0);
+  const totalRequiredCount = configs.reduce((sum, c) => sum + (parseInt(c.number_of_devices, 10) || 0), 0);
+  const totalExtraCount = extraConfigs.reduce((sum, c) => sum + (parseInt(c.extra_quantity ?? c.number_of_devices, 10) || 0), 0);
+  const totalCarriedCount = totalRequiredCount + totalExtraCount;
 
   useEffect(() => {
     if (isServiceJob) {
@@ -40,7 +61,7 @@ export default function BomRequirementSummary({
       return;
     }
 
-    if (configs.length === 0) {
+    if (configs.length === 0 && extraConfigs.length === 0) {
       setCalculation(null);
       if (onCalculated) onCalculated(null);
       return;
@@ -49,7 +70,7 @@ export default function BomRequirementSummary({
     if (hasEmptyOrInvalid) {
       setCalculation({
         configured: false,
-        warning: 'All device quantities must be positive whole numbers greater than 0 (no zero, negative, or blank quantities allowed).',
+        warning: 'All required device quantities must be positive whole numbers greater than 0.',
         items: [],
       });
       if (onCalculated) onCalculated(null);
@@ -62,17 +83,22 @@ export default function BomRequirementSummary({
       number_of_vehicles: parseInt(c.number_of_vehicles, 10) || parseInt(c.number_of_devices, 10) || 1,
     }));
 
-    const requestId = JSON.stringify(payloadConfigs) + `_${jobType}`;
+    const payloadExtraConfigs = extraConfigs.map((c) => ({
+      device_type: c.device_type,
+      extra_quantity: parseInt(c.extra_quantity ?? c.number_of_devices, 10) || 1,
+    }));
+
+    const requestId = JSON.stringify({ req: payloadConfigs, ext: payloadExtraConfigs, job: jobType });
     lastRequestRef.current = requestId;
     setLoading(true);
     setError(null);
 
     calculateBomRequirements(token, {
       device_configurations: payloadConfigs,
+      extra_device_configurations: payloadExtraConfigs,
       job_type: jobType,
     })
       .then((data) => {
-        // Prevent race conditions
         if (lastRequestRef.current === requestId) {
           setCalculation(data);
           if (onCalculated) {
@@ -92,11 +118,28 @@ export default function BomRequirementSummary({
           setLoading(false);
         }
       });
-  }, [JSON.stringify(configs), token, jobType, isServiceJob]);
+  }, [JSON.stringify(configs), JSON.stringify(extraConfigs), token, jobType, isServiceJob]);
 
-  if (isServiceJob || configs.length === 0) {
+  if (isServiceJob || (configs.length === 0 && extraConfigs.length === 0)) {
     return null;
   }
+
+  // Determine currently active BOM items based on selected tab
+  let currentItems = calculation?.items || [];
+  let currentDeviceCount = totalCarriedCount;
+  let currentGroupLabel = 'Combined Preliminary BOM (All Devices Carried)';
+
+  if (activeGroupTab === 'required' && calculation?.required_bom?.items) {
+    currentItems = calculation.required_bom.items;
+    currentDeviceCount = totalRequiredCount;
+    currentGroupLabel = 'BOM for Required Devices';
+  } else if (activeGroupTab === 'extra' && calculation?.extra_bom?.items) {
+    currentItems = calculation.extra_bom.items;
+    currentDeviceCount = totalExtraCount;
+    currentGroupLabel = 'BOM for Extra Backup Devices';
+  }
+
+  const hasExtra = totalExtraCount > 0;
 
   return (
     <div className="bg-slate-50/80 border border-slate-200/80 rounded-2xl p-5 shadow-xs transition-all space-y-4">
@@ -108,26 +151,71 @@ export default function BomRequirementSummary({
           </div>
           <div>
             <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wider flex items-center gap-2">
-              Automatic Bill of Materials (BOM) Requirements
+              Preliminary Bill of Materials (BOM) Requirements
               {loading && <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-600" />}
             </h4>
             <p className="text-[11px] text-gray-500">
-              Combined material requirements for <strong className="text-gray-800">{totalDevicesCount} total device(s)</strong> across {configs.length} device configuration(s)
+              Preliminary material planning for <strong className="text-gray-800">{totalCarriedCount} device(s) carried</strong> to site ({totalRequiredCount} required + {totalExtraCount} backup)
             </p>
           </div>
         </div>
 
         {calculation?.configured && (
           <div className="flex items-center gap-2 shrink-0">
-            <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-indigo-100 text-indigo-800 border border-indigo-200">
-              {configs.length > 1 ? `${configs.length} Device Types Combined` : `Active BOM v${calculation.bom_version || 1}`}
+            <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-indigo-100 text-indigo-800 border border-indigo-200 flex items-center gap-1">
+              <PackageCheck className="w-3 h-3" />
+              {hasExtra ? 'Required + Extra BOM Configured' : 'BOM Auto-Calculated'}
             </span>
             <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200 flex items-center gap-1">
-              <CheckCircle2 className="w-3 h-3" /> Auto-Calculated
+              <CheckCircle2 className="w-3 h-3" /> Preliminary Plan Ready
             </span>
           </div>
         )}
       </div>
+
+      {/* Group Toggles when Extra Devices exist */}
+      {hasExtra && calculation?.configured && (
+        <div className="bg-white p-1 rounded-xl border border-indigo-100 shadow-2xs flex flex-wrap gap-1">
+          <button
+            type="button"
+            onClick={() => setActiveGroupTab('combined')}
+            className={`flex-1 min-w-[150px] py-1.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+              activeGroupTab === 'combined'
+                ? 'bg-indigo-600 text-white shadow-2xs'
+                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+            }`}
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>Combined Preliminary BOM ({totalCarriedCount} Carried)</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveGroupTab('required')}
+            className={`flex-1 min-w-[140px] py-1.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+              activeGroupTab === 'required'
+                ? 'bg-indigo-600 text-white shadow-2xs'
+                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+            }`}
+          >
+            <HardDrive className="w-3.5 h-3.5" />
+            <span>Required BOM ({totalRequiredCount} Units)</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveGroupTab('extra')}
+            className={`flex-1 min-w-[140px] py-1.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+              activeGroupTab === 'extra'
+                ? 'bg-indigo-600 text-white shadow-2xs'
+                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+            }`}
+          >
+            <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+            <span>Extra Devices BOM ({totalExtraCount} Backup)</span>
+          </button>
+        </div>
+      )}
 
       {/* Invalid Quantity Warning */}
       {hasEmptyOrInvalid && (
@@ -136,13 +224,13 @@ export default function BomRequirementSummary({
           <div>
             <p className="font-bold">Invalid Device Quantities</p>
             <p className="text-[11px] text-amber-800 mt-0.5">
-              Please enter positive whole numbers (1 or more) for all selected device configurations. Zero, negative, or blank quantities cannot be calculated.
+              Please enter positive whole numbers (1 or more) for all selected device configurations.
             </p>
           </div>
         </div>
       )}
 
-      {/* Unconfigured BOM Warning (Requirement 9: show warning and do not display incomplete calculation as final) */}
+      {/* Unconfigured BOM Warning */}
       {!hasEmptyOrInvalid && calculation && !calculation.configured && (
         <div className="p-4 bg-amber-50 border-2 border-amber-300 text-amber-900 rounded-xl text-xs space-y-2 shadow-xs">
           <div className="flex items-center gap-2 font-bold text-amber-900">
@@ -150,7 +238,7 @@ export default function BomRequirementSummary({
             <span>Incomplete BOM Configuration - Calculation Not Final</span>
           </div>
           <p className="text-[11px] text-amber-800 leading-relaxed">
-            {calculation.warning || 'One or more selected device types do not have an active configured Bill of Materials (BOM). Material requirements cannot be assumed as zero or displayed as final until all selected device types have configured BOMs.'}
+            {calculation.warning || 'One or more selected device types do not have an active configured Bill of Materials (BOM).'}
           </p>
           {Array.isArray(calculation.unconfigured_device_types) && calculation.unconfigured_device_types.length > 0 && (
             <div className="pt-1 flex flex-wrap gap-1.5 items-center">
@@ -162,9 +250,6 @@ export default function BomRequirementSummary({
               ))}
             </div>
           )}
-          <p className="text-[10px] text-amber-700 font-medium pt-1">
-            Tip: An authorized Store Manager can configure missing BOMs in the Store Manager Workspace under the BOM Management tab.
-          </p>
         </div>
       )}
 
@@ -176,12 +261,12 @@ export default function BomRequirementSummary({
         </div>
       )}
 
-      {/* Calculated Materials Combined Table */}
-      {!hasEmptyOrInvalid && calculation?.configured && Array.isArray(calculation.items) && calculation.items.length > 0 && (
+      {/* Calculated Materials Table */}
+      {!hasEmptyOrInvalid && calculation?.configured && Array.isArray(currentItems) && currentItems.length > 0 && (
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-semibold text-gray-700">
-              Total Combined Materials Required ({calculation.items.length} distinct items):
+              {currentGroupLabel} ({currentItems.length} distinct items):
             </span>
             {configs.length > 1 && (
               <button
@@ -217,7 +302,7 @@ export default function BomRequirementSummary({
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {calculation.items.map((item, idx) => (
+                {currentItems.map((item, idx) => (
                   <tr key={item.id || idx} className="hover:bg-indigo-50/30 transition-colors">
                     <td className="py-2.5 px-3 text-center text-[11px] font-mono text-gray-400">
                       {idx + 1}
@@ -240,7 +325,7 @@ export default function BomRequirementSummary({
                       </td>
                     )}
                     <td className="py-2.5 px-4 text-center font-mono text-gray-600">
-                      {totalDevicesCount}
+                      {currentDeviceCount}
                     </td>
                     <td className="py-2.5 px-4 text-center">
                       <span className="inline-block px-2.5 py-1 rounded-md bg-indigo-50 text-indigo-900 font-bold font-mono text-xs border border-indigo-200">
@@ -260,11 +345,11 @@ export default function BomRequirementSummary({
           <div className="flex flex-col sm:flex-row sm:items-center justify-between text-[11px] text-gray-500 bg-white p-3 rounded-xl border border-gray-100 gap-2">
             <span className="flex items-center gap-1.5 text-indigo-950 font-medium">
               <Calculator className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
-              Calculated using each device type's configured BOM. Shared materials combined for overall installation.
+              Calculated using configured BOM. Extra backup devices are included in preliminary material planning to prevent site shortages.
             </span>
             <span className="flex items-center gap-1 text-gray-400 shrink-0">
               <Info className="w-3.5 h-3.5 shrink-0" />
-              Stock is not deducted when a checklist is created; issuance occurs via Store Manager.
+              BOM calculation alone does not deduct inventory; stock is issued by Store Manager.
             </span>
           </div>
         </div>

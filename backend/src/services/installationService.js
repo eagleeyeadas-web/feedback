@@ -6,9 +6,19 @@ import {
   reserveEngineerAtomic,
   releaseEngineerBooking,
 } from './engineerBookingService.js';
-import { calculateBomRequirements, parseDeviceConfigurations } from './bomService.js';
+import {
+  calculateBomRequirements,
+  calculateJobPreliminaryBom,
+  parseDeviceConfigurations,
+  parseExtraDeviceConfigurations,
+  combineCarriedDevicesAllocation,
+} from './bomService.js';
 import { syncStoreRequirementForChecklist } from './storeRequirementService.js';
 import { notifyStoreManagerOnInstallationChecklist } from './notificationService.js';
+
+// In-memory structured extra configurations cache for active runtime sessions
+export const inMemoryChecklistExtraConfigs = new Map();
+export const inMemoryChecklistBomSnapshots = new Map();
 
 const DEVICE_TYPES = [
   '2 Channel Live',
@@ -145,18 +155,33 @@ export async function createChecklist(adminUserId, data) {
         ? deviceConfigs.map((c) => `${c.device_type} (${c.number_of_devices})`).join(', ')
         : (data.device_type || '2 Channel Live'));
 
-  // Calculate or preserve BOM snapshot (ONLY for Installation jobs)
+  const extraConfigs = parseExtraDeviceConfigurations(
+    data.extra_device_configurations || (data.extra_devices ? data : null)
+  );
+  const totalExtraDevices = extraConfigs.reduce((sum, c) => sum + (Number(c.extra_quantity) || 0), 0);
+  const hasExtra = Boolean(data.extra_devices) && extraConfigs.length > 0;
+  const extraTypeSummary = hasExtra
+    ? (extraConfigs.length === 1
+        ? extraConfigs[0].device_type
+        : extraConfigs.map((c) => `${c.device_type} (${c.extra_quantity})`).join(', '))
+    : null;
+
+  // Calculate preliminary BOM for all devices carried (ONLY for Installation jobs)
+  // Calculates required BOM, extra BOM, and combined preliminary BOM for all devices carried
   const isInstallationJob = (data.installation_or_service || 'Installation') === 'Installation';
   let bomSnapshot = null;
   if (isInstallationJob) {
-    if (deviceConfigs.length > 0) {
+    if (deviceConfigs.length > 0 || extraConfigs.length > 0) {
       try {
-        const calc = await calculateBomRequirements(deviceConfigs);
-        if (calc && calc.configured) {
-          bomSnapshot = calc;
+        const prelimCalc = await calculateJobPreliminaryBom({
+          requiredConfigs: deviceConfigs,
+          extraConfigs,
+        });
+        if (prelimCalc && prelimCalc.configured) {
+          bomSnapshot = prelimCalc;
         }
       } catch (e) {
-        console.warn('Could not auto-calculate BOM snapshot:', e.message);
+        console.warn('Could not auto-calculate preliminary BOM snapshot:', e.message);
       }
     }
     if (!bomSnapshot && data.bom_snapshot?.items) {
@@ -177,9 +202,10 @@ export async function createChecklist(adminUserId, data) {
     number_of_devices: totalDevices,
     number_of_vehicles: totalVehicles,
     device_configurations: deviceConfigs,
-    extra_devices: Boolean(data.extra_devices),
-    extra_device_type: data.extra_devices ? data.extra_device_type : null,
-    extra_device_count: data.extra_devices ? (Number(data.extra_device_count) || null) : null,
+    extra_devices: hasExtra,
+    extra_device_type: extraTypeSummary,
+    extra_device_count: hasExtra ? totalExtraDevices : null,
+    extra_device_configurations: hasExtra ? extraConfigs : [],
     confirmed_price: confirmedPrice,
     payment_method: data.payment_method || 'UPI',
     advance_received: Boolean(data.advance_received),
@@ -189,7 +215,7 @@ export async function createChecklist(adminUserId, data) {
     installation_duration: duration,
     vehicle_type: data.vehicle_type === 'Other' && data.custom_vehicle_type ? data.custom_vehicle_type.trim() : (data.vehicle_type || 'Truck'),
     expected_arrival_date: startDate,
-    expected_arrival_time: data.expected_arrival_time || null,
+    expected_arrival_time: data.expected_arrival_time || '10:00 AM',
     installation_or_service: data.installation_or_service,
     salesperson_name: data.salesperson_name ? data.salesperson_name.trim() : null,
     service_engineer: engineerName,
@@ -215,12 +241,13 @@ export async function createChecklist(adminUserId, data) {
       .single();
 
     if (error) throw error;
-    inserted = { ...payload, ...res, id: res.id };
+    inserted = { ...payload, ...res, id: res.id, carry_status: 'RECORDED' };
   } catch (error) {
-    // If device_configurations / service_engineer_id / booking_end_date / bom_snapshot / material_issuance_status / salesperson_name columns are not migrated yet in PostgreSQL, retry without optional columns
+    // If device_configurations / extra_device_configurations / service_engineer_id / booking_end_date / bom_snapshot / material_issuance_status / salesperson_name columns are not migrated yet in PostgreSQL, retry without optional columns
     if (
       error.code === 'PGRST204' ||
       error.message?.includes('device_configurations') ||
+      error.message?.includes('extra_device_configurations') ||
       error.message?.includes('service_engineer_id') ||
       error.message?.includes('booking_end_date') ||
       error.message?.includes('bom_snapshot') ||
@@ -229,6 +256,7 @@ export async function createChecklist(adminUserId, data) {
     ) {
       const fallbackPayload = { ...payload };
       delete fallbackPayload.device_configurations;
+      delete fallbackPayload.extra_device_configurations;
       delete fallbackPayload.service_engineer_id;
       delete fallbackPayload.booking_end_date;
       delete fallbackPayload.bom_snapshot;
@@ -266,6 +294,12 @@ export async function createChecklist(adminUserId, data) {
 
   // Automatically create or update the associated Store Manager material-requirement record
   if (inserted?.id) {
+    if (extraConfigs && extraConfigs.length > 0) {
+      inMemoryChecklistExtraConfigs.set(inserted.id, extraConfigs);
+    }
+    if (bomSnapshot) {
+      inMemoryChecklistBomSnapshots.set(inserted.id, bomSnapshot);
+    }
     try {
       const req = await syncStoreRequirementForChecklist(inserted);
       notifyStoreManagerOnInstallationChecklist({ checklist: inserted, requirement: req }).catch((e) =>
@@ -276,24 +310,49 @@ export async function createChecklist(adminUserId, data) {
     }
   }
 
+  inserted = normalizeChecklistDeviceConfigs(inserted);
+  inserted.carry_status = 'RECORDED';
   return inserted;
 }
 
 /**
- * Helper to ensure checklist has device_configurations populated
+ * Helper to ensure checklist has device_configurations and extra_device_configurations populated
  */
 export function normalizeChecklistDeviceConfigs(checklist) {
   if (!checklist) return checklist;
-  const parsed = parseDeviceConfigurations(
+  const reqConfigs = parseDeviceConfigurations(
     checklist,
     checklist.number_of_devices || 1,
     checklist.number_of_vehicles || 1
   );
-  if (parsed.length > 0) {
-    checklist.device_configurations = parsed;
-  } else if (!Array.isArray(checklist.device_configurations)) {
-    checklist.device_configurations = [];
+
+  const inMemExtra = checklist.id ? inMemoryChecklistExtraConfigs.get(checklist.id) : null;
+  const rawExtra = (Array.isArray(checklist.extra_device_configurations) && checklist.extra_device_configurations.length > 0)
+    ? checklist.extra_device_configurations
+    : (inMemExtra || (checklist.extra_devices ? checklist : null));
+
+  const extraConfigs = parseExtraDeviceConfigurations(rawExtra);
+  const hasExtra = Boolean(checklist.extra_devices) && extraConfigs.length > 0;
+
+  checklist.device_configurations = reqConfigs;
+  checklist.extra_device_configurations = hasExtra ? extraConfigs : [];
+  checklist.extra_devices = hasExtra;
+  checklist.has_extra_devices = hasExtra;
+  checklist.devices_carried = combineCarriedDevicesAllocation(reqConfigs, hasExtra ? extraConfigs : []);
+
+  checklist.total_devices_required = reqConfigs.reduce((sum, c) => sum + (Number(c.number_of_devices) || 0), 0);
+  checklist.total_extra_devices = hasExtra ? extraConfigs.reduce((sum, c) => sum + (Number(c.extra_quantity) || 0), 0) : 0;
+  checklist.total_devices_carried = checklist.total_devices_required + checklist.total_extra_devices;
+
+  if (!checklist.bom_snapshot && checklist.id) {
+    checklist.bom_snapshot = inMemoryChecklistBomSnapshots.get(checklist.id) || null;
   }
+  if (checklist.bom_snapshot) {
+    checklist.bom_snapshot.total_devices_required = checklist.bom_snapshot.total_devices_required ?? checklist.total_devices_required;
+    checklist.bom_snapshot.total_extra_devices = checklist.bom_snapshot.total_extra_devices ?? checklist.total_extra_devices;
+    checklist.bom_snapshot.total_devices_carried = checklist.bom_snapshot.total_devices_carried ?? checklist.total_devices_carried;
+  }
+
   return checklist;
 }
 
@@ -405,7 +464,7 @@ export async function getServiceEngineers() {
 /**
  * Fetch a single installation checklist by ID
  */
-export async function getChecklistById(id) {
+export async function getChecklistById(id, { enrich = true } = {}) {
   let query = supabase.from('installation_checklists').select('*');
 
   // If UUID vs string checklist number
@@ -422,7 +481,19 @@ export async function getChecklistById(id) {
     throw new Error('Installation checklist not found');
   }
 
-  return normalizeChecklistDeviceConfigs(data);
+  const normalized = normalizeChecklistDeviceConfigs(data);
+
+  if (enrich) {
+    try {
+      const { enrichChecklistsWithWorkflowStatus } = await import('./workflowService.js');
+      const enriched = await enrichChecklistsWithWorkflowStatus([normalized]);
+      return enriched[0] || normalized;
+    } catch (e) {
+      // Non-blocking fallback
+    }
+  }
+
+  return normalized;
 }
 
 /**
@@ -497,19 +568,43 @@ export async function updateChecklist(id, data) {
   // If job type is Installation: maintain or calculate snapshot
   // If job type is Service: ensure no installation BOM snapshot is saved or attached
   let updatedBomSnapshot = null;
+  let extraConfigs = [];
+  if (data.extra_device_configurations !== undefined) {
+    extraConfigs = parseExtraDeviceConfigurations(data.extra_device_configurations);
+  } else if (data.extra_devices !== undefined) {
+    extraConfigs = data.extra_devices ? parseExtraDeviceConfigurations(data) : [];
+  } else {
+    extraConfigs = parseExtraDeviceConfigurations(
+      existing.extra_device_configurations || (existing.extra_devices ? existing : null)
+    );
+  }
+
+  const hasExtra = (data.extra_devices !== undefined ? Boolean(data.extra_devices) : existing.extra_devices) && extraConfigs.length > 0;
+  const totalExtraDevices = extraConfigs.reduce((sum, c) => sum + (Number(c.extra_quantity) || 0), 0);
+  const extraTypeSummary = hasExtra
+    ? (extraConfigs.length === 1
+        ? extraConfigs[0].device_type
+        : extraConfigs.map((c) => `${c.device_type} (${c.extra_quantity})`).join(', '))
+    : null;
+
   if (isInstallation) {
-    const configsChanged = JSON.stringify(deviceConfigs) !== JSON.stringify(existing.device_configurations);
+    const configsChanged =
+      JSON.stringify(deviceConfigs) !== JSON.stringify(existing.device_configurations) ||
+      JSON.stringify(extraConfigs) !== JSON.stringify(existing.extra_device_configurations);
     updatedBomSnapshot = existing.bom_snapshot;
     if (data.bom_snapshot !== undefined) {
       updatedBomSnapshot = data.bom_snapshot;
-    } else if (configsChanged && deviceConfigs.length > 0) {
+    } else if (configsChanged && (deviceConfigs.length > 0 || extraConfigs.length > 0)) {
       try {
-        const calc = await calculateBomRequirements(deviceConfigs);
-        if (calc && calc.configured) {
-          updatedBomSnapshot = calc;
+        const prelimCalc = await calculateJobPreliminaryBom({
+          requiredConfigs: deviceConfigs,
+          extraConfigs,
+        });
+        if (prelimCalc && prelimCalc.configured) {
+          updatedBomSnapshot = prelimCalc;
         }
       } catch (e) {
-        console.warn('Could not recalculate BOM snapshot:', e.message);
+        console.warn('Could not recalculate preliminary BOM snapshot:', e.message);
       }
     }
   } else {
@@ -526,9 +621,10 @@ export async function updateChecklist(id, data) {
     number_of_devices: totalDevices,
     number_of_vehicles: totalVehicles,
     device_configurations: deviceConfigs.length > 0 ? deviceConfigs : (existing.device_configurations || null),
-    extra_devices: data.extra_devices !== undefined ? Boolean(data.extra_devices) : existing.extra_devices,
-    extra_device_type: data.extra_devices ? data.extra_device_type : null,
-    extra_device_count: data.extra_devices ? (Number(data.extra_device_count) || null) : null,
+    extra_devices: hasExtra,
+    extra_device_type: extraTypeSummary,
+    extra_device_count: hasExtra ? totalExtraDevices : null,
+    extra_device_configurations: hasExtra ? extraConfigs : [],
     confirmed_price: confirmedPrice,
     payment_method: data.payment_method || existing.payment_method,
     advance_received: Boolean(data.advance_received),
@@ -569,10 +665,14 @@ export async function updateChecklist(id, data) {
 
     if (error) throw error;
     updated = { ...existing, ...payload, ...res, id: existing.id };
+    if (extraConfigs && extraConfigs.length > 0) {
+      inMemoryChecklistExtraConfigs.set(existing.id, extraConfigs);
+    }
   } catch (error) {
     if (
       error.code === 'PGRST204' ||
       error.message?.includes('device_configurations') ||
+      error.message?.includes('extra_device_configurations') ||
       error.message?.includes('service_engineer_id') ||
       error.message?.includes('booking_end_date') ||
       error.message?.includes('bom_snapshot') ||
@@ -581,6 +681,7 @@ export async function updateChecklist(id, data) {
     ) {
       const fallbackPayload = { ...payload };
       delete fallbackPayload.device_configurations;
+      delete fallbackPayload.extra_device_configurations;
       delete fallbackPayload.service_engineer_id;
       delete fallbackPayload.booking_end_date;
       delete fallbackPayload.bom_snapshot;
@@ -594,6 +695,9 @@ export async function updateChecklist(id, data) {
         .single();
       if (err2) throw err2;
       updated = { ...existing, ...payload, ...res2, id: existing.id };
+      if (extraConfigs && extraConfigs.length > 0) {
+        inMemoryChecklistExtraConfigs.set(existing.id, extraConfigs);
+      }
     } else {
       console.error('Database update error for checklist:', error);
       throw new Error(error.message || 'Failed to update installation checklist');

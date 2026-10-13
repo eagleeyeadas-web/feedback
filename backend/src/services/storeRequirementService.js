@@ -1,7 +1,13 @@
 import supabase from './supabase.js';
 import { getMaterialInventory, issueMaterialsForChecklist } from './materialStockService.js';
-import { getInventoryProducts, issueDevicesForChecklist } from './inventoryService.js';
-import { calculateBomRequirements, parseDeviceConfigurations } from './bomService.js';
+import { getInventoryProducts } from './inventoryService.js';
+import {
+  calculateBomRequirements,
+  parseDeviceConfigurations,
+  parseExtraDeviceConfigurations,
+  combineCarriedDevicesAllocation,
+} from './bomService.js';
+import { enrichChecklistsWithWorkflowStatus } from './workflowService.js';
 
 // In-memory fallback cache
 const inMemoryStoreRequirements = new Map();
@@ -11,7 +17,13 @@ const inMemoryStoreRequirements = new Map();
  * for an installation or service checklist.
  * Calculates device stock availability and material stock availability separately.
  */
-export async function syncStoreRequirementForChecklist(checklist) {
+export async function syncStoreRequirementForChecklist(checklistOrId) {
+  let checklist = checklistOrId;
+  if (typeof checklistOrId === 'string') {
+    const { getChecklistById } = await import('./installationService.js');
+    checklist = await getChecklistById(checklistOrId);
+  }
+
   if (!checklist || !checklist.id) {
     throw new Error('Checklist with valid ID is required to sync Store Manager requirement');
   }
@@ -51,9 +63,47 @@ export async function syncStoreRequirementForChecklist(checklist) {
     console.warn('Could not load camera device products map:', e.message);
   }
 
-  deviceItems = deviceConfigs.map((cfg) => {
+  const extraConfigs = parseExtraDeviceConfigurations(checklist);
+  const combinedAllocation = combineCarriedDevicesAllocation(deviceConfigs, extraConfigs);
+
+  const requiredDeviceItems = deviceConfigs.map((cfg) => {
     const dType = (cfg.device_type || '').trim();
     const reqQty = Number(cfg.number_of_devices) || 1;
+    const prod = deviceProductsMap.get(dType);
+    const availableStock = prod ? Number(prod.usable_stock) || 0 : 0;
+    return {
+      product_id: prod?.id || null,
+      sku: prod?.sku || null,
+      device_type: dType,
+      required_quantity: reqQty,
+      quantity: reqQty,
+      number_of_devices: reqQty,
+      unit: 'Nos.',
+      available_stock: availableStock,
+    };
+  });
+
+  const extraDeviceItems = extraConfigs.map((cfg) => {
+    const dType = (cfg.device_type || '').trim();
+    const extraQty = Number(cfg.extra_quantity) || 1;
+    const prod = deviceProductsMap.get(dType);
+    const availableStock = prod ? Number(prod.usable_stock) || 0 : 0;
+    return {
+      product_id: prod?.id || null,
+      sku: prod?.sku || null,
+      device_type: dType,
+      extra_quantity: extraQty,
+      required_quantity: extraQty,
+      quantity: extraQty,
+      number_of_devices: extraQty,
+      unit: 'Nos.',
+      available_stock: availableStock,
+    };
+  });
+
+  deviceItems = combinedAllocation.map((cfg) => {
+    const dType = (cfg.device_type || '').trim();
+    const reqQty = Number(cfg.quantity_carried) || Number(cfg.number_of_devices) || 1;
     const prod = deviceProductsMap.get(dType);
     const availableStock = prod ? Number(prod.usable_stock) || 0 : 0;
     const shortage = Math.max(0, reqQty - availableStock);
@@ -77,6 +127,9 @@ export async function syncStoreRequirementForChecklist(checklist) {
       sku: prod?.sku || null,
       device_type: dType,
       required_quantity: reqQty,
+      quantity_carried: reqQty,
+      required_for_installation: Number(cfg.required_quantity) || 0,
+      extra_quantity: Number(cfg.extra_quantity) || 0,
       unit: 'Nos.',
       available_stock: availableStock,
       shortage: isInstallation ? shortage : 0,
@@ -171,10 +224,13 @@ export async function syncStoreRequirementForChecklist(checklist) {
     google_maps_location: checklist.google_maps_location ? checklist.google_maps_location.trim() : null,
     job_type: isInstallation ? 'Installation' : 'Service',
     device_type: checklist.device_type || (deviceConfigs[0]?.device_type) || '2 Channel Live',
-    number_of_devices: Number(checklist.number_of_devices) || deviceConfigs.reduce((s, c) => s + c.number_of_devices, 0) || 1,
+    number_of_devices: combinedAllocation.reduce((s, c) => s + (Number(c.quantity_carried) || 0), 0) || Number(checklist.number_of_devices) || 1,
     number_of_vehicles: Number(checklist.number_of_vehicles) || Number(checklist.number_of_devices) || 1,
     device_configurations: deviceConfigs,
+    extra_device_configurations: extraConfigs,
     device_items: deviceItems,
+    required_device_items: requiredDeviceItems,
+    extra_device_items: extraDeviceItems,
     bom_snapshot: isInstallation ? bomSnapshot : null,
     material_items: isInstallation ? materialItems : [],
     material_issuance_status: materialIssuanceStatus,
@@ -204,9 +260,22 @@ export async function syncStoreRequirementForChecklist(checklist) {
       .select()
       .maybeSingle();
 
+    const totalCarried = combinedAllocation.reduce((s, c) => s + (Number(c.quantity_carried) || 0), 0) || Number(payload.number_of_devices) || 1;
+    const totalReq = deviceConfigs.reduce((s, c) => s + (Number(c.number_of_devices) || 1), 0);
+    const totalExtra = extraConfigs.reduce((s, c) => s + (Number(c.extra_quantity) || 1), 0);
+
     if (!error && res) {
-      inMemoryStoreRequirements.set(checklistId, res);
-      return res;
+      const full = {
+        ...res,
+        total_devices_carried: totalCarried,
+        total_devices_required: totalReq,
+        total_extra_devices: totalExtra,
+        required_device_items: requiredDeviceItems,
+        extra_device_items: extraDeviceItems,
+        extra_device_configurations: extraConfigs,
+      };
+      inMemoryStoreRequirements.set(checklistId, full);
+      return full;
     }
 
     if (
@@ -217,7 +286,10 @@ export async function syncStoreRequirementForChecklist(checklist) {
         error.message?.includes('service_assistant') ||
         error.message?.includes('expected_arrival_date') ||
         error.message?.includes('expected_arrival_time') ||
-        error.message?.includes('installation_duration'))
+        error.message?.includes('installation_duration') ||
+        error.message?.includes('required_device_items') ||
+        error.message?.includes('extra_device_items') ||
+        error.message?.includes('extra_device_configurations'))
     ) {
       const strippedPayload = { ...payload };
       delete strippedPayload.salesperson_name;
@@ -226,13 +298,22 @@ export async function syncStoreRequirementForChecklist(checklist) {
       delete strippedPayload.expected_arrival_date;
       delete strippedPayload.expected_arrival_time;
       delete strippedPayload.installation_duration;
+      delete strippedPayload.required_device_items;
+      delete strippedPayload.extra_device_items;
+      delete strippedPayload.extra_device_configurations;
       const { data: res2, error: err2 } = await supabase
         .from('store_material_requirements')
         .upsert(strippedPayload, { onConflict: 'checklist_id' })
         .select()
         .maybeSingle();
       if (!err2 && res2) {
-        const merged = { ...res2, ...payload };
+        const merged = {
+          ...res2,
+          ...payload,
+          total_devices_carried: totalCarried,
+          total_devices_required: totalReq,
+          total_extra_devices: totalExtra,
+        };
         inMemoryStoreRequirements.set(checklistId, merged);
         return merged;
       }
@@ -241,9 +322,16 @@ export async function syncStoreRequirementForChecklist(checklist) {
     console.warn('Upsert store_material_requirements exception:', err.message);
   }
 
+  const totalCarried = combinedAllocation.reduce((s, c) => s + (Number(c.quantity_carried) || 0), 0) || Number(payload.number_of_devices) || 1;
+  const totalReq = deviceConfigs.reduce((s, c) => s + (Number(c.number_of_devices) || 1), 0);
+  const totalExtra = extraConfigs.reduce((s, c) => s + (Number(c.extra_quantity) || 1), 0);
+
   const fallbackRecord = {
     id: `req-${checklistId}`,
     ...payload,
+    total_devices_carried: totalCarried,
+    total_devices_required: totalReq,
+    total_extra_devices: totalExtra,
     created_at: payload.submission_date,
   };
   inMemoryStoreRequirements.set(checklistId, fallbackRecord);
@@ -336,20 +424,33 @@ export async function getStoreMaterialRequirements(params = {}) {
     }
   }
 
-  // Backfill salesperson and assignment fields from checklists for any legacy records
-  const missingInfoIds = (dbRecords || [])
-    .filter((r) => (!r.salesperson_name || !r.service_engineer) && r.checklist_id)
-    .map((r) => r.checklist_id);
-  if (missingInfoIds.length > 0) {
+  // Backfill checklist details & workflow status (BOM, completion report, actual materials, returns)
+  const allChecklistIds = (dbRecords || [])
+    .map((r) => r.checklist_id || r.id)
+    .filter(Boolean);
+
+  if (allChecklistIds.length > 0) {
     try {
-      const { data: chkRows } = await supabase
-        .from('installation_checklists')
-        .select('id, checklist_number, salesperson_name, service_engineer, service_assistant, expected_arrival_date, expected_arrival_time, installation_duration')
-        .in('id', missingInfoIds);
+      let chkRows = null;
+      try {
+        const { data, error } = await supabase
+          .from('installation_checklists')
+          .select('id, checklist_number, salesperson_name, service_engineer, service_assistant, expected_arrival_date, expected_arrival_time, installation_duration, installation_status, final_bom_snapshot, actual_materials_used, actual_materials_returned, material_return_status')
+          .in('id', allChecklistIds);
+        if (!error && Array.isArray(data)) chkRows = data;
+      } catch (colErr) {
+        const { data } = await supabase
+          .from('installation_checklists')
+          .select('id, checklist_number, salesperson_name, service_engineer, service_assistant, expected_arrival_date, expected_arrival_time, installation_duration, installation_status')
+          .in('id', allChecklistIds);
+        if (Array.isArray(data)) chkRows = data;
+      }
+
       if (Array.isArray(chkRows)) {
-        const chkMap = new Map(chkRows.map((c) => [c.id, c]));
+        const enrichedChk = enrichChecklistsWithWorkflowStatus(chkRows);
+        const chkMap = new Map(enrichedChk.map((c) => [c.id, c]));
         (dbRecords || []).forEach((r) => {
-          const matched = chkMap.get(r.checklist_id);
+          const matched = chkMap.get(r.checklist_id || r.id);
           if (matched) {
             r.salesperson_name = r.salesperson_name || matched.salesperson_name || null;
             r.service_engineer = r.service_engineer || matched.service_engineer || null;
@@ -357,11 +458,20 @@ export async function getStoreMaterialRequirements(params = {}) {
             r.expected_arrival_date = r.expected_arrival_date || matched.expected_arrival_date || null;
             r.expected_arrival_time = r.expected_arrival_time || matched.expected_arrival_time || null;
             r.installation_duration = r.installation_duration || matched.installation_duration || null;
+            r.installation_status = matched.installation_status || r.installation_status || null;
+            r.final_bom_snapshot = matched.final_bom_snapshot || r.final_bom_snapshot || null;
+            r.actual_materials_used = matched.actual_materials_used || r.actual_materials_used || null;
+            r.actual_materials_returned = matched.actual_materials_returned || r.actual_materials_returned || null;
+            r.material_return_status = matched.material_return_status || r.material_return_status || null;
+            r.completion_report = matched.completion_report || r.completion_report || null;
+            r.returns = matched.returns || r.returns || null;
+            r.material_returns = matched.material_returns || r.material_returns || null;
+            r.is_completion_submitted = matched.is_completion_submitted || false;
           }
         });
       }
     } catch (e) {
-      console.warn('Could not backfill salesperson info from checklists:', e.message);
+      console.warn('Could not backfill checklist workflow data:', e.message);
     }
   }
 

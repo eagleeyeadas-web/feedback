@@ -57,7 +57,6 @@ app.get('/api/admin/cleanup/status', handleCleanupStatusEndpoint);
 // Routes
 app.use('/api/feedback', feedbackRoutes);
 app.use('/api/admin/quotations', quotationRoutes);
-app.use('/api/admin/quotation', quotationRoutes);
 app.use('/api/admin/installations', installationRoutes);
 app.use('/api/installations', installationRoutes);
 app.use('/api/admin/inventory', inventoryRoutes);

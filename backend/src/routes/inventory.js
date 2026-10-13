@@ -15,7 +15,9 @@ import {
 import {
   getAllStoreReturns,
   getPendingStoreReturns,
+  getAllStoreMaterialReturns,
   verifyStoreReturn,
+  verifyStoreMaterialReturn,
 } from '../services/workflowService.js';
 import supabase from '../services/supabase.js';
 
@@ -199,8 +201,15 @@ router.post('/issue-devices', requireRole('STORE_MANAGER', 'ADMIN'), async (req,
  */
 router.get('/returns', requireRole('STORE_MANAGER', 'ADMIN'), async (req, res) => {
   try {
-    const returns = await getAllStoreReturns();
-    return res.json(returns);
+    const deviceReturns = await getAllStoreReturns();
+    const materialReturns = await getAllStoreMaterialReturns();
+    const formattedDevice = (deviceReturns || []).map((r) => ({ ...r, return_category: 'DEVICE' }));
+    const formattedMaterial = (materialReturns || []).map((r) => ({
+      ...r,
+      return_category: 'MATERIAL',
+      device_type: `${r.material_name} (${r.unit || 'Nos.'})`,
+    }));
+    return res.json([...formattedDevice, ...formattedMaterial]);
   } catch (err) {
     console.error('Error in GET /inventory/returns:', err);
     return res.status(500).json({ error: err.message || 'Failed to fetch store returns' });
@@ -209,13 +218,27 @@ router.get('/returns', requireRole('STORE_MANAGER', 'ADMIN'), async (req, res) =
 
 /**
  * POST /api/admin/inventory/verify-return
- * Verify physical store return (STORE_MANAGER, ADMIN)
+ * Verify physical store return for devices or materials (STORE_MANAGER, ADMIN)
  */
 router.post('/verify-return', requireRole('STORE_MANAGER', 'ADMIN'), async (req, res) => {
   try {
-    const { return_id, accepted_usable_qty, damaged_qty, missing_qty, remarks } = req.body;
+    const { return_id, return_category, is_material, accepted_usable_qty, damaged_qty, missing_qty, remarks } = req.body;
     if (!return_id) {
       return res.status(400).json({ error: 'return_id is required' });
+    }
+
+    const isMat = return_category === 'MATERIAL' || is_material || String(return_id).startsWith('matret-');
+
+    if (isMat) {
+      const result = await verifyStoreMaterialReturn({
+        return_id,
+        accepted_usable_qty: accepted_usable_qty !== undefined ? parseFloat(accepted_usable_qty) : 0,
+        damaged_qty: parseFloat(damaged_qty) || 0,
+        missing_qty: parseFloat(missing_qty) || 0,
+        user: req.profile,
+        remarks,
+      });
+      return res.json(result);
     }
 
     const result = await verifyStoreReturn({

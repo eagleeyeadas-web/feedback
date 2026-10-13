@@ -8,30 +8,40 @@ dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
 import supabase from '../src/services/supabase.js';
 
-// Account definitions to provision
-const TARGET_ACCOUNTS = [
-  {
-    email: 'sales@gmail.com',
-    password: process.env.SALES_ACCOUNT_PASSWORD || 'sales@2026',
-    role: 'SALES',
-    fullName: 'Sales Executive',
-    defaultWorkspace: 'Sales Workspace',
-  },
-  {
-    email: 'tech@gmail.com',
-    password: process.env.TECH_ACCOUNT_PASSWORD || 'camera@2026',
-    role: 'TECHNICAL',
-    fullName: 'Service Engineer',
-    defaultWorkspace: 'Technical Workspace',
-  },
-  {
-    email: 'store@gmail.com',
-    password: process.env.STORE_ACCOUNT_PASSWORD || 'adas@2026',
-    role: 'STORE_MANAGER',
-    fullName: 'Store Manager',
-    defaultWorkspace: 'Store Manager Workspace',
-  },
-];
+function getAccountPassword(envVar, roleName) {
+  const pwd = process.env[envVar];
+  if (!pwd) {
+    throw new Error(`Environment variable ${envVar} is required to provision the ${roleName} account. Please define it in backend/.env.`);
+  }
+  return pwd;
+}
+
+// Account definitions to provision (passwords supplied via environment variables)
+function getTargetAccounts() {
+  return [
+    {
+      email: 'sales@gmail.com',
+      password: getAccountPassword('SALES_ACCOUNT_PASSWORD', 'SALES'),
+      role: 'SALES',
+      fullName: 'Sales Executive',
+      defaultWorkspace: 'Sales Workspace',
+    },
+    {
+      email: 'tech@gmail.com',
+      password: getAccountPassword('TECH_ACCOUNT_PASSWORD', 'TECHNICAL'),
+      role: 'TECHNICAL',
+      fullName: 'Service Engineer',
+      defaultWorkspace: 'Technical Workspace',
+    },
+    {
+      email: 'store@gmail.com',
+      password: getAccountPassword('STORE_ACCOUNT_PASSWORD', 'STORE_MANAGER'),
+      role: 'STORE_MANAGER',
+      fullName: 'Store Manager',
+      defaultWorkspace: 'Store Manager Workspace',
+    },
+  ];
+}
 
 export async function provisionAccounts() {
   console.log('================================================================');
@@ -47,7 +57,8 @@ export async function provisionAccounts() {
   const existingAuthUsers = authList?.users || [];
   const results = [];
 
-  for (const account of TARGET_ACCOUNTS) {
+  const targetAccounts = getTargetAccounts();
+  for (const account of targetAccounts) {
     const existing = existingAuthUsers.find(
       (u) => u.email?.toLowerCase() === account.email.toLowerCase()
     );

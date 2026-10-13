@@ -585,6 +585,25 @@ export async function verifyReturnJob(token, checklistId, data) {
   return json;
 }
 
+export async function verifyStoreMaterialReturnApi(token, checklistId, data) {
+  const res = await fetch(`${API_BASE}/admin/installations/${checklistId}/verify-material-return`, {
+    method: 'POST',
+    headers: adminHeaders(token),
+    body: JSON.stringify(data),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to verify store material return');
+  return json;
+}
+
+export async function fetchJobFinalBom(token, checklistId) {
+  const res = await fetch(`${API_BASE}/admin/installations/${checklistId}/final-bom`, {
+    headers: adminHeaders(token),
+  });
+  if (!res.ok) throw new Error('Failed to fetch job final BOM');
+  return res.json();
+}
+
 export async function resolveDiscrepancyJob(token, checklistId, data) {
   const res = await fetch(`${API_BASE}/admin/installations/${checklistId}/resolve-discrepancy`, {
     method: 'POST',

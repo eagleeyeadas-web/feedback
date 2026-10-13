@@ -312,7 +312,7 @@ export default function StoreWorkspace({ onSelectChecklist }) {
     }
   };
 
-  // Handle Verify Technician Return
+  // Handle Verify Technician Return (Devices & Materials)
   const handleVerifyReturnSubmit = async (e) => {
     e.preventDefault();
     setModalError('');
@@ -320,9 +320,11 @@ export default function StoreWorkspace({ onSelectChecklist }) {
     try {
       await verifyStoreReturnApi(token, {
         return_id: verifyReturnModal.id,
-        accepted_usable_qty: parseInt(modalQty, 10) || 0,
-        damaged_qty: parseInt(modalCost, 10) || 0,
-        missing_qty: parseInt(modalSupplier, 10) || 0,
+        return_category: verifyReturnModal.return_category,
+        is_material: verifyReturnModal.return_category === 'MATERIAL',
+        accepted_usable_qty: parseFloat(modalQty) || 0,
+        damaged_qty: parseFloat(modalCost) || 0,
+        missing_qty: parseFloat(modalSupplier) || 0,
         remarks: modalReason.trim(),
       });
       showToast(`Verified physical return for ${verifyReturnModal.checklist?.checklist_number || 'checklist'}!`);
@@ -948,10 +950,10 @@ export default function StoreWorkspace({ onSelectChecklist }) {
             <div>
               <h2 className="text-sm font-bold text-gray-900 flex items-center gap-2">
                 <ShieldCheck className="w-4 h-4 text-amber-600" />
-                <span>Physical Return Verification</span>
+                <span>Physical Return Verification (Devices &amp; Materials)</span>
               </h2>
               <p className="text-gray-500 mt-0.5">
-                Technician declared returns must be verified by Store Manager. Usable stock is credited only upon verification; damaged units are routed to scrap stock.
+                Technician declared returns must be verified by Store Manager. Usable stock is credited only upon verification; damaged units/materials are routed to scrap stock. Missing items are logged as discrepancies.
               </p>
             </div>
           </div>
@@ -961,8 +963,9 @@ export default function StoreWorkspace({ onSelectChecklist }) {
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-200 text-[11px] font-bold text-gray-600 uppercase tracking-wider">
                   <th className="py-3 px-4">Job Reference</th>
+                  <th className="py-3 px-4">Category</th>
                   <th className="py-3 px-4">Technician</th>
-                  <th className="py-3 px-4">Device Model</th>
+                  <th className="py-3 px-4">Item / Model</th>
                   <th className="py-3 px-4 text-center">Declared Qty</th>
                   <th className="py-3 px-4 text-center">Accepted Usable</th>
                   <th className="py-3 px-4 text-center">Damaged</th>
@@ -973,58 +976,71 @@ export default function StoreWorkspace({ onSelectChecklist }) {
               <tbody className="divide-y divide-gray-100">
                 {storeReturns.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="py-8 text-center text-gray-400">
-                      No device returns recorded.
+                    <td colSpan={9} className="py-8 text-center text-gray-400">
+                      No device or material returns recorded.
                     </td>
                   </tr>
                 ) : (
-                  storeReturns.map((r) => (
-                    <tr key={r.id} className="hover:bg-amber-50/20 transition-colors">
-                      <td className="py-3 px-4 font-mono font-bold text-amber-800">
-                        {r.checklist?.checklist_number || 'N/A'}
-                        <span className="block text-[11px] text-gray-500 font-sans font-normal">{r.checklist?.client_name}</span>
-                      </td>
-                      <td className="py-3 px-4 text-gray-700">
-                        {r.technician?.full_name || r.technician?.email || 'Technician'}
-                      </td>
-                      <td className="py-3 px-4 font-semibold text-gray-900">{r.device_type}</td>
-                      <td className="py-3 px-4 text-center font-bold font-mono">{r.declared_return_qty} Nos.</td>
-                      <td className="py-3 px-4 text-center font-bold font-mono text-emerald-700">
-                        {r.accepted_usable_qty !== null ? `${r.accepted_usable_qty} Nos.` : '—'}
-                      </td>
-                      <td className="py-3 px-4 text-center font-bold font-mono text-rose-600">
-                        {r.damaged_qty !== null ? `${r.damaged_qty} Nos.` : '—'}
-                      </td>
-                      <td className="py-3 px-4 text-center">
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                          r.status === 'VERIFIED_ACCEPTED'
-                            ? 'bg-emerald-100 text-emerald-800'
-                            : 'bg-amber-100 text-amber-800'
-                        }`}>
-                          {r.status === 'VERIFIED_ACCEPTED' ? 'Verified & Credited' : 'Awaiting Store Verification'}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-right">
-                        {r.status === 'PENDING_STORE_VERIFICATION' ? (
-                          <button
-                            onClick={() => {
-                              setVerifyReturnModal(r);
-                              setModalQty(r.declared_return_qty || '');
-                              setModalCost('0');
-                              setModalSupplier('0');
-                              setModalReason('');
-                              setModalError('');
-                            }}
-                            className="px-3 py-1 text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 rounded-lg shadow-xs cursor-pointer"
-                          >
-                            Verify Return
-                          </button>
-                        ) : (
-                          <span className="text-gray-400 text-xs">Completed</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))
+                  storeReturns.map((r) => {
+                    const isMat = r.return_category === 'MATERIAL';
+                    const unitStr = r.unit || 'Nos.';
+                    return (
+                      <tr key={r.id} className="hover:bg-amber-50/20 transition-colors">
+                        <td className="py-3 px-4 font-mono font-bold text-amber-800">
+                          {r.checklist?.checklist_number || 'N/A'}
+                          <span className="block text-[11px] text-gray-500 font-sans font-normal">{r.checklist?.client_name}</span>
+                        </td>
+                        <td className="py-3 px-4">
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                            isMat ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'
+                          }`}>
+                            {isMat ? 'Material' : 'Device'}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-gray-700">
+                          {r.technician?.full_name || r.technician?.email || 'Technician'}
+                        </td>
+                        <td className="py-3 px-4 font-semibold text-gray-900">
+                          {r.material_name || r.device_type}
+                        </td>
+                        <td className="py-3 px-4 text-center font-bold font-mono">{r.declared_return_qty} {unitStr}</td>
+                        <td className="py-3 px-4 text-center font-bold font-mono text-emerald-700">
+                          {r.accepted_usable_qty !== null ? `${r.accepted_usable_qty} ${unitStr}` : '—'}
+                        </td>
+                        <td className="py-3 px-4 text-center font-bold font-mono text-rose-600">
+                          {r.damaged_qty !== null ? `${r.damaged_qty} ${unitStr}` : '—'}
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                            r.status === 'VERIFIED_ACCEPTED'
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : 'bg-amber-100 text-amber-800'
+                          }`}>
+                            {r.status === 'VERIFIED_ACCEPTED' ? 'Verified & Credited' : 'Awaiting Store Verification'}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-right">
+                          {r.status === 'PENDING_STORE_VERIFICATION' ? (
+                            <button
+                              onClick={() => {
+                                setVerifyReturnModal(r);
+                                setModalQty(r.declared_return_qty || '');
+                                setModalCost('0');
+                                setModalSupplier('0');
+                                setModalReason('');
+                                setModalError('');
+                              }}
+                              className="px-3 py-1 text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 rounded-lg shadow-xs cursor-pointer"
+                            >
+                              Verify Return
+                            </button>
+                          ) : (
+                            <span className="text-gray-400 text-xs">Completed</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
@@ -1585,7 +1601,7 @@ export default function StoreWorkspace({ onSelectChecklist }) {
             <div className="flex items-center justify-between pb-2 border-b border-gray-100">
               <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
                 <ShieldCheck className="w-4 h-4 text-emerald-600" />
-                <span>Verify Return: {verifyReturnModal.device_type}</span>
+                <span>Verify Return: {verifyReturnModal.material_name || verifyReturnModal.device_type}</span>
               </h3>
               <button onClick={() => setVerifyReturnModal(null)} className="text-gray-400 hover:text-gray-600">
                 <X className="w-5 h-5" />
@@ -1600,32 +1616,54 @@ export default function StoreWorkspace({ onSelectChecklist }) {
 
             <form onSubmit={handleVerifyReturnSubmit} className="space-y-3 text-xs">
               <div className="p-3 bg-gray-50 rounded-xl text-gray-600">
-                Declared Return Qty: <strong>{verifyReturnModal.declared_return_qty} Nos.</strong>
+                Declared Return Qty: <strong>{verifyReturnModal.declared_return_qty} {verifyReturnModal.unit || 'Nos.'}</strong>
               </div>
 
               <div>
-                <label className="block font-bold text-gray-700 mb-1">Accepted Usable Quantity (Nos.) *</label>
+                <label className="block font-bold text-gray-700 mb-1">
+                  Accepted Usable Quantity ({verifyReturnModal.unit || 'Nos.'}) *
+                </label>
                 <input
                   type="number"
                   min="0"
+                  step="any"
                   required
                   value={modalQty}
                   onChange={(e) => setModalQty(e.target.value)}
                   className="w-full p-2.5 border border-gray-200 rounded-xl font-bold font-mono focus:outline-none focus:border-amber-500"
                 />
-                <span className="text-[10px] text-gray-400 mt-1 block">Credited to usable stock</span>
+                <span className="text-[10px] text-gray-400 mt-1 block">Physically verified and credited back to usable warehouse stock</span>
               </div>
 
               <div>
-                <label className="block font-bold text-gray-700 mb-1">Damaged Quantity (Nos.)</label>
+                <label className="block font-bold text-gray-700 mb-1">
+                  Damaged Quantity ({verifyReturnModal.unit || 'Nos.'})
+                </label>
                 <input
                   type="number"
                   min="0"
+                  step="any"
                   value={modalCost}
                   onChange={(e) => setModalCost(e.target.value)}
                   className="w-full p-2.5 border border-gray-200 rounded-xl font-bold font-mono focus:outline-none focus:border-amber-500"
                 />
-                <span className="text-[10px] text-gray-400 mt-1 block">Routed to damaged/scrap inventory</span>
+                <span className="text-[10px] text-gray-400 mt-1 block">Recorded in damaged stock ledger (not added to usable inventory)</span>
+              </div>
+
+              <div>
+                <label className="block font-bold text-gray-700 mb-1">
+                  Missing / Unreturned Quantity ({verifyReturnModal.unit || 'Nos.'})
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="any"
+                  value={modalSupplier}
+                  onChange={(e) => setModalSupplier(e.target.value)}
+                  placeholder="0"
+                  className="w-full p-2.5 border border-gray-200 rounded-xl font-bold font-mono focus:outline-none focus:border-amber-500"
+                />
+                <span className="text-[10px] text-gray-400 mt-1 block">Never added to stock; logged as audit discrepancy</span>
               </div>
 
               <div>
@@ -1634,7 +1672,7 @@ export default function StoreWorkspace({ onSelectChecklist }) {
                   type="text"
                   value={modalReason}
                   onChange={(e) => setModalReason(e.target.value)}
-                  placeholder="e.g. Serial checked, tested operational"
+                  placeholder="e.g. Serial checked, tested operational on test bench"
                   className="w-full p-2.5 border border-gray-200 rounded-xl focus:outline-none focus:border-amber-500"
                 />
               </div>

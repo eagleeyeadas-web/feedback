@@ -66,22 +66,28 @@ export function parseDeviceConfigurations(input, defaultQty = 1, defaultVehicles
   } else if (typeof input === 'object') {
     if (Array.isArray(input.device_configurations) && input.device_configurations.length > 0) {
       rawList = input.device_configurations;
+    } else if (Array.isArray(input.devices_carried) && input.devices_carried.length > 0) {
+      rawList = input.devices_carried;
     } else if (Array.isArray(input.device_items) && input.device_items.length > 0) {
       rawList = input.device_items.map((d) => ({
         device_type: d.device_type,
-        number_of_devices: d.required_quantity || d.number_of_devices || defaultQty,
+        quantity_carried: d.quantity_carried || d.required_quantity || d.number_of_devices || defaultQty,
+        number_of_devices: d.required_quantity || d.quantity_carried || d.number_of_devices || defaultQty,
         number_of_vehicles: d.number_of_vehicles || defaultVehicles,
       }));
     } else if (input.device_type) {
+      const q = input.quantity_carried || input.number_of_devices || defaultQty;
       rawList = [{
         device_type: input.device_type,
-        number_of_devices: input.number_of_devices || defaultQty,
+        quantity_carried: q,
+        number_of_devices: q,
         number_of_vehicles: input.number_of_vehicles || defaultVehicles,
       }];
     }
   } else if (typeof input === 'string') {
     rawList = [{
       device_type: input,
+      quantity_carried: defaultQty,
       number_of_devices: defaultQty,
       number_of_vehicles: defaultVehicles,
     }];
@@ -93,7 +99,7 @@ export function parseDeviceConfigurations(input, defaultQty = 1, defaultVehicles
     const rawType = (typeof item === 'string' ? item : (item.device_type || '')).trim();
     if (!rawType) continue;
 
-    const itemQty = Number(item.number_of_devices) || defaultQty || 1;
+    const itemQty = Number(item.quantity_carried) || Number(item.number_of_devices) || defaultQty || 1;
     const itemVeh = Number(item.number_of_vehicles) || defaultVehicles || itemQty;
 
     // Check if rawType is a composite string containing multiple device types separated by comma or semicolon
@@ -106,10 +112,12 @@ export function parseDeviceConfigurations(input, defaultQty = 1, defaultVehicles
         const qty = qtyMatch ? parseInt(qtyMatch[1], 10) : 1;
         const nameClean = p.replace(/\(.*?\)/g, '').replace(/(?:x|[:\-])\s*\d+/gi, '').trim();
         if (nameClean) {
+          const finalQty = Math.max(1, isNaN(qty) ? 1 : qty);
           parsedItems.push({
             device_type: normalizeDeviceTypeName(nameClean),
-            number_of_devices: Math.max(1, isNaN(qty) ? 1 : qty),
-            number_of_vehicles: Math.max(1, isNaN(qty) ? 1 : qty),
+            quantity_carried: finalQty,
+            number_of_devices: finalQty,
+            number_of_vehicles: finalQty,
           });
         }
       }
@@ -118,10 +126,12 @@ export function parseDeviceConfigurations(input, defaultQty = 1, defaultVehicles
       const qtyMatch = p.match(/\((\d+)(?:\s*devices?)?\)/i) || p.match(/(?:x|[:\-])\s*(\d+)/i);
       const nameClean = p.replace(/\(.*?\)/g, '').replace(/(?:x|[:\-])\s*\d+/gi, '').trim();
       const extractedQty = qtyMatch ? parseInt(qtyMatch[1], 10) : itemQty;
+      const finalQty = Math.max(1, isNaN(extractedQty) ? 1 : extractedQty);
 
       parsedItems.push({
         device_type: normalizeDeviceTypeName(nameClean || p),
-        number_of_devices: Math.max(1, isNaN(extractedQty) ? 1 : extractedQty),
+        quantity_carried: finalQty,
+        number_of_devices: finalQty,
         number_of_vehicles: Math.max(1, isNaN(itemVeh) ? 1 : itemVeh),
       });
     }
@@ -135,11 +145,13 @@ export function parseDeviceConfigurations(input, defaultQty = 1, defaultVehicles
 
     if (combined.has(dt)) {
       const ex = combined.get(dt);
+      ex.quantity_carried += item.number_of_devices;
       ex.number_of_devices += item.number_of_devices;
       ex.number_of_vehicles += item.number_of_vehicles;
     } else {
       combined.set(dt, {
         device_type: dt,
+        quantity_carried: item.number_of_devices,
         number_of_devices: item.number_of_devices,
         number_of_vehicles: item.number_of_vehicles,
       });
@@ -147,6 +159,133 @@ export function parseDeviceConfigurations(input, defaultQty = 1, defaultVehicles
   }
 
   return Array.from(combined.values());
+}
+
+/**
+ * Robustly parses and normalizes extra devices carried from:
+ * - Array of extra device configuration objects [{ device_type, extra_quantity }]
+ * - Object with extra_device_configurations
+ * - Object with extra_device_type string and extra_device_count number
+ * - Composite extra device string e.g. "4 Channel Live (2), 8 Channel Live (1)"
+ */
+export function parseExtraDeviceConfigurations(input) {
+  if (!input) return [];
+
+  let rawList = [];
+  if (Array.isArray(input)) {
+    rawList = input;
+  } else if (typeof input === 'object') {
+    if (Array.isArray(input.extra_device_configurations) && input.extra_device_configurations.length > 0) {
+      rawList = input.extra_device_configurations;
+    } else if (input.extra_devices && input.extra_device_type) {
+      rawList = [{
+        device_type: input.extra_device_type,
+        extra_quantity: Number(input.extra_device_count) || 1,
+      }];
+    }
+  } else if (typeof input === 'string') {
+    rawList = [{ device_type: input, extra_quantity: 1 }];
+  }
+
+  const parsedItems = [];
+  for (const item of rawList) {
+    const rawType = (typeof item === 'string' ? item : (item.device_type || '')).trim();
+    if (!rawType) continue;
+
+    const itemQty = Number(item.extra_quantity) || Number(item.quantity) || Number(item.count) || Number(item.number_of_devices) || 1;
+    const parts = rawType.split(/[,;\n]+/).map((p) => p.trim()).filter(Boolean);
+
+    if (parts.length > 1) {
+      for (const p of parts) {
+        const qtyMatch = p.match(/\((\d+)(?:\s*devices?)?\)/i) || p.match(/(?:x|[:\-])\s*(\d+)/i);
+        const qty = qtyMatch ? parseInt(qtyMatch[1], 10) : 1;
+        const nameClean = p.replace(/\(.*?\)/g, '').replace(/(?:x|[:\-])\s*\d+/gi, '').trim();
+        if (nameClean) {
+          const finalQty = Math.max(1, isNaN(qty) ? 1 : qty);
+          parsedItems.push({
+            device_type: normalizeDeviceTypeName(nameClean),
+            extra_quantity: finalQty,
+          });
+        }
+      }
+    } else if (parts.length === 1) {
+      const p = parts[0];
+      const qtyMatch = p.match(/\((\d+)(?:\s*devices?)?\)/i) || p.match(/(?:x|[:\-])\s*(\d+)/i);
+      const nameClean = p.replace(/\(.*?\)/g, '').replace(/(?:x|[:\-])\s*\d+/gi, '').trim();
+      const extractedQty = qtyMatch ? parseInt(qtyMatch[1], 10) : itemQty;
+      const finalQty = Math.max(1, isNaN(extractedQty) ? 1 : extractedQty);
+
+      parsedItems.push({
+        device_type: normalizeDeviceTypeName(nameClean || p),
+        extra_quantity: finalQty,
+      });
+    }
+  }
+
+  // Combine duplicate extra device types into single aggregated rows
+  const combined = new Map();
+  for (const item of parsedItems) {
+    const dt = normalizeDeviceTypeName(item.device_type);
+    if (!dt) continue;
+
+    if (combined.has(dt)) {
+      const ex = combined.get(dt);
+      ex.extra_quantity += item.extra_quantity;
+    } else {
+      combined.set(dt, {
+        device_type: dt,
+        extra_quantity: item.extra_quantity,
+      });
+    }
+  }
+
+  return Array.from(combined.values());
+}
+
+/**
+ * Combines required installation devices and extra backup devices into an authoritative allocation list
+ * Calculates required_quantity, extra_quantity, and total quantity_carried for each device type without double-counting.
+ */
+export function combineCarriedDevicesAllocation(requiredConfigs = [], extraConfigs = []) {
+  const map = new Map();
+
+  for (const r of requiredConfigs) {
+    const dt = normalizeDeviceTypeName(r.device_type);
+    if (!dt) continue;
+    const reqQty = Number(r.number_of_devices) || Number(r.quantity_carried) || 1;
+    if (map.has(dt)) {
+      const item = map.get(dt);
+      item.required_quantity += reqQty;
+      item.quantity_carried += reqQty;
+    } else {
+      map.set(dt, {
+        device_type: dt,
+        required_quantity: reqQty,
+        extra_quantity: 0,
+        quantity_carried: reqQty,
+      });
+    }
+  }
+
+  for (const e of extraConfigs) {
+    const dt = normalizeDeviceTypeName(e.device_type);
+    if (!dt) continue;
+    const extraQty = Number(e.extra_quantity) || Number(e.quantity) || 1;
+    if (map.has(dt)) {
+      const item = map.get(dt);
+      item.extra_quantity += extraQty;
+      item.quantity_carried += extraQty;
+    } else {
+      map.set(dt, {
+        device_type: dt,
+        required_quantity: 0,
+        extra_quantity: extraQty,
+        quantity_carried: extraQty,
+      });
+    }
+  }
+
+  return Array.from(map.values());
 }
 
 /**
@@ -580,6 +719,265 @@ export async function calculateBomRequirements(param1, param2) {
       ...it,
       number_of_devices: totalDevices,
     })),
+  };
+}
+
+/**
+ * Priority 2: Calculate Preliminary BOM for All Devices Carried
+ * Calculates:
+ * 1. BOM for required devices
+ * 2. BOM for extra devices
+ * 3. Combined preliminary BOM for all devices carried (required + extra)
+ * Preserves 8 Channel Live Memory Card exclusion.
+ * Extra devices are included in the combined material planning.
+ */
+export async function calculateJobPreliminaryBom({ requiredConfigs = [], extraConfigs = [] }) {
+  const parsedRequired = parseDeviceConfigurations(requiredConfigs);
+  const parsedExtra = parseExtraDeviceConfigurations(extraConfigs);
+
+  // 1. Calculate Required Devices BOM
+  let requiredBom = null;
+  if (parsedRequired.length > 0) {
+    try {
+      requiredBom = await calculateBomRequirements(parsedRequired);
+    } catch (e) {
+      console.warn('Could not calculate required BOM:', e.message);
+    }
+  }
+
+  // 2. Calculate Extra Devices BOM
+  let extraBom = null;
+  if (parsedExtra.length > 0) {
+    try {
+      const extraAsDeviceConfigs = parsedExtra.map((e) => ({
+        device_type: e.device_type,
+        number_of_devices: Number(e.extra_quantity) || 1,
+        number_of_vehicles: Number(e.extra_quantity) || 1,
+      }));
+      extraBom = await calculateBomRequirements(extraAsDeviceConfigs);
+    } catch (e) {
+      console.warn('Could not calculate extra BOM:', e.message);
+    }
+  }
+
+  // 3. Combine both groups into all carried configs
+  const combinedAllocations = combineCarriedDevicesAllocation(parsedRequired, parsedExtra);
+  const allCarriedConfigs = combinedAllocations.map((c) => ({
+    device_type: c.device_type,
+    number_of_devices: Number(c.quantity_carried) || 1,
+    number_of_vehicles: Number(c.quantity_carried) || 1,
+  }));
+
+  let combinedBom = null;
+  if (allCarriedConfigs.length > 0) {
+    try {
+      combinedBom = await calculateBomRequirements(allCarriedConfigs);
+    } catch (e) {
+      console.warn('Could not calculate combined carried BOM:', e.message);
+    }
+  }
+
+  const totalRequired = parsedRequired.reduce((sum, c) => sum + (Number(c.number_of_devices) || 0), 0);
+  const totalExtra = parsedExtra.reduce((sum, c) => sum + (Number(c.extra_quantity) || 0), 0);
+  const totalCarried = totalRequired + totalExtra;
+
+  const baseResult = combinedBom || requiredBom || {
+    configured: false,
+    warning: 'No BOM calculation available',
+    items: [],
+  };
+
+  return {
+    ...baseResult,
+    configured: baseResult.configured,
+    total_devices_required: totalRequired,
+    total_extra_devices: totalExtra,
+    total_devices_carried: totalCarried,
+    required_devices_count: totalRequired,
+    extra_devices_count: totalExtra,
+    required_device_configurations: parsedRequired,
+    extra_device_configurations: parsedExtra,
+    combined_allocations: combinedAllocations,
+    required_bom: requiredBom,
+    extra_bom: extraBom,
+    combined_preliminary_bom: combinedBom,
+    // Preserve items pointing to the combined preliminary requirements for full planning
+    items: combinedBom?.items || requiredBom?.items || [],
+    calculated_at: new Date().toISOString(),
+  };
+}
+
+/**
+ * Priority 2: Calculate Final BOM for Devices Actually Installed
+ * Formula: Final BOM = Sum of (actual installed quantity for each device type × configured BOM quantity per device type)
+ * Includes extra devices that were installed.
+ * Excludes unused extra devices.
+ * Compares Preliminary BOM vs Final BOM requirements, plus actual materials issued, used, and returned.
+ */
+export async function calculateJobFinalBom({
+  installedDeviceConfigs = [],
+  preliminaryBomSnapshot = null,
+  actualMaterialsIssued = [],
+  actualMaterialsUsed = [],
+  actualMaterialsReturned = [],
+}) {
+  const parsedInstalled = parseDeviceConfigurations(installedDeviceConfigs);
+
+  let finalBom = null;
+  if (parsedInstalled.length > 0) {
+    finalBom = await calculateBomRequirements(parsedInstalled);
+  } else {
+    finalBom = {
+      configured: true,
+      items: [],
+      total_devices: 0,
+      total_materials_count: 0,
+      device_configurations: [],
+    };
+  }
+
+  // Build comparison between preliminary BOM and final BOM
+  const comparisonMap = new Map();
+
+  const getMatKey = (item) => {
+    return (item.material_name || '').toLowerCase().trim();
+  };
+
+  // 1. Add preliminary BOM items (baseline for all carried devices)
+  const prelimItems = preliminaryBomSnapshot?.items || [];
+  for (const it of prelimItems) {
+    const key = getMatKey(it);
+    comparisonMap.set(key, {
+      material_id: it.material_id || null,
+      material_sku: it.material_sku || null,
+      material_name: it.material_name,
+      unit: it.unit || 'Nos.',
+      preliminary_quantity: Number(it.total_quantity) || 0,
+      final_quantity: 0,
+      difference: 0,
+      actual_issued: 0,
+      actual_used: 0,
+      actual_returned: 0,
+      status: 'MATCHED',
+    });
+  }
+
+  // 2. Add final BOM items (for installed devices)
+  const finalItems = finalBom?.items || [];
+  for (const it of finalItems) {
+    const key = getMatKey(it);
+    const finalQty = Number(it.total_quantity) || 0;
+    if (comparisonMap.has(key)) {
+      const entry = comparisonMap.get(key);
+      entry.final_quantity = finalQty;
+      if (!entry.material_id && it.material_id) entry.material_id = it.material_id;
+      if (!entry.material_sku && it.material_sku) entry.material_sku = it.material_sku;
+    } else {
+      comparisonMap.set(key, {
+        material_id: it.material_id || null,
+        material_sku: it.material_sku || null,
+        material_name: it.material_name,
+        unit: it.unit || 'Nos.',
+        preliminary_quantity: 0,
+        final_quantity: finalQty,
+        difference: 0,
+        actual_issued: 0,
+        actual_used: 0,
+        actual_returned: 0,
+        status: 'NEW_IN_FINAL',
+      });
+    }
+  }
+
+  // 3. Map actual materials issued
+  for (const m of (actualMaterialsIssued || [])) {
+    const key = getMatKey(m);
+    const issuedQty = Number(m.issued_quantity ?? m.quantity_issued ?? m.quantity) || 0;
+    if (comparisonMap.has(key)) {
+      comparisonMap.get(key).actual_issued = issuedQty;
+    } else if (issuedQty > 0) {
+      comparisonMap.set(key, {
+        material_id: m.material_id || null,
+        material_sku: m.material_sku || null,
+        material_name: m.material_name,
+        unit: m.unit || 'Nos.',
+        preliminary_quantity: 0,
+        final_quantity: 0,
+        difference: 0,
+        actual_issued: issuedQty,
+        actual_used: 0,
+        actual_returned: 0,
+        status: 'ISSUED_ONLY',
+      });
+    }
+  }
+
+  // 4. Map actual materials used
+  for (const m of (actualMaterialsUsed || [])) {
+    const key = getMatKey(m);
+    const usedQty = Number(m.quantity_used ?? m.used_quantity ?? m.quantity) || 0;
+    if (comparisonMap.has(key)) {
+      comparisonMap.get(key).actual_used = usedQty;
+    } else if (usedQty > 0) {
+      comparisonMap.set(key, {
+        material_id: m.material_id || null,
+        material_sku: m.material_sku || null,
+        material_name: m.material_name,
+        unit: m.unit || 'Nos.',
+        preliminary_quantity: 0,
+        final_quantity: 0,
+        difference: 0,
+        actual_issued: 0,
+        actual_used: usedQty,
+        actual_returned: 0,
+        status: 'USED_EXTRA',
+      });
+    }
+  }
+
+  // 5. Map actual materials returned
+  for (const m of (actualMaterialsReturned || [])) {
+    const key = getMatKey(m);
+    const retQty = Number(m.quantity_returned ?? m.returned_quantity ?? m.declared_return_qty ?? m.quantity) || 0;
+    if (comparisonMap.has(key)) {
+      comparisonMap.get(key).actual_returned = retQty;
+    } else if (retQty > 0) {
+      comparisonMap.set(key, {
+        material_id: m.material_id || null,
+        material_sku: m.material_sku || null,
+        material_name: m.material_name,
+        unit: m.unit || 'Nos.',
+        preliminary_quantity: 0,
+        final_quantity: 0,
+        difference: 0,
+        actual_issued: 0,
+        actual_used: 0,
+        actual_returned: retQty,
+        status: 'RETURNED_EXTRA',
+      });
+    }
+  }
+
+  // 6. Compute difference for each row: final_quantity - preliminary_quantity
+  const comparisonList = Array.from(comparisonMap.values()).map((row) => {
+    const diff = Math.round((row.final_quantity - row.preliminary_quantity) * 100) / 100;
+    return {
+      ...row,
+      difference: diff,
+      variance_label: diff === 0 ? 'Equal' : (diff > 0 ? `+${diff}` : `${diff}`),
+    };
+  });
+
+  const totalInstalled = parsedInstalled.reduce((sum, c) => sum + (Number(c.number_of_devices) || 0), 0);
+
+  return {
+    configured: finalBom?.configured !== false,
+    installed_device_configurations: parsedInstalled,
+    total_devices_installed: totalInstalled,
+    final_bom: finalBom,
+    items: finalBom?.items || [],
+    comparison: comparisonList,
+    calculated_at: new Date().toISOString(),
   };
 }
 

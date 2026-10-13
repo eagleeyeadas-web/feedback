@@ -22,3 +22,6 @@ npm-debug.log*
 Thumbs.db
 .vscode/
 .idea/
+
+# Scratch & temporary testing data
+scratch/

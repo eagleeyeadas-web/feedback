@@ -21,7 +21,9 @@ import { issueStockForJob } from '../services/inventoryService.js';
 import {
   submitTechnicalReport,
   declareDeviceReturns,
+  declareMaterialReturns,
   verifyStoreReturn,
+  verifyStoreMaterialReturn,
   resolveDiscrepancy,
   submitDeviceCarryRecord,
   getDeviceCarryRecord,
@@ -29,6 +31,9 @@ import {
   submitInstallationCompletionReport,
   getInstallationCompletionReport,
   getPendingStoreReturns,
+  getPendingStoreMaterialReturns,
+  getAllStoreReturns,
+  getAllStoreMaterialReturns,
   enrichChecklistsWithWorkflowStatus,
 } from '../services/workflowService.js';
 
@@ -62,6 +67,13 @@ export const deviceConfigItemSchema = z.object({
   number_of_vehicles: z.coerce.number().int().gt(0, 'Number of vehicles must be a positive whole number greater than 0').optional().default(1),
 });
 
+export const extraDeviceItemSchema = z.object({
+  device_type: z.enum(DEVICE_TYPES, {
+    errorMap: () => ({ message: 'Invalid extra device type option selected' }),
+  }),
+  extra_quantity: z.coerce.number().int().gt(0, 'Extra quantity must be a positive whole number greater than 0'),
+});
+
 export const checklistValidationSchema = z.object({
   salesperson_name: z.enum(SALESPERSON_OPTIONS, {
     errorMap: () => ({ message: 'Salesperson Name is required. Please select one of the authorized salespeople: Ranjith, Abinaya, Kavitha, Kavitha Balu, or Padmapriya.' }),
@@ -77,8 +89,10 @@ export const checklistValidationSchema = z.object({
   number_of_devices: z.coerce.number().int().gt(0, 'Number of devices must be greater than 0').optional(),
   number_of_vehicles: z.coerce.number().int().gt(0, 'Number of vehicles must be greater than 0').optional().default(1),
   extra_devices: z.boolean().default(false),
+  extra_device_configurations: z.array(extraDeviceItemSchema).optional().nullable(),
   extra_device_type: z.string().nullable().optional(),
   extra_device_count: z.number().int().gt(0).nullable().optional(),
+  total_devices_carried: z.coerce.number().int().gt(0).optional(),
   confirmed_price: z.number().gte(0, 'Confirmed price must be 0 or greater'),
   payment_method: z.enum(['Cash', 'UPI', 'Bank Transfer', 'Credit', 'Other'], {
     errorMap: () => ({ message: 'Valid payment method option is required' }),
@@ -140,6 +154,16 @@ export const checklistValidationSchema = z.object({
       path: ['advance_amount'],
       message: 'Advance amount + Pending amount cannot exceed Confirmed Price',
     });
+  }
+
+  if (data.extra_devices) {
+    if (Array.isArray(data.extra_device_configurations) && data.extra_device_configurations.length === 0 && !data.extra_device_type) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['extra_device_configurations'],
+        message: 'At least one extra device is required when carrying extra devices',
+      });
+    }
   }
 });
 
@@ -220,11 +244,29 @@ router.get('/engineers/calendar', requireRole('ADMIN', 'SALES', 'TECHNICAL', 'ST
  */
 router.get('/pending-returns', requireRole('STORE_MANAGER', 'ADMIN'), async (req, res) => {
   try {
-    const returns = await getPendingStoreReturns();
-    return res.json(returns);
+    const deviceReturns = await getPendingStoreReturns();
+    const materialReturns = await getPendingStoreMaterialReturns();
+    if (req.query.format === 'structured') {
+      return res.json({ device_returns: deviceReturns, material_returns: materialReturns });
+    }
+    return res.json([...deviceReturns, ...materialReturns]);
   } catch (err) {
     console.error('Error fetching pending returns:', err);
     return res.status(500).json({ error: 'Failed to fetch pending store returns' });
+  }
+});
+
+/**
+ * GET /api/admin/installations/pending-material-returns
+ * Fetch all declared fitting material returns pending Store Manager verification
+ */
+router.get('/pending-material-returns', requireRole('STORE_MANAGER', 'ADMIN'), async (req, res) => {
+  try {
+    const materialReturns = await getPendingStoreMaterialReturns();
+    return res.json(materialReturns);
+  } catch (err) {
+    console.error('Error fetching pending material returns:', err);
+    return res.status(500).json({ error: 'Failed to fetch pending store material returns' });
   }
 });
 
@@ -486,11 +528,12 @@ router.get('/:id/completion-report', requireRole('ADMIN', 'SALES', 'TECHNICAL', 
  */
 router.post('/:id/completion-report', requireRole('TECHNICAL', 'ADMIN'), async (req, res) => {
   try {
-    const { items, completion_status, remarks } = req.body;
+    const { items, device_items, completion_status, remarks, material_items, materials } = req.body;
     const result = await submitInstallationCompletionReport({
       checklist_id: req.params.id,
       user: req.profile,
-      items,
+      items: items || device_items,
+      material_items: material_items || materials,
       completion_status,
       remarks,
     });
@@ -498,6 +541,42 @@ router.post('/:id/completion-report', requireRole('TECHNICAL', 'ADMIN'), async (
   } catch (err) {
     console.error('Error submitting completion report:', err);
     return res.status(400).json({ error: err.message || 'Failed to submit completion report' });
+  }
+});
+
+/**
+ * GET /api/admin/installations/:id/final-bom
+ * Fetch Final BOM based on devices actually installed + Preliminary vs Final comparison
+ */
+router.get('/:id/final-bom', requireRole('ADMIN', 'SALES', 'TECHNICAL', 'STORE_MANAGER'), async (req, res) => {
+  try {
+    let item = await getChecklistById(req.params.id);
+    if (!item) {
+      return res.status(404).json({ error: 'Installation checklist not found' });
+    }
+    const enriched = await enrichChecklistsWithWorkflowStatus([item]);
+    item = enriched[0] || item;
+
+    const report = await getInstallationCompletionReport(item.id);
+
+    return res.json({
+      checklist_id: item.id,
+      checklist_number: item.checklist_number,
+      client_name: item.client_name,
+      installation_status: item.installation_status,
+      reconciliation_status: item.reconciliation_status,
+      material_return_status: item.material_return_status,
+      preliminary_bom_snapshot: item.bom_snapshot,
+      final_bom_snapshot: item.final_bom_snapshot || report?.final_bom || report?.final_bom_snapshot,
+      actual_materials_used: item.actual_materials_used || report?.material_items?.filter((m) => m.quantity_used > 0) || [],
+      actual_materials_returned: item.actual_materials_returned || report?.material_items?.filter((m) => m.quantity_returned > 0) || [],
+      devices_carried: item.devices_carried,
+      device_returns: item.device_returns || item.returns || [],
+      material_returns: item.material_returns || [],
+    });
+  } catch (err) {
+    console.error('Error in GET /installations/:id/final-bom:', err);
+    return res.status(500).json({ error: err.message || 'Failed to fetch final BOM details' });
   }
 });
 
@@ -541,6 +620,30 @@ router.post('/:id/verify-return', requireRole('STORE_MANAGER', 'ADMIN'), async (
   } catch (err) {
     console.error('Error in POST /installations/:id/verify-return:', err);
     return res.status(400).json({ error: err.message || 'Failed to verify store return' });
+  }
+});
+
+/**
+ * Stage 5B: STORE_MANAGER physically verifies returned materials and credits usable stock
+ * POST /api/admin/installations/:id/verify-material-return
+ */
+router.post('/:id/verify-material-return', requireRole('STORE_MANAGER', 'ADMIN'), async (req, res) => {
+  try {
+    const { return_id, accepted_usable_qty, damaged_qty, missing_qty, items, remarks } = req.body;
+    const result = await verifyStoreMaterialReturn({
+      checklist_id: req.params.id,
+      return_id,
+      accepted_usable_qty: accepted_usable_qty !== undefined ? parseFloat(accepted_usable_qty) : undefined,
+      damaged_qty: parseFloat(damaged_qty) || 0,
+      missing_qty: parseFloat(missing_qty) || 0,
+      items,
+      user: req.profile,
+      remarks,
+    });
+    return res.json(result);
+  } catch (err) {
+    console.error('Error in POST /installations/:id/verify-material-return:', err);
+    return res.status(400).json({ error: err.message || 'Failed to verify store material return' });
   }
 });
 
