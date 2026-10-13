@@ -1,6 +1,13 @@
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import supabase from './supabase.js';
 import { logAudit } from './auditService.js';
 import { updateRequirementIssuanceStatus } from './storeRequirementService.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const STORAGE_FILE = path.join(__dirname, '../data/inventory_storage.json');
 
 export const STANDARD_MATERIALS = [
   { id: 'mat-001', sku: 'MAT-INSU-TAPE', material_name: 'Insulation Tape', unit: 'Nos.', opening_stock: 100, current_stock: 100, opening_stock_set: true, min_stock_level: 20 },
@@ -15,7 +22,7 @@ export const STANDARD_MATERIALS = [
 ];
 
 /**
- * Resilient in-memory store for material inventory
+ * Resilient in-memory store for material inventory with persistent file backing
  */
 const inMemoryMaterials = new Map(
   STANDARD_MATERIALS.map((item) => [
@@ -40,6 +47,67 @@ const inMemoryMaterialTransactions = [];
 const processedChecklistMaterialIssuances = new Set();
 const processedMaterialReturnCredits = new Set();
 let dbSeeded = false;
+
+/**
+ * Load persistent materials state from JSON file
+ */
+export function loadMaterialFallbackStorage() {
+  try {
+    if (fs.existsSync(STORAGE_FILE)) {
+      const raw = fs.readFileSync(STORAGE_FILE, 'utf-8');
+      const data = JSON.parse(raw);
+      if (data.materialProducts && typeof data.materialProducts === 'object') {
+        Object.entries(data.materialProducts).forEach(([k, v]) => {
+          inMemoryMaterials.set(k, { ...v });
+        });
+      }
+      if (Array.isArray(data.materialTransactions)) {
+        inMemoryMaterialTransactions.length = 0;
+        inMemoryMaterialTransactions.push(...data.materialTransactions);
+      }
+      if (Array.isArray(data.processedChecklistMaterialIssuances)) {
+        data.processedChecklistMaterialIssuances.forEach((id) => processedChecklistMaterialIssuances.add(id));
+      }
+      if (Array.isArray(data.processedMaterialReturnCredits)) {
+        data.processedMaterialReturnCredits.forEach((id) => processedMaterialReturnCredits.add(id));
+      }
+    } else {
+      saveMaterialFallbackStorage();
+    }
+  } catch (err) {
+    console.warn('Could not load material fallback storage:', err.message);
+  }
+}
+
+/**
+ * Save persistent materials state to JSON file
+ */
+export function saveMaterialFallbackStorage() {
+  try {
+    const dir = path.dirname(STORAGE_FILE);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    let data = {};
+    if (fs.existsSync(STORAGE_FILE)) {
+      try {
+        data = JSON.parse(fs.readFileSync(STORAGE_FILE, 'utf-8')) || {};
+      } catch (e) {
+        data = {};
+      }
+    }
+    data.materialProducts = Object.fromEntries(inMemoryMaterials);
+    data.materialTransactions = inMemoryMaterialTransactions;
+    data.processedChecklistMaterialIssuances = Array.from(processedChecklistMaterialIssuances);
+    data.processedMaterialReturnCredits = Array.from(processedMaterialReturnCredits);
+    fs.writeFileSync(STORAGE_FILE, JSON.stringify(data, null, 2), 'utf-8');
+  } catch (err) {
+    console.warn('Could not save material fallback storage:', err.message);
+  }
+}
+
+// Load storage on module initialization
+loadMaterialFallbackStorage();
 
 /**
  * Ensure database has standard materials without inflating or duplicating stock.
@@ -94,6 +162,7 @@ export async function getMaterialInventory() {
       data.forEach((m) => {
         inMemoryMaterials.set(m.material_name, { ...m });
       });
+      saveMaterialFallbackStorage();
       return data;
     }
   } catch (err) {
@@ -199,6 +268,7 @@ export async function setMaterialOpeningStock({
   }
 
   inMemoryMaterialTransactions.unshift(txRecord);
+  saveMaterialFallbackStorage();
 
   if (user) {
     await logAudit({
@@ -390,6 +460,7 @@ export async function adjustMaterialStock({
   }
 
   inMemoryMaterialTransactions.unshift(txRecord);
+  saveMaterialFallbackStorage();
 
   if (user) {
     await logAudit({
@@ -628,6 +699,7 @@ export async function issueMaterialsForChecklist({
   }
 
   processedChecklistMaterialIssuances.add(checklist_id);
+  saveMaterialFallbackStorage();
 
   if (user) {
     await logAudit({
@@ -922,6 +994,7 @@ export async function creditMaterialStockForVerifiedReturn({
   }
 
   processedMaterialReturnCredits.add(returnKey);
+  saveMaterialFallbackStorage();
 
   if (user) {
     await logAudit({

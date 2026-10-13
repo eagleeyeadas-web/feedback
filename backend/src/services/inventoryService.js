@@ -1,5 +1,12 @@
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import supabase from './supabase.js';
 import { logAudit } from './auditService.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const STORAGE_FILE = path.join(__dirname, '../data/inventory_storage.json');
 
 export const STANDARD_DEVICE_TYPES = [
   '2 Channel Live',
@@ -22,7 +29,7 @@ export const STANDARD_DEVICE_PRODUCTS = [
 ];
 
 /**
- * In-memory fallback stores for local resilience
+ * In-memory fallback stores for local resilience with persistent JSON backing
  * Opening stock is NOT assumed (starts at 0 with opening_stock_set: false)
  */
 const inMemoryProducts = new Map(
@@ -39,6 +46,67 @@ const inMemoryTransactions = [];
 const processedCarryDeductions = new Set();
 const processedChecklistDeviceIssuances = new Set();
 let devicesDbSeeded = false;
+
+/**
+ * Load persistent inventory state from JSON file
+ */
+export function loadInventoryStorage() {
+  try {
+    if (fs.existsSync(STORAGE_FILE)) {
+      const raw = fs.readFileSync(STORAGE_FILE, 'utf-8');
+      const data = JSON.parse(raw);
+      if (data.deviceProducts && typeof data.deviceProducts === 'object') {
+        Object.entries(data.deviceProducts).forEach(([k, v]) => {
+          inMemoryProducts.set(k, { ...v });
+        });
+      }
+      if (Array.isArray(data.deviceTransactions)) {
+        inMemoryTransactions.length = 0;
+        inMemoryTransactions.push(...data.deviceTransactions);
+      }
+      if (Array.isArray(data.processedCarryDeductions)) {
+        data.processedCarryDeductions.forEach((id) => processedCarryDeductions.add(id));
+      }
+      if (Array.isArray(data.processedChecklistDeviceIssuances)) {
+        data.processedChecklistDeviceIssuances.forEach((id) => processedChecklistDeviceIssuances.add(id));
+      }
+    } else {
+      saveInventoryStorage();
+    }
+  } catch (err) {
+    console.warn('Could not load inventory fallback storage:', err.message);
+  }
+}
+
+/**
+ * Save persistent inventory state to JSON file
+ */
+export function saveInventoryStorage() {
+  try {
+    const dir = path.dirname(STORAGE_FILE);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    let data = {};
+    if (fs.existsSync(STORAGE_FILE)) {
+      try {
+        data = JSON.parse(fs.readFileSync(STORAGE_FILE, 'utf-8')) || {};
+      } catch (e) {
+        data = {};
+      }
+    }
+    data.deviceProducts = Object.fromEntries(inMemoryProducts);
+    data.deviceTransactions = inMemoryTransactions;
+    data.processedCarryDeductions = Array.from(processedCarryDeductions);
+    data.processedChecklistDeviceIssuances = Array.from(processedChecklistDeviceIssuances);
+    fs.writeFileSync(STORAGE_FILE, JSON.stringify(data, null, 2), 'utf-8');
+  } catch (err) {
+    console.warn('Could not save inventory fallback storage:', err.message);
+  }
+}
+
+// Initialize storage on module load
+loadInventoryStorage();
 
 /**
  * Ensure standard 7 camera device models exist in database without overwriting opening counts
@@ -96,6 +164,7 @@ export async function getInventoryProducts() {
       data.forEach((p) => {
         inMemoryProducts.set(p.device_type, { ...p });
       });
+      saveInventoryStorage();
       return data;
     }
   } catch (err) {
@@ -245,6 +314,7 @@ export async function setDeviceOpeningStock({
   }
 
   inMemoryTransactions.unshift(txRecord);
+  saveInventoryStorage();
 
   if (user) {
     await logAudit({
@@ -291,7 +361,7 @@ export async function receiveNewStock({
     throw new Error('Received stock quantity must be a positive whole number greater than 0.');
   }
 
-  if (!device_type || !STANDARD_DEVICE_TYPES.includes(device_type)) {
+  if (!device_type || (!STANDARD_DEVICE_TYPES.includes(device_type) && !inMemoryProducts.has(device_type))) {
     throw new Error(`Invalid device type selected: "${device_type}".`);
   }
 
@@ -370,6 +440,7 @@ export async function receiveNewStock({
   }
 
   inMemoryTransactions.unshift(transactionRecord);
+  saveInventoryStorage();
 
   if (user) {
     await logAudit({
@@ -404,7 +475,7 @@ export async function adjustStock({
   move_to_damaged = false,
   user,
 }) {
-  if (!device_type || !STANDARD_DEVICE_TYPES.includes(device_type)) {
+  if (!device_type || (!STANDARD_DEVICE_TYPES.includes(device_type) && !inMemoryProducts.has(device_type))) {
     throw new Error(`Invalid device type selected: "${device_type}".`);
   }
 
@@ -514,6 +585,7 @@ export async function adjustStock({
   }
 
   inMemoryTransactions.unshift(transactionRecord);
+  saveInventoryStorage();
 
   if (user) {
     await logAudit({
@@ -543,6 +615,148 @@ export async function adjustStock({
     damaged_stock: newDamaged,
     transaction: transactionRecord,
   };
+}
+
+/**
+ * Add a new camera device model to inventory
+ * Persists permanently to inventory_storage.json and attempts Supabase insert
+ */
+export async function addNewDeviceProduct({
+  device_name,
+  device_type,
+  sku,
+  opening_quantity = 0,
+  min_stock_level = 5,
+  unit = 'Nos.',
+  user,
+}) {
+  if (!device_type || !device_type.trim()) {
+    throw new Error('Device Model / Type name is required.');
+  }
+
+  const trimmedType = device_type.trim();
+  const trimmedName = (device_name || `${trimmedType} Camera System`).trim();
+
+  // Check if device model already exists (case-insensitive)
+  const existing = Array.from(inMemoryProducts.values()).find(
+    (p) => p.device_type.toLowerCase() === trimmedType.toLowerCase()
+  );
+  if (existing) {
+    throw new Error(`Device model "${trimmedType}" already exists in inventory.`);
+  }
+
+  const openingQty = Math.max(0, parseInt(opening_quantity, 10) || 0);
+  const minLevel = Math.max(0, parseInt(min_stock_level, 10) || 5);
+  const generatedSku = (sku || `EE-${trimmedType.replace(/[^a-zA-Z0-9]+/g, '-').toUpperCase()}`).trim();
+  const productId = `dev-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+
+  const newProduct = {
+    id: productId,
+    device_name: trimmedName,
+    device_type: trimmedType,
+    sku: generatedSku,
+    unit: unit || 'Nos.',
+    opening_quantity: openingQty,
+    opening_stock_set: openingQty > 0,
+    usable_stock: openingQty,
+    reserved_stock: 0,
+    issued_stock: 0,
+    returned_usable_stock: 0,
+    damaged_stock: 0,
+    min_stock_level: minLevel,
+    is_active: true,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+
+  inMemoryProducts.set(trimmedType, newProduct);
+
+  // If opening quantity > 0, record opening stock transaction
+  if (openingQty > 0) {
+    const txRecord = {
+      id: `tx-dev-open-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      product_id: productId,
+      device_type: trimmedType,
+      device_name: trimmedName,
+      transaction_type: 'OPENING_STOCK',
+      quantity: openingQty,
+      previous_balance: 0,
+      new_balance: openingQty,
+      checklist_id: null,
+      performed_by: user?.id || null,
+      performer_name: user?.full_name || user?.email || 'Store Manager',
+      reason_or_remarks: `Opening stock configured upon adding device model "${trimmedType}"`,
+      idempotency_key: `DEV-NEW-${trimmedType}-${Date.now()}`,
+      created_at: new Date().toISOString(),
+    };
+    inMemoryTransactions.unshift(txRecord);
+
+    try {
+      await supabase.from('inventory_transactions').insert([{
+        product_id: productId,
+        transaction_type: 'OPENING_STOCK',
+        quantity: openingQty,
+        previous_balance: 0,
+        new_balance: openingQty,
+        performed_by: user?.id || null,
+        reason_or_remarks: txRecord.reason_or_remarks,
+        idempotency_key: txRecord.idempotency_key,
+      }]);
+    } catch (e) {
+      // In-memory fallback
+    }
+  }
+
+  // Attempt DB insert
+  try {
+    const { data: dbCreated, error: dbErr } = await supabase
+      .from('inventory_products')
+      .insert([{
+        device_name: newProduct.device_name,
+        device_type: newProduct.device_type,
+        sku: newProduct.sku,
+        unit: newProduct.unit,
+        opening_quantity: newProduct.opening_quantity,
+        opening_stock_set: newProduct.opening_stock_set,
+        usable_stock: newProduct.usable_stock,
+        reserved_stock: 0,
+        issued_stock: 0,
+        returned_usable_stock: 0,
+        damaged_stock: 0,
+        min_stock_level: newProduct.min_stock_level,
+        is_active: true,
+      }])
+      .select()
+      .single();
+
+    if (!dbErr && dbCreated) {
+      newProduct.id = dbCreated.id;
+      inMemoryProducts.set(trimmedType, newProduct);
+    }
+  } catch (err) {
+    console.warn('DB insert for new device product failed, using persistent JSON storage:', err.message);
+  }
+
+  saveInventoryStorage();
+
+  if (user) {
+    await logAudit({
+      actor_id: user.id,
+      actor_email: user.email,
+      actor_role: user.role,
+      action: 'ADD_DEVICE_PRODUCT',
+      target_table: 'inventory_products',
+      target_id: newProduct.id,
+      details: {
+        device_type: trimmedType,
+        device_name: trimmedName,
+        sku: generatedSku,
+        opening_quantity: openingQty,
+      },
+    }).catch(() => null);
+  }
+
+  return newProduct;
 }
 
 /**
@@ -676,6 +890,7 @@ export async function issueDevicesForChecklist({
   }
 
   processedChecklistDeviceIssuances.add(checklist_id);
+  saveInventoryStorage();
 
   if (user) {
     await logAudit({
@@ -795,6 +1010,7 @@ export async function deductStockForCarryRecord({ checklist_id, technician_user_
   }
 
   processedCarryDeductions.add(checklist_id);
+  saveInventoryStorage();
 }
 
 /**
@@ -959,6 +1175,7 @@ export async function creditStockForVerifiedReturn({
     inMemoryTransactions.unshift(dmgTx);
   }
 
+  saveInventoryStorage();
   return { success: true, usable_stock: newUsable, damaged_stock: newDamaged };
 }
 

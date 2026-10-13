@@ -369,6 +369,17 @@ export async function fetchInventoryProducts(token) {
   return res.json();
 }
 
+export async function createDeviceProductApi(token, data) {
+  const res = await fetch(`${API_BASE}/admin/inventory/products`, {
+    method: 'POST',
+    headers: adminHeaders(token),
+    body: JSON.stringify(data),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to create device product');
+  return json;
+}
+
 export async function fetchInventorySummary(token) {
   const res = await fetch(`${API_BASE}/admin/inventory/summary`, {
     headers: adminHeaders(token),

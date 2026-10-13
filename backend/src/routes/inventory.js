@@ -8,6 +8,7 @@ import {
   adjustStock,
   setDeviceOpeningStock,
   issueDevicesForChecklist,
+  addNewDeviceProduct,
 } from '../services/inventoryService.js';
 import {
   getMaterialTransactions,
@@ -34,6 +35,50 @@ router.get('/', requireRole('STORE_MANAGER', 'ADMIN'), async (req, res) => {
   } catch (err) {
     console.error('Error in GET /inventory:', err);
     return res.status(500).json({ error: err.message || 'Failed to fetch inventory' });
+  }
+});
+
+/**
+ * POST /api/admin/inventory/products
+ * and alias POST /api/admin/inventory/devices
+ * Add new camera device model to inventory
+ * Accessible to STORE_MANAGER, ADMIN
+ */
+router.post('/products', requireRole('STORE_MANAGER', 'ADMIN'), async (req, res) => {
+  try {
+    const { device_name, device_type, sku, opening_quantity, min_stock_level, unit } = req.body;
+    const result = await addNewDeviceProduct({
+      device_name,
+      device_type,
+      sku,
+      opening_quantity,
+      min_stock_level,
+      unit,
+      user: req.profile,
+    });
+    return res.status(201).json(result);
+  } catch (err) {
+    console.error('Error in POST /inventory/products:', err);
+    return res.status(400).json({ error: err.message || 'Failed to add device product' });
+  }
+});
+
+router.post('/devices', requireRole('STORE_MANAGER', 'ADMIN'), async (req, res) => {
+  try {
+    const { device_name, device_type, sku, opening_quantity, min_stock_level, unit } = req.body;
+    const result = await addNewDeviceProduct({
+      device_name,
+      device_type,
+      sku,
+      opening_quantity,
+      min_stock_level,
+      unit,
+      user: req.profile,
+    });
+    return res.status(201).json(result);
+  } catch (err) {
+    console.error('Error in POST /inventory/devices:', err);
+    return res.status(400).json({ error: err.message || 'Failed to add device product' });
   }
 });
 

@@ -43,6 +43,7 @@ import {
   fetchAllStoreReturns,
   verifyStoreReturnApi,
   fetchStoreMaterialRequirements,
+  createDeviceProductApi,
 } from '../../../lib/api';
 
 const STANDARD_DEVICE_TYPES = [
@@ -102,6 +103,16 @@ export default function StoreWorkspace({ onSelectChecklist }) {
   const [submittingModal, setSubmittingModal] = useState(false);
   const [modalError, setModalError] = useState('');
 
+  // Add New Device Model State
+  const [addDeviceModalOpen, setAddDeviceModalOpen] = useState(false);
+  const [newDeviceForm, setNewDeviceForm] = useState({
+    device_type: '',
+    device_name: '',
+    sku: '',
+    opening_quantity: '',
+    min_stock_level: '5',
+  });
+
   const showToast = (msg) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(''), 4000);
@@ -152,6 +163,51 @@ export default function StoreWorkspace({ onSelectChecklist }) {
   useEffect(() => {
     loadAllData();
   }, [loadAllData]);
+
+  // Handle Adding New Camera Device Model
+  const handleAddDeviceSubmit = async (e) => {
+    e.preventDefault();
+    setModalError('');
+    if (!newDeviceForm.device_type.trim()) {
+      setModalError('Device Model / Type name is required.');
+      return;
+    }
+    const openingQty = newDeviceForm.opening_quantity ? parseInt(newDeviceForm.opening_quantity, 10) : 0;
+    if (isNaN(openingQty) || openingQty < 0) {
+      setModalError('Opening quantity must be a non-negative number (0 or greater).');
+      return;
+    }
+    const minLevel = newDeviceForm.min_stock_level ? parseInt(newDeviceForm.min_stock_level, 10) : 5;
+    if (isNaN(minLevel) || minLevel < 0) {
+      setModalError('Minimum stock level must be 0 or greater.');
+      return;
+    }
+
+    setSubmittingModal(true);
+    try {
+      await createDeviceProductApi(token, {
+        device_type: newDeviceForm.device_type.trim(),
+        device_name: newDeviceForm.device_name.trim() || `${newDeviceForm.device_type.trim()} Camera System`,
+        sku: newDeviceForm.sku.trim() || undefined,
+        opening_quantity: openingQty,
+        min_stock_level: minLevel,
+      });
+      showToast(`Device "${newDeviceForm.device_type.trim()}" added successfully!`);
+      setAddDeviceModalOpen(false);
+      setNewDeviceForm({
+        device_type: '',
+        device_name: '',
+        sku: '',
+        opening_quantity: '',
+        min_stock_level: '5',
+      });
+      loadAllData();
+    } catch (err) {
+      setModalError(err.message || 'Failed to add device product');
+    } finally {
+      setSubmittingModal(false);
+    }
+  };
 
   // Handle Setting Camera Device Opening Stock
   const handleDeviceOpeningSubmit = async (e) => {
@@ -627,9 +683,26 @@ export default function StoreWorkspace({ onSelectChecklist }) {
                 <span>Camera Device Products ({products.length} Models)</span>
               </h2>
               <p className="text-gray-500 mt-0.5">
-                Configurable inventory entries for all 7 camera device models, tracked separately from installation materials.
+                Configurable inventory entries for all camera device models, tracked separately from installation materials.
               </p>
             </div>
+            <button
+              onClick={() => {
+                setModalError('');
+                setNewDeviceForm({
+                  device_type: '',
+                  device_name: '',
+                  sku: '',
+                  opening_quantity: '',
+                  min_stock_level: '5',
+                });
+                setAddDeviceModalOpen(true);
+              }}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-bold text-xs shadow-xs transition-colors cursor-pointer self-start sm:self-auto"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Add Device</span>
+            </button>
           </div>
 
           <div className="bg-white rounded-2xl border border-gray-200 shadow-xs overflow-x-auto">
@@ -1410,6 +1483,140 @@ export default function StoreWorkspace({ onSelectChecklist }) {
                   className="px-5 py-2 font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-xs"
                 >
                   {submittingModal ? 'Recording...' : 'Record Received Stock'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Add New Camera Device Model Modal */}
+      {addDeviceModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 border border-gray-100">
+            <div className="flex items-center justify-between pb-2 border-b border-gray-100">
+              <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                <HardDrive className="w-4 h-4 text-amber-600" />
+                <span>Add Camera Device Model</span>
+              </h3>
+              <button
+                onClick={() => setAddDeviceModalOpen(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {modalError && (
+              <div className="p-3 bg-rose-50 text-rose-800 border border-rose-200 rounded-xl text-xs font-medium">
+                {modalError}
+              </div>
+            )}
+
+            <form onSubmit={handleAddDeviceSubmit} className="space-y-3 text-xs">
+              <div>
+                <label className="block font-bold text-gray-700 mb-1">
+                  Device Model / Type Name *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={newDeviceForm.device_type}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setNewDeviceForm((prev) => ({
+                      ...prev,
+                      device_type: val,
+                      sku: prev.sku || (val ? `EE-${val.replace(/[^a-zA-Z0-9]+/g, '-').toUpperCase()}` : ''),
+                    }));
+                  }}
+                  placeholder="e.g. 12 Channel Live or Dashcam Pro"
+                  className="w-full p-2.5 border border-gray-200 rounded-xl font-medium focus:outline-none focus:border-amber-500"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-gray-700 mb-1">
+                  Display / Product Title
+                </label>
+                <input
+                  type="text"
+                  value={newDeviceForm.device_name}
+                  onChange={(e) =>
+                    setNewDeviceForm((prev) => ({ ...prev, device_name: e.target.value }))
+                  }
+                  placeholder="e.g. 12 Channel Live Enterprise MDVR"
+                  className="w-full p-2.5 border border-gray-200 rounded-xl font-medium focus:outline-none focus:border-amber-500"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-gray-700 mb-1">
+                  SKU / Product Code (Auto-generated if blank)
+                </label>
+                <input
+                  type="text"
+                  value={newDeviceForm.sku}
+                  onChange={(e) =>
+                    setNewDeviceForm((prev) => ({ ...prev, sku: e.target.value.toUpperCase() }))
+                  }
+                  placeholder="e.g. EE-12CH-LIVE"
+                  className="w-full p-2.5 border border-gray-200 rounded-xl font-mono text-[11px] focus:outline-none focus:border-amber-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">
+                    Opening Stock (Nos.)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={newDeviceForm.opening_quantity}
+                    onChange={(e) =>
+                      setNewDeviceForm((prev) => ({ ...prev, opening_quantity: e.target.value }))
+                    }
+                    placeholder="0"
+                    className="w-full p-2.5 border border-gray-200 rounded-xl font-bold font-mono focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">
+                    Min Stock Alert Level
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={newDeviceForm.min_stock_level}
+                    onChange={(e) =>
+                      setNewDeviceForm((prev) => ({ ...prev, min_stock_level: e.target.value }))
+                    }
+                    placeholder="5"
+                    className="w-full p-2.5 border border-gray-200 rounded-xl font-bold font-mono focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+              </div>
+
+              <p className="text-[11px] text-gray-500 italic">
+                Device details and stock balances are saved permanently and will not be lost across server restarts.
+              </p>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => setAddDeviceModalOpen(false)}
+                  className="px-4 py-2 font-semibold text-gray-600 hover:bg-gray-100 rounded-xl"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingModal}
+                  className="px-5 py-2 font-bold text-white bg-amber-600 hover:bg-amber-700 rounded-xl shadow-xs transition-colors"
+                >
+                  {submittingModal ? 'Saving Device...' : 'Save Device Model'}
                 </button>
               </div>
             </form>
