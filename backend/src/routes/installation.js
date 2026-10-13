@@ -15,6 +15,8 @@ import {
   getAvailabilityCalendar,
 } from '../services/engineerBookingService.js';
 import { generateInstallationChecklistPDF } from '../services/installationPdfGenerator.js';
+import { generateStoreManagerRequirementPDF } from '../services/storeManagerPdfGenerator.js';
+import { getStoreMaterialRequirementById, syncStoreRequirementForChecklist } from '../services/storeRequirementService.js';
 import { issueStockForJob } from '../services/inventoryService.js';
 import {
   submitTechnicalReport,
@@ -285,6 +287,40 @@ router.get('/:id/pdf', requireRole('ADMIN', 'SALES', 'TECHNICAL', 'STORE_MANAGER
   } catch (err) {
     console.error('Error in GET /installations/:id/pdf:', err);
     return res.status(500).json({ error: err.message || 'Failed to generate installation PDF' });
+  }
+});
+
+/**
+ * GET /api/admin/installations/:id/store-pdf
+ * Download dedicated Store Manager — Device & Material Requirement Sheet PDF
+ * Accessible to all authenticated staff (Store Manager, Admin, Tech, Sales)
+ */
+router.get('/:id/store-pdf', requireRole('STORE_MANAGER', 'ADMIN', 'TECHNICAL', 'SALES'), async (req, res) => {
+  try {
+    let requirement = null;
+    try {
+      requirement = await getStoreMaterialRequirementById(req.params.id);
+    } catch (e) {
+      const item = await getChecklistById(req.params.id);
+      if (item) {
+        requirement = await syncStoreRequirementForChecklist(item);
+      }
+    }
+
+    if (!requirement) {
+      return res.status(404).json({ error: 'Store material requirement record not found' });
+    }
+
+    const pdfBuffer = await generateStoreManagerRequirementPDF(requirement);
+    const filename = `Store-Requirements-${requirement.checklist_number}.pdf`;
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Length', pdfBuffer.length);
+    return res.send(pdfBuffer);
+  } catch (err) {
+    console.error('Error in GET /installations/:id/store-pdf:', err);
+    return res.status(500).json({ error: err.message || 'Failed to generate Store Manager requirement PDF' });
   }
 });
 

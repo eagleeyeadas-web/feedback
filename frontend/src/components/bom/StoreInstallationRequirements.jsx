@@ -25,6 +25,7 @@ import {
 import {
   fetchStoreMaterialRequirements,
   syncStoreMaterialRequirements,
+  downloadStoreRequirementPDF,
   downloadInstallationPDF,
 } from '../../lib/api';
 import IssueMaterialsModal from './IssueMaterialsModal';
@@ -105,20 +106,20 @@ export default function StoreInstallationRequirements({ token, onSelectChecklist
   const handleDownloadPdf = async (checklistId, checklistNumber) => {
     if (!token || !checklistId) return;
     try {
-      showToast(`Generating official PDF for ${checklistNumber}...`);
-      const blob = await downloadInstallationPDF(token, checklistId);
+      showToast(`Generating Store Manager Requirement Sheet for ${checklistNumber}...`);
+      const blob = await downloadStoreRequirementPDF(token, checklistId);
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `EagleEye-Installation-${checklistNumber}.pdf`;
+      link.download = `Store-Requirements-${checklistNumber}.pdf`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
-      showToast(`PDF downloaded for ${checklistNumber}`);
+      showToast(`Store Manager PDF downloaded for ${checklistNumber}`);
     } catch (err) {
       console.error('PDF download error:', err);
-      alert('Failed to download PDF. Please try again.');
+      alert('Failed to download Store Manager PDF. Please try again.');
     }
   };
 
@@ -417,21 +418,26 @@ export default function StoreInstallationRequirements({ token, onSelectChecklist
                   <div className="flex flex-wrap items-center gap-2">
                     <button
                       type="button"
-                      onClick={() => onSelectChecklist && onSelectChecklist(req.checklist_id || req.id)}
-                      className="px-3 py-1.5 text-xs font-bold text-gray-700 bg-white hover:bg-gray-50 border border-gray-200 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                      onClick={() => toggleExpand(req.id || req.checklist_id)}
+                      className={`px-3 py-1.5 text-xs font-bold rounded-xl cursor-pointer transition-colors flex items-center gap-1.5 shadow-2xs ${
+                        isExpanded
+                          ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                          : 'bg-white hover:bg-gray-50 text-gray-800 border border-gray-200'
+                      }`}
+                      title={isExpanded ? 'Collapse Material Requirements' : 'View Full Material Requirements & Live Stock'}
                     >
-                      <Eye className="w-3.5 h-3.5 text-gray-500" />
-                      <span>Checklist Details</span>
+                      <span>{isExpanded ? 'Hide Requirements' : 'View Material Requirements'}</span>
+                      {isExpanded ? <ChevronUp className="w-3.5 h-3.5 text-amber-700" /> : <ChevronDown className="w-3.5 h-3.5 text-gray-500" />}
                     </button>
 
                     <button
                       type="button"
                       onClick={() => handleDownloadPdf(req.checklist_id || req.id, req.checklist_number)}
                       className="px-3 py-1.5 text-xs font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
-                      title="Download official PDF copy"
+                      title="Download/Print Store Manager Device & Material Requirement Sheet"
                     >
                       <FileDown className="w-3.5 h-3.5 text-blue-600" />
-                      <span>PDF</span>
+                      <span>Store Manager PDF</span>
                     </button>
 
                     {!isService && !isIssued && (
@@ -449,18 +455,18 @@ export default function StoreInstallationRequirements({ token, onSelectChecklist
                         className="px-3.5 py-1.5 text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
                       >
                         <Package className="w-3.5 h-3.5" />
-                        <span>Issue Stock</span>
+                        <span>Issue Materials</span>
                       </button>
                     )}
 
                     <button
                       type="button"
-                      onClick={() => toggleExpand(req.id || req.checklist_id)}
-                      className="px-3 py-1.5 text-xs font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl cursor-pointer transition-colors flex items-center gap-1"
-                      title={isExpanded ? 'Collapse BOM & Details' : 'View Full Details & BOM'}
+                      onClick={() => onSelectChecklist && onSelectChecklist(req.checklist_id || req.id)}
+                      className="px-2.5 py-1.5 text-xs font-semibold text-gray-600 bg-white hover:bg-gray-50 border border-gray-200 rounded-xl transition-all flex items-center gap-1 cursor-pointer shadow-2xs"
+                      title="View full installation checklist details"
                     >
-                      <span>{isExpanded ? 'Hide BOM' : 'View BOM'}</span>
-                      {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                      <Eye className="w-3.5 h-3.5 text-gray-400" />
+                      <span>Checklist</span>
                     </button>
                   </div>
                 </div>

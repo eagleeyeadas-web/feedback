@@ -546,6 +546,25 @@ export async function getStoreMaterialRequirementById(id) {
   const fallback = inMemoryStoreRequirements.get(id);
   if (fallback) return fallback;
 
+  // Resilient fallback: look up installation_checklists directly by ID or checklist_number and sync
+  try {
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+    let chkQuery = supabase.from('installation_checklists').select('*');
+    if (isUuid) {
+      chkQuery = chkQuery.eq('id', id);
+    } else {
+      chkQuery = chkQuery.eq('checklist_number', id);
+    }
+    const { data: chk, error: chkErr } = await chkQuery.maybeSingle();
+    if (!chkErr && chk) {
+      const synced = await syncStoreRequirementForChecklist(chk);
+      const enriched = await getStoreMaterialRequirements({ limit: 1, search: chk.checklist_number });
+      return enriched.requirements[0] || synced;
+    }
+  } catch (chkFallbackErr) {
+    console.warn('Checklist fallback lookup for requirement failed:', chkFallbackErr.message);
+  }
+
   throw new Error(`Requirement with ID "${id}" not found.`);
 }
 

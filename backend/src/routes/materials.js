@@ -13,6 +13,7 @@ import {
   syncStoreRequirementForChecklist,
   issueFullJobStock,
 } from '../services/storeRequirementService.js';
+import { generateStoreManagerRequirementPDF } from '../services/storeManagerPdfGenerator.js';
 import supabase from '../services/supabase.js';
 
 const router = Router();
@@ -154,6 +155,32 @@ router.get('/requirements/:id', requireRole('STORE_MANAGER', 'ADMIN'), async (re
   } catch (err) {
     console.error('Error fetching requirement detail:', err);
     return res.status(404).json({ error: err.message || 'Requirement not found' });
+  }
+});
+
+/**
+ * GET /api/admin/materials/requirements/:id/pdf
+ * Download dedicated Store Manager — Device & Material Requirement Sheet PDF
+ * Focuses strictly on client, location, devices, assigned team, and calculated BOM requirements with live shortages.
+ * Excludes customer selling price, payment methods, advance, and pending payments.
+ */
+router.get('/requirements/:id/pdf', requireRole('STORE_MANAGER', 'ADMIN', 'TECHNICAL', 'SALES'), async (req, res) => {
+  try {
+    const requirement = await getStoreMaterialRequirementById(req.params.id);
+    if (!requirement) {
+      return res.status(404).json({ error: 'Store material requirement record not found' });
+    }
+
+    const pdfBuffer = await generateStoreManagerRequirementPDF(requirement);
+    const filename = `Store-Requirements-${requirement.checklist_number}.pdf`;
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Length', pdfBuffer.length);
+    return res.send(pdfBuffer);
+  } catch (err) {
+    console.error('Error generating Store Manager requirement PDF:', err);
+    return res.status(500).json({ error: err.message || 'Failed to generate Store Manager requirement PDF' });
   }
 });
 

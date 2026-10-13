@@ -240,6 +240,26 @@ export async function downloadInstallationPDF(token, id) {
 }
 
 /**
+ * Download dedicated Store Manager — Device & Material Requirement Sheet PDF
+ */
+export async function downloadStoreRequirementPDF(token, id) {
+  const res = await fetch(`${API_BASE}/admin/materials/requirements/${id}/pdf`, {
+    headers: adminHeaders(token),
+  });
+  if (!res.ok) {
+    const resFallback = await fetch(`${API_BASE}/admin/installations/${id}/store-pdf`, {
+      headers: adminHeaders(token),
+    });
+    if (!resFallback.ok) {
+      const errorData = await resFallback.json().catch(() => ({}));
+      throw new Error(errorData.error || 'Failed to download Store Manager requirement PDF');
+    }
+    return resFallback.blob();
+  }
+  return res.blob();
+}
+
+/**
  * Service Engineer List & Carry / Completion Workflow APIs
  */
 export async function fetchServiceEngineers(token) {
