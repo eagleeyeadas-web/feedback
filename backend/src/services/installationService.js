@@ -6,7 +6,7 @@ import {
   reserveEngineerAtomic,
   releaseEngineerBooking,
 } from './engineerBookingService.js';
-import { calculateBomRequirements } from './bomService.js';
+import { calculateBomRequirements, parseDeviceConfigurations } from './bomService.js';
 import { syncStoreRequirementForChecklist } from './storeRequirementService.js';
 import { notifyStoreManagerOnInstallationChecklist } from './notificationService.js';
 
@@ -125,25 +125,9 @@ export async function createChecklist(adminUserId, data) {
     });
   }
 
-  // Normalize device configurations
-  let deviceConfigs = [];
-  if (Array.isArray(data.device_configurations) && data.device_configurations.length > 0) {
-    const map = new Map();
-    for (const c of data.device_configurations) {
-      const dt = (c.device_type || '').trim();
-      if (!dt) continue;
-      const dQty = Math.max(1, parseInt(c.number_of_devices, 10) || 1);
-      const vQty = Math.max(1, parseInt(c.number_of_vehicles, 10) || dQty);
-      if (map.has(dt)) {
-        const ex = map.get(dt);
-        ex.number_of_devices += dQty;
-        ex.number_of_vehicles += vQty;
-      } else {
-        map.set(dt, { device_type: dt, number_of_devices: dQty, number_of_vehicles: vQty });
-      }
-    }
-    deviceConfigs = Array.from(map.values());
-  } else if (data.device_type) {
+  // Normalize device configurations using robust parser
+  let deviceConfigs = parseDeviceConfigurations(data);
+  if (deviceConfigs.length === 0 && data.device_type) {
     const dQty = Math.max(1, parseInt(data.number_of_devices, 10) || 1);
     const vQty = Math.max(1, parseInt(data.number_of_vehicles, 10) || dQty);
     deviceConfigs = [{
@@ -165,8 +149,7 @@ export async function createChecklist(adminUserId, data) {
   const isInstallationJob = (data.installation_or_service || 'Installation') === 'Installation';
   let bomSnapshot = null;
   if (isInstallationJob) {
-    bomSnapshot = data.bom_snapshot || null;
-    if (!bomSnapshot && deviceConfigs.length > 0) {
+    if (deviceConfigs.length > 0) {
       try {
         const calc = await calculateBomRequirements(deviceConfigs);
         if (calc && calc.configured) {
@@ -175,6 +158,9 @@ export async function createChecklist(adminUserId, data) {
       } catch (e) {
         console.warn('Could not auto-calculate BOM snapshot:', e.message);
       }
+    }
+    if (!bomSnapshot && data.bom_snapshot?.items) {
+      bomSnapshot = data.bom_snapshot;
     }
   } else {
     bomSnapshot = null;
@@ -229,7 +215,7 @@ export async function createChecklist(adminUserId, data) {
       .single();
 
     if (error) throw error;
-    inserted = res;
+    inserted = { ...payload, ...res, id: res.id };
   } catch (error) {
     // If device_configurations / service_engineer_id / booking_end_date / bom_snapshot / material_issuance_status / salesperson_name columns are not migrated yet in PostgreSQL, retry without optional columns
     if (
@@ -254,7 +240,7 @@ export async function createChecklist(adminUserId, data) {
         .select()
         .single();
       if (err2) throw err2;
-      inserted = res2;
+      inserted = { ...payload, ...res2, id: res2.id };
     } else {
       console.error('Database insert error for checklist:', error);
       if (error.code === 'PGRST205' || error.message?.includes("Could not find the table 'public.installation_checklists'")) {
@@ -298,18 +284,15 @@ export async function createChecklist(adminUserId, data) {
  */
 export function normalizeChecklistDeviceConfigs(checklist) {
   if (!checklist) return checklist;
-  if (!Array.isArray(checklist.device_configurations) || checklist.device_configurations.length === 0) {
-    if (checklist.device_type) {
-      checklist.device_configurations = [
-        {
-          device_type: checklist.device_type,
-          number_of_devices: checklist.number_of_devices || 1,
-          number_of_vehicles: checklist.number_of_vehicles || checklist.number_of_devices || 1,
-        },
-      ];
-    } else {
-      checklist.device_configurations = [];
-    }
+  const parsed = parseDeviceConfigurations(
+    checklist,
+    checklist.number_of_devices || 1,
+    checklist.number_of_vehicles || 1
+  );
+  if (parsed.length > 0) {
+    checklist.device_configurations = parsed;
+  } else if (!Array.isArray(checklist.device_configurations)) {
+    checklist.device_configurations = [];
   }
   return checklist;
 }
@@ -487,42 +470,20 @@ export async function updateChecklist(id, data) {
     });
   }
 
-  // Handle device configuration updates
-  let deviceConfigs = [];
-  if (Array.isArray(data.device_configurations) && data.device_configurations.length > 0) {
-    const map = new Map();
-    for (const c of data.device_configurations) {
-      const dt = (c.device_type || '').trim();
-      if (!dt) continue;
-      const dQty = Math.max(1, parseInt(c.number_of_devices, 10) || 1);
-      const vQty = Math.max(1, parseInt(c.number_of_vehicles, 10) || dQty);
-      if (map.has(dt)) {
-        const ex = map.get(dt);
-        ex.number_of_devices += dQty;
-        ex.number_of_vehicles += vQty;
-      } else {
-        map.set(dt, { device_type: dt, number_of_devices: dQty, number_of_vehicles: vQty });
-      }
-    }
-    deviceConfigs = Array.from(map.values());
-  } else if (data.device_type) {
-    const dQty = Math.max(1, parseInt(data.number_of_devices, 10) || existing.number_of_devices || 1);
-    const vQty = Math.max(1, parseInt(data.number_of_vehicles, 10) || existing.number_of_vehicles || dQty);
-    deviceConfigs = [{
-      device_type: data.device_type.trim(),
-      number_of_devices: dQty,
-      number_of_vehicles: vQty,
-    }];
-  } else if (Array.isArray(existing.device_configurations) && existing.device_configurations.length > 0) {
-    deviceConfigs = existing.device_configurations;
+  // Handle device configuration updates using robust parser
+  let deviceConfigs = parseDeviceConfigurations(
+    (data.device_configurations && data.device_configurations.length > 0) || data.device_type ? data : existing
+  );
+  if (deviceConfigs.length === 0) {
+    deviceConfigs = parseDeviceConfigurations(existing);
   }
 
   const totalDevices = deviceConfigs.length > 0
     ? deviceConfigs.reduce((sum, c) => sum + c.number_of_devices, 0)
-    : (Number(data.number_of_devices) || existing.number_of_devices);
+    : (Number(data.number_of_devices) || existing.number_of_devices || 1);
   const totalVehicles = deviceConfigs.length > 0
     ? deviceConfigs.reduce((sum, c) => sum + c.number_of_vehicles, 0)
-    : (Number(data.number_of_vehicles) || existing.number_of_vehicles);
+    : (Number(data.number_of_vehicles) || existing.number_of_vehicles || totalDevices);
   const summaryDeviceType = deviceConfigs.length === 1
     ? deviceConfigs[0].device_type
     : (deviceConfigs.length > 0
@@ -607,7 +568,7 @@ export async function updateChecklist(id, data) {
       .single();
 
     if (error) throw error;
-    updated = res;
+    updated = { ...existing, ...payload, ...res, id: existing.id };
   } catch (error) {
     if (
       error.code === 'PGRST204' ||
@@ -632,7 +593,7 @@ export async function updateChecklist(id, data) {
         .select()
         .single();
       if (err2) throw err2;
-      updated = res2;
+      updated = { ...existing, ...payload, ...res2, id: existing.id };
     } else {
       console.error('Database update error for checklist:', error);
       throw new Error(error.message || 'Failed to update installation checklist');

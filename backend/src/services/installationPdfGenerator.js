@@ -2,6 +2,7 @@ import { jsPDF } from 'jspdf';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { parseDeviceConfigurations } from './bomService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -324,8 +325,9 @@ export async function generateInstallationChecklistPDF(item) {
   // ============================================================
   y = drawSectionHeader(doc, '2. DEVICE CONFIGURATIONS & DETAILS', y);
 
-  const configs = (item.device_configurations && Array.isArray(item.device_configurations) && item.device_configurations.length > 0)
-    ? item.device_configurations
+  const parsedConfigs = parseDeviceConfigurations(item);
+  const configs = parsedConfigs.length > 0
+    ? parsedConfigs
     : [{ device_type: item.device_type || '—', number_of_devices: item.number_of_devices || 0 }];
 
   // Table Header for Devices

@@ -1,7 +1,7 @@
 import supabase from './supabase.js';
 import { getMaterialInventory, issueMaterialsForChecklist } from './materialStockService.js';
 import { getInventoryProducts, issueDevicesForChecklist } from './inventoryService.js';
-import { calculateBomRequirements } from './bomService.js';
+import { calculateBomRequirements, parseDeviceConfigurations } from './bomService.js';
 
 // In-memory fallback cache
 const inMemoryStoreRequirements = new Map();
@@ -27,15 +27,18 @@ export async function syncStoreRequirementForChecklist(checklist) {
   let shortageCount = 0;
   const shortageDetails = [];
 
-  // Normalize device configurations
-  let deviceConfigs = [];
-  if (Array.isArray(checklist.device_configurations) && checklist.device_configurations.length > 0) {
-    deviceConfigs = checklist.device_configurations;
-  } else if (checklist.device_type) {
+  // Normalize device configurations using robust parser
+  let deviceConfigs = parseDeviceConfigurations(
+    checklist,
+    checklist.number_of_devices || 1,
+    checklist.number_of_vehicles || 1
+  );
+
+  if (deviceConfigs.length === 0) {
     deviceConfigs = [{
-      device_type: checklist.device_type,
-      number_of_devices: checklist.number_of_devices || 1,
-      number_of_vehicles: checklist.number_of_vehicles || checklist.number_of_devices || 1,
+      device_type: '2 Channel Live',
+      number_of_devices: 1,
+      number_of_vehicles: 1,
     }];
   }
 
@@ -82,7 +85,9 @@ export async function syncStoreRequirementForChecklist(checklist) {
 
   // 2. Authoritative Installation Materials stock availability check (ONLY for Installation jobs!)
   if (isInstallation) {
-    bomSnapshot = checklist.bom_snapshot || null;
+    bomSnapshot = checklist.bom_snapshot && Array.isArray(checklist.bom_snapshot?.items) && checklist.bom_snapshot.items.length > 0
+      ? checklist.bom_snapshot
+      : null;
 
     if (!bomSnapshot && deviceConfigs.length > 0) {
       try {
@@ -108,7 +113,7 @@ export async function syncStoreRequirementForChecklist(checklist) {
         const matName = item.material_name || '';
         const inv = materialInventoryMap.get(matName.toLowerCase());
         const availableStock = inv ? Number(inv.current_stock) || 0 : 0;
-        const requiredQty = Number(item.total_quantity) || 0;
+        const requiredQty = Number(item.total_quantity !== undefined ? item.total_quantity : item.total_required_quantity) || 0;
         const shortage = Math.max(0, requiredQty - availableStock);
 
         if (shortage > 0) {
@@ -361,24 +366,18 @@ export async function getStoreMaterialRequirements(params = {}) {
   }
 
   // Enrich records with LIVE authoritative inventory stock & shortage
-  const enrichedRecords = (dbRecords || []).map((rec) => {
+  const enrichedRecords = await Promise.all((dbRecords || []).map(async (rec) => {
     let liveHasShortage = false;
     let liveShortageCount = 0;
     const liveShortageDetails = [];
 
-    // Enrich device items
-    const enrichedDevices = (Array.isArray(rec.device_items) && rec.device_items.length > 0
-      ? rec.device_items
-      : (rec.device_configurations || []).map((c) => ({
-          device_type: c.device_type,
-          required_quantity: c.number_of_devices,
-          unit: 'Nos.',
-        }))
-    ).map((dItem) => {
+    // Parse and normalize device items
+    const parsedDevices = parseDeviceConfigurations(rec);
+    const enrichedDevices = (parsedDevices.length > 0 ? parsedDevices : (Array.isArray(rec.device_items) && rec.device_items.length > 0 ? rec.device_items : [])).map((dItem) => {
       const dType = dItem.device_type || '';
       const dev = deviceMap.get(dType);
       const currentStock = dev ? Number(dev.usable_stock) || 0 : 0;
-      const requiredQty = Number(dItem.required_quantity) || 1;
+      const requiredQty = Number(dItem.required_quantity ?? dItem.number_of_devices) || 1;
       const shortage = rec.job_type === 'Installation' ? Math.max(0, requiredQty - currentStock) : 0;
       const itemAvailability = currentStock >= requiredQty
         ? 'Available'
@@ -410,12 +409,35 @@ export async function getStoreMaterialRequirements(params = {}) {
       };
     });
 
-    // Enrich material items (Only for Installation)
-    const enrichedMaterials = (Array.isArray(rec.material_items) ? rec.material_items : []).map((item) => {
+    // Self-heal and enrich material items (Only for Installation)
+    let rawMats = Array.isArray(rec.material_items) ? rec.material_items : [];
+    if (rawMats.length === 0 && rec.job_type === 'Installation' && parsedDevices.length > 0) {
+      try {
+        const autoCalc = await calculateBomRequirements(parsedDevices);
+        if (autoCalc?.items && autoCalc.items.length > 0) {
+          rawMats = autoCalc.items.map((it) => ({
+            material_id: it.material_id,
+            material_sku: it.material_sku,
+            material_name: it.material_name,
+            quantity_per_device: it.quantity_per_device !== undefined ? it.quantity_per_device : 'Combined',
+            total_required_quantity: it.total_quantity,
+            unit: it.unit,
+            breakdown: it.breakdown,
+          }));
+          rec.material_items = rawMats;
+          rec.bom_snapshot = autoCalc;
+          inMemoryStoreRequirements.set(rec.checklist_id || rec.id, rec);
+        }
+      } catch (err) {
+        console.warn('Auto-healing BOM requirements calculation error:', err.message);
+      }
+    }
+
+    const enrichedMaterials = rawMats.map((item) => {
       const matName = item.material_name || '';
       const inv = materialMap.get(matName.toLowerCase());
       const currentStock = inv ? Number(inv.current_stock) || 0 : 0;
-      const requiredQty = Number(item.total_required_quantity) || 0;
+      const requiredQty = Number(item.total_required_quantity !== undefined ? item.total_required_quantity : (item.total_quantity !== undefined ? item.total_quantity : item.required_quantity)) || 0;
       const shortage = rec.job_type === 'Installation' ? Math.max(0, requiredQty - currentStock) : 0;
       const itemAvailability = currentStock >= requiredQty
         ? 'Available'
@@ -490,7 +512,7 @@ export async function getStoreMaterialRequirements(params = {}) {
       bom_availability_status: bomAvailabilityStatus,
       status: liveStatus,
     };
-  });
+  }));
 
   // Calculate counters
   let pendingCount = 0;
@@ -544,7 +566,13 @@ export async function getStoreMaterialRequirementById(id) {
   }
 
   const fallback = inMemoryStoreRequirements.get(id);
-  if (fallback) return fallback;
+  if (fallback) {
+    if (fallback.job_type === 'Installation' && (!fallback.material_items || fallback.material_items.length === 0)) {
+      const enriched = await getStoreMaterialRequirements({ limit: 1, search: fallback.checklist_number });
+      if (enriched?.requirements?.[0]) return enriched.requirements[0];
+    }
+    return fallback;
+  }
 
   // Resilient fallback: look up installation_checklists directly by ID or checklist_number and sync
   try {

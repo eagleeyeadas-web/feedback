@@ -4,7 +4,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { getMaterialInventory } from './materialStockService.js';
 import { getInventoryProducts } from './inventoryService.js';
-import { calculateBomRequirements } from './bomService.js';
+import { calculateBomRequirements, parseDeviceConfigurations } from './bomService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -187,17 +187,9 @@ export async function generateStoreManagerRequirementPDF(data) {
     console.warn('Could not load inventory maps in PDF generator:', e.message);
   }
 
-  // Normalize Device Configurations
-  let deviceConfigs = [];
-  if (Array.isArray(data.device_configurations) && data.device_configurations.length > 0) {
-    deviceConfigs = data.device_configurations;
-  } else if (Array.isArray(data.device_items) && data.device_items.length > 0) {
-    deviceConfigs = data.device_items.map((d) => ({
-      device_type: d.device_type,
-      number_of_devices: d.required_quantity || d.number_of_devices || 1,
-      number_of_vehicles: d.number_of_vehicles || 1,
-    }));
-  } else if (data.device_type) {
+  // Normalize Device Configurations using robust parser
+  let deviceConfigs = parseDeviceConfigurations(data);
+  if (deviceConfigs.length === 0 && data.device_type) {
     deviceConfigs = [{
       device_type: data.device_type,
       number_of_devices: data.number_of_devices || 1,
@@ -213,12 +205,15 @@ export async function generateStoreManagerRequirementPDF(data) {
   if (!isService) {
     if (Array.isArray(data.material_items) && data.material_items.length > 0) {
       materialItems = data.material_items;
-    } else if (data.bom_snapshot?.items && Array.isArray(data.bom_snapshot.items)) {
+    } else if (data.bom_snapshot?.items && Array.isArray(data.bom_snapshot.items) && data.bom_snapshot.items.length > 0) {
       materialItems = data.bom_snapshot.items;
-    } else if (deviceConfigs.length > 0) {
+    }
+
+    // Self-healing fallback: If materialItems is empty or has zero quantity, calculate from configured BOM
+    if (materialItems.length === 0 && deviceConfigs.length > 0) {
       try {
         const calculated = await calculateBomRequirements(deviceConfigs);
-        if (calculated?.items) {
+        if (calculated?.items && calculated.items.length > 0) {
           materialItems = calculated.items;
         }
       } catch (e) {
@@ -242,7 +237,7 @@ export async function generateStoreManagerRequirementPDF(data) {
       const matName = sanitizeText(item.material_name || '');
       const inv = materialInventoryMap.get(matName.toLowerCase());
       const currentStock = inv ? Number(inv.current_stock) || 0 : (item.available_stock !== undefined ? Number(item.available_stock) : 0);
-      const reqQty = Number(item.total_required_quantity !== undefined ? item.total_required_quantity : item.total_quantity) || 0;
+      const reqQty = Number(item.required_quantity !== undefined ? item.required_quantity : (item.total_required_quantity !== undefined ? item.total_required_quantity : item.total_quantity)) || 0;
       const shortage = Math.max(0, reqQty - currentStock);
       const sku = inv?.sku || item.material_sku || item.sku || 'N/A';
       const unit = sanitizeText(item.unit || inv?.unit || 'Nos.');
@@ -555,7 +550,8 @@ export async function generateStoreManagerRequirementPDF(data) {
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(8);
     doc.setTextColor(...COLORS.amber);
-    doc.text('NO BOM MATERIALS CONFIGURED FOR SELECTED DEVICES', MARGIN_X + 4, y + 6.5);
+    const warningMsg = sanitizeText(data.bom_snapshot?.warning || 'NO BOM MATERIALS CONFIGURED FOR SELECTED DEVICES');
+    doc.text(warningMsg, MARGIN_X + 4, y + 6.5);
 
     y += 15;
   } else {

@@ -14,14 +14,14 @@ export const STANDARD_DEVICE_TYPES = [
 
 export const INITIAL_BOM_TEMPLATE = [
   { material_id: 'mat-001', material_name: 'Insulation Tape', quantity_per_device: 2, unit: 'Nos.', sort_order: 1 },
-  { material_id: 'mat-002', material_name: 'Cable Tie – 200 mm', quantity_per_device: 1, unit: 'Packet', sort_order: 2 },
-  { material_id: 'mat-003', material_name: 'Cable Tie – 300 mm', quantity_per_device: 1, unit: 'Packet', sort_order: 3 },
+  { material_id: 'mat-002', material_name: 'Cable Tie – 200 mm', quantity_per_device: 1, unit: 'Packets', sort_order: 2 },
+  { material_id: 'mat-003', material_name: 'Cable Tie – 300 mm', quantity_per_device: 1, unit: 'Packets', sort_order: 3 },
   { material_id: 'mat-004', material_name: 'Long Screw', quantity_per_device: 12, unit: 'Nos.', sort_order: 4 },
   { material_id: 'mat-005', material_name: 'Small Screw', quantity_per_device: 12, unit: 'Nos.', sort_order: 5 },
-  { material_id: 'mat-006', material_name: 'Memory Card', quantity_per_device: 1, unit: 'No.', sort_order: 6 },
+  { material_id: 'mat-006', material_name: 'Memory Card', quantity_per_device: 1, unit: 'Nos.', sort_order: 6 },
   { material_id: 'mat-007', material_name: '0.5 mm Wire', quantity_per_device: 20, unit: 'Metres', sort_order: 7 },
   { material_id: 'mat-008', material_name: '5-metre Cable', quantity_per_device: 3, unit: 'Nos.', sort_order: 8 },
-  { material_id: 'mat-009', material_name: '15-metre Cable', quantity_per_device: 1, unit: 'No.', sort_order: 9 },
+  { material_id: 'mat-009', material_name: '15-metre Cable', quantity_per_device: 1, unit: 'Nos.', sort_order: 9 },
 ];
 
 export const COMMON_UNITS = [
@@ -36,6 +36,118 @@ export const COMMON_UNITS = [
   'Set',
   'Piece',
 ];
+
+/**
+ * Normalizes device type name to canonical standard name (case-insensitive)
+ */
+export function normalizeDeviceTypeName(name) {
+  if (!name || typeof name !== 'string') return '';
+  const clean = name.trim();
+  const matched = STANDARD_DEVICE_TYPES.find(
+    (t) => t.toLowerCase() === clean.toLowerCase()
+  );
+  return matched || clean;
+}
+
+/**
+ * Robustly parses and normalizes device configurations from:
+ * - Array of configuration objects
+ * - Single checklist or requirement object
+ * - Summary strings like "4 Channel Live (2), 8 Channel Live (1)"
+ * - Single device type strings
+ * Normalizes device names, extracts counts, and aggregates duplicates.
+ */
+export function parseDeviceConfigurations(input, defaultQty = 1, defaultVehicles = 1) {
+  if (!input) return [];
+
+  let rawList = [];
+  if (Array.isArray(input)) {
+    rawList = input;
+  } else if (typeof input === 'object') {
+    if (Array.isArray(input.device_configurations) && input.device_configurations.length > 0) {
+      rawList = input.device_configurations;
+    } else if (Array.isArray(input.device_items) && input.device_items.length > 0) {
+      rawList = input.device_items.map((d) => ({
+        device_type: d.device_type,
+        number_of_devices: d.required_quantity || d.number_of_devices || defaultQty,
+        number_of_vehicles: d.number_of_vehicles || defaultVehicles,
+      }));
+    } else if (input.device_type) {
+      rawList = [{
+        device_type: input.device_type,
+        number_of_devices: input.number_of_devices || defaultQty,
+        number_of_vehicles: input.number_of_vehicles || defaultVehicles,
+      }];
+    }
+  } else if (typeof input === 'string') {
+    rawList = [{
+      device_type: input,
+      number_of_devices: defaultQty,
+      number_of_vehicles: defaultVehicles,
+    }];
+  }
+
+  const parsedItems = [];
+
+  for (const item of rawList) {
+    const rawType = (typeof item === 'string' ? item : (item.device_type || '')).trim();
+    if (!rawType) continue;
+
+    const itemQty = Number(item.number_of_devices) || defaultQty || 1;
+    const itemVeh = Number(item.number_of_vehicles) || defaultVehicles || itemQty;
+
+    // Check if rawType is a composite string containing multiple device types separated by comma or semicolon
+    const parts = rawType.split(/[,;\n]+/).map((p) => p.trim()).filter(Boolean);
+
+    if (parts.length > 1) {
+      for (const p of parts) {
+        // e.g. "4 Channel Live (2)" or "4 Channel Live x 2" or "4 Channel Live - 2"
+        const qtyMatch = p.match(/\((\d+)(?:\s*devices?)?\)/i) || p.match(/(?:x|[:\-])\s*(\d+)/i);
+        const qty = qtyMatch ? parseInt(qtyMatch[1], 10) : 1;
+        const nameClean = p.replace(/\(.*?\)/g, '').replace(/(?:x|[:\-])\s*\d+/gi, '').trim();
+        if (nameClean) {
+          parsedItems.push({
+            device_type: normalizeDeviceTypeName(nameClean),
+            number_of_devices: Math.max(1, isNaN(qty) ? 1 : qty),
+            number_of_vehicles: Math.max(1, isNaN(qty) ? 1 : qty),
+          });
+        }
+      }
+    } else if (parts.length === 1) {
+      const p = parts[0];
+      const qtyMatch = p.match(/\((\d+)(?:\s*devices?)?\)/i) || p.match(/(?:x|[:\-])\s*(\d+)/i);
+      const nameClean = p.replace(/\(.*?\)/g, '').replace(/(?:x|[:\-])\s*\d+/gi, '').trim();
+      const extractedQty = qtyMatch ? parseInt(qtyMatch[1], 10) : itemQty;
+
+      parsedItems.push({
+        device_type: normalizeDeviceTypeName(nameClean || p),
+        number_of_devices: Math.max(1, isNaN(extractedQty) ? 1 : extractedQty),
+        number_of_vehicles: Math.max(1, isNaN(itemVeh) ? 1 : itemVeh),
+      });
+    }
+  }
+
+  // Combine duplicate device types into single aggregated rows
+  const combined = new Map();
+  for (const item of parsedItems) {
+    const dt = normalizeDeviceTypeName(item.device_type);
+    if (!dt) continue;
+
+    if (combined.has(dt)) {
+      const ex = combined.get(dt);
+      ex.number_of_devices += item.number_of_devices;
+      ex.number_of_vehicles += item.number_of_vehicles;
+    } else {
+      combined.set(dt, {
+        device_type: dt,
+        number_of_devices: item.number_of_devices,
+        number_of_vehicles: item.number_of_vehicles,
+      });
+    }
+  }
+
+  return Array.from(combined.values());
+}
 
 /**
  * Normalizes units to check compatibility (e.g. 'Packets' vs 'Packet', 'Nos.' vs 'No.')
@@ -98,24 +210,26 @@ let bomsDbSeeded = false;
 
 /**
  * Seed BOM templates into Supabase if not already present
+ * Idempotent: Does not duplicate products, preserves customizations.
  */
 async function ensureDbBomsSeeded() {
   if (bomsDbSeeded) return;
   try {
     const { data: dbBoms, error } = await supabase
       .from('device_boms')
-      .select('id, device_type');
+      .select('id, device_type, items:bom_items(id, material_name)');
 
     if (!error && Array.isArray(dbBoms)) {
-      const existingTypes = new Set(dbBoms.map((b) => b.device_type));
-      const missingTypes = STANDARD_DEVICE_TYPES.filter((t) => !existingTypes.has(t));
+      // Fetch materials to map material_id
+      const { data: dbMats } = await supabase.from('material_inventory').select('id, material_name, unit');
+      const matMap = new Map((dbMats || []).map((m) => [m.material_name.toLowerCase(), m]));
 
-      if (missingTypes.length > 0) {
-        // Fetch materials to map material_id
-        const { data: dbMats } = await supabase.from('material_inventory').select('id, material_name, unit');
-        const matMap = new Map((dbMats || []).map((m) => [m.material_name.toLowerCase(), m]));
+      const existingMap = new Map(dbBoms.map((b) => [b.device_type.toLowerCase(), b]));
 
-        for (const mType of missingTypes) {
+      for (const mType of STANDARD_DEVICE_TYPES) {
+        let bomRec = existingMap.get(mType.toLowerCase());
+
+        if (!bomRec) {
           const { data: newBom } = await supabase
             .from('device_boms')
             .insert({
@@ -126,21 +240,22 @@ async function ensureDbBomsSeeded() {
             })
             .select()
             .single();
+          bomRec = newBom;
+        }
 
-          if (newBom) {
-            const bomItemsToInsert = getInitialBomTemplateForDevice(mType).map((item) => {
-              const matchedMat = matMap.get(item.material_name.toLowerCase());
-              return {
-                bom_id: newBom.id,
-                material_id: matchedMat?.id || null,
-                material_name: item.material_name,
-                quantity_per_device: item.quantity_per_device,
-                unit: item.unit,
-                sort_order: item.sort_order,
-              };
-            });
-            await supabase.from('bom_items').insert(bomItemsToInsert);
-          }
+        if (bomRec && (!bomRec.items || bomRec.items.length === 0)) {
+          const bomItemsToInsert = getInitialBomTemplateForDevice(mType).map((item) => {
+            const matchedMat = matMap.get(item.material_name.toLowerCase());
+            return {
+              bom_id: bomRec.id,
+              material_id: matchedMat?.id || null,
+              material_name: item.material_name,
+              quantity_per_device: item.quantity_per_device,
+              unit: item.unit,
+              sort_order: item.sort_order,
+            };
+          });
+          await supabase.from('bom_items').insert(bomItemsToInsert);
         }
       }
 
@@ -158,7 +273,7 @@ async function ensureDbBomsSeeded() {
       bomsDbSeeded = true;
     }
   } catch (err) {
-    // Database table might not be migrated yet
+    // Database table might not be migrated yet - inMemoryBoms is used
   }
 }
 
@@ -175,7 +290,6 @@ export async function getAllBoms() {
       .order('device_type', { ascending: true });
 
     if (!bomsError && dbBoms && dbBoms.length > 0) {
-      // Also fetch materials map to guarantee material_id is enriched
       const materials = await getMaterialInventory().catch(() => []);
       const matNameMap = new Map(materials.map((m) => [m.material_name.toLowerCase(), m]));
 
@@ -215,21 +329,21 @@ export async function getAllBoms() {
 }
 
 /**
- * Get a single BOM by device type
+ * Get a single BOM by device type (case-insensitive, trimmed)
  */
 export async function getBomByDeviceType(deviceType) {
   if (!deviceType) return null;
-  const normalized = deviceType.trim();
+  const normalized = normalizeDeviceTypeName(deviceType);
   const is8Channel = normalized.toLowerCase() === '8 channel live';
 
   try {
     const { data: dbBom, error } = await supabase
       .from('device_boms')
       .select('*, items:bom_items(*)')
-      .eq('device_type', normalized)
+      .ilike('device_type', normalized)
       .maybeSingle();
 
-    if (!error && dbBom) {
+    if (!error && dbBom && Array.isArray(dbBom.items) && dbBom.items.length > 0) {
       const materials = await getMaterialInventory().catch(() => []);
       const matNameMap = new Map(materials.map((m) => [m.material_name.toLowerCase(), m]));
 
@@ -259,14 +373,20 @@ export async function getBomByDeviceType(deviceType) {
     console.warn(`DB fetch for BOM "${normalized}" failed:`, err.message);
   }
 
-  const memBom = inMemoryBoms.get(normalized);
-  if (memBom && is8Channel) {
-    return {
-      ...memBom,
-      items: (memBom.items || []).filter((item) => !(item.material_name || '').toLowerCase().includes('memory card')),
-    };
+  // Lookup in inMemoryBoms case-insensitively
+  for (const [key, memBom] of inMemoryBoms.entries()) {
+    if (key.toLowerCase() === normalized.toLowerCase()) {
+      if (is8Channel) {
+        return {
+          ...memBom,
+          items: (memBom.items || []).filter((item) => !(item.material_name || '').toLowerCase().includes('memory card')),
+        };
+      }
+      return memBom;
+    }
   }
-  return memBom || null;
+
+  return null;
 }
 
 /**
@@ -274,52 +394,21 @@ export async function getBomByDeviceType(deviceType) {
  * Total required quantity = configured BOM quantity per device * number of devices
  * Combines shared material requirements for multiple camera device types in the same job.
  * Uses inventory product IDs (`material_id`) and validates units without conversion.
+ * Excludes Memory Card entirely for 8 Channel Live.
  */
 export async function calculateBomRequirements(param1, param2) {
-  let rawConfigs = [];
-  if (Array.isArray(param1)) {
-    rawConfigs = param1;
-  } else if (param1 && typeof param1 === 'object' && Array.isArray(param1.device_configurations)) {
-    rawConfigs = param1.device_configurations;
-  } else if (typeof param1 === 'string') {
-    rawConfigs = [{ device_type: param1, number_of_devices: param2, number_of_vehicles: param2 }];
-  } else if (param1 && typeof param1 === 'object' && param1.device_type) {
-    rawConfigs = [param1];
-  }
+  const normalizedConfigs = parseDeviceConfigurations(param1, param2, param2);
 
-  if (rawConfigs.length === 0) {
+  if (normalizedConfigs.length === 0) {
     return {
       configured: false,
-      warning: 'At least one device configuration is required.',
+      warning: 'At least one valid device configuration is required.',
       device_configurations: [],
       items: [],
       total_devices: 0,
       total_vehicles: 0,
     };
   }
-
-  // Combine duplicate device types automatically
-  const combinedMap = new Map();
-  for (const c of rawConfigs) {
-    const dType = (c.device_type || '').trim();
-    if (!dType) continue;
-    const dQty = parseInt(c.number_of_devices, 10);
-    const vQty = parseInt(c.number_of_vehicles, 10);
-
-    if (combinedMap.has(dType)) {
-      const existing = combinedMap.get(dType);
-      existing.number_of_devices += (isNaN(dQty) ? 0 : dQty);
-      existing.number_of_vehicles += (isNaN(vQty) ? (isNaN(dQty) ? 0 : dQty) : vQty);
-    } else {
-      combinedMap.set(dType, {
-        device_type: dType,
-        number_of_devices: isNaN(dQty) ? 0 : dQty,
-        number_of_vehicles: isNaN(vQty) ? (isNaN(dQty) ? 0 : dQty) : vQty,
-      });
-    }
-  }
-
-  const normalizedConfigs = Array.from(combinedMap.values());
 
   for (const c of normalizedConfigs) {
     if (isNaN(c.number_of_devices) || c.number_of_devices <= 0) {
