@@ -819,6 +819,59 @@ export async function fetchAllMovements(token, params = {}) {
   return res.json();
 }
 
+/**
+ * Technician Job Expenses API
+ */
+export async function fetchJobExpenses(token, checklistId) {
+  const res = await fetch(`${API_BASE}/admin/installations/${checklistId}/expenses`, {
+    headers: adminHeaders(token),
+  });
+  if (!res.ok) {
+    const json = await res.json().catch(() => ({}));
+    throw new Error(json.error || 'Failed to fetch job expenses');
+  }
+  return res.json();
+}
+
+export async function saveJobExpensesApi(token, checklistId, data) {
+  const res = await fetch(`${API_BASE}/admin/installations/${checklistId}/expenses`, {
+    method: 'POST',
+    headers: adminHeaders(token),
+    body: JSON.stringify(data),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to save job expenses');
+  return json;
+}
+
+export async function uploadExpenseReceiptApi(token, checklistId, file) {
+  const formData = new FormData();
+  formData.append('receipt', file);
+
+  const res = await fetch(`${API_BASE}/admin/installations/${checklistId}/expenses/receipt`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: formData,
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to upload receipt');
+  return json;
+}
+
+export async function fetchTechnicianMonthlyExpenseSummary(token) {
+  const res = await fetch(`${API_BASE}/admin/installations/technician-expenses/monthly-summary`, {
+    headers: adminHeaders(token),
+  });
+  if (!res.ok) {
+    const json = await res.json().catch(() => ({}));
+    throw new Error(json.error || 'Failed to fetch monthly expense summary');
+  }
+  return res.json();
+}
+
+
 
 
 

@@ -15,8 +15,10 @@ import {
   RefreshCw,
   Eye,
   Archive,
+  Receipt,
 } from 'lucide-react';
 import InstallationCompletionModal from '../../../components/workspaces/InstallationCompletionModal';
+import TechnicianExpenseModal from '../../../components/workspaces/TechnicianExpenseModal';
 import { fetchInstallationChecklists, fetchServiceEngineers, startInstallationJob } from '../../../lib/api';
 
 // Helper to extract separated required and extra device allocations
@@ -68,6 +70,8 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
   // Active Modals State
   const [completionModalJob, setCompletionModalJob] = useState(null);
   const [viewReportModalJob, setViewReportModalJob] = useState(null);
+  const [expenseModalJob, setExpenseModalJob] = useState(null);
+  const [postInstallCompletedJob, setPostInstallCompletedJob] = useState(null);
 
   const loadData = useCallback(async () => {
     if (!token) {
@@ -553,12 +557,20 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
                                 <FileCheck className="w-3.5 h-3.5" /> Post-Installation Device Report
                               </button>
                             ) : (
-                              <button
-                                onClick={() => setViewReportModalJob(item)}
-                                className="px-3 py-1.5 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg flex items-center gap-1.5 cursor-pointer w-fit"
-                              >
-                                <FileCheck className="w-3.5 h-3.5 text-blue-600" /> View Installation Report
-                              </button>
+                              <div className="flex flex-wrap gap-1">
+                                <button
+                                  onClick={() => setViewReportModalJob(item)}
+                                  className="px-2.5 py-1 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg flex items-center gap-1 cursor-pointer w-fit"
+                                >
+                                  <FileCheck className="w-3 h-3 text-blue-600" /> View Report
+                                </button>
+                                <button
+                                  onClick={() => setExpenseModalJob(item)}
+                                  className="px-2.5 py-1 text-xs font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-lg flex items-center gap-1 cursor-pointer w-fit"
+                                >
+                                  <Receipt className="w-3 h-3 text-purple-600" /> Expenses
+                                </button>
+                              </div>
                             )}
 
                             {/* Job Details Link */}
@@ -778,12 +790,21 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
                         {/* Actions Column: View Installation Report */}
                         <td className="py-3 px-4">
                           <div className="flex flex-col gap-1.5">
-                            <button
-                              onClick={() => setViewReportModalJob(item)}
-                              className="px-3 py-1.5 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg flex items-center gap-1.5 cursor-pointer w-fit"
-                            >
-                              <FileCheck className="w-3.5 h-3.5 text-blue-600" /> View Installation Report
-                            </button>
+                            <div className="flex flex-wrap gap-1">
+                              <button
+                                onClick={() => setViewReportModalJob(item)}
+                                className="px-2.5 py-1 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg flex items-center gap-1 cursor-pointer w-fit"
+                              >
+                                <FileCheck className="w-3.5 h-3.5 text-blue-600" /> View Report
+                              </button>
+                              <button
+                                onClick={() => setExpenseModalJob(item)}
+                                className="px-2.5 py-1 text-xs font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-lg flex items-center gap-1 cursor-pointer w-fit shadow-2xs"
+                                title="View or add technician expenses for this completed job"
+                              >
+                                <Receipt className="w-3.5 h-3.5 text-purple-600" /> Expenses
+                              </button>
+                            </div>
 
                             <div className="flex items-center gap-2 text-[10px] mt-0.5 text-gray-500">
                               <button
@@ -817,6 +838,7 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
           onClose={() => setCompletionModalJob(null)}
           onSuccess={(result) => {
             const targetId = completionModalJob.id;
+            const submittedJob = { ...completionModalJob, has_completion_report: true, installation_status: 'Completed' };
             const isReturn =
               result?.reconciliation_status === 'PENDING_STORE_VERIFICATION' ||
               result?.summary?.devices_unused_qty > 0;
@@ -829,6 +851,7 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
                       ...item,
                       carry_status: 'RECORDED',
                       installation_status: 'Completed',
+                      has_completion_report: true,
                       reconciliation_status: isReturn
                         ? 'PENDING_STORE_VERIFICATION'
                         : 'FULLY_RECONCILED',
@@ -838,7 +861,7 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
             );
             setCompletionModalJob(null);
             setActiveTab('completed');
-            showToast('Installation report submitted! Job moved to Completed Jobs.');
+            setPostInstallCompletedJob(submittedJob);
             loadData();
           }}
         />
@@ -852,6 +875,79 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
           readOnly={true}
           onClose={() => setViewReportModalJob(null)}
           onSuccess={() => setViewReportModalJob(null)}
+        />
+      )}
+
+      {/* STEP 2 TRANSITION CONFIRMATION DIALOG (Post-Installation Report -> Technician Expenses) */}
+      {postInstallCompletedJob && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 border border-gray-100 text-center animate-in fade-in zoom-in duration-200">
+            <div className="w-14 h-14 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto">
+              <CheckCircle2 className="w-8 h-8" />
+            </div>
+
+            <div>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 uppercase tracking-wider">
+                Step 1 Complete
+              </span>
+              <h3 className="text-lg font-bold text-gray-900 mt-1.5">
+                Post-Installation Report Saved!
+              </h3>
+              <p className="text-xs text-gray-600 mt-1">
+                Installation details, device reconciliation, and material usage for{' '}
+                <strong className="text-gray-900">{postInstallCompletedJob.checklist_number}</strong> have been recorded.
+              </p>
+            </div>
+
+            <div className="p-3.5 bg-purple-50 rounded-xl border border-purple-200 text-left space-y-1">
+              <span className="text-[11px] font-bold text-purple-900 flex items-center gap-1.5">
+                <Receipt className="w-4 h-4 text-purple-600" />
+                <span>Step 2 — Record Technician Expenses</span>
+              </span>
+              <p className="text-[11px] text-purple-700">
+                You can record travel, fuel, food, toll, and accommodation costs incurred for {postInstallCompletedJob.client_name} now, or return anytime from the Completed Jobs tab.
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => {
+                  const targetJob = postInstallCompletedJob;
+                  setPostInstallCompletedJob(null);
+                  setExpenseModalJob(targetJob);
+                }}
+                className="w-full py-2.5 px-4 rounded-xl text-xs font-bold text-white bg-purple-700 hover:bg-purple-800 transition-all flex items-center justify-center gap-2 shadow-xs cursor-pointer"
+              >
+                <Receipt className="w-4 h-4" />
+                <span>Continue to Technician Expenses (Step 2)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setPostInstallCompletedJob(null);
+                  showToast('Installation report saved. You can record expenses anytime from Completed Jobs.');
+                }}
+                className="w-full py-2 px-4 rounded-xl text-xs font-semibold text-gray-600 hover:bg-gray-100 transition-colors cursor-pointer"
+              >
+                Complete Expenses Later
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TECHNICIAN EXPENSES MODAL */}
+      {expenseModalJob && (
+        <TechnicianExpenseModal
+          checklist={expenseModalJob}
+          token={token}
+          onClose={() => setExpenseModalJob(null)}
+          onSuccess={() => {
+            showToast(`Expenses updated for ${expenseModalJob.checklist_number}!`);
+            loadData();
+          }}
         />
       )}
     </div>

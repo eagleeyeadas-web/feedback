@@ -36,6 +36,26 @@ import {
   getAllStoreMaterialReturns,
   enrichChecklistsWithWorkflowStatus,
 } from '../services/workflowService.js';
+import multer from 'multer';
+import {
+  getExpensesForChecklist,
+  saveJobExpenses,
+  getTechnicianCurrentMonthTotal,
+  uploadExpenseReceipt,
+} from '../services/expenseService.js';
+
+const uploadReceipt = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+  fileFilter: (req, file, cb) => {
+    const allowed = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+    if (allowed.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid file format. Only JPEG, PNG, WebP, and PDF are accepted.'));
+    }
+  },
+});
 
 const router = Router();
 
@@ -271,6 +291,22 @@ router.get('/pending-material-returns', requireRole('STORE_MANAGER', 'ADMIN'), a
 });
 
 /**
+ * GET /api/admin/installations/technician-expenses/monthly-summary
+ * Fetch current month submitted expenses total for the authenticated technician
+ */
+router.get('/technician-expenses/monthly-summary', requireRole('TECHNICAL', 'ADMIN'), async (req, res) => {
+  try {
+    const techId = req.profile?.id;
+    const techName = req.profile?.full_name || req.profile?.email;
+    const total = await getTechnicianCurrentMonthTotal(techId, techName);
+    return res.json({ total, technician_id: techId, technician_name: techName });
+  } catch (err) {
+    console.error('Error fetching monthly expense summary:', err);
+    return res.status(500).json({ error: err.message || 'Failed to fetch monthly expense summary' });
+  }
+});
+
+/**
  * GET /api/admin/installations
  * List installation checklists with search, filters, pagination (Accessible to all 4 roles)
  */
@@ -284,6 +320,20 @@ router.get('/', requireRole('ADMIN', 'SALES', 'TECHNICAL', 'STORE_MANAGER'), asy
   } catch (err) {
     console.error('Error in GET /installations:', err);
     return res.status(500).json({ error: err.message || 'Failed to fetch installation checklists' });
+  }
+});
+
+/**
+ * GET /api/admin/installations/technician-expenses/monthly-summary
+ * Current month technician expense total for authenticated technician
+ */
+router.get('/technician-expenses/monthly-summary', requireRole('TECHNICAL', 'ADMIN'), async (req, res) => {
+  try {
+    const total = await getTechnicianCurrentMonthTotal(req.profile?.id, req.profile?.full_name);
+    return res.json({ total, month: new Date().toISOString().slice(0, 7) });
+  } catch (err) {
+    console.error('Error in GET /technician-expenses/monthly-summary:', err);
+    return res.status(500).json({ error: err.message || 'Failed to fetch monthly expense summary' });
   }
 });
 
@@ -665,6 +715,71 @@ router.post('/:id/resolve-discrepancy', requireAdmin, async (req, res) => {
     console.error('Error in POST /installations/:id/resolve-discrepancy:', err);
     return res.status(400).json({ error: err.message || 'Failed to resolve discrepancy' });
   }
+});
+
+/**
+ * Stage 7A: GET /api/admin/installations/:id/expenses
+ * Retrieve recorded and draft technician expenses for this job
+ */
+router.get('/:id/expenses', requireRole('TECHNICAL', 'ADMIN', 'STORE_MANAGER', 'SALES'), async (req, res) => {
+  try {
+    const result = await getExpensesForChecklist(req.params.id, req.profile);
+    return res.json(result);
+  } catch (err) {
+    console.error('Error in GET /installations/:id/expenses:', err);
+    const status = err.statusCode || 500;
+    return res.status(status).json({ error: err.message || 'Failed to fetch expenses for job' });
+  }
+});
+
+/**
+ * Stage 7B: POST /api/admin/installations/:id/expenses
+ * Record or save draft technician expenses after post-installation report submission
+ */
+router.post('/:id/expenses', requireRole('TECHNICAL', 'ADMIN'), async (req, res) => {
+  try {
+    const { expenses, is_draft, idempotency_key } = req.body;
+    const result = await saveJobExpenses({
+      checklist_id: req.params.id,
+      user: req.profile,
+      expenses,
+      is_draft: Boolean(is_draft),
+      idempotency_key,
+    });
+    return res.json(result);
+  } catch (err) {
+    console.error('Error in POST /installations/:id/expenses:', err);
+    const status = err.statusCode || 400;
+    return res.status(status).json({ error: err.message || 'Failed to record expenses' });
+  }
+});
+
+/**
+ * Stage 7C: POST /api/admin/installations/:id/expenses/receipt
+ * Upload receipt photo or PDF for an expense entry
+ */
+router.post('/:id/expenses/receipt', requireRole('TECHNICAL', 'ADMIN'), (req, res) => {
+  uploadReceipt.single('receipt')(req, res, async (err) => {
+    if (err) {
+      return res.status(400).json({ error: err.message || 'File upload error' });
+    }
+    if (!req.file) {
+      return res.status(400).json({ error: 'Receipt file is required' });
+    }
+    try {
+      const uploadRes = await uploadExpenseReceipt({
+        buffer: req.file.buffer,
+        originalname: req.file.originalname,
+        mimetype: req.file.mimetype,
+        checklist_id: req.params.id,
+      });
+      return res.json(uploadRes);
+    } catch (uploadErr) {
+      console.error('Error uploading receipt:', uploadErr);
+      const status = uploadErr.statusCode || 500;
+      return res.status(status).json({ error: uploadErr.message || 'Failed to upload receipt' });
+    }
+  });
 });
 
 export default router;
