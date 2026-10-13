@@ -1,14 +1,15 @@
 import supabase from './supabase.js';
-import { getMaterialInventory } from './materialStockService.js';
+import { getMaterialInventory, issueMaterialsForChecklist } from './materialStockService.js';
+import { getInventoryProducts, issueDevicesForChecklist } from './inventoryService.js';
 import { calculateBomRequirements } from './bomService.js';
 
-// In-memory fallback cache to ensure 100% operational uptime
+// In-memory fallback cache
 const inMemoryStoreRequirements = new Map();
 
 /**
  * Automatically create or update the associated Store Manager material-requirement record
  * for an installation or service checklist.
- * Idempotent upsert linked by checklist_id.
+ * Calculates device stock availability and material stock availability separately.
  */
 export async function syncStoreRequirementForChecklist(checklist) {
   if (!checklist || !checklist.id) {
@@ -21,47 +22,91 @@ export async function syncStoreRequirementForChecklist(checklist) {
 
   let bomSnapshot = null;
   let materialItems = [];
+  let deviceItems = [];
   let hasShortage = false;
   let shortageCount = 0;
   const shortageDetails = [];
 
+  // Normalize device configurations
+  let deviceConfigs = [];
+  if (Array.isArray(checklist.device_configurations) && checklist.device_configurations.length > 0) {
+    deviceConfigs = checklist.device_configurations;
+  } else if (checklist.device_type) {
+    deviceConfigs = [{
+      device_type: checklist.device_type,
+      number_of_devices: checklist.number_of_devices || 1,
+      number_of_vehicles: checklist.number_of_vehicles || checklist.number_of_devices || 1,
+    }];
+  }
+
+  // 1. Authoritative Camera Devices stock availability check
+  let deviceProductsMap = new Map();
+  try {
+    const allDevices = await getInventoryProducts();
+    deviceProductsMap = new Map(allDevices.map((d) => [d.device_type, d]));
+  } catch (e) {
+    console.warn('Could not load camera device products map:', e.message);
+  }
+
+  deviceItems = deviceConfigs.map((cfg) => {
+    const dType = (cfg.device_type || '').trim();
+    const reqQty = Number(cfg.number_of_devices) || 1;
+    const prod = deviceProductsMap.get(dType);
+    const availableStock = prod ? Number(prod.usable_stock) || 0 : 0;
+    const shortage = Math.max(0, reqQty - availableStock);
+
+    if (isInstallation && shortage > 0) {
+      hasShortage = true;
+      shortageCount++;
+      shortageDetails.push({
+        category: 'Camera Device',
+        item_name: dType,
+        sku: prod?.sku || 'N/A',
+        available_stock: availableStock,
+        required_quantity: reqQty,
+        shortage,
+        unit: 'Nos.',
+      });
+    }
+
+    return {
+      product_id: prod?.id || null,
+      sku: prod?.sku || null,
+      device_type: dType,
+      required_quantity: reqQty,
+      unit: 'Nos.',
+      available_stock: availableStock,
+      shortage: isInstallation ? shortage : 0,
+    };
+  });
+
+  // 2. Authoritative Installation Materials stock availability check (ONLY for Installation jobs!)
   if (isInstallation) {
     bomSnapshot = checklist.bom_snapshot || null;
 
-    // Auto-calculate BOM if not already attached
-    if (!bomSnapshot && Array.isArray(checklist.device_configurations) && checklist.device_configurations.length > 0) {
+    if (!bomSnapshot && deviceConfigs.length > 0) {
       try {
-        const calc = await calculateBomRequirements(checklist.device_configurations);
+        const calc = await calculateBomRequirements(deviceConfigs);
         if (calc && calc.configured) {
           bomSnapshot = calc;
         }
       } catch (err) {
         console.warn('Could not calculate BOM snapshot for requirement sync:', err.message);
       }
-    } else if (!bomSnapshot && checklist.device_type) {
-      try {
-        const calc = await calculateBomRequirements(checklist.device_type, checklist.number_of_devices || 1);
-        if (calc && calc.configured) {
-          bomSnapshot = calc;
-        }
-      } catch (err) {
-        console.warn('Could not calculate single-device BOM snapshot for requirement sync:', err.message);
-      }
     }
 
-    // Fetch authoritative material inventory for stock accuracy & shortage calculation
-    let inventoryMap = new Map();
+    let materialInventoryMap = new Map();
     try {
       const allMaterials = await getMaterialInventory();
-      inventoryMap = new Map(allMaterials.map((m) => [m.material_name.toLowerCase(), m]));
+      materialInventoryMap = new Map(allMaterials.map((m) => [m.material_name.toLowerCase(), m]));
     } catch (e) {
-      console.warn('Could not load inventory for shortage calculation:', e.message);
+      console.warn('Could not load material inventory for shortage calculation:', e.message);
     }
 
     if (bomSnapshot?.items && Array.isArray(bomSnapshot.items)) {
       materialItems = bomSnapshot.items.map((item) => {
         const matName = item.material_name || '';
-        const inv = inventoryMap.get(matName.toLowerCase());
+        const inv = materialInventoryMap.get(matName.toLowerCase());
         const availableStock = inv ? Number(inv.current_stock) || 0 : 0;
         const requiredQty = Number(item.total_quantity) || 0;
         const shortage = Math.max(0, requiredQty - availableStock);
@@ -70,7 +115,9 @@ export async function syncStoreRequirementForChecklist(checklist) {
           hasShortage = true;
           shortageCount++;
           shortageDetails.push({
-            material_name: matName,
+            category: 'Installation Material',
+            item_name: matName,
+            sku: inv?.sku || item.material_sku || 'N/A',
             available_stock: availableStock,
             required_quantity: requiredQty,
             shortage,
@@ -79,6 +126,8 @@ export async function syncStoreRequirementForChecklist(checklist) {
         }
 
         return {
+          material_id: item.material_id || inv?.id || null,
+          material_sku: inv?.sku || item.material_sku || null,
           material_name: matName,
           quantity_per_device: item.quantity_per_device !== undefined ? item.quantity_per_device : 'Combined',
           total_required_quantity: requiredQty,
@@ -91,14 +140,16 @@ export async function syncStoreRequirementForChecklist(checklist) {
     }
   }
 
-  // Determine requirement status
+  // Determine requirement statuses
   let reqStatus = 'PENDING_REVIEW';
-  let issuanceStatus = isInstallation ? (checklist.material_issuance_status || 'PENDING') : 'NOT_APPLICABLE';
+  let materialIssuanceStatus = isInstallation ? (checklist.material_issuance_status || 'PENDING') : 'NOT_APPLICABLE';
+  let devicesIssuanceStatus = isInstallation ? (checklist.devices_issuance_status || 'PENDING') : 'NOT_APPLICABLE';
 
   if (!isInstallation) {
     reqStatus = 'NOT_APPLICABLE';
-    issuanceStatus = 'NOT_APPLICABLE';
-  } else if (issuanceStatus === 'ISSUED') {
+    materialIssuanceStatus = 'NOT_APPLICABLE';
+    devicesIssuanceStatus = 'NOT_APPLICABLE';
+  } else if (materialIssuanceStatus === 'ISSUED' && devicesIssuanceStatus === 'ISSUED') {
     reqStatus = 'ISSUED';
   } else if (hasShortage) {
     reqStatus = 'SHORTAGE_FLAGGED';
@@ -114,13 +165,15 @@ export async function syncStoreRequirementForChecklist(checklist) {
     client_location: (checklist.client_location || '').trim(),
     google_maps_location: checklist.google_maps_location ? checklist.google_maps_location.trim() : null,
     job_type: isInstallation ? 'Installation' : 'Service',
-    device_type: checklist.device_type || '2 Channel Live',
-    number_of_devices: Number(checklist.number_of_devices) || 1,
+    device_type: checklist.device_type || (deviceConfigs[0]?.device_type) || '2 Channel Live',
+    number_of_devices: Number(checklist.number_of_devices) || deviceConfigs.reduce((s, c) => s + c.number_of_devices, 0) || 1,
     number_of_vehicles: Number(checklist.number_of_vehicles) || Number(checklist.number_of_devices) || 1,
-    device_configurations: checklist.device_configurations || [],
+    device_configurations: deviceConfigs,
+    device_items: deviceItems,
     bom_snapshot: isInstallation ? bomSnapshot : null,
     material_items: isInstallation ? materialItems : [],
-    material_issuance_status: issuanceStatus,
+    material_issuance_status: materialIssuanceStatus,
+    devices_issuance_status: devicesIssuanceStatus,
     status: reqStatus,
     has_shortage: hasShortage,
     shortage_count: shortageCount,
@@ -132,7 +185,7 @@ export async function syncStoreRequirementForChecklist(checklist) {
     updated_at: new Date().toISOString(),
   };
 
-  // 1. Persist to Supabase store_material_requirements table
+  // Upsert to Supabase
   try {
     const { data: res, error } = await supabase
       .from('store_material_requirements')
@@ -144,14 +197,10 @@ export async function syncStoreRequirementForChecklist(checklist) {
       inMemoryStoreRequirements.set(checklistId, res);
       return res;
     }
-    if (error) {
-      console.warn('Supabase upsert for store_material_requirements failed, using fallback:', error.message);
-    }
   } catch (err) {
-    console.warn('Exception upserting store_material_requirements:', err.message);
+    console.warn('Upsert store_material_requirements exception:', err.message);
   }
 
-  // 2. In-memory cache fallback with assigned ID
   const fallbackRecord = {
     id: `req-${checklistId}`,
     ...payload,
@@ -178,13 +227,19 @@ export async function getStoreMaterialRequirements(params = {}) {
   const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10)));
   const offset = (pageNum - 1) * limitNum;
 
-  // Authoritative live inventory for up-to-the-minute stock & shortage calculations
-  let inventoryMap = new Map();
+  // Authoritative live inventory maps
+  let materialMap = new Map();
+  let deviceMap = new Map();
+
   try {
-    const allMaterials = await getMaterialInventory();
-    inventoryMap = new Map(allMaterials.map((m) => [m.material_name.toLowerCase(), m]));
+    const [allMats, allDevs] = await Promise.all([
+      getMaterialInventory().catch(() => []),
+      getInventoryProducts().catch(() => []),
+    ]);
+    materialMap = new Map(allMats.map((m) => [m.material_name.toLowerCase(), m]));
+    deviceMap = new Map(allDevs.map((d) => [d.device_type, d]));
   } catch (e) {
-    console.warn('Could not load inventory map in getStoreMaterialRequirements:', e.message);
+    console.warn('Could not load inventory maps in getStoreMaterialRequirements:', e.message);
   }
 
   let dbRecords = null;
@@ -220,10 +275,9 @@ export async function getStoreMaterialRequirements(params = {}) {
       totalCount = count || data.length;
     }
   } catch (err) {
-    console.warn('Could not query store_material_requirements table, falling back to checklists join:', err.message);
+    console.warn('Could not query store_material_requirements table:', err.message);
   }
 
-  // If table does not exist or has no records, fallback to installation_checklists
   if (!dbRecords) {
     try {
       const { data: chkList, count: chkCount } = await supabase
@@ -237,7 +291,6 @@ export async function getStoreMaterialRequirements(params = {}) {
         totalCount = chkCount || chkList.length;
       }
     } catch (e) {
-      console.warn('Fallback checklist query failed:', e.message);
       dbRecords = Array.from(inMemoryStoreRequirements.values());
       totalCount = dbRecords.length;
     }
@@ -249,18 +302,58 @@ export async function getStoreMaterialRequirements(params = {}) {
     let liveShortageCount = 0;
     const liveShortageDetails = [];
 
-    const enrichedItems = (Array.isArray(rec.material_items) ? rec.material_items : []).map((item) => {
-      const matName = item.material_name || '';
-      const inv = inventoryMap.get(matName.toLowerCase());
-      const currentStock = inv ? Number(inv.current_stock) || 0 : 0;
-      const requiredQty = Number(item.total_required_quantity) || 0;
-      const shortage = Math.max(0, requiredQty - currentStock);
+    // Enrich device items
+    const enrichedDevices = (Array.isArray(rec.device_items) && rec.device_items.length > 0
+      ? rec.device_items
+      : (rec.device_configurations || []).map((c) => ({
+          device_type: c.device_type,
+          required_quantity: c.number_of_devices,
+          unit: 'Nos.',
+        }))
+    ).map((dItem) => {
+      const dType = dItem.device_type || '';
+      const dev = deviceMap.get(dType);
+      const currentStock = dev ? Number(dev.usable_stock) || 0 : 0;
+      const requiredQty = Number(dItem.required_quantity) || 1;
+      const shortage = rec.job_type === 'Installation' ? Math.max(0, requiredQty - currentStock) : 0;
 
       if (shortage > 0) {
         liveHasShortage = true;
         liveShortageCount++;
         liveShortageDetails.push({
-          material_name: matName,
+          category: 'Camera Device',
+          item_name: dType,
+          sku: dev?.sku || 'N/A',
+          available_stock: currentStock,
+          required_quantity: requiredQty,
+          shortage,
+          unit: 'Nos.',
+        });
+      }
+
+      return {
+        ...dItem,
+        sku: dev?.sku || dItem.sku || null,
+        available_stock: currentStock,
+        shortage,
+      };
+    });
+
+    // Enrich material items (Only for Installation)
+    const enrichedMaterials = (Array.isArray(rec.material_items) ? rec.material_items : []).map((item) => {
+      const matName = item.material_name || '';
+      const inv = materialMap.get(matName.toLowerCase());
+      const currentStock = inv ? Number(inv.current_stock) || 0 : 0;
+      const requiredQty = Number(item.total_required_quantity) || 0;
+      const shortage = rec.job_type === 'Installation' ? Math.max(0, requiredQty - currentStock) : 0;
+
+      if (shortage > 0) {
+        liveHasShortage = true;
+        liveShortageCount++;
+        liveShortageDetails.push({
+          category: 'Installation Material',
+          item_name: matName,
+          sku: inv?.sku || item.material_sku || 'N/A',
           available_stock: currentStock,
           required_quantity: requiredQty,
           shortage,
@@ -270,6 +363,7 @@ export async function getStoreMaterialRequirements(params = {}) {
 
       return {
         ...item,
+        sku: inv?.sku || item.material_sku || null,
         available_stock: currentStock,
         shortage,
       };
@@ -278,8 +372,12 @@ export async function getStoreMaterialRequirements(params = {}) {
     let liveStatus = rec.status;
     if (rec.job_type === 'Service') {
       liveStatus = 'NOT_APPLICABLE';
-    } else if (rec.material_issuance_status === 'ISSUED') {
+    } else if (rec.material_issuance_status === 'ISSUED' && rec.devices_issuance_status === 'ISSUED') {
       liveStatus = 'ISSUED';
+    } else if (rec.material_issuance_status === 'ISSUED') {
+      liveStatus = 'MATERIALS_ISSUED';
+    } else if (rec.devices_issuance_status === 'ISSUED') {
+      liveStatus = 'DEVICES_ISSUED';
     } else if (liveHasShortage) {
       liveStatus = 'SHORTAGE_FLAGGED';
     } else {
@@ -288,7 +386,8 @@ export async function getStoreMaterialRequirements(params = {}) {
 
     return {
       ...rec,
-      material_items: enrichedItems,
+      device_items: enrichedDevices,
+      material_items: enrichedMaterials,
       has_shortage: liveHasShortage,
       shortage_count: liveShortageCount,
       shortage_details: liveShortageDetails,
@@ -296,7 +395,7 @@ export async function getStoreMaterialRequirements(params = {}) {
     };
   });
 
-  // Calculate high-level summary counters
+  // Calculate counters
   let pendingCount = 0;
   let shortageCounter = 0;
   let issuedCount = 0;
@@ -306,9 +405,9 @@ export async function getStoreMaterialRequirements(params = {}) {
   enrichedRecords.forEach((r) => {
     if (r.job_type === 'Installation') installationCount++;
     if (r.job_type === 'Service') serviceCount++;
-    if (r.material_issuance_status === 'PENDING') pendingCount++;
     if (r.material_issuance_status === 'ISSUED') issuedCount++;
-    if (r.has_shortage && r.material_issuance_status !== 'ISSUED') shortageCounter++;
+    else if (r.job_type === 'Installation') pendingCount++;
+    if (r.has_shortage) shortageCounter++;
   });
 
   return {
@@ -322,98 +421,133 @@ export async function getStoreMaterialRequirements(params = {}) {
       issuedCount,
     },
     page: pageNum,
-    limit: limitNum,
     totalPages: Math.ceil(totalCount / limitNum) || 1,
   };
 }
 
 /**
- * Retrieve a single requirement record by ID or checklist_id
+ * Retrieve specific store requirement detail
  */
-export async function getStoreMaterialRequirementById(idOrChecklistId) {
-  let record = null;
+export async function getStoreMaterialRequirementById(id) {
+  if (!id) throw new Error('Requirement ID is required');
 
   try {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('store_material_requirements')
       .select('*')
-      .or(`id.eq.${idOrChecklistId},checklist_id.eq.${idOrChecklistId}`)
+      .or(`id.eq.${id},checklist_id.eq.${id}`)
       .maybeSingle();
 
-    if (data) record = data;
+    if (!error && data) {
+      const enriched = await getStoreMaterialRequirements({ limit: 1, search: data.checklist_number });
+      return enriched.requirements[0] || data;
+    }
   } catch (err) {
-    // Check in-memory
+    console.warn('Error fetching store requirement detail:', err.message);
   }
 
-  if (!record) {
-    record = inMemoryStoreRequirements.get(idOrChecklistId) || null;
+  const fallback = inMemoryStoreRequirements.get(id);
+  if (fallback) return fallback;
+
+  throw new Error(`Requirement with ID "${id}" not found.`);
+}
+
+/**
+ * Update requirement issuance status
+ */
+export async function updateRequirementIssuanceStatus(checklistId, { status, issued_at, issued_by }) {
+  if (!checklistId) return;
+
+  try {
+    await supabase
+      .from('store_material_requirements')
+      .update({
+        material_issuance_status: status,
+        material_issued_at: issued_at || new Date().toISOString(),
+        material_issued_by: issued_by || null,
+        status: status === 'ISSUED' ? 'ISSUED' : 'READY_FOR_ISSUANCE',
+        updated_at: new Date().toISOString(),
+      })
+      .eq('checklist_id', checklistId);
+  } catch (err) {
+    console.warn('Error updating requirement issuance status:', err.message);
   }
 
-  if (!record) {
-    // Try to load checklist and sync
+  const inMem = inMemoryStoreRequirements.get(checklistId);
+  if (inMem) {
+    inMem.material_issuance_status = status;
+    inMem.material_issued_at = issued_at || new Date().toISOString();
+    inMem.status = status === 'ISSUED' ? 'ISSUED' : 'READY_FOR_ISSUANCE';
+  }
+}
+
+/**
+ * Server-side atomic unified issuance of BOTH camera devices AND installation materials for a job
+ */
+export async function issueFullJobStock({
+  checklist_id,
+  issue_devices = true,
+  issue_materials = true,
+  remarks = '',
+  user,
+}) {
+  if (!checklist_id) {
+    throw new Error('Checklist ID is required.');
+  }
+
+  const req = await getStoreMaterialRequirementById(checklist_id);
+  if (!req) {
+    throw new Error(`Job requirement "${checklist_id}" not found.`);
+  }
+
+  if (req.job_type === 'Service') {
+    throw new Error(`Job ${req.checklist_number} is a Service job. Installation BOM issuance does not apply.`);
+  }
+
+  const results = {};
+
+  // 1. Issue Camera Devices if requested
+  if (issue_devices && req.device_items?.length > 0) {
+    const devResults = await issueDevicesForChecklist({
+      checklist_id,
+      devices: req.device_items,
+      remarks: remarks || `Camera devices issued for job ${req.checklist_number}`,
+      user,
+    });
+    results.devices = devResults;
+
     try {
-      const { data: chk } = await supabase
-        .from('installation_checklists')
-        .select('*')
-        .eq('id', idOrChecklistId)
-        .maybeSingle();
-
-      if (chk) {
-        record = await syncStoreRequirementForChecklist(chk);
-      }
+      await supabase
+        .from('store_material_requirements')
+        .update({
+          devices_issuance_status: 'ISSUED',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('checklist_id', checklist_id);
     } catch (e) {
       // Ignore
     }
   }
 
-  if (!record) {
-    throw new Error(`Store material requirement not found for ${idOrChecklistId}`);
+  // 2. Issue Installation Materials if requested
+  if (issue_materials && req.material_items?.length > 0) {
+    const matResults = await issueMaterialsForChecklist({
+      checklist_id,
+      items: req.material_items.map((m) => ({
+        material_name: m.material_name,
+        total_quantity: m.total_required_quantity,
+        unit: m.unit,
+      })),
+      remarks: remarks || `Materials issued for job ${req.checklist_number}`,
+      user,
+    });
+    results.materials = matResults;
   }
-
-  // Enrich with live stock
-  const allMaterials = await getMaterialInventory().catch(() => []);
-  const inventoryMap = new Map(allMaterials.map((m) => [m.material_name.toLowerCase(), m]));
-
-  const enrichedItems = (Array.isArray(record.material_items) ? record.material_items : []).map((item) => {
-    const inv = inventoryMap.get((item.material_name || '').toLowerCase());
-    const available = inv ? Number(inv.current_stock) || 0 : 0;
-    const required = Number(item.total_required_quantity) || 0;
-    return {
-      ...item,
-      available_stock: available,
-      shortage: Math.max(0, required - available),
-    };
-  });
 
   return {
-    ...record,
-    material_items: enrichedItems,
+    success: true,
+    checklist_id,
+    checklist_number: req.checklist_number,
+    results,
   };
-}
-
-/**
- * Update material issuance status for a requirement
- */
-export async function updateRequirementIssuanceStatus(checklistId, { status, issued_at, issued_by }) {
-  const updatePayload = {
-    material_issuance_status: status || 'ISSUED',
-    status: status || 'ISSUED',
-    material_issued_at: issued_at || new Date().toISOString(),
-    material_issued_by: issued_by || null,
-    updated_at: new Date().toISOString(),
-  };
-
-  try {
-    await supabase
-      .from('store_material_requirements')
-      .update(updatePayload)
-      .eq('checklist_id', checklistId);
-  } catch (err) {
-    console.warn('Could not update store_material_requirements issuance status:', err.message);
-  }
-
-  if (inMemoryStoreRequirements.has(checklistId)) {
-    const mem = inMemoryStoreRequirements.get(checklistId);
-    inMemoryStoreRequirements.set(checklistId, { ...mem, ...updatePayload });
-  }
 }

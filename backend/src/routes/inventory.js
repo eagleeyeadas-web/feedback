@@ -6,7 +6,12 @@ import {
   getInventoryTransactions,
   receiveNewStock,
   adjustStock,
+  setDeviceOpeningStock,
+  issueDevicesForChecklist,
 } from '../services/inventoryService.js';
+import {
+  getMaterialTransactions,
+} from '../services/materialStockService.js';
 import {
   getAllStoreReturns,
   getPendingStoreReturns,
@@ -20,7 +25,7 @@ const router = Router();
  * GET /api/admin/inventory
  * Accessible to STORE_MANAGER, ADMIN
  */
-router.get('/', requireRole('STORE_MANAGER'), async (req, res) => {
+router.get('/', requireRole('STORE_MANAGER', 'ADMIN'), async (req, res) => {
   try {
     const products = await getInventoryProducts();
     return res.json(products);
@@ -34,7 +39,7 @@ router.get('/', requireRole('STORE_MANAGER'), async (req, res) => {
  * GET /api/admin/inventory/summary
  * Accessible to STORE_MANAGER, ADMIN
  */
-router.get('/summary', requireRole('STORE_MANAGER'), async (req, res) => {
+router.get('/summary', requireRole('STORE_MANAGER', 'ADMIN'), async (req, res) => {
   try {
     const summary = await getInventorySummary();
     return res.json(summary);
@@ -48,7 +53,7 @@ router.get('/summary', requireRole('STORE_MANAGER'), async (req, res) => {
  * GET /api/admin/inventory/transactions
  * Accessible to STORE_MANAGER, ADMIN
  */
-router.get('/transactions', requireRole('STORE_MANAGER'), async (req, res) => {
+router.get('/transactions', requireRole('STORE_MANAGER', 'ADMIN'), async (req, res) => {
   try {
     const result = await getInventoryTransactions(req.query);
     return res.json(result);
@@ -59,10 +64,73 @@ router.get('/transactions', requireRole('STORE_MANAGER'), async (req, res) => {
 });
 
 /**
+ * GET /api/admin/inventory/all-movements
+ * Returns unified auditable movements across BOTH camera devices and installation materials
+ */
+router.get('/all-movements', requireRole('STORE_MANAGER', 'ADMIN'), async (req, res) => {
+  try {
+    const { category = 'All', search = '', type = '' } = req.query;
+
+    const [devTx, matTx] = await Promise.all([
+      category === 'Materials' ? { transactions: [] } : getInventoryTransactions({ limit: 100, search, type }),
+      category === 'Devices' ? { transactions: [] } : getMaterialTransactions({ limit: 100, search, type }),
+    ]);
+
+    const formattedDevs = (devTx.transactions || []).map((t) => ({
+      ...t,
+      category: 'Camera Device',
+      item_name: t.device_name || t.device_type,
+      unit: 'Nos.',
+    }));
+
+    const formattedMats = (matTx.transactions || []).map((t) => ({
+      ...t,
+      category: 'Installation Material',
+      item_name: t.material_name,
+      unit: t.unit || 'Nos.',
+    }));
+
+    const combined = [...formattedDevs, ...formattedMats].sort(
+      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
+
+    return res.json({
+      transactions: combined,
+      totalCount: combined.length,
+    });
+  } catch (err) {
+    console.error('Error in GET /inventory/all-movements:', err);
+    return res.status(500).json({ error: err.message || 'Failed to fetch combined movements' });
+  }
+});
+
+/**
+ * POST /api/admin/inventory/opening-stock
+ * Set actual opening quantity for a camera device (STORE_MANAGER, ADMIN)
+ * Opening stock is NOT assumed; Store Manager enters actual count.
+ */
+router.post('/opening-stock', requireRole('STORE_MANAGER', 'ADMIN'), async (req, res) => {
+  try {
+    const { device_type, product_id, opening_quantity, reason } = req.body;
+    const result = await setDeviceOpeningStock({
+      device_type,
+      product_id,
+      opening_quantity,
+      reason,
+      user: req.profile,
+    });
+    return res.json(result);
+  } catch (err) {
+    console.error('Error in POST /inventory/opening-stock:', err);
+    return res.status(400).json({ error: err.message || 'Failed to set opening quantity' });
+  }
+});
+
+/**
  * POST /api/admin/inventory/receive
  * Receive new stock batch (STORE_MANAGER, ADMIN)
  */
-router.post('/receive', requireRole('STORE_MANAGER'), async (req, res) => {
+router.post('/receive', requireRole('STORE_MANAGER', 'ADMIN'), async (req, res) => {
   try {
     const { device_type, quantity, supplier, purchase_ref, unit_cost, received_date, remarks } = req.body;
     const result = await receiveNewStock({
@@ -84,7 +152,7 @@ router.post('/receive', requireRole('STORE_MANAGER'), async (req, res) => {
 
 /**
  * POST /api/admin/inventory/adjust
- * Adjust or Edit stock balances (Add or Remove stock with reason)
+ * Adjust or Edit stock balances (Add, Remove, Set with reason)
  * Accessible to STORE_MANAGER, ADMIN
  */
 router.post('/adjust', requireRole('STORE_MANAGER', 'ADMIN'), async (req, res) => {
@@ -106,10 +174,30 @@ router.post('/adjust', requireRole('STORE_MANAGER', 'ADMIN'), async (req, res) =
 });
 
 /**
+ * POST /api/admin/inventory/issue-devices
+ * Server-side atomic issuance of camera devices for a checklist
+ */
+router.post('/issue-devices', requireRole('STORE_MANAGER', 'ADMIN'), async (req, res) => {
+  try {
+    const { checklist_id, devices, remarks } = req.body;
+    const result = await issueDevicesForChecklist({
+      checklist_id,
+      devices,
+      remarks,
+      user: req.profile,
+    });
+    return res.json(result);
+  } catch (err) {
+    console.error('Error issuing devices for checklist:', err);
+    return res.status(400).json({ error: err.message || 'Failed to issue devices' });
+  }
+});
+
+/**
  * GET /api/admin/inventory/returns
  * Fetch all declared device returns (STORE_MANAGER, ADMIN)
  */
-router.get('/returns', requireRole('STORE_MANAGER'), async (req, res) => {
+router.get('/returns', requireRole('STORE_MANAGER', 'ADMIN'), async (req, res) => {
   try {
     const returns = await getAllStoreReturns();
     return res.json(returns);
@@ -123,7 +211,7 @@ router.get('/returns', requireRole('STORE_MANAGER'), async (req, res) => {
  * POST /api/admin/inventory/verify-return
  * Verify physical store return (STORE_MANAGER, ADMIN)
  */
-router.post('/verify-return', requireRole('STORE_MANAGER'), async (req, res) => {
+router.post('/verify-return', requireRole('STORE_MANAGER', 'ADMIN'), async (req, res) => {
   try {
     const { return_id, accepted_usable_qty, damaged_qty, missing_qty, remarks } = req.body;
     if (!return_id) {
@@ -148,9 +236,8 @@ router.post('/verify-return', requireRole('STORE_MANAGER'), async (req, res) => 
 
 /**
  * GET /api/admin/inventory/discrepancies
- * Accessible to STORE_MANAGER, ADMIN
  */
-router.get('/discrepancies', requireRole('STORE_MANAGER'), async (req, res) => {
+router.get('/discrepancies', requireRole('STORE_MANAGER', 'ADMIN'), async (req, res) => {
   try {
     const { data, error } = await supabase
       .from('inventory_discrepancies')

@@ -1,21 +1,36 @@
 import supabase from './supabase.js';
 import { logAudit } from './auditService.js';
-import { INITIAL_BOM_TEMPLATE } from './bomService.js';
 import { updateRequirementIssuanceStatus } from './storeRequirementService.js';
+
+export const STANDARD_MATERIALS = [
+  { id: 'mat-001', sku: 'MAT-INSU-TAPE', material_name: 'Insulation Tape', unit: 'Nos.', opening_stock: 100, current_stock: 100, opening_stock_set: true, min_stock_level: 20 },
+  { id: 'mat-002', sku: 'MAT-CT-200MM', material_name: 'Cable Tie – 200 mm', unit: 'Packets', opening_stock: 50, current_stock: 50, opening_stock_set: true, min_stock_level: 10 },
+  { id: 'mat-003', sku: 'MAT-CT-300MM', material_name: 'Cable Tie – 300 mm', unit: 'Packets', opening_stock: 40, current_stock: 40, opening_stock_set: true, min_stock_level: 10 },
+  { id: 'mat-004', sku: 'MAT-SCREW-LONG', material_name: 'Long Screw', unit: 'Nos.', opening_stock: 500, current_stock: 500, opening_stock_set: true, min_stock_level: 50 },
+  { id: 'mat-005', sku: 'MAT-SCREW-SMALL', material_name: 'Small Screw', unit: 'Nos.', opening_stock: 500, current_stock: 500, opening_stock_set: true, min_stock_level: 50 },
+  { id: 'mat-006', sku: 'MAT-MEM-CARD', material_name: 'Memory Card', unit: 'Nos.', opening_stock: 100, current_stock: 100, opening_stock_set: true, min_stock_level: 15 },
+  { id: 'mat-007', sku: 'MAT-WIRE-0.5MM', material_name: '0.5 mm Wire', unit: 'Metres', opening_stock: 1000, current_stock: 1000, opening_stock_set: true, min_stock_level: 100 },
+  { id: 'mat-008', sku: 'MAT-CBL-5M', material_name: '5-metre Cable', unit: 'Nos.', opening_stock: 150, current_stock: 150, opening_stock_set: true, min_stock_level: 25 },
+  { id: 'mat-009', sku: 'MAT-CBL-15M', material_name: '15-metre Cable', unit: 'Nos.', opening_stock: 50, current_stock: 50, opening_stock_set: true, min_stock_level: 10 },
+];
 
 /**
  * Resilient in-memory store for material inventory
  */
 const inMemoryMaterials = new Map(
-  INITIAL_BOM_TEMPLATE.map((item, idx) => [
+  STANDARD_MATERIALS.map((item) => [
     item.material_name,
     {
-      id: `mat-${idx + 1}`,
+      id: item.id,
+      sku: item.sku,
       material_name: item.material_name,
       unit: item.unit,
-      current_stock: item.material_name.includes('Screw') ? 2000 : item.material_name.includes('wire') ? 5000 : 500,
+      opening_stock: item.opening_stock,
+      opening_stock_set: item.opening_stock_set,
+      current_stock: item.current_stock,
       issued_stock: 0,
-      min_stock_level: 20,
+      min_stock_level: item.min_stock_level,
+      is_active: true,
       updated_at: new Date().toISOString(),
     },
   ])
@@ -23,11 +38,51 @@ const inMemoryMaterials = new Map(
 
 const inMemoryMaterialTransactions = [];
 const processedChecklistMaterialIssuances = new Set();
+let dbSeeded = false;
+
+/**
+ * Ensure database has standard materials without inflating or duplicating stock.
+ * Checks existing records first. Only inserts missing items with their opening stock.
+ */
+async function ensureDbMaterialsSeeded() {
+  if (dbSeeded) return;
+  try {
+    const { data: existing, error } = await supabase
+      .from('material_inventory')
+      .select('id, material_name, current_stock, opening_stock');
+
+    if (!error && Array.isArray(existing)) {
+      const existingNames = new Set(existing.map((m) => m.material_name.toLowerCase()));
+      const missing = STANDARD_MATERIALS.filter((m) => !existingNames.has(m.material_name.toLowerCase()));
+
+      if (missing.length > 0) {
+        await supabase.from('material_inventory').insert(
+          missing.map((m) => ({
+            material_name: m.material_name,
+            sku: m.sku,
+            unit: m.unit,
+            opening_stock: m.opening_stock,
+            opening_stock_set: true,
+            current_stock: m.opening_stock,
+            issued_stock: 0,
+            min_stock_level: m.min_stock_level,
+            is_active: true,
+          }))
+        );
+      }
+      dbSeeded = true;
+    }
+  } catch (err) {
+    // Database table might not be migrated yet; fallback to in-memory store
+  }
+}
 
 /**
  * Get all materials in inventory with current stock balances
  */
 export async function getMaterialInventory() {
+  await ensureDbMaterialsSeeded();
+
   try {
     const { data, error } = await supabase
       .from('material_inventory')
@@ -45,6 +100,132 @@ export async function getMaterialInventory() {
   }
 
   return Array.from(inMemoryMaterials.values()).sort((a, b) => a.material_name.localeCompare(b.material_name));
+}
+
+/**
+ * Explicitly set Opening Stock for a material.
+ * Only Store Manager can set or update opening stock.
+ * Does not add on top of existing stock; explicitly sets the baseline opening stock.
+ */
+export async function setMaterialOpeningStock({
+  material_name,
+  material_id,
+  opening_stock,
+  reason,
+  user,
+}) {
+  if (!material_name && !material_id) {
+    throw new Error('Material name or ID is required.');
+  }
+
+  const qty = parseFloat(opening_stock);
+  if (isNaN(qty) || qty < 0) {
+    throw new Error('Opening stock must be a non-negative number.');
+  }
+
+  const all = await getMaterialInventory();
+  const material = all.find(
+    (m) =>
+      (material_id && m.id === material_id) ||
+      (material_name && m.material_name.toLowerCase() === material_name.trim().toLowerCase())
+  ) || inMemoryMaterials.get(material_name);
+
+  if (!material) {
+    throw new Error(`Material "${material_name || material_id}" not found.`);
+  }
+
+  const previousBalance = Number(material.current_stock) || 0;
+  const newBalance = qty;
+  const targetId = material.id;
+  const targetName = material.material_name;
+  const unit = material.unit || 'Nos.';
+
+  // Update in-memory
+  material.opening_stock = qty;
+  material.opening_stock_set = true;
+  material.current_stock = newBalance;
+  material.updated_at = new Date().toISOString();
+  inMemoryMaterials.set(targetName, material);
+
+  // Update DB
+  try {
+    await supabase
+      .from('material_inventory')
+      .update({
+        opening_stock: qty,
+        opening_stock_set: true,
+        current_stock: newBalance,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', targetId);
+  } catch (err) {
+    console.warn('DB update opening stock error:', err.message);
+  }
+
+  // Create audit transaction
+  const txRecord = {
+    id: `tx-mat-open-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    material_id: targetId,
+    material_name: targetName,
+    transaction_type: 'OPENING_STOCK',
+    quantity: qty,
+    previous_balance: previousBalance,
+    new_balance: newBalance,
+    unit,
+    checklist_id: null,
+    performed_by: user?.id || null,
+    performer_name: user?.full_name || user?.email || 'Store Manager',
+    reason_or_remarks: reason ? reason.trim() : `Opening stock set to ${qty} ${unit}`,
+    idempotency_key: `MAT-OPEN-${targetName}-${Date.now()}`,
+    created_at: new Date().toISOString(),
+  };
+
+  try {
+    await supabase.from('material_stock_transactions').insert([{
+      material_id: targetId,
+      material_name: targetName,
+      transaction_type: 'OPENING_STOCK',
+      quantity: qty,
+      previous_balance: previousBalance,
+      new_balance: newBalance,
+      unit,
+      performed_by: user?.id || null,
+      reason_or_remarks: txRecord.reason_or_remarks,
+      idempotency_key: txRecord.idempotency_key,
+    }]);
+  } catch (txErr) {
+    console.warn('DB transaction insert error:', txErr.message);
+  }
+
+  inMemoryMaterialTransactions.unshift(txRecord);
+
+  if (user) {
+    await logAudit({
+      actor_id: user.id,
+      actor_email: user.email,
+      actor_role: user.role,
+      action: 'MATERIAL_OPENING_STOCK_SET',
+      target_table: 'material_inventory',
+      target_id: targetId,
+      details: {
+        material_name: targetName,
+        opening_stock: qty,
+        previous_balance: previousBalance,
+        new_balance: newBalance,
+        unit,
+        reason,
+      },
+    }).catch(() => null);
+  }
+
+  return {
+    success: true,
+    material_name: targetName,
+    opening_stock: qty,
+    current_stock: newBalance,
+    unit,
+    transaction: txRecord,
+  };
 }
 
 /**
@@ -75,10 +256,29 @@ export async function adjustMaterialStock({
   let material = inMemoryMaterials.get(name);
 
   if (!material) {
+    // Attempt lookup from DB
+    try {
+      const { data: dbItem } = await supabase
+        .from('material_inventory')
+        .select('*')
+        .eq('material_name', name)
+        .maybeSingle();
+      if (dbItem) {
+        material = { ...dbItem };
+        inMemoryMaterials.set(name, material);
+      }
+    } catch (e) {
+      // Ignore
+    }
+  }
+
+  if (!material) {
     material = {
       id: `mat-${Date.now()}`,
       material_name: name,
       unit: 'Nos.',
+      opening_stock: 0,
+      opening_stock_set: false,
       current_stock: 0,
       issued_stock: 0,
       min_stock_level: 20,
@@ -87,27 +287,27 @@ export async function adjustMaterialStock({
     inMemoryMaterials.set(name, material);
   }
 
-  const current = Number(material.current_stock) || 0;
-  let newCurrent = current;
+  const previousBalance = Number(material.current_stock) || 0;
+  let newCurrent = previousBalance;
   let qtyDelta = 0;
   let txType = 'STOCK_ADJUSTMENT';
 
   if (normalizedAction === 'ADD') {
     if (qty <= 0) throw new Error('Quantity to add must be greater than 0.');
-    newCurrent = current + qty;
+    newCurrent = previousBalance + qty;
     qtyDelta = qty;
     txType = 'STOCK_RECEIVED';
   } else if (normalizedAction === 'REMOVE') {
     if (qty <= 0) throw new Error('Quantity to remove must be greater than 0.');
-    if (qty > current) {
-      throw new Error(`Cannot remove ${qty} ${material.unit}. Current stock is only ${current} ${material.unit}. Negative stock is prevented.`);
+    if (qty > previousBalance) {
+      throw new Error(`Cannot remove ${qty} ${material.unit}. Current stock is only ${previousBalance} ${material.unit}. Negative stock is prevented.`);
     }
-    newCurrent = current - qty;
+    newCurrent = previousBalance - qty;
     qtyDelta = -qty;
     txType = 'STOCK_ADJUSTMENT';
   } else if (normalizedAction === 'SET') {
     newCurrent = qty;
-    qtyDelta = qty - current;
+    qtyDelta = qty - previousBalance;
     txType = 'STOCK_ADJUSTMENT';
   } else {
     throw new Error('Invalid adjustment action. Supported actions: ADD, REMOVE, SET.');
@@ -142,6 +342,8 @@ export async function adjustMaterialStock({
           material_name: name,
           unit: material.unit || 'Nos.',
           current_stock: newCurrent,
+          opening_stock: normalizedAction === 'SET' ? newCurrent : 0,
+          opening_stock_set: normalizedAction === 'SET',
           min_stock_level: material.min_stock_level || 20,
         })
         .select()
@@ -158,11 +360,13 @@ export async function adjustMaterialStock({
     material_name: name,
     transaction_type: txType,
     quantity: Math.abs(qtyDelta),
+    previous_balance: previousBalance,
+    new_balance: newCurrent,
     unit: material.unit,
     checklist_id: null,
     performed_by: user?.id || null,
     performer_name: user?.full_name || user?.email || 'Store Manager',
-    reason_or_remarks: `[${normalizedAction}] ${reason.trim()} (Stock: ${current} → ${newCurrent} ${material.unit})`,
+    reason_or_remarks: `[${normalizedAction}] ${reason.trim()} (Stock: ${previousBalance} → ${newCurrent} ${material.unit})`,
     idempotency_key: `MAT-ADJ-${name}-${Date.now()}`,
     created_at: new Date().toISOString(),
   };
@@ -173,6 +377,8 @@ export async function adjustMaterialStock({
       material_name: name,
       transaction_type: txType,
       quantity: Math.abs(qtyDelta),
+      previous_balance: previousBalance,
+      new_balance: newCurrent,
       unit: material.unit,
       performed_by: user?.id || null,
       reason_or_remarks: txRecord.reason_or_remarks,
@@ -195,8 +401,8 @@ export async function adjustMaterialStock({
       details: {
         material_name: name,
         action: normalizedAction,
-        previous_stock: current,
-        new_stock: newCurrent,
+        previous_balance: previousBalance,
+        new_balance: newCurrent,
         quantity_delta: qtyDelta,
         unit: material.unit,
         reason,
@@ -208,7 +414,7 @@ export async function adjustMaterialStock({
     success: true,
     material_name: name,
     action: normalizedAction,
-    previous_stock: current,
+    previous_balance: previousBalance,
     current_stock: newCurrent,
     unit: material.unit,
     transaction: txRecord,
@@ -246,7 +452,7 @@ export async function issueMaterialsForChecklist({
 
     if (chk) {
       if (chk.installation_or_service === 'Service') {
-        throw new Error(`Checklist ${chk.checklist_number} is a Service job. Material issuance is only applicable for Installation jobs.`);
+        throw new Error(`Checklist ${chk.checklist_number} is a Service job. Installation material issuance is not applicable.`);
       }
       if (chk.material_issuance_status === 'ISSUED') {
         processedChecklistMaterialIssuances.add(checklist_id);
@@ -260,7 +466,6 @@ export async function issueMaterialsForChecklist({
   // Determine items to issue (from request body or fallback to checklist's saved bom_snapshot)
   let itemsToIssue = items;
   if (!itemsToIssue || !Array.isArray(itemsToIssue) || itemsToIssue.length === 0) {
-    // Attempt to load from checklist's bom_snapshot
     try {
       const { data: chk } = await supabase
         .from('installation_checklists')
@@ -313,7 +518,8 @@ export async function issueMaterialsForChecklist({
     const existingMat = matMap.get(matName.toLowerCase()) || inMemoryMaterials.get(matName);
     let materialId = existingMat?.id || `mat-${Date.now()}`;
     const unit = existingMat?.unit || item.unit || 'Nos.';
-    const newStock = Math.max(0, (Number(existingMat?.current_stock) || 0) - qtyRequired);
+    const previousBalance = Number(existingMat?.current_stock) || 0;
+    const newStock = Math.max(0, previousBalance - qtyRequired);
     const newIssuedStock = (Number(existingMat?.issued_stock) || 0) + qtyRequired;
 
     // Update in Supabase
@@ -346,7 +552,7 @@ export async function issueMaterialsForChecklist({
       existingMat.updated_at = new Date().toISOString();
     }
 
-    // Insert stock transaction
+    // Insert stock transaction with previous_balance and new_balance
     const idempotencyKey = `MAT-ISSUE-${checklist_id}-${matName}`;
     const txRecord = {
       id: `tx-issue-mat-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
@@ -354,6 +560,8 @@ export async function issueMaterialsForChecklist({
       material_name: matName,
       transaction_type: 'STOCK_ISSUED',
       quantity: qtyRequired,
+      previous_balance: previousBalance,
+      new_balance: newStock,
       unit,
       checklist_id,
       performed_by: user?.id || null,
@@ -369,6 +577,8 @@ export async function issueMaterialsForChecklist({
         material_name: matName,
         transaction_type: 'STOCK_ISSUED',
         quantity: qtyRequired,
+        previous_balance: previousBalance,
+        new_balance: newStock,
         unit,
         checklist_id,
         performed_by: user?.id || null,
@@ -381,9 +591,11 @@ export async function issueMaterialsForChecklist({
 
     inMemoryMaterialTransactions.unshift(txRecord);
     issuedRecords.push({
+      material_id: materialId,
       material_name: matName,
       quantity_issued: qtyRequired,
       unit,
+      previous_balance: previousBalance,
       remaining_stock: newStock,
     });
   }
@@ -447,7 +659,7 @@ export async function issueMaterialsForChecklist({
  * Get Material Stock Transactions log
  */
 export async function getMaterialTransactions(params = {}) {
-  const { page = 1, limit = 50, search = '' } = params;
+  const { page = 1, limit = 50, search = '', type = '' } = params;
   const pageNum = Math.max(1, parseInt(page, 10));
   const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10)));
   const offset = (pageNum - 1) * limitNum;
@@ -458,6 +670,10 @@ export async function getMaterialTransactions(params = {}) {
       .select('*, performer:admin_users(email, full_name)', { count: 'exact' })
       .order('created_at', { ascending: false })
       .range(offset, offset + limitNum - 1);
+
+    if (type && type !== 'All') {
+      query = query.eq('transaction_type', type);
+    }
 
     if (search && search.trim()) {
       const s = search.trim();
@@ -482,6 +698,9 @@ export async function getMaterialTransactions(params = {}) {
 
   // Filter in memory
   let filtered = [...inMemoryMaterialTransactions];
+  if (type && type !== 'All') {
+    filtered = filtered.filter((t) => t.transaction_type === type);
+  }
   if (search && search.trim()) {
     const s = search.trim().toLowerCase();
     filtered = filtered.filter(

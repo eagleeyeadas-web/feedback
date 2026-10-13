@@ -1,52 +1,103 @@
 import { useState, useEffect } from 'react';
-import { Package, X, AlertTriangle, CheckCircle2, Loader2, ShieldAlert } from 'lucide-react';
-import { fetchMaterialInventory, issueMaterialsForChecklist } from '../../lib/api';
+import { Package, X, AlertTriangle, CheckCircle2, Loader2, HardDrive, Layers, ArrowRight } from 'lucide-react';
+import {
+  fetchMaterialInventory,
+  fetchInventoryProducts,
+  issueFullJobStockApi,
+} from '../../lib/api';
 
 export default function IssueMaterialsModal({ checklist, token, onClose, onSuccess }) {
-  const [inventory, setInventory] = useState([]);
+  const [deviceInventory, setDeviceInventory] = useState([]);
+  const [materialInventory, setMaterialInventory] = useState([]);
   const [loadingInv, setLoadingInv] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [remarks, setRemarks] = useState('');
   const [error, setError] = useState('');
 
-  const bomItems = Array.isArray(checklist.bom_snapshot?.items)
-    ? checklist.bom_snapshot.items
-    : [];
+  const [issueDevices, setIssueDevices] = useState(true);
+  const [issueMaterials, setIssueMaterials] = useState(true);
 
   useEffect(() => {
     if (!token) return;
     setLoadingInv(true);
-    fetchMaterialInventory(token)
-      .then((data) => setInventory(data || []))
-      .catch((err) => console.error('Failed to load material inventory:', err))
+    Promise.all([
+      fetchInventoryProducts(token).catch(() => []),
+      fetchMaterialInventory(token).catch(() => []),
+    ])
+      .then(([devs, mats]) => {
+        setDeviceInventory(devs || []);
+        setMaterialInventory(mats || []);
+      })
+      .catch((err) => console.error('Failed to load live inventory:', err))
       .finally(() => setLoadingInv(false));
   }, [token]);
 
-  // Inventory map
-  const invMap = new Map(inventory.map((m) => [m.material_name.toLowerCase(), m]));
+  // Maps for live availability
+  const devMap = new Map(deviceInventory.map((d) => [d.device_type, d]));
+  const matMap = new Map(materialInventory.map((m) => [m.material_name.toLowerCase(), m]));
 
-  // Check if any material has insufficient stock
-  const stockDeficits = [];
-  bomItems.forEach((item) => {
-    const inv = invMap.get((item.material_name || '').toLowerCase());
-    const available = inv ? Number(inv.current_stock) || 0 : 0;
-    const required = Number(item.total_quantity) || 0;
-    if (required > available) {
-      stockDeficits.push({
-        material_name: item.material_name,
-        available,
-        required,
-        unit: item.unit || inv?.unit || 'Nos.',
-      });
-    }
+  // 1. Camera Devices to Issue
+  const rawConfigs = Array.isArray(checklist.device_configurations) && checklist.device_configurations.length > 0
+    ? checklist.device_configurations
+    : (checklist.device_items && checklist.device_items.length > 0
+      ? checklist.device_items
+      : [{ device_type: checklist.device_type || '2 Channel Live', number_of_devices: checklist.number_of_devices || 1 }]);
+
+  const deviceList = rawConfigs.map((c) => {
+    const dType = c.device_type || '';
+    const req = Number(c.number_of_devices !== undefined ? c.number_of_devices : c.required_quantity) || 1;
+    const prod = devMap.get(dType);
+    const available = prod ? Number(prod.usable_stock) || 0 : 0;
+    const shortage = Math.max(0, req - available);
+    return {
+      device_type: dType,
+      sku: prod?.sku || 'N/A',
+      required: req,
+      available,
+      shortage,
+      unit: 'Nos.',
+    };
   });
 
-  const hasDeficit = stockDeficits.length > 0;
+  // 2. Installation Materials to Issue
+  const bomItems = Array.isArray(checklist.bom_snapshot?.items)
+    ? checklist.bom_snapshot.items
+    : (Array.isArray(checklist.material_items) ? checklist.material_items : []);
+
+  const materialList = bomItems.map((it) => {
+    const mName = it.material_name || '';
+    const req = Number(it.total_quantity !== undefined ? it.total_quantity : it.total_required_quantity) || 0;
+    const inv = matMap.get(mName.toLowerCase());
+    const available = inv ? Number(inv.current_stock) || 0 : 0;
+    const shortage = Math.max(0, req - available);
+    return {
+      material_id: it.material_id || inv?.id,
+      material_name: mName,
+      sku: inv?.sku || it.material_sku || 'N/A',
+      required: req,
+      available,
+      shortage,
+      unit: it.unit || inv?.unit || 'Nos.',
+    };
+  });
+
+  // Shortage calculations
+  const devDeficits = deviceList.filter((d) => d.shortage > 0);
+  const matDeficits = materialList.filter((m) => m.shortage > 0);
+
+  const hasDeviceDeficit = issueDevices && devDeficits.length > 0;
+  const hasMaterialDeficit = issueMaterials && matDeficits.length > 0;
+  const hasDeficit = hasDeviceDeficit || hasMaterialDeficit;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!issueDevices && !issueMaterials) {
+      setError('Please select at least one component (Camera Devices or Installation Materials) to issue.');
+      return;
+    }
+
     if (hasDeficit) {
-      setError('Cannot issue materials due to insufficient stock for one or more items. Negative stock is strictly prevented.');
+      setError('Cannot issue stock due to insufficient inventory. Negative stock is strictly prevented. Please replenish shortage before issuing.');
       return;
     }
 
@@ -54,15 +105,16 @@ export default function IssueMaterialsModal({ checklist, token, onClose, onSucce
     setError('');
 
     try {
-      await issueMaterialsForChecklist(token, {
-        checklist_id: checklist.id,
-        items: bomItems,
-        remarks: remarks.trim() || `Materials issued for checklist ${checklist.checklist_number}`,
+      await issueFullJobStockApi(token, {
+        checklist_id: checklist.id || checklist.checklist_id,
+        issue_devices: issueDevices,
+        issue_materials: issueMaterials,
+        remarks: remarks.trim() || `Authorized stock issuance for job ${checklist.checklist_number}`,
       });
       onSuccess();
     } catch (err) {
-      console.error('Error issuing materials:', err);
-      setError(err.message || 'Failed to issue materials');
+      console.error('Error issuing job stock:', err);
+      setError(err.message || 'Failed to issue job stock');
     } finally {
       setSubmitting(false);
     }
@@ -74,15 +126,15 @@ export default function IssueMaterialsModal({ checklist, token, onClose, onSucce
         {/* Header */}
         <div className="flex items-start justify-between pb-3 border-b border-gray-100">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center shadow-xs">
+            <div className="w-10 h-10 rounded-xl bg-amber-600 text-white flex items-center justify-center shadow-xs">
               <Package className="w-5 h-5" />
             </div>
             <div>
               <h3 className="text-base font-bold text-gray-900 flex items-center gap-2">
-                Store Manager: Authorize Material Issuance
+                Store Manager: Authorize & Issue Stock
               </h3>
               <p className="text-xs text-gray-500">
-                Job: <strong className="font-mono text-gray-800">{checklist.checklist_number}</strong> ({checklist.client_name} — {checklist.device_type} × {checklist.number_of_devices})
+                Job: <strong className="font-mono text-gray-800">{checklist.checklist_number}</strong> ({checklist.client_name})
               </p>
             </div>
           </div>
@@ -94,7 +146,7 @@ export default function IssueMaterialsModal({ checklist, token, onClose, onSucce
           </button>
         </div>
 
-        {/* Warning / Error alert */}
+        {/* Error Alert */}
         {error && (
           <div className="p-3.5 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl text-xs flex items-start gap-2">
             <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
@@ -102,122 +154,183 @@ export default function IssueMaterialsModal({ checklist, token, onClose, onSucce
           </div>
         )}
 
-        {hasDeficit && (
-          <div className="p-4 bg-red-50 border-2 border-red-300 text-red-900 rounded-xl text-xs space-y-1.5">
-            <div className="flex items-center gap-2 font-bold text-red-900">
-              <ShieldAlert className="w-4 h-4 text-red-600 shrink-0" />
-              <span>Insufficient Stock Detected (Negative Stock Prevented)</span>
-            </div>
-            <p className="text-[11px] text-red-800">
-              The following materials do not have enough usable stock in the store to fulfill this requirement:
-            </p>
-            <ul className="list-disc pl-5 text-[11px] space-y-0.5 text-red-900 font-semibold">
-              {stockDeficits.map((d, i) => (
-                <li key={i}>
-                  {d.material_name}: Available {d.available} {d.unit}, Required {d.required} {d.unit} (Shortage: {d.required - d.available} {d.unit})
-                </li>
-              ))}
-            </ul>
-            <p className="text-[10px] text-red-700 pt-1">
-              Please replenish stock in the Store Manager workspace before proceeding with issuance.
-            </p>
+        {/* Issuance Checkbox Toggles */}
+        <div className="bg-amber-50/50 p-3 rounded-xl border border-amber-200/60 flex flex-wrap items-center gap-6 text-xs font-semibold text-gray-800">
+          <span className="text-[11px] font-bold text-amber-900 uppercase tracking-wider">Components to Issue:</span>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={issueDevices}
+              onChange={(e) => setIssueDevices(e.target.checked)}
+              className="w-4 h-4 text-amber-600 rounded border-gray-300 focus:ring-amber-500"
+            />
+            <span>Camera Devices ({deviceList.length})</span>
+          </label>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={issueMaterials}
+              onChange={(e) => setIssueMaterials(e.target.checked)}
+              className="w-4 h-4 text-amber-600 rounded border-gray-300 focus:ring-amber-500"
+            />
+            <span>Installation Materials ({materialList.length})</span>
+          </label>
+        </div>
+
+        {loadingInv ? (
+          <div className="py-8 text-center space-y-2">
+            <Loader2 className="w-6 h-6 animate-spin text-amber-600 mx-auto" />
+            <p className="text-xs text-gray-500">Verifying authoritative stock balances...</p>
+          </div>
+        ) : (
+          <div className="space-y-4 max-h-[50vh] overflow-y-auto pr-1">
+            {/* 1. Camera Devices Stock Review */}
+            {issueDevices && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-xs font-bold text-gray-700">
+                  <span className="flex items-center gap-1.5 text-blue-800">
+                    <HardDrive className="w-4 h-4" /> Camera Devices to Issue
+                  </span>
+                  {hasDeviceDeficit && (
+                    <span className="text-rose-600 text-[11px] font-bold">
+                      ⚠ {devDeficits.length} Device Model Shortage
+                    </span>
+                  )}
+                </div>
+
+                <div className="border border-gray-200 rounded-xl overflow-hidden text-xs">
+                  <table className="w-full text-left">
+                    <thead className="bg-gray-50 text-[10px] font-bold text-gray-600 uppercase border-b border-gray-200">
+                      <tr>
+                        <th className="py-2 px-3">Device Model</th>
+                        <th className="py-2 px-3">SKU</th>
+                        <th className="py-2 px-3 text-center">Req Qty</th>
+                        <th className="py-2 px-3 text-center">In Store</th>
+                        <th className="py-2 px-3 text-center">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {deviceList.map((d, i) => (
+                        <tr key={i} className={d.shortage > 0 ? 'bg-rose-50/50' : 'hover:bg-gray-50/50'}>
+                          <td className="py-2 px-3 font-semibold text-gray-900">{d.device_type}</td>
+                          <td className="py-2 px-3 font-mono text-[11px] text-gray-500">{d.sku}</td>
+                          <td className="py-2 px-3 text-center font-bold text-gray-900">{d.required} Nos.</td>
+                          <td className="py-2 px-3 text-center font-mono font-bold text-gray-800">{d.available} Nos.</td>
+                          <td className="py-2 px-3 text-center">
+                            {d.shortage > 0 ? (
+                              <span className="text-[10px] font-bold text-rose-700 bg-rose-100 px-2 py-0.5 rounded-full">
+                                Short by {d.shortage}
+                              </span>
+                            ) : (
+                              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
+                                Available
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* 2. Installation Materials Stock Review */}
+            {issueMaterials && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-xs font-bold text-gray-700">
+                  <span className="flex items-center gap-1.5 text-amber-800">
+                    <Layers className="w-4 h-4" /> Installation Materials to Issue
+                  </span>
+                  {hasMaterialDeficit && (
+                    <span className="text-rose-600 text-[11px] font-bold">
+                      ⚠ {matDeficits.length} Material Shortage
+                    </span>
+                  )}
+                </div>
+
+                <div className="border border-gray-200 rounded-xl overflow-hidden text-xs">
+                  <table className="w-full text-left">
+                    <thead className="bg-gray-50 text-[10px] font-bold text-gray-600 uppercase border-b border-gray-200">
+                      <tr>
+                        <th className="py-2 px-3">Material</th>
+                        <th className="py-2 px-3 text-center">Req Qty</th>
+                        <th className="py-2 px-3 text-center">Unit</th>
+                        <th className="py-2 px-3 text-center">In Store</th>
+                        <th className="py-2 px-3 text-center">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {materialList.map((m, i) => (
+                        <tr key={i} className={m.shortage > 0 ? 'bg-rose-50/50' : 'hover:bg-gray-50/50'}>
+                          <td className="py-2 px-3 font-semibold text-gray-900">{m.material_name}</td>
+                          <td className="py-2 px-3 text-center font-bold text-gray-900">{m.required}</td>
+                          <td className="py-2 px-3 text-center text-gray-500 font-medium">{m.unit}</td>
+                          <td className="py-2 px-3 text-center font-mono font-bold text-gray-800">{m.available}</td>
+                          <td className="py-2 px-3 text-center">
+                            {m.shortage > 0 ? (
+                              <span className="text-[10px] font-bold text-rose-700 bg-rose-100 px-2 py-0.5 rounded-full">
+                                Short by {m.shortage}
+                              </span>
+                            ) : (
+                              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
+                                Available
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
-        {/* Materials Table */}
-        <div className="space-y-2">
-          <div className="flex items-center justify-between text-xs font-semibold text-gray-700">
-            <span>Required Materials for Dispatch ({bomItems.length} items)</span>
-            {loadingInv && <span className="text-gray-400 text-[11px] flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" /> Checking stock...</span>}
+        {/* Remarks Form & Submission */}
+        <form onSubmit={handleSubmit} className="space-y-4 pt-2 border-t border-gray-100">
+          <div>
+            <label className="text-xs font-bold text-gray-700 block mb-1">
+              Store Manager Remarks / Dispatch Notes
+            </label>
+            <input
+              type="text"
+              value={remarks}
+              onChange={(e) => setRemarks(e.target.value)}
+              placeholder="e.g. Dispatched complete kit with technician; batch verified"
+              className="w-full text-xs p-2.5 border border-gray-200 rounded-xl focus:outline-none focus:border-amber-500"
+            />
           </div>
 
-          <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white max-h-64 overflow-y-auto">
-            <table className="w-full text-left border-collapse text-xs">
-              <thead className="sticky top-0 bg-gray-50 border-b border-gray-200">
-                <tr className="text-[11px] font-bold text-gray-600 uppercase tracking-wider">
-                  <th className="py-2.5 px-3">Material</th>
-                  <th className="py-2.5 px-3 text-center">Req. Qty</th>
-                  <th className="py-2.5 px-3 text-center">Unit</th>
-                  <th className="py-2.5 px-3 text-center">In Stock</th>
-                  <th className="py-2.5 px-3 text-center">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {bomItems.map((item, idx) => {
-                  const inv = invMap.get((item.material_name || '').toLowerCase());
-                  const inStock = inv ? Number(inv.current_stock) || 0 : 0;
-                  const req = Number(item.total_quantity) || 0;
-                  const isShort = req > inStock;
-
-                  return (
-                    <tr key={idx} className={isShort ? 'bg-red-50/50' : 'hover:bg-gray-50/50'}>
-                      <td className="py-2.5 px-3 font-semibold text-gray-900">{item.material_name}</td>
-                      <td className="py-2.5 px-3 text-center font-mono font-bold text-gray-800">{item.total_quantity}</td>
-                      <td className="py-2.5 px-3 text-center text-gray-600">{item.unit}</td>
-                      <td className="py-2.5 px-3 text-center font-mono font-bold text-gray-700">
-                        {loadingInv ? '...' : inStock}
-                      </td>
-                      <td className="py-2.5 px-3 text-center">
-                        {isShort ? (
-                          <span className="px-2 py-0.5 rounded-md bg-red-100 text-red-800 font-bold text-[10px]">
-                            Shortage
-                          </span>
-                        ) : (
-                          <span className="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 font-bold text-[10px]">
-                            Available
-                          </span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+          <div className="flex items-center justify-end gap-2 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={submitting}
+              className="px-4 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-100 rounded-xl transition-colors cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={submitting || hasDeficit || (!issueDevices && !issueMaterials)}
+              className="px-5 py-2 text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 rounded-xl transition-all shadow-xs flex items-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {submitting ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Deducting Stock...</span>
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>Authorize & Issue Stock</span>
+                </>
+              )}
+            </button>
           </div>
-        </div>
-
-        {/* Remarks */}
-        <div>
-          <label className="block text-xs font-semibold text-gray-700 mb-1">
-            Dispatch Remarks / Notes
-          </label>
-          <input
-            type="text"
-            value={remarks}
-            onChange={(e) => setRemarks(e.target.value)}
-            placeholder="e.g. Issued materials to lead installation technician"
-            className="w-full text-xs p-2.5 border border-gray-200 rounded-xl focus:outline-none focus:border-indigo-500"
-          />
-        </div>
-
-        {/* Footer Actions */}
-        <div className="flex items-center justify-end gap-3 pt-3 border-t border-gray-100">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-100 rounded-xl transition-colors cursor-pointer"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={handleSubmit}
-            disabled={submitting || hasDeficit || loadingInv}
-            className="px-5 py-2 text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl transition-all shadow-xs flex items-center gap-2 cursor-pointer"
-          >
-            {submitting ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                <span>Processing Atomic Deduction...</span>
-              </>
-            ) : (
-              <>
-                <CheckCircle2 className="w-4 h-4" />
-                <span>Authorize & Deduct Inventory</span>
-              </>
-            )}
-          </button>
-        </div>
+        </form>
       </div>
     </div>
   );

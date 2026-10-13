@@ -718,6 +718,68 @@ export async function syncStoreMaterialRequirements(token) {
   return res.json();
 }
 
+/**
+ * Opening Stock API Helpers
+ */
+export async function setMaterialOpeningStockApi(token, data) {
+  const res = await fetch(`${API_BASE}/admin/materials/opening-stock`, {
+    method: 'POST',
+    headers: adminHeaders(token),
+    body: JSON.stringify(data),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to set material opening stock');
+  return json;
+}
+
+export async function setDeviceOpeningStockApi(token, data) {
+  const res = await fetch(`${API_BASE}/admin/inventory/opening-stock`, {
+    method: 'POST',
+    headers: adminHeaders(token),
+    body: JSON.stringify(data),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to set device opening stock');
+  return json;
+}
+
+/**
+ * Unified Full Job Stock Issuance API
+ */
+export async function issueFullJobStockApi(token, data) {
+  const res = await fetch(`${API_BASE}/admin/materials/issue-full-job`, {
+    method: 'POST',
+    headers: adminHeaders(token),
+    body: JSON.stringify(data),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to issue job stock');
+  return json;
+}
+
+export async function issueDevicesForChecklistApi(token, data) {
+  const res = await fetch(`${API_BASE}/admin/inventory/issue-devices`, {
+    method: 'POST',
+    headers: adminHeaders(token),
+    body: JSON.stringify(data),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to issue devices');
+  return json;
+}
+
+/**
+ * Combined Movements API
+ */
+export async function fetchAllMovements(token, params = {}) {
+  const query = new URLSearchParams(params).toString();
+  const res = await fetch(`${API_BASE}/admin/inventory/all-movements?${query}`, {
+    headers: adminHeaders(token),
+  });
+  if (!res.ok) throw new Error('Failed to fetch combined stock movements');
+  return res.json();
+}
+
 
 
 

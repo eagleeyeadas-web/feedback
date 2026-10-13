@@ -11,24 +11,25 @@ export const STANDARD_DEVICE_TYPES = [
   '8 Channel Live',
 ];
 
+export const STANDARD_DEVICE_PRODUCTS = [
+  { id: 'dev-001', sku: 'EE-2CH-LIVE', device_name: '2 Channel Live Camera System', device_type: '2 Channel Live', unit: 'Nos.', opening_quantity: 0, opening_stock_set: false, usable_stock: 0, reserved_stock: 0, issued_stock: 0, returned_usable_stock: 0, damaged_stock: 0, min_stock_level: 5, is_active: true },
+  { id: 'dev-002', sku: 'EE-2CH-REC', device_name: '2 Channel Recording System', device_type: '2 Channel Recording', unit: 'Nos.', opening_quantity: 0, opening_stock_set: false, usable_stock: 0, reserved_stock: 0, issued_stock: 0, returned_usable_stock: 0, damaged_stock: 0, min_stock_level: 5, is_active: true },
+  { id: 'dev-003', sku: 'EE-4CH-LIVE', device_name: '4 Channel Live MDVR System', device_type: '4 Channel Live', unit: 'Nos.', opening_quantity: 0, opening_stock_set: false, usable_stock: 0, reserved_stock: 0, issued_stock: 0, returned_usable_stock: 0, damaged_stock: 0, min_stock_level: 5, is_active: true },
+  { id: 'dev-004', sku: 'EE-4CH-REC', device_name: '4 Channel Recording MDVR System', device_type: '4 Channel Recording', unit: 'Nos.', opening_quantity: 0, opening_stock_set: false, usable_stock: 0, reserved_stock: 0, issued_stock: 0, returned_usable_stock: 0, damaged_stock: 0, min_stock_level: 5, is_active: true },
+  { id: 'dev-005', sku: 'EE-6CH-LIVE', device_name: '6 Channel Live Telematics System', device_type: '6 Channel Live', unit: 'Nos.', opening_quantity: 0, opening_stock_set: false, usable_stock: 0, reserved_stock: 0, issued_stock: 0, returned_usable_stock: 0, damaged_stock: 0, min_stock_level: 5, is_active: true },
+  { id: 'dev-006', sku: 'EE-6CH-REC', device_name: '6 Channel Recording Telematics System', device_type: '6 Channel Recording', unit: 'Nos.', opening_quantity: 0, opening_stock_set: false, usable_stock: 0, reserved_stock: 0, issued_stock: 0, returned_usable_stock: 0, damaged_stock: 0, min_stock_level: 5, is_active: true },
+  { id: 'dev-007', sku: 'EE-8CH-LIVE', device_name: '8 Channel Live Enterprise System', device_type: '8 Channel Live', unit: 'Nos.', opening_quantity: 0, opening_stock_set: false, usable_stock: 0, reserved_stock: 0, issued_stock: 0, returned_usable_stock: 0, damaged_stock: 0, min_stock_level: 5, is_active: true },
+];
+
 /**
- * In-memory fallback stores for local resilience and environments where
- * Supabase inventory tables are not yet migrated
+ * In-memory fallback stores for local resilience
+ * Opening stock is NOT assumed (starts at 0 with opening_stock_set: false)
  */
 const inMemoryProducts = new Map(
-  STANDARD_DEVICE_TYPES.map((type, idx) => [
-    type,
+  STANDARD_DEVICE_PRODUCTS.map((p) => [
+    p.device_type,
     {
-      id: `prod-00${idx + 1}`,
-      device_name: `${type} System`,
-      device_type: type,
-      sku: `EE-${type.replace(/\s+/g, '-').toUpperCase()}`,
-      opening_quantity: 50,
-      usable_stock: 50,
-      issued_stock: 0,
-      returned_usable_stock: 0,
-      damaged_stock: 0,
-      min_stock_level: 5,
+      ...p,
       updated_at: new Date().toISOString(),
     },
   ])
@@ -36,11 +37,55 @@ const inMemoryProducts = new Map(
 
 const inMemoryTransactions = [];
 const processedCarryDeductions = new Set();
+const processedChecklistDeviceIssuances = new Set();
+let devicesDbSeeded = false;
+
+/**
+ * Ensure standard 7 camera device models exist in database without overwriting opening counts
+ */
+async function ensureDbDevicesSeeded() {
+  if (devicesDbSeeded) return;
+  try {
+    const { data: existing, error } = await supabase
+      .from('inventory_products')
+      .select('id, device_type, sku');
+
+    if (!error && Array.isArray(existing)) {
+      const existingTypes = new Set(existing.map((p) => p.device_type));
+      const missing = STANDARD_DEVICE_PRODUCTS.filter((p) => !existingTypes.has(p.device_type));
+
+      if (missing.length > 0) {
+        await supabase.from('inventory_products').insert(
+          missing.map((p) => ({
+            device_name: p.device_name,
+            device_type: p.device_type,
+            sku: p.sku,
+            unit: p.unit,
+            opening_quantity: 0,
+            opening_stock_set: false,
+            usable_stock: 0,
+            reserved_stock: 0,
+            issued_stock: 0,
+            returned_usable_stock: 0,
+            damaged_stock: 0,
+            min_stock_level: p.min_stock_level,
+            is_active: true,
+          }))
+        );
+      }
+      devicesDbSeeded = true;
+    }
+  } catch (err) {
+    // Database table might not be migrated yet
+  }
+}
 
 /**
  * Get all inventory products and current stock balances
  */
 export async function getInventoryProducts() {
+  await ensureDbDevicesSeeded();
+
   try {
     const { data, error } = await supabase
       .from('inventory_products')
@@ -48,7 +93,6 @@ export async function getInventoryProducts() {
       .order('device_type', { ascending: true });
 
     if (!error && data && data.length > 0) {
-      // Sync in-memory map
       data.forEach((p) => {
         inMemoryProducts.set(p.device_type, { ...p });
       });
@@ -70,14 +114,21 @@ export async function getInventorySummary() {
   let totalUsable = 0;
   let totalIssued = 0;
   let totalDamaged = 0;
+  let totalOpening = 0;
+  let lowStockCount = 0;
 
   products.forEach((p) => {
-    totalUsable += Number(p.usable_stock) || 0;
+    const usable = Number(p.usable_stock) || 0;
+    const minLevel = Number(p.min_stock_level) || 5;
+    totalUsable += usable;
     totalIssued += Number(p.issued_stock) || 0;
     totalDamaged += Number(p.damaged_stock) || 0;
+    totalOpening += Number(p.opening_quantity) || 0;
+    if (usable <= minLevel) {
+      lowStockCount++;
+    }
   });
 
-  // Calculate units awaiting return verification
   let totalAwaitingReturn = 0;
   try {
     const { data: pendingReturns, error } = await supabase
@@ -91,7 +142,7 @@ export async function getInventorySummary() {
       });
     }
   } catch (err) {
-    // Check in-memory store in workflowService if needed
+    // In-memory fallback
   }
 
   return {
@@ -99,6 +150,126 @@ export async function getInventorySummary() {
     totalIssued,
     totalAwaitingReturn,
     totalDamaged,
+    totalOpening,
+    lowStockCount,
+    totalModels: products.length,
+  };
+}
+
+/**
+ * Set Opening Quantity for a Camera Device (Store Manager enters actual opening count)
+ */
+export async function setDeviceOpeningStock({
+  device_type,
+  product_id,
+  opening_quantity,
+  reason,
+  user,
+}) {
+  if (!device_type && !product_id) {
+    throw new Error('Device type or product ID is required.');
+  }
+
+  const qty = parseInt(opening_quantity, 10);
+  if (isNaN(qty) || qty < 0) {
+    throw new Error('Opening quantity must be a non-negative whole number (0 or greater).');
+  }
+
+  const products = await getInventoryProducts();
+  const product = products.find(
+    (p) => (product_id && p.id === product_id) || (device_type && p.device_type === device_type)
+  ) || inMemoryProducts.get(device_type);
+
+  if (!product) {
+    throw new Error(`Device model "${device_type || product_id}" not found.`);
+  }
+
+  const targetType = product.device_type;
+  const targetId = product.id;
+  const previousBalance = Number(product.usable_stock) || 0;
+  const newBalance = qty;
+
+  // Update in-memory
+  product.opening_quantity = qty;
+  product.opening_stock_set = true;
+  product.usable_stock = newBalance;
+  product.updated_at = new Date().toISOString();
+  inMemoryProducts.set(targetType, product);
+
+  // Update DB
+  try {
+    await supabase
+      .from('inventory_products')
+      .update({
+        opening_quantity: qty,
+        opening_stock_set: true,
+        usable_stock: newBalance,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', targetId);
+  } catch (err) {
+    console.warn('DB update device opening stock error:', err.message);
+  }
+
+  // Create audit transaction
+  const txRecord = {
+    id: `tx-dev-open-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    product_id: targetId,
+    device_type: targetType,
+    device_name: product.device_name,
+    transaction_type: 'OPENING_STOCK',
+    quantity: qty,
+    previous_balance: previousBalance,
+    new_balance: newBalance,
+    checklist_id: null,
+    performed_by: user?.id || null,
+    performer_name: user?.full_name || user?.email || 'Store Manager',
+    reason_or_remarks: reason ? reason.trim() : `Opening stock set to ${qty} Nos. for ${targetType}`,
+    idempotency_key: `DEV-OPEN-${targetType}-${Date.now()}`,
+    created_at: new Date().toISOString(),
+  };
+
+  try {
+    await supabase.from('inventory_transactions').insert([{
+      product_id: targetId,
+      transaction_type: 'OPENING_STOCK',
+      quantity: qty,
+      previous_balance: previousBalance,
+      new_balance: newBalance,
+      performed_by: user?.id || null,
+      reason_or_remarks: txRecord.reason_or_remarks,
+      idempotency_key: txRecord.idempotency_key,
+    }]);
+  } catch (txErr) {
+    console.warn('DB device opening tx insert error:', txErr.message);
+  }
+
+  inMemoryTransactions.unshift(txRecord);
+
+  if (user) {
+    await logAudit({
+      actor_id: user.id,
+      actor_email: user.email,
+      actor_role: user.role,
+      action: 'DEVICE_OPENING_STOCK_SET',
+      target_table: 'inventory_products',
+      target_id: targetId,
+      details: {
+        device_type: targetType,
+        opening_quantity: qty,
+        previous_balance: previousBalance,
+        new_balance: newBalance,
+        reason,
+      },
+    }).catch(() => null);
+  }
+
+  return {
+    success: true,
+    device_type: targetType,
+    opening_quantity: qty,
+    usable_stock: newBalance,
+    transaction: txRecord,
   };
 }
 
@@ -125,7 +296,8 @@ export async function receiveNewStock({
   }
 
   let product = inMemoryProducts.get(device_type);
-  let newUsable = ((product?.usable_stock) || 0) + qty;
+  const previousBalance = Number(product?.usable_stock) || 0;
+  let newUsable = previousBalance + qty;
   let productId = product?.id || `prod-${Date.now()}`;
 
   try {
@@ -137,7 +309,7 @@ export async function receiveNewStock({
 
     if (dbProd) {
       productId = dbProd.id;
-      newUsable = dbProd.usable_stock + qty;
+      newUsable = Number(dbProd.usable_stock) + qty;
       await supabase
         .from('inventory_products')
         .update({
@@ -154,21 +326,6 @@ export async function receiveNewStock({
   if (product) {
     product.usable_stock = newUsable;
     product.updated_at = new Date().toISOString();
-  } else {
-    product = {
-      id: productId,
-      device_name: `${device_type} System`,
-      device_type,
-      sku: `EE-${device_type.replace(/\s+/g, '-').toUpperCase()}`,
-      opening_quantity: 0,
-      usable_stock: newUsable,
-      issued_stock: 0,
-      returned_usable_stock: 0,
-      damaged_stock: 0,
-      min_stock_level: 5,
-      updated_at: new Date().toISOString(),
-    };
-    inMemoryProducts.set(device_type, product);
   }
 
   const txDetails = [
@@ -184,13 +341,15 @@ export async function receiveNewStock({
     id: `tx-recv-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
     product_id: productId,
     device_type,
-    device_name: product.device_name,
+    device_name: product?.device_name || `${device_type} System`,
     transaction_type: 'STOCK_RECEIVED',
     quantity: qty,
+    previous_balance: previousBalance,
+    new_balance: newUsable,
     checklist_id: null,
-    performed_by: user.id,
-    performer_name: user.full_name || user.email || 'Store Manager',
-    reason_or_remarks: txDetails || `Stock received for ${device_type}`,
+    performed_by: user?.id,
+    performer_name: user?.full_name || user?.email || 'Store Manager',
+    reason_or_remarks: txDetails || `Stock received for ${device_type} (Stock: ${previousBalance} → ${newUsable} Nos.)`,
     idempotency_key: `RECEIVE-${device_type}-${Date.now()}`,
     created_at: new Date().toISOString(),
   };
@@ -200,7 +359,9 @@ export async function receiveNewStock({
       product_id: productId,
       transaction_type: 'STOCK_RECEIVED',
       quantity: qty,
-      performed_by: user.id,
+      previous_balance: previousBalance,
+      new_balance: newUsable,
+      performed_by: user?.id,
       reason_or_remarks: transactionRecord.reason_or_remarks,
       idempotency_key: transactionRecord.idempotency_key,
     }]);
@@ -210,21 +371,30 @@ export async function receiveNewStock({
 
   inMemoryTransactions.unshift(transactionRecord);
 
-  await logAudit({
-    actor_id: user.id,
-    actor_email: user.email,
-    actor_role: user.role,
-    action: 'RECEIVE_NEW_STOCK',
-    target_table: 'inventory_products',
-    target_id: productId,
-    details: { device_type, quantity: qty, new_usable_stock: newUsable, supplier, purchase_ref },
-  });
+  if (user) {
+    await logAudit({
+      actor_id: user.id,
+      actor_email: user.email,
+      actor_role: user.role,
+      action: 'RECEIVE_NEW_STOCK',
+      target_table: 'inventory_products',
+      target_id: productId,
+      details: {
+        device_type,
+        quantity: qty,
+        previous_balance: previousBalance,
+        new_usable_stock: newUsable,
+        supplier,
+        purchase_ref,
+      },
+    }).catch(() => null);
+  }
 
-  return { success: true, usable_stock: newUsable, transaction: transactionRecord };
+  return { success: true, usable_stock: newUsable, previous_balance: previousBalance, transaction: transactionRecord };
 }
 
 /**
- * Adjust or Edit stock balances (Add or Remove stock with required reason)
+ * Adjust or Edit stock balances (Add, Remove, or Set with required reason)
  */
 export async function adjustStock({
   device_type,
@@ -244,27 +414,13 @@ export async function adjustStock({
   }
 
   if (!reason || !reason.trim()) {
-    throw new Error('A valid reason is required for any stock adjustment or edit.');
+    throw new Error('A valid reason is required for any stock adjustment.');
   }
 
   let product = inMemoryProducts.get(device_type);
-  if (!product) {
-    product = {
-      id: `prod-${Date.now()}`,
-      device_name: `${device_type} System`,
-      device_type,
-      usable_stock: 50,
-      issued_stock: 0,
-      damaged_stock: 0,
-      min_stock_level: 5,
-      updated_at: new Date().toISOString(),
-    };
-    inMemoryProducts.set(device_type, product);
-  }
-
-  const currentUsable = product.usable_stock || 0;
+  const currentUsable = Number(product?.usable_stock) || 0;
   let newUsable = currentUsable;
-  let newDamaged = product.damaged_stock || 0;
+  let newDamaged = Number(product?.damaged_stock) || 0;
   let qtyDelta = 0;
   const normalizedAction = (action || '').toUpperCase();
   let txType = 'STOCK_ADJUSTMENT';
@@ -277,13 +433,13 @@ export async function adjustStock({
   } else if (normalizedAction === 'REMOVE') {
     if (qty <= 0) throw new Error('Quantity to remove must be greater than 0.');
     if (qty > currentUsable) {
-      throw new Error(`Cannot remove ${qty} units. Current usable stock is only ${currentUsable} units.`);
+      throw new Error(`Cannot remove ${qty} units. Current usable stock is only ${currentUsable} Nos. Negative stock is strictly prevented.`);
     }
     newUsable = currentUsable - qty;
     qtyDelta = -qty;
     txType = 'STOCK_ADJUSTMENT';
     if (move_to_damaged) {
-      newDamaged = (product.damaged_stock || 0) + qty;
+      newDamaged = (Number(product?.damaged_stock) || 0) + qty;
     }
   } else if (normalizedAction === 'SET') {
     newUsable = qty;
@@ -293,10 +449,13 @@ export async function adjustStock({
     throw new Error('Invalid adjustment action. Supported actions: ADD, REMOVE, SET.');
   }
 
-  // Update in-memory product
-  product.usable_stock = newUsable;
-  product.damaged_stock = newDamaged;
-  product.updated_at = new Date().toISOString();
+  if (product) {
+    product.usable_stock = newUsable;
+    product.damaged_stock = newDamaged;
+    product.updated_at = new Date().toISOString();
+  }
+
+  const productId = product?.id || `prod-${Date.now()}`;
 
   // Try DB update
   try {
@@ -324,11 +483,13 @@ export async function adjustStock({
 
   const transactionRecord = {
     id: `tx-adj-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-    product_id: product.id,
+    product_id: productId,
     device_type,
-    device_name: product.device_name,
+    device_name: product?.device_name || `${device_type} System`,
     transaction_type: txType,
     quantity: Math.abs(qtyDelta),
+    previous_balance: currentUsable,
+    new_balance: newUsable,
     checklist_id: null,
     performed_by: user?.id,
     performer_name: user?.full_name || user?.email || 'Store Manager',
@@ -339,9 +500,11 @@ export async function adjustStock({
 
   try {
     await supabase.from('inventory_transactions').insert([{
-      product_id: product.id,
+      product_id: productId,
       transaction_type: txType,
       quantity: Math.abs(qtyDelta),
+      previous_balance: currentUsable,
+      new_balance: newUsable,
       performed_by: user?.id,
       reason_or_remarks: remarkFormatted,
       idempotency_key: transactionRecord.idempotency_key,
@@ -352,23 +515,25 @@ export async function adjustStock({
 
   inMemoryTransactions.unshift(transactionRecord);
 
-  await logAudit({
-    actor_id: user?.id,
-    actor_email: user?.email,
-    actor_role: user?.role,
-    action: `STOCK_ADJUSTMENT_${normalizedAction}`,
-    target_table: 'inventory_products',
-    target_id: product.id,
-    details: {
-      device_type,
-      action: normalizedAction,
-      previous_usable: currentUsable,
-      new_usable: newUsable,
-      quantity_delta: qtyDelta,
-      move_to_damaged,
-      reason,
-    },
-  });
+  if (user) {
+    await logAudit({
+      actor_id: user?.id,
+      actor_email: user?.email,
+      actor_role: user?.role,
+      action: `STOCK_ADJUSTMENT_${normalizedAction}`,
+      target_table: 'inventory_products',
+      target_id: productId,
+      details: {
+        device_type,
+        action: normalizedAction,
+        previous_usable: currentUsable,
+        new_usable: newUsable,
+        quantity_delta: qtyDelta,
+        move_to_damaged,
+        reason,
+      },
+    }).catch(() => null);
+  }
 
   return {
     success: true,
@@ -381,80 +546,212 @@ export async function adjustStock({
 }
 
 /**
- * Deduct stock automatically when technician submits Device Carry Form.
- * Validates available stock for ALL items before making any deductions (Atomic).
- * Prevents duplicate deductions if already submitted for checklist.
+ * Server-side atomic transaction to issue camera devices for a checklist.
+ * Validates available stock for ALL devices before making deductions.
+ * Prevents negative stock.
  */
-export async function deductStockForCarryRecord({ checklist_id, technician_user_id, technician_name, items }) {
-  if (!items || !Array.isArray(items) || items.length === 0) {
-    return;
+export async function issueDevicesForChecklist({
+  checklist_id,
+  devices,
+  remarks = '',
+  user,
+}) {
+  if (!checklist_id) {
+    throw new Error('Checklist ID is required.');
   }
 
-  // Idempotency: prevent double deduction for the same checklist carry submission
-  if (processedCarryDeductions.has(checklist_id)) {
-    console.log(`Stock already deducted for checklist ${checklist_id}, skipping duplicate deduction.`);
-    return;
+  if (processedChecklistDeviceIssuances.has(checklist_id)) {
+    throw new Error(`Devices have already been issued for checklist ${checklist_id}. Duplicate issuance is prevented.`);
   }
 
-  // 1. Fetch current balances for validation
-  const products = await getInventoryProducts();
-  const productMap = new Map(products.map((p) => [p.device_type, p]));
+  if (!devices || !Array.isArray(devices) || devices.length === 0) {
+    throw new Error('No camera devices specified for issuance.');
+  }
 
-  // 2. Validate sufficient usable stock for ALL items BEFORE making changes
-  for (const item of items) {
-    const devType = item.device_type?.trim();
-    const qty = parseInt(item.quantity_to_carry !== undefined ? item.quantity_to_carry : item.quantity_carried, 10) || 0;
+  const allProducts = await getInventoryProducts();
+  const prodMap = new Map(allProducts.map((p) => [p.device_type, p]));
 
+  // 1. ATOMIC PRE-CHECK: Validate stock for ALL camera devices
+  for (const item of devices) {
+    const devType = (item.device_type || '').trim();
+    const qty = parseInt(
+      item.required_quantity !== undefined
+        ? item.required_quantity
+        : (item.number_of_devices !== undefined ? item.number_of_devices : item.quantity),
+      10
+    ) || 0;
     if (qty <= 0) continue;
 
-    const prod = productMap.get(devType) || inMemoryProducts.get(devType);
-    const available = prod ? prod.usable_stock : 0;
+    const prod = prodMap.get(devType) || inMemoryProducts.get(devType);
+    const available = prod ? Number(prod.usable_stock) || 0 : 0;
 
     if (qty > available) {
       throw new Error(
-        `Insufficient usable stock for "${devType}". Available: ${available} units, Requested: ${qty} units. Please adjust quantities or receive new stock.`
+        `Insufficient usable stock for camera device "${devType}". Available: ${available} Nos., Required: ${qty} Nos. Negative stock is strictly prevented.`
       );
     }
   }
 
-  // 3. Perform atomic deduction for all items
+  // 2. ATOMIC DEDUCTION
+  const issuedRecords = [];
+
+  for (const item of devices) {
+    const devType = (item.device_type || '').trim();
+    const qty = parseInt(
+      item.required_quantity !== undefined
+        ? item.required_quantity
+        : (item.number_of_devices !== undefined ? item.number_of_devices : item.quantity),
+      10
+    ) || 0;
+    if (qty <= 0) continue;
+
+    const prod = prodMap.get(devType) || inMemoryProducts.get(devType);
+    const productId = prod?.id || `dev-${Date.now()}`;
+    const previousBalance = Number(prod?.usable_stock) || 0;
+    const newUsable = Math.max(0, previousBalance - qty);
+    const newIssued = (Number(prod?.issued_stock) || 0) + qty;
+
+    try {
+      await supabase
+        .from('inventory_products')
+        .update({
+          usable_stock: newUsable,
+          issued_stock: newIssued,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', productId);
+    } catch (e) {
+      console.warn(`DB device stock deduction error for ${devType}:`, e.message);
+    }
+
+    if (prod) {
+      prod.usable_stock = newUsable;
+      prod.issued_stock = newIssued;
+      prod.updated_at = new Date().toISOString();
+    }
+
+    const idempotencyKey = `DEV-ISSUE-${checklist_id}-${devType}`;
+    const txRecord = {
+      id: `tx-dev-issue-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      product_id: productId,
+      device_type: devType,
+      device_name: prod?.device_name || `${devType} System`,
+      transaction_type: 'STOCK_ISSUED',
+      quantity: qty,
+      previous_balance: previousBalance,
+      new_balance: newUsable,
+      checklist_id,
+      performed_by: user?.id || null,
+      performer_name: user?.full_name || user?.email || 'Store Manager',
+      reason_or_remarks: remarks || `Camera device issued for checklist ${checklist_id}`,
+      idempotency_key: idempotencyKey,
+      created_at: new Date().toISOString(),
+    };
+
+    try {
+      await supabase.from('inventory_transactions').insert([{
+        product_id: productId,
+        transaction_type: 'STOCK_ISSUED',
+        quantity: qty,
+        previous_balance: previousBalance,
+        new_balance: newUsable,
+        checklist_id,
+        performed_by: user?.id || null,
+        reason_or_remarks: txRecord.reason_or_remarks,
+        idempotency_key: idempotencyKey,
+      }]);
+    } catch (txErr) {
+      console.warn('DB device transaction insert error:', txErr.message);
+    }
+
+    inMemoryTransactions.unshift(txRecord);
+    issuedRecords.push({
+      device_type: devType,
+      product_id: productId,
+      sku: prod?.sku,
+      quantity_issued: qty,
+      previous_balance: previousBalance,
+      remaining_usable: newUsable,
+    });
+  }
+
+  processedChecklistDeviceIssuances.add(checklist_id);
+
+  if (user) {
+    await logAudit({
+      actor_id: user.id,
+      actor_email: user.email,
+      actor_role: user.role,
+      action: 'ISSUE_DEVICES_FOR_CHECKLIST',
+      target_table: 'inventory_products',
+      target_id: checklist_id,
+      details: {
+        checklist_id,
+        devices_count: issuedRecords.length,
+        devices: issuedRecords,
+        remarks,
+      },
+    }).catch(() => null);
+  }
+
+  return {
+    success: true,
+    checklist_id,
+    devices_issuance_status: 'ISSUED',
+    devices: issuedRecords,
+  };
+}
+
+/**
+ * Deduct stock automatically when technician submits Device Carry Form (Workflow compatibility)
+ */
+export async function deductStockForCarryRecord({ checklist_id, technician_user_id, technician_name, items }) {
+  if (!items || !Array.isArray(items) || items.length === 0) return;
+
+  if (processedCarryDeductions.has(checklist_id)) return;
+
+  const products = await getInventoryProducts();
+  const productMap = new Map(products.map((p) => [p.device_type, p]));
+
   for (const item of items) {
     const devType = item.device_type?.trim();
     const qty = parseInt(item.quantity_to_carry !== undefined ? item.quantity_to_carry : item.quantity_carried, 10) || 0;
-
     if (qty <= 0) continue;
 
-    const prod = inMemoryProducts.get(devType);
+    const prod = productMap.get(devType) || inMemoryProducts.get(devType);
+    const available = prod ? Number(prod.usable_stock) || 0 : 0;
+
+    if (qty > available) {
+      throw new Error(
+        `Insufficient usable stock for "${devType}". Available: ${available} Nos., Requested: ${qty} Nos.`
+      );
+    }
+  }
+
+  for (const item of items) {
+    const devType = item.device_type?.trim();
+    const qty = parseInt(item.quantity_to_carry !== undefined ? item.quantity_to_carry : item.quantity_carried, 10) || 0;
+    if (qty <= 0) continue;
+
+    const prod = productMap.get(devType) || inMemoryProducts.get(devType);
     let productId = prod?.id || `prod-${Date.now()}`;
-    let newUsable = prod ? prod.usable_stock - qty : 0;
-    let newIssued = prod ? (prod.issued_stock || 0) + qty : qty;
+    const previousBalance = Number(prod?.usable_stock) || 0;
+    let newUsable = Math.max(0, previousBalance - qty);
+    let newIssued = (Number(prod?.issued_stock) || 0) + qty;
 
     try {
-      const { data: dbProd } = await supabase
+      await supabase
         .from('inventory_products')
-        .select('*')
-        .eq('device_type', devType)
-        .maybeSingle();
-
-      if (dbProd) {
-        productId = dbProd.id;
-        newUsable = dbProd.usable_stock - qty;
-        newIssued = (dbProd.issued_stock || 0) + qty;
-
-        await supabase
-          .from('inventory_products')
-          .update({
-            usable_stock: newUsable,
-            issued_stock: newIssued,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', dbProd.id);
-      }
+        .update({
+          usable_stock: newUsable,
+          issued_stock: newIssued,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', productId);
     } catch (e) {
       console.warn(`DB deduction error for ${devType}:`, e.message);
     }
 
-    // Update in-memory product
     if (prod) {
       prod.usable_stock = newUsable;
       prod.issued_stock = newIssued;
@@ -468,6 +765,8 @@ export async function deductStockForCarryRecord({ checklist_id, technician_user_
       device_name: prod?.device_name || `${devType} System`,
       transaction_type: 'STOCK_ISSUED',
       quantity: qty,
+      previous_balance: previousBalance,
+      new_balance: newUsable,
       checklist_id,
       performed_by: technician_user_id,
       performer_name: technician_name || 'Technician',
@@ -481,6 +780,8 @@ export async function deductStockForCarryRecord({ checklist_id, technician_user_
         product_id: productId,
         transaction_type: 'STOCK_ISSUED',
         quantity: qty,
+        previous_balance: previousBalance,
+        new_balance: newUsable,
         checklist_id,
         performed_by: technician_user_id,
         reason_or_remarks: txRecord.reason_or_remarks,
@@ -493,7 +794,6 @@ export async function deductStockForCarryRecord({ checklist_id, technician_user_
     inMemoryTransactions.unshift(txRecord);
   }
 
-  // Mark checklist as deducted
   processedCarryDeductions.add(checklist_id);
 }
 
@@ -540,10 +840,11 @@ export async function creditStockForVerifiedReturn({
 
   const prod = inMemoryProducts.get(device_type);
   let productId = prod?.id || `prod-${Date.now()}`;
-  let newUsable = (prod?.usable_stock || 0) + usableQty;
-  let newReturnedUsable = (prod?.returned_usable_stock || 0) + usableQty;
-  let newDamaged = (prod?.damaged_stock || 0) + dmgQty;
-  let newIssued = Math.max(0, (prod?.issued_stock || 0) - totalReceived);
+  const previousUsable = Number(prod?.usable_stock) || 0;
+  let newUsable = previousUsable + usableQty;
+  let newReturnedUsable = (Number(prod?.returned_usable_stock) || 0) + usableQty;
+  let newDamaged = (Number(prod?.damaged_stock) || 0) + dmgQty;
+  let newIssued = Math.max(0, (Number(prod?.issued_stock) || 0) - totalReceived);
 
   try {
     const { data: dbProd } = await supabase
@@ -554,10 +855,10 @@ export async function creditStockForVerifiedReturn({
 
     if (dbProd) {
       productId = dbProd.id;
-      newUsable = dbProd.usable_stock + usableQty;
-      newReturnedUsable = (dbProd.returned_usable_stock || 0) + usableQty;
-      newDamaged = (dbProd.damaged_stock || 0) + dmgQty;
-      newIssued = Math.max(0, (dbProd.issued_stock || 0) - totalReceived);
+      newUsable = Number(dbProd.usable_stock) + usableQty;
+      newReturnedUsable = (Number(dbProd.returned_usable_stock) || 0) + usableQty;
+      newDamaged = (Number(dbProd.damaged_stock) || 0) + dmgQty;
+      newIssued = Math.max(0, (Number(dbProd.issued_stock) || 0) - totalReceived);
 
       await supabase
         .from('inventory_products')
@@ -574,7 +875,6 @@ export async function creditStockForVerifiedReturn({
     console.warn(`DB return credit error for ${device_type}:`, e.message);
   }
 
-  // Update in-memory product
   if (prod) {
     prod.usable_stock = newUsable;
     prod.returned_usable_stock = newReturnedUsable;
@@ -592,10 +892,12 @@ export async function creditStockForVerifiedReturn({
       device_name: prod?.device_name || `${device_type} System`,
       transaction_type: 'USABLE_STOCK_RETURNED',
       quantity: usableQty,
+      previous_balance: previousUsable,
+      new_balance: newUsable,
       checklist_id,
       performed_by: user.id,
       performer_name: user.full_name || user.email || 'Store Manager',
-      reason_or_remarks: remarks || `Physical return verified usable for ${device_type}`,
+      reason_or_remarks: remarks || `Physical return verified usable for ${device_type} (+${usableQty} Nos.)`,
       idempotency_key: `RETURN-USABLE-${return_id}-${Date.now()}`,
       created_at: new Date().toISOString(),
     };
@@ -605,6 +907,8 @@ export async function creditStockForVerifiedReturn({
         product_id: productId,
         transaction_type: 'USABLE_STOCK_RETURNED',
         quantity: usableQty,
+        previous_balance: previousUsable,
+        new_balance: newUsable,
         checklist_id,
         performed_by: user.id,
         reason_or_remarks: usableTx.reason_or_remarks,
@@ -626,10 +930,12 @@ export async function creditStockForVerifiedReturn({
       device_name: prod?.device_name || `${device_type} System`,
       transaction_type: 'DAMAGED_STOCK_RECEIVED',
       quantity: dmgQty,
+      previous_balance: Number(prod?.damaged_stock) || 0,
+      new_balance: newDamaged,
       checklist_id,
       performed_by: user.id,
       performer_name: user.full_name || user.email || 'Store Manager',
-      reason_or_remarks: remarks || `Damaged return recorded for ${device_type}`,
+      reason_or_remarks: remarks || `Damaged return recorded for ${device_type} (+${dmgQty} Nos.)`,
       idempotency_key: `RETURN-DAMAGED-${return_id}-${Date.now()}`,
       created_at: new Date().toISOString(),
     };
@@ -639,6 +945,8 @@ export async function creditStockForVerifiedReturn({
         product_id: productId,
         transaction_type: 'DAMAGED_STOCK_RECEIVED',
         quantity: dmgQty,
+        previous_balance: Number(prod?.damaged_stock) || 0,
+        new_balance: newDamaged,
         checklist_id,
         performed_by: user.id,
         reason_or_remarks: dmgTx.reason_or_remarks,
@@ -658,7 +966,7 @@ export async function creditStockForVerifiedReturn({
  * Gets immutable inventory stock transaction logs (searchable & filterable)
  */
 export async function getInventoryTransactions(params = {}) {
-  const { page = 1, limit = 50, type = '', search = '' } = params;
+  const { page = 1, limit = 50, type = '', search = '', device_type = '' } = params;
   const pageNum = Math.max(1, parseInt(page, 10));
   const limitNum = Math.min(200, Math.max(1, parseInt(limit, 10)));
   const offset = (pageNum - 1) * limitNum;
@@ -666,19 +974,21 @@ export async function getInventoryTransactions(params = {}) {
   try {
     let query = supabase
       .from('inventory_transactions')
-      .select('*, product:inventory_products(device_name, device_type), actor:admin_users(email, full_name, role)', { count: 'exact' })
+      .select('*, product:inventory_products(device_name, device_type, sku), actor:admin_users(email, full_name, role)', { count: 'exact' })
       .order('created_at', { ascending: false })
       .range(offset, offset + limitNum - 1);
 
-    if (type) query = query.eq('transaction_type', type);
+    if (type && type !== 'All') query = query.eq('transaction_type', type);
+    if (device_type && device_type !== 'All') query = query.eq('device_type', device_type);
     if (search) {
-      query = query.or(`reason_or_remarks.ilike.%${search}%,idempotency_key.ilike.%${search}%`);
+      query = query.or(`reason_or_remarks.ilike.%${search}%,idempotency_key.ilike.%${search}%,device_type.ilike.%${search}%`);
     }
 
     const { data, count, error } = await query;
     if (!error && data && data.length > 0) {
       const formatted = data.map((d) => ({
         ...d,
+        sku: d.product?.sku || (STANDARD_DEVICE_PRODUCTS.find((x) => x.device_type === d.device_type)?.sku),
         device_type: d.product?.device_type || d.device_type,
         device_name: d.product?.device_name || d.device_name,
         performer_name: d.actor?.full_name || d.actor?.email || d.performed_by,
@@ -697,10 +1007,12 @@ export async function getInventoryTransactions(params = {}) {
   // Filter in-memory transactions
   let filtered = [...inMemoryTransactions];
 
-  if (type) {
+  if (type && type !== 'All') {
     filtered = filtered.filter((t) => t.transaction_type === type);
   }
-
+  if (device_type && device_type !== 'All') {
+    filtered = filtered.filter((t) => t.device_type === device_type);
+  }
   if (search && search.trim()) {
     const s = search.trim().toLowerCase();
     filtered = filtered.filter(
