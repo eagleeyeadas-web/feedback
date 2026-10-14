@@ -83,6 +83,14 @@ export default function StoreWorkspace({ onSelectChecklist }) {
   const [movementType, setMovementType] = useState('All');
   const [movementSearch, setMovementSearch] = useState('');
 
+  // Manage Stock Modal State (Unified Simplified Stock Management)
+  const [manageStockItem, setManageStockItem] = useState(null); // { type: 'DEVICE' | 'MATERIAL', name, unit, currentStock, rawItem }
+  const [manageStockAction, setManageStockAction] = useState('ADD'); // 'ADD' | 'REMOVE'
+  const [manageStockQty, setManageStockQty] = useState('');
+  const [manageStockReason, setManageStockReason] = useState('');
+  const [manageStockSubmitting, setManageStockSubmitting] = useState(false);
+  const [manageStockError, setManageStockError] = useState('');
+
   // Modals
   const [openingDeviceModal, setOpeningDeviceModal] = useState(null); // device object
   const [openingMaterialModal, setOpeningMaterialModal] = useState(null); // material object
@@ -264,6 +272,91 @@ export default function StoreWorkspace({ onSelectChecklist }) {
       setModalError(err.message || 'Failed to set material opening stock');
     } finally {
       setSubmittingModal(false);
+    }
+  };
+
+  // Open Simplified Manage Stock Modal (Camera Devices & Installation Materials)
+  const openManageStockModal = (item, type) => {
+    const isDevice = type === 'DEVICE';
+    const name = isDevice ? item.device_type : item.material_name;
+    const unit = isDevice ? 'Nos.' : (item.unit || 'Nos.');
+    const currentStock = Number(isDevice ? item.usable_stock : item.current_stock) || 0;
+
+    setManageStockItem({
+      type,
+      name,
+      unit,
+      currentStock,
+      rawItem: item,
+    });
+    setManageStockAction('ADD');
+    setManageStockQty('');
+    setManageStockReason('');
+    setManageStockError('');
+  };
+
+  // Handle Simplified Stock Adjustment (Add Stock or Remove Stock)
+  const handleManageStockSubmit = async (e) => {
+    e.preventDefault();
+    if (!manageStockItem || manageStockSubmitting) return;
+    setManageStockError('');
+
+    const isDevice = manageStockItem.type === 'DEVICE';
+    const qty = isDevice ? parseInt(manageStockQty, 10) : parseFloat(manageStockQty);
+
+    if (isNaN(qty) || qty <= 0) {
+      setManageStockError('Quantity must be a positive number greater than 0.');
+      return;
+    }
+
+    if (isDevice && !Number.isInteger(qty)) {
+      setManageStockError('Quantity for camera devices must be a whole number.');
+      return;
+    }
+
+    if (manageStockAction === 'REMOVE' && qty > manageStockItem.currentStock) {
+      setManageStockError(
+        `Cannot remove ${qty} ${manageStockItem.unit}. Current stock is only ${manageStockItem.currentStock} ${manageStockItem.unit}. Stock cannot become negative.`
+      );
+      return;
+    }
+
+    if (!manageStockReason.trim()) {
+      setManageStockError('A reason or note is required for manual stock adjustments.');
+      return;
+    }
+
+    setManageStockSubmitting(true);
+    try {
+      if (isDevice) {
+        await adjustInventoryStock(token, {
+          device_type: manageStockItem.name,
+          action: manageStockAction, // 'ADD' or 'REMOVE'
+          quantity: qty,
+          reason: manageStockReason.trim(),
+        });
+      } else {
+        await adjustMaterialStock(token, {
+          material_name: manageStockItem.name,
+          action: manageStockAction, // 'ADD' or 'REMOVE'
+          quantity: qty,
+          reason: manageStockReason.trim(),
+        });
+      }
+
+      const actionText = manageStockAction === 'ADD' ? 'added to' : 'removed from';
+      showToast(`Stock updated: ${qty} ${manageStockItem.unit} ${actionText} ${manageStockItem.name}.`);
+      setManageStockItem(null);
+      setManageStockQty('');
+      setManageStockReason('');
+
+      // Refresh displayed stock immediately
+      await loadAllData();
+    } catch (err) {
+      console.error('Failed to adjust stock:', err);
+      setManageStockError(err.message || 'Failed to update stock. Please try again.');
+    } finally {
+      setManageStockSubmitting(false);
     }
   };
 
@@ -705,111 +798,50 @@ export default function StoreWorkspace({ onSelectChecklist }) {
             </button>
           </div>
 
-          <div className="bg-white rounded-2xl border border-gray-200 shadow-xs overflow-x-auto">
-            <table className="w-full text-left border-collapse text-xs">
-              <thead>
-                <tr className="bg-gray-50 border-b border-gray-200 text-[11px] font-bold text-gray-600 uppercase tracking-wider">
-                  <th className="py-3 px-4">Device Model</th>
-                  <th className="py-3 px-4">SKU / Product Code</th>
-                  <th className="py-3 px-4 text-center">Usable Stock</th>
-                  <th className="py-3 px-4 text-center">Opening Stock</th>
-                  <th className="py-3 px-4 text-center">Issued Stock</th>
-                  <th className="py-3 px-4 text-center">Damaged</th>
-                  <th className="py-3 px-4 text-center">Min Level</th>
-                  <th className="py-3 px-4 text-center">Status</th>
-                  <th className="py-3 px-4 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {products.map((p) => {
-                  const usable = Number(p.usable_stock) || 0;
-                  const isLow = usable <= Number(p.min_stock_level || 5);
-
-                  return (
-                    <tr key={p.id || p.device_type} className="hover:bg-amber-50/20 transition-colors">
-                      <td className="py-3 px-4 font-bold text-gray-900">
-                        {p.device_type}
-                        <span className="block text-[11px] text-gray-400 font-normal">{p.device_name}</span>
-                      </td>
-                      <td className="py-3 px-4 font-mono text-[11px] text-gray-600 font-semibold">
-                        {p.sku || `EE-${p.device_type.replace(/\s+/g, '-').toUpperCase()}`}
-                      </td>
-                      <td className="py-3 px-4 text-center font-bold font-mono">
-                        <span className={`px-2 py-0.5 rounded-md ${isLow ? 'bg-rose-100 text-rose-800 font-black' : 'text-gray-900'}`}>
-                          {usable} Nos.
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-center">
-                        <span className="font-mono text-gray-700 block">
-                          {p.opening_quantity || 0} Nos.
-                        </span>
-                        <span className={`text-[10px] font-semibold ${p.opening_stock_set ? 'text-emerald-600' : 'text-amber-600'}`}>
-                          {p.opening_stock_set ? '✓ Baseline Set' : 'Pending Entry'}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-center font-mono text-gray-600">
-                        {p.issued_stock || 0} Nos.
-                      </td>
-                      <td className="py-3 px-4 text-center font-mono text-rose-600 font-bold">
-                        {p.damaged_stock || 0} Nos.
-                      </td>
-                      <td className="py-3 px-4 text-center font-mono text-gray-500">
-                        {p.min_stock_level || 5} Nos.
-                      </td>
-                      <td className="py-3 px-4 text-center">
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
-                          Active
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
-                          <button
-                            onClick={() => {
-                              setOpeningDeviceModal(p);
-                              setModalQty(p.opening_quantity || '');
-                              setModalReason('');
-                              setModalError('');
-                            }}
-                            className="px-2.5 py-1 text-[11px] font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors cursor-pointer"
-                            title="Set actual opening stock quantity"
-                          >
-                            Set Opening
-                          </button>
-                          <button
-                            onClick={() => {
-                              setReceiveModalDevice(p);
-                              setModalQty('');
-                              setModalReason('');
-                              setModalSupplier('');
-                              setModalRef('');
-                              setModalCost('');
-                              setModalError('');
-                            }}
-                            className="px-2.5 py-1 text-[11px] font-bold text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg transition-colors cursor-pointer"
-                            title="Receive incoming batch from supplier"
-                          >
-                            Receive
-                          </button>
-                          <button
-                            onClick={() => {
-                              setAdjustDeviceModal(p);
-                              setModalQty('');
-                              setModalAction('ADD');
-                              setModalReason('');
-                              setModalError('');
-                            }}
-                            className="px-2.5 py-1 text-[11px] font-bold text-gray-700 bg-white hover:bg-gray-50 border border-gray-200 rounded-lg transition-colors cursor-pointer"
-                            title="Adjust quantity with audit reason"
-                          >
-                            Adjust
-                          </button>
-                        </div>
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-xs overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="bg-gray-50 border-b border-gray-200 text-[11px] font-bold text-gray-600 uppercase tracking-wider">
+                    <th className="py-3.5 px-6">Item</th>
+                    <th className="py-3.5 px-6 text-center">Stock Remaining</th>
+                    <th className="py-3.5 px-6 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {products.length === 0 ? (
+                    <tr>
+                      <td colSpan="3" className="py-8 text-center text-gray-400">
+                        No camera devices found.
                       </td>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                  ) : (
+                    products.map((p) => {
+                      const usable = Number(p.usable_stock) || 0;
+                      return (
+                        <tr key={p.id || p.device_type} className="hover:bg-amber-50/20 transition-colors">
+                          <td className="py-3.5 px-6 font-bold text-gray-900 text-xs sm:text-sm">
+                            {p.device_type}
+                          </td>
+                          <td className="py-3.5 px-6 text-center font-bold font-mono text-xs sm:text-sm text-gray-900">
+                            {usable} Nos.
+                          </td>
+                          <td className="py-3.5 px-6 text-right">
+                            <button
+                              onClick={() => openManageStockModal(p, 'DEVICE')}
+                              className="px-3.5 py-1.5 text-xs font-semibold text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-xl transition-all shadow-xs cursor-pointer inline-flex items-center gap-1.5"
+                            >
+                              <SlidersHorizontal className="w-3.5 h-3.5 text-amber-600" />
+                              <span>Manage Stock</span>
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}
@@ -831,103 +863,50 @@ export default function StoreWorkspace({ onSelectChecklist }) {
             </div>
           </div>
 
-          <div className="bg-white rounded-2xl border border-gray-200 shadow-xs overflow-x-auto">
-            <table className="w-full text-left border-collapse text-xs">
-              <thead>
-                <tr className="bg-gray-50 border-b border-gray-200 text-[11px] font-bold text-gray-600 uppercase tracking-wider">
-                  <th className="py-3 px-4">Material Name</th>
-                  <th className="py-3 px-4">SKU / Code</th>
-                  <th className="py-3 px-4 text-center">Unit</th>
-                  <th className="py-3 px-4 text-center">Usable Current Stock</th>
-                  <th className="py-3 px-4 text-center">Opening Stock</th>
-                  <th className="py-3 px-4 text-center">Issued Stock</th>
-                  <th className="py-3 px-4 text-center">Min Level</th>
-                  <th className="py-3 px-4 text-center">Health</th>
-                  <th className="py-3 px-4 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {materials.map((m) => {
-                  const stock = Number(m.current_stock) || 0;
-                  const isLow = stock <= Number(m.min_stock_level || 10);
-
-                  return (
-                    <tr key={m.id || m.material_name} className="hover:bg-amber-50/20 transition-colors">
-                      <td className="py-3 px-4 font-bold text-gray-900">
-                        {m.material_name}
-                      </td>
-                      <td className="py-3 px-4 font-mono text-[11px] text-gray-600 font-semibold">
-                        {m.sku || 'N/A'}
-                      </td>
-                      <td className="py-3 px-4 text-center">
-                        <span className="font-semibold text-gray-700 bg-gray-100 px-2 py-0.5 rounded text-[11px]">
-                          {m.unit}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-center font-bold font-mono">
-                        <span className={`px-2 py-0.5 rounded-md ${isLow ? 'bg-rose-100 text-rose-800 font-black' : 'text-gray-900'}`}>
-                          {stock} {m.unit}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-center">
-                        <span className="font-mono text-gray-700 block">
-                          {m.opening_stock || 0} {m.unit}
-                        </span>
-                        <span className="text-[10px] text-emerald-600 font-semibold">
-                          ✓ Business Baseline
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-center font-mono text-gray-600">
-                        {m.issued_stock || 0} {m.unit}
-                      </td>
-                      <td className="py-3 px-4 text-center font-mono text-gray-500">
-                        {m.min_stock_level || 10} {m.unit}
-                      </td>
-                      <td className="py-3 px-4 text-center">
-                        {isLow ? (
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-800">
-                            Low Stock
-                          </span>
-                        ) : (
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
-                            Adequate
-                          </span>
-                        )}
-                      </td>
-                      <td className="py-3 px-4 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
-                          <button
-                            onClick={() => {
-                              setOpeningMaterialModal(m);
-                              setModalQty(m.opening_stock || '');
-                              setModalReason('');
-                              setModalError('');
-                            }}
-                            className="px-2.5 py-1 text-[11px] font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors cursor-pointer"
-                            title="Set explicit opening stock"
-                          >
-                            Set Opening
-                          </button>
-                          <button
-                            onClick={() => {
-                              setAdjustMaterialModal(m);
-                              setModalQty('');
-                              setModalAction('ADD');
-                              setModalReason('');
-                              setModalError('');
-                            }}
-                            className="px-2.5 py-1 text-[11px] font-bold text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg transition-colors cursor-pointer"
-                            title="Add / Remove / Set quantity"
-                          >
-                            Adjust Stock
-                          </button>
-                        </div>
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-xs overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="bg-gray-50 border-b border-gray-200 text-[11px] font-bold text-gray-600 uppercase tracking-wider">
+                    <th className="py-3.5 px-6">Item</th>
+                    <th className="py-3.5 px-6 text-center">Stock Remaining</th>
+                    <th className="py-3.5 px-6 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {materials.length === 0 ? (
+                    <tr>
+                      <td colSpan="3" className="py-8 text-center text-gray-400">
+                        No installation materials found.
                       </td>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                  ) : (
+                    materials.map((m) => {
+                      const stock = Number(m.current_stock) || 0;
+                      return (
+                        <tr key={m.id || m.material_name} className="hover:bg-amber-50/20 transition-colors">
+                          <td className="py-3.5 px-6 font-bold text-gray-900 text-xs sm:text-sm">
+                            {m.material_name}
+                          </td>
+                          <td className="py-3.5 px-6 text-center font-bold font-mono text-xs sm:text-sm text-gray-900">
+                            {stock} {m.unit || 'Nos.'}
+                          </td>
+                          <td className="py-3.5 px-6 text-right">
+                            <button
+                              onClick={() => openManageStockModal(m, 'MATERIAL')}
+                              className="px-3.5 py-1.5 text-xs font-semibold text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-xl transition-all shadow-xs cursor-pointer inline-flex items-center gap-1.5"
+                            >
+                              <SlidersHorizontal className="w-3.5 h-3.5 text-amber-600" />
+                              <span>Manage Stock</span>
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}
@@ -1624,176 +1603,173 @@ export default function StoreWorkspace({ onSelectChecklist }) {
         </div>
       )}
 
-      {/* 4. Adjust Camera Device Modal */}
-      {adjustDeviceModal && (
+      {/* Manage Stock Modal (Camera Devices & Installation Materials) */}
+      {manageStockItem && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 border border-gray-100">
-            <div className="flex items-center justify-between pb-2 border-b border-gray-100">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 border border-gray-100 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-3 border-b border-gray-100">
               <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
                 <SlidersHorizontal className="w-4 h-4 text-amber-600" />
-                <span>Adjust Stock: {adjustDeviceModal.device_type}</span>
+                <span>Manage Stock</span>
               </h3>
-              <button onClick={() => setAdjustDeviceModal(null)} className="text-gray-400 hover:text-gray-600">
+              <button
+                type="button"
+                onClick={() => {
+                  if (!manageStockSubmitting) setManageStockItem(null);
+                }}
+                className="text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            {modalError && (
-              <div className="p-3 bg-rose-50 text-rose-800 border border-rose-200 rounded-xl text-xs">
-                {modalError}
+            {/* Item & Current Stock Card */}
+            <div className="p-3.5 bg-gray-50 border border-gray-200 rounded-xl space-y-1">
+              <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider block">
+                {manageStockItem.type === 'DEVICE' ? 'Camera Device Model' : 'Installation Material'}
+              </span>
+              <div className="flex items-center justify-between">
+                <span className="font-black text-gray-900 text-sm">{manageStockItem.name}</span>
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-black bg-blue-100 text-blue-800 font-mono">
+                  Current: {manageStockItem.currentStock} {manageStockItem.unit}
+                </span>
               </div>
-            )}
-
-            <form onSubmit={handleAdjustDeviceSubmit} className="space-y-3 text-xs">
-              <div>
-                <label className="block font-bold text-gray-700 mb-1">Adjustment Action</label>
-                <div className="grid grid-cols-3 gap-2">
-                  {['ADD', 'REMOVE', 'SET'].map((act) => (
-                    <button
-                      key={act}
-                      type="button"
-                      onClick={() => setModalAction(act)}
-                      className={`py-2 rounded-xl font-bold border transition-all ${
-                        modalAction === act
-                          ? 'bg-amber-600 text-white border-amber-700'
-                          : 'bg-gray-50 text-gray-700 border-gray-200'
-                      }`}
-                    >
-                      {act}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <label className="block font-bold text-gray-700 mb-1">Quantity (Nos.) *</label>
-                <input
-                  type="number"
-                  min="0"
-                  required
-                  value={modalQty}
-                  onChange={(e) => setModalQty(e.target.value)}
-                  placeholder="e.g. 5"
-                  className="w-full p-2.5 border border-gray-200 rounded-xl font-bold font-mono focus:outline-none focus:border-amber-500"
-                />
-              </div>
-
-              <div>
-                <label className="block font-bold text-gray-700 mb-1">Mandatory Audit Reason *</label>
-                <input
-                  type="text"
-                  required
-                  value={modalReason}
-                  onChange={(e) => setModalReason(e.target.value)}
-                  placeholder="e.g. Physical inventory count discrepancy correction"
-                  className="w-full p-2.5 border border-gray-200 rounded-xl focus:outline-none focus:border-amber-500"
-                />
-              </div>
-
-              <div className="flex items-center justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setAdjustDeviceModal(null)}
-                  className="px-4 py-2 font-semibold text-gray-600 hover:bg-gray-100 rounded-xl"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={submittingModal}
-                  className="px-5 py-2 font-bold text-white bg-amber-600 hover:bg-amber-700 rounded-xl shadow-xs"
-                >
-                  {submittingModal ? 'Adjusting...' : 'Confirm Adjustment'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* 5. Adjust Material Modal */}
-      {adjustMaterialModal && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 border border-gray-100">
-            <div className="flex items-center justify-between pb-2 border-b border-gray-100">
-              <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
-                <Layers className="w-4 h-4 text-amber-600" />
-                <span>Adjust Material: {adjustMaterialModal.material_name}</span>
-              </h3>
-              <button onClick={() => setAdjustMaterialModal(null)} className="text-gray-400 hover:text-gray-600">
-                <X className="w-5 h-5" />
-              </button>
             </div>
 
-            {modalError && (
-              <div className="p-3 bg-rose-50 text-rose-800 border border-rose-200 rounded-xl text-xs">
-                {modalError}
+            {manageStockError && (
+              <div className="p-3 bg-rose-50 text-rose-800 border border-rose-200 rounded-xl text-xs flex items-start gap-2 animate-in fade-in">
+                <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                <span>{manageStockError}</span>
               </div>
             )}
 
-            <form onSubmit={handleAdjustMaterialSubmit} className="space-y-3 text-xs">
+            <form onSubmit={handleManageStockSubmit} className="space-y-4 text-xs">
+              {/* Action Segmented Toggle: Add Stock vs Remove Stock */}
               <div>
-                <label className="block font-bold text-gray-700 mb-1">Action</label>
-                <div className="grid grid-cols-3 gap-2">
-                  {['ADD', 'REMOVE', 'SET'].map((act) => (
-                    <button
-                      key={act}
-                      type="button"
-                      onClick={() => setModalAction(act)}
-                      className={`py-2 rounded-xl font-bold border transition-all ${
-                        modalAction === act
-                          ? 'bg-amber-600 text-white border-amber-700'
-                          : 'bg-gray-50 text-gray-700 border-gray-200'
-                      }`}
-                    >
-                      {act}
-                    </button>
-                  ))}
+                <label className="block font-bold text-gray-700 mb-1.5">Action *</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setManageStockAction('ADD');
+                      setManageStockError('');
+                    }}
+                    className={`py-2 px-3 rounded-xl font-bold border transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                      manageStockAction === 'ADD'
+                        ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                        : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+                    }`}
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Add Stock</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setManageStockAction('REMOVE');
+                      setManageStockError('');
+                    }}
+                    className={`py-2 px-3 rounded-xl font-bold border transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                      manageStockAction === 'REMOVE'
+                        ? 'bg-rose-600 text-white border-rose-600 shadow-xs'
+                        : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+                    }`}
+                  >
+                    <span className="text-base font-black leading-none">−</span>
+                    <span>Remove Stock</span>
+                  </button>
                 </div>
               </div>
 
+              {/* Quantity Input */}
               <div>
                 <label className="block font-bold text-gray-700 mb-1">
-                  Quantity ({adjustMaterialModal.unit}) *
+                  Quantity ({manageStockItem.unit}) *
                 </label>
                 <input
                   type="number"
-                  min="0"
-                  step="any"
+                  min="1"
+                  step={manageStockItem.type === 'DEVICE' ? '1' : 'any'}
                   required
-                  value={modalQty}
-                  onChange={(e) => setModalQty(e.target.value)}
-                  placeholder="e.g. 50"
+                  value={manageStockQty}
+                  onChange={(e) => {
+                    setManageStockQty(e.target.value);
+                    setManageStockError('');
+                  }}
+                  placeholder="Enter quantity greater than 0"
                   className="w-full p-2.5 border border-gray-200 rounded-xl font-bold font-mono focus:outline-none focus:border-amber-500"
                 />
+                {/* Projected Stock Preview */}
+                {(() => {
+                  const parsed = parseFloat(manageStockQty);
+                  if (!isNaN(parsed) && parsed > 0) {
+                    const projected =
+                      manageStockAction === 'ADD'
+                        ? manageStockItem.currentStock + parsed
+                        : manageStockItem.currentStock - parsed;
+                    const isNegative = projected < 0;
+                    return (
+                      <p
+                        className={`text-[11px] mt-1 font-medium ${
+                          isNegative ? 'text-rose-600 font-bold' : 'text-gray-500'
+                        }`}
+                      >
+                        Projected stock remaining:{' '}
+                        <strong className={isNegative ? 'text-rose-700 font-black' : 'text-gray-900 font-mono'}>
+                          {projected} {manageStockItem.unit}
+                        </strong>
+                        {isNegative && ' (Negative stock is strictly prevented)'}
+                      </p>
+                    );
+                  }
+                  return null;
+                })()}
               </div>
 
+              {/* Reason / Notes */}
               <div>
-                <label className="block font-bold text-gray-700 mb-1">Mandatory Audit Reason *</label>
-                <input
-                  type="text"
+                <label className="block font-bold text-gray-700 mb-1">
+                  Reason / Notes *
+                </label>
+                <textarea
+                  rows={2}
                   required
-                  value={modalReason}
-                  onChange={(e) => setModalReason(e.target.value)}
-                  placeholder="e.g. Stock replenishment received / physical recount"
-                  className="w-full p-2.5 border border-gray-200 rounded-xl focus:outline-none focus:border-amber-500"
+                  value={manageStockReason}
+                  onChange={(e) => {
+                    setManageStockReason(e.target.value);
+                    setManageStockError('');
+                  }}
+                  placeholder="e.g. Physical inventory adjustment, Supplier delivery batch, Damaged write-off"
+                  className="w-full p-2.5 border border-gray-200 rounded-xl focus:outline-none focus:border-amber-500 resize-none font-medium"
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-2">
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100">
                 <button
                   type="button"
-                  onClick={() => setAdjustMaterialModal(null)}
-                  className="px-4 py-2 font-semibold text-gray-600 hover:bg-gray-100 rounded-xl"
+                  disabled={manageStockSubmitting}
+                  onClick={() => setManageStockItem(null)}
+                  className="px-4 py-2 font-semibold text-gray-600 hover:bg-gray-100 rounded-xl cursor-pointer disabled:opacity-50"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  disabled={submittingModal}
-                  className="px-5 py-2 font-bold text-white bg-amber-600 hover:bg-amber-700 rounded-xl shadow-xs"
+                  disabled={manageStockSubmitting}
+                  className={`px-5 py-2 font-bold text-white rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-50 ${
+                    manageStockAction === 'ADD'
+                      ? 'bg-emerald-600 hover:bg-emerald-700'
+                      : 'bg-rose-600 hover:bg-rose-700'
+                  }`}
                 >
-                  {submittingModal ? 'Adjusting...' : 'Confirm Material Adjustment'}
+                  {manageStockSubmitting ? (
+                    <>
+                      <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <span>Saving...</span>
+                    </>
+                  ) : (
+                    <span>Save Stock</span>
+                  )}
                 </button>
               </div>
             </form>
