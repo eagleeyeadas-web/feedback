@@ -23,6 +23,9 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 
+// Trust reverse proxy (e.g. Render, Nginx, Cloudflare) for accurate client IP rate limiting
+app.set('trust proxy', 1);
+
 // Security middleware
 app.use(helmet());
 app.use(cors({
@@ -32,12 +35,16 @@ app.use(cors({
   credentials: true,
 }));
 
-// Global rate limiter
+// Global rate limiter with structured JSON response
 app.use(rateLimit({
   windowMs: config.rateLimit.windowMs,
   max: config.rateLimit.max,
   standardHeaders: true,
   legacyHeaders: false,
+  message: { error: 'Too many requests. Please slow down and try again shortly.' },
+  handler: (req, res, next, options) => {
+    res.status(options.statusCode).json(typeof options.message === 'string' ? { error: options.message } : options.message);
+  },
 }));
 
 // Body parsing

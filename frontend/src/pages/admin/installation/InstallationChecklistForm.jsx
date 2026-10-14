@@ -66,6 +66,8 @@ function computeEndDate(startDate, durationStr) {
   return dt.toISOString().split('T')[0];
 }
 
+const EMPTY_EXTRA_DEVICES = [];
+
 export default function InstallationChecklistForm({ id: propId, onSaved, onCancel }) {
   const { session } = useAuth();
   const token = session?.access_token;
@@ -984,12 +986,15 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
             <div className="pt-2">
               <BomRequirementSummary
                 deviceConfigurations={deviceConfigs}
-                extraDeviceConfigurations={hasExtraDevices ? extraDeviceConfigs : []}
+                extraDeviceConfigurations={hasExtraDevices ? extraDeviceConfigs : EMPTY_EXTRA_DEVICES}
                 token={token}
                 jobType={formData.installation_or_service}
                 onCalculated={(snapshot) => {
                   if (formData.installation_or_service === 'Installation') {
-                    setBomSnapshot(snapshot);
+                    setBomSnapshot((prev) => {
+                      if (JSON.stringify(prev) === JSON.stringify(snapshot)) return prev;
+                      return snapshot;
+                    });
                   }
                 }}
               />

@@ -22,8 +22,8 @@ const config = {
 
   rateLimit: {
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100, // max requests per window
-    feedbackMax: 5, // max feedback submissions per window
+    max: parseInt(process.env.RATE_LIMIT_MAX || '2500', 10), // max requests per window (increased from 100 for normal operational usage)
+    feedbackMax: 20, // max feedback submissions per window
   },
 
   timezone: 'Asia/Kolkata',

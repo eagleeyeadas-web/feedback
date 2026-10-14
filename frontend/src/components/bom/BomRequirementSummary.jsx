@@ -29,6 +29,12 @@ export default function BomRequirementSummary({
   const [showBreakdown, setShowBreakdown] = useState(false);
   const [activeGroupTab, setActiveGroupTab] = useState('combined'); // 'combined' | 'required' | 'extra'
   const lastRequestRef = useRef('');
+  const lastSuccessPayloadRef = useRef('');
+  const onCalculatedRef = useRef(onCalculated);
+
+  useEffect(() => {
+    onCalculatedRef.current = onCalculated;
+  }, [onCalculated]);
 
   // Service jobs do not perform BOM calculations
   const isServiceJob = jobType === 'Service';
@@ -54,16 +60,34 @@ export default function BomRequirementSummary({
   const totalExtraCount = extraConfigs.reduce((sum, c) => sum + (parseInt(c.extra_quantity ?? c.number_of_devices, 10) || 0), 0);
   const totalCarriedCount = totalRequiredCount + totalExtraCount;
 
+  // Normalized payload representations without temporary client UUIDs to avoid spurious re-fetches
+  const payloadConfigsKey = JSON.stringify(
+    configs.map((c) => ({
+      device_type: c.device_type,
+      number_of_devices: parseInt(c.number_of_devices, 10) || 1,
+      number_of_vehicles: parseInt(c.number_of_vehicles, 10) || parseInt(c.number_of_devices, 10) || 1,
+    }))
+  );
+
+  const payloadExtraConfigsKey = JSON.stringify(
+    extraConfigs.map((c) => ({
+      device_type: c.device_type,
+      extra_quantity: parseInt(c.extra_quantity ?? c.number_of_devices, 10) || 1,
+    }))
+  );
+
   useEffect(() => {
     if (isServiceJob) {
       setCalculation(null);
-      if (onCalculated) onCalculated(null);
+      lastSuccessPayloadRef.current = '';
+      if (onCalculatedRef.current) onCalculatedRef.current(null);
       return;
     }
 
     if (configs.length === 0 && extraConfigs.length === 0) {
       setCalculation(null);
-      if (onCalculated) onCalculated(null);
+      lastSuccessPayloadRef.current = '';
+      if (onCalculatedRef.current) onCalculatedRef.current(null);
       return;
     }
 
@@ -73,52 +97,53 @@ export default function BomRequirementSummary({
         warning: 'All required device quantities must be positive whole numbers greater than 0.',
         items: [],
       });
-      if (onCalculated) onCalculated(null);
       return;
     }
 
-    const payloadConfigs = configs.map((c) => ({
-      device_type: c.device_type,
-      number_of_devices: parseInt(c.number_of_devices, 10) || 1,
-      number_of_vehicles: parseInt(c.number_of_vehicles, 10) || parseInt(c.number_of_devices, 10) || 1,
-    }));
-
-    const payloadExtraConfigs = extraConfigs.map((c) => ({
-      device_type: c.device_type,
-      extra_quantity: parseInt(c.extra_quantity ?? c.number_of_devices, 10) || 1,
-    }));
-
+    const payloadConfigs = JSON.parse(payloadConfigsKey);
+    const payloadExtraConfigs = JSON.parse(payloadExtraConfigsKey);
     const requestId = JSON.stringify({ req: payloadConfigs, ext: payloadExtraConfigs, job: jobType });
+
+    // Skip redundant network call if exact same payload was already calculated successfully
+    if (requestId === lastSuccessPayloadRef.current) {
+      return;
+    }
+
     lastRequestRef.current = requestId;
     setLoading(true);
     setError(null);
 
-    calculateBomRequirements(token, {
-      device_configurations: payloadConfigs,
-      extra_device_configurations: payloadExtraConfigs,
-      job_type: jobType,
-    })
-      .then((data) => {
-        if (lastRequestRef.current === requestId) {
-          setCalculation(data);
-          if (onCalculated) {
-            onCalculated(data.configured ? data : null);
+    // 350ms debounce to prevent flooding during rapid typing or device additions
+    const timer = setTimeout(() => {
+      calculateBomRequirements(token, {
+        device_configurations: payloadConfigs,
+        extra_device_configurations: payloadExtraConfigs,
+        job_type: jobType,
+      })
+        .then((data) => {
+          if (lastRequestRef.current === requestId) {
+            lastSuccessPayloadRef.current = requestId;
+            setCalculation(data);
+            if (onCalculatedRef.current) {
+              onCalculatedRef.current(data.configured ? data : null);
+            }
           }
-        }
-      })
-      .catch((err) => {
-        if (lastRequestRef.current === requestId) {
-          console.error('BOM calculation error:', err);
-          setError(err.message || 'Failed to calculate material requirements');
-          if (onCalculated) onCalculated(null);
-        }
-      })
-      .finally(() => {
-        if (lastRequestRef.current === requestId) {
-          setLoading(false);
-        }
-      });
-  }, [JSON.stringify(configs), JSON.stringify(extraConfigs), token, jobType, isServiceJob]);
+        })
+        .catch((err) => {
+          if (lastRequestRef.current === requestId) {
+            console.error('BOM calculation error:', err);
+            setError(err.message || 'Failed to calculate material requirements');
+          }
+        })
+        .finally(() => {
+          if (lastRequestRef.current === requestId) {
+            setLoading(false);
+          }
+        });
+    }, 350);
+
+    return () => clearTimeout(timer);
+  }, [payloadConfigsKey, payloadExtraConfigsKey, token, jobType, isServiceJob, hasEmptyOrInvalid]);
 
   if (isServiceJob || (configs.length === 0 && extraConfigs.length === 0)) {
     return null;

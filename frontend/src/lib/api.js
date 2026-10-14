@@ -15,6 +15,26 @@ export function pingServerWakeup() {
 }
 
 /**
+ * Safely parse JSON response with graceful fallback to server text or status code
+ */
+export async function parseResponse(res, fallbackMessage = 'Request failed') {
+  if (!res.ok) {
+    let errorMsg = `${fallbackMessage} (${res.status})`;
+    try {
+      const json = await res.json();
+      errorMsg = json.error || json.message || errorMsg;
+    } catch {
+      const text = await res.text().catch(() => '');
+      if (text && text.length < 300) {
+        errorMsg = text;
+      }
+    }
+    throw new Error(errorMsg);
+  }
+  return res.json();
+}
+
+/**
  * Submit customer feedback
  */
 export async function submitFeedback(data) {
@@ -23,14 +43,7 @@ export async function submitFeedback(data) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
   });
-
-  const json = await res.json();
-
-  if (!res.ok) {
-    throw new Error(json.error || 'Submission failed');
-  }
-
-  return json;
+  return parseResponse(res, 'Submission failed');
 }
 
 /**
@@ -109,11 +122,7 @@ export async function createQuotation(token, data) {
     headers: adminHeaders(token),
     body: JSON.stringify(data),
   });
-  const json = await res.json();
-  if (!res.ok) {
-    throw new Error(json.error || 'Failed to create quotation');
-  }
-  return json;
+  return parseResponse(res, 'Failed to create quotation');
 }
 
 export async function fetchAdminQuotations(token, params = {}) {
@@ -186,8 +195,10 @@ export async function fetchInstallationChecklistDetail(token, id) {
   const res = await fetch(`${API_BASE}/admin/installations/${id}`, {
     headers: adminHeaders(token),
   });
-  if (!res.ok) throw new Error('Failed to fetch installation checklist detail');
-  return res.json();
+  if (res.status === 404) {
+    throw new Error('Installation checklist not found or has been removed.');
+  }
+  return parseResponse(res, 'Failed to fetch installation checklist detail');
 }
 
 export async function createInstallationChecklist(token, data) {
@@ -196,11 +207,7 @@ export async function createInstallationChecklist(token, data) {
     headers: adminHeaders(token),
     body: JSON.stringify(data),
   });
-  const json = await res.json();
-  if (!res.ok) {
-    throw new Error(json.error || 'Failed to create installation checklist');
-  }
-  return json;
+  return parseResponse(res, 'Failed to create installation checklist');
 }
 
 export async function updateInstallationChecklist(token, id, data) {
@@ -209,11 +216,7 @@ export async function updateInstallationChecklist(token, id, data) {
     headers: adminHeaders(token),
     body: JSON.stringify(data),
   });
-  const json = await res.json();
-  if (!res.ok) {
-    throw new Error(json.error || 'Failed to update installation checklist');
-  }
-  return json;
+  return parseResponse(res, 'Failed to update installation checklist');
 }
 
 export async function deleteInstallationChecklist(token, id) {
@@ -221,11 +224,7 @@ export async function deleteInstallationChecklist(token, id) {
     method: 'DELETE',
     headers: adminHeaders(token),
   });
-  const json = await res.json();
-  if (!res.ok) {
-    throw new Error(json.error || 'Failed to delete installation checklist');
-  }
-  return json;
+  return parseResponse(res, 'Failed to delete installation checklist');
 }
 
 export async function downloadInstallationPDF(token, id) {
@@ -654,9 +653,7 @@ export async function calculateBomRequirements(token, data) {
     headers: adminHeaders(token),
     body: JSON.stringify(data),
   });
-  const json = await res.json();
-  if (!res.ok) throw new Error(json.error || 'Failed to calculate BOM requirements');
-  return json;
+  return parseResponse(res, 'Failed to calculate BOM requirements');
 }
 
 export async function updateDeviceBom(token, deviceType, data) {
@@ -665,9 +662,7 @@ export async function updateDeviceBom(token, deviceType, data) {
     headers: adminHeaders(token),
     body: JSON.stringify(data),
   });
-  const json = await res.json();
-  if (!res.ok) throw new Error(json.error || 'Failed to update BOM configuration');
-  return json;
+  return parseResponse(res, 'Failed to update BOM configuration');
 }
 
 export async function resetDeviceBom(token, deviceType) {
@@ -675,9 +670,7 @@ export async function resetDeviceBom(token, deviceType) {
     method: 'POST',
     headers: adminHeaders(token),
   });
-  const json = await res.json();
-  if (!res.ok) throw new Error(json.error || 'Failed to reset BOM configuration');
-  return json;
+  return parseResponse(res, 'Failed to reset BOM configuration');
 }
 
 export async function fetchBomUnits(token) {
