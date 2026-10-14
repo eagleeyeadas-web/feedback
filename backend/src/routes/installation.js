@@ -42,6 +42,7 @@ import {
   saveJobExpenses,
   getTechnicianCurrentMonthTotal,
   uploadExpenseReceipt,
+  generateTechnicianExpensePDFForChecklist,
 } from '../services/expenseService.js';
 
 const uploadReceipt = multer({
@@ -722,9 +723,10 @@ router.post('/:id/resolve-discrepancy', requireAdmin, async (req, res) => {
 
 /**
  * Stage 7A: GET /api/admin/installations/:id/expenses
- * Retrieve recorded and draft technician expenses for this job
+ * Retrieve recorded technician expenses for this job
+ * Strictly restricted to TECHNICAL and ADMIN roles
  */
-router.get('/:id/expenses', requireRole('TECHNICAL', 'ADMIN', 'STORE_MANAGER', 'SALES'), async (req, res) => {
+router.get('/:id/expenses', requireRole('TECHNICAL', 'ADMIN'), async (req, res) => {
   try {
     const result = await getExpensesForChecklist(req.params.id, req.profile);
     return res.json(result);
@@ -737,23 +739,49 @@ router.get('/:id/expenses', requireRole('TECHNICAL', 'ADMIN', 'STORE_MANAGER', '
 
 /**
  * Stage 7B: POST /api/admin/installations/:id/expenses
- * Record or save draft technician expenses after post-installation report submission
+ * Record or save technician expenses after post-installation report submission
+ * Strictly restricted to TECHNICAL and ADMIN roles
  */
 router.post('/:id/expenses', requireRole('TECHNICAL', 'ADMIN'), async (req, res) => {
   try {
-    const { expenses, is_draft, idempotency_key } = req.body;
+    const { expenses, is_draft, idempotency_key, delete_ids } = req.body;
     const result = await saveJobExpenses({
       checklist_id: req.params.id,
       user: req.profile,
       expenses,
       is_draft: Boolean(is_draft),
       idempotency_key,
+      delete_ids,
     });
     return res.json(result);
   } catch (err) {
     console.error('Error in POST /installations/:id/expenses:', err);
     const status = err.statusCode || 400;
     return res.status(status).json({ error: err.message || 'Failed to record expenses' });
+  }
+});
+
+/**
+ * Stage 7C: GET /api/admin/installations/:id/expenses/pdf
+ * Generate and download or print A4 Technician Expense Report PDF
+ * Strictly restricted to TECHNICAL and ADMIN roles
+ */
+router.get('/:id/expenses/pdf', requireRole('TECHNICAL', 'ADMIN'), async (req, res) => {
+  try {
+    const { pdfBuffer, checklist } = await generateTechnicianExpensePDFForChecklist(req.params.id, req.profile);
+    const filename = `Expense-Report-${checklist.checklist_number}.pdf`;
+
+    const isInline = req.query.inline === 'true' || req.query.print === 'true';
+    const dispositionType = isInline ? 'inline' : 'attachment';
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `${dispositionType}; filename="${filename}"`);
+    res.setHeader('Content-Length', pdfBuffer.length);
+    return res.send(pdfBuffer);
+  } catch (err) {
+    console.error('Error in GET /installations/:id/expenses/pdf:', err);
+    const status = err.statusCode || 500;
+    return res.status(status).json({ error: err.message || 'Failed to generate technician expense PDF' });
   }
 });
 

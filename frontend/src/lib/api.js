@@ -848,6 +848,17 @@ export async function saveJobExpensesApi(token, checklistId, data) {
   return json;
 }
 
+export async function downloadJobExpensePdfApi(token, checklistId, inline = false) {
+  const res = await fetch(`${API_BASE}/admin/installations/${checklistId}/expenses/pdf${inline ? '?inline=true' : ''}`, {
+    headers: adminHeaders(token),
+  });
+  if (!res.ok) {
+    const json = await res.json().catch(() => ({}));
+    throw new Error(json.error || 'Failed to generate technician expense PDF');
+  }
+  return res.blob();
+}
+
 export async function uploadExpenseReceiptApi(token, checklistId, file) {
   const formData = new FormData();
   formData.append('receipt', file);

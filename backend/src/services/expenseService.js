@@ -5,6 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 import supabase from './supabase.js';
 import { getChecklistById } from './installationService.js';
 import { getInstallationCompletionReport } from './workflowService.js';
+import { generateTechnicianExpensePDF } from './technicianExpensePdfGenerator.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -66,11 +67,19 @@ loadFallbackStorage();
 /**
  * Validates that the job exists, that post-installation report was submitted,
  * and that the technician is authorized for this job.
+ * Enforces privacy: Sales, Coordinator, and Store Manager cannot access expenses.
  */
 export async function assertChecklistEligibleForExpenses(checklistId, user) {
   if (!checklistId) {
     const err = new Error('Checklist ID is required');
     err.statusCode = 400;
+    throw err;
+  }
+
+  // 1. Role Authorization guard: Expenses are strictly private to Technical & Admin
+  if (user && user.role && user.role !== 'TECHNICAL' && user.role !== 'ADMIN') {
+    const err = new Error('Access denied. Job expenses are restricted to the service engineer and administrator.');
+    err.statusCode = 403;
     throw err;
   }
 
@@ -81,7 +90,7 @@ export async function assertChecklistEligibleForExpenses(checklistId, user) {
     throw err;
   }
 
-  // 1. Post-Installation Report MUST have been submitted!
+  // 2. Post-Installation Report MUST have been submitted!
   // Criterion 1: The expense form is unavailable before the post-installation report is successfully submitted.
   const completionReport = await getInstallationCompletionReport(checklistId).catch(() => null);
   const statusNorm = (checklist.installation_status || '').toLowerCase().trim();
@@ -100,7 +109,7 @@ export async function assertChecklistEligibleForExpenses(checklistId, user) {
     throw err;
   }
 
-  // 2. Authorization guard: Technicians cannot attach expenses to unauthorized jobs.
+  // 3. Technical user assignment check: Technicians cannot access unauthorized jobs.
   if (user && user.role === 'TECHNICAL') {
     const userEmail = (user.email || '').toLowerCase().trim();
     const userName = (user.full_name || '').toLowerCase().trim();
@@ -117,7 +126,7 @@ export async function assertChecklistEligibleForExpenses(checklistId, user) {
       checklist.technician_id === user.id;
 
     if (!isAssigned) {
-      const err = new Error('You are not authorized to submit expenses for this job.');
+      const err = new Error('You are not authorized to view or submit expenses for this job.');
       err.statusCode = 403;
       throw err;
     }
@@ -259,6 +268,7 @@ export async function saveJobExpenses({
   expenses,
   is_draft = false,
   idempotency_key = null,
+  delete_ids = [],
 }) {
   if (!Array.isArray(expenses) || expenses.length === 0) {
     const err = new Error('At least one expense entry is required.');
@@ -344,7 +354,8 @@ export async function saveJobExpenses({
     }
 
     const expenseDate = exp.expense_date || new Date().toISOString().split('T')[0];
-    const recordId = exp.id || uuidv4();
+    const isTempId = !exp.id || String(exp.id).startsWith('new-');
+    const recordId = isTempId ? uuidv4() : exp.id;
 
     validatedRecords.push({
       id: recordId,
@@ -361,8 +372,20 @@ export async function saveJobExpenses({
       notes: (exp.notes || '').trim() || null,
       status,
       idempotency_key: idempotency_key || null,
-      created_at: new Date().toISOString(),
+      created_at: exp.created_at || new Date().toISOString(),
       updated_at: new Date().toISOString(),
+    });
+  }
+
+  // Handle deletions if any rows were deleted by technician
+  if (Array.isArray(delete_ids) && delete_ids.length > 0) {
+    try {
+      await supabase.from('job_expenses').delete().in('id', delete_ids);
+    } catch (delErr) {
+      console.warn('DB delete from job_expenses fallback:', delErr.message);
+    }
+    delete_ids.forEach((did) => {
+      inMemoryJobExpenses.delete(did);
     });
   }
 
@@ -371,16 +394,16 @@ export async function saveJobExpenses({
   try {
     const { data, error } = await supabase
       .from('job_expenses')
-      .insert(validatedRecords)
+      .upsert(validatedRecords, { onConflict: 'id' })
       .select();
 
     if (!error && Array.isArray(data)) {
       insertedData = data;
     } else {
-      console.warn('DB insert into job_expenses failed, using dual-layer fallback:', error?.message);
+      console.warn('DB upsert into job_expenses failed, using dual-layer fallback:', error?.message);
     }
   } catch (err) {
-    console.warn('DB job_expenses insert exception, using fallback storage:', err.message);
+    console.warn('DB job_expenses upsert exception, using fallback storage:', err.message);
   }
 
   // Update in-memory fallback
@@ -401,7 +424,31 @@ export async function saveJobExpenses({
     summary,
     message: is_draft
       ? `Saved ${recordsToStore.length} expense draft(s) successfully.`
-      : `Recorded ${recordsToStore.length} technician expense(s) successfully.`,
+      : `Saved ${recordsToStore.length} technician expense(s) successfully.`,
+  };
+}
+
+/**
+ * Generates an A4 print-ready PDF for technician expenses for a checklist
+ */
+export async function generateTechnicianExpensePDFForChecklist(checklistId, user) {
+  // 1. Verify eligibility (report must be submitted + authorization check)
+  const { checklist } = await assertChecklistEligibleForExpenses(checklistId, user);
+
+  // 2. Fetch expenses
+  const expenseData = await getExpensesForChecklist(checklistId, user);
+
+  // 3. Generate PDF
+  const pdfBuffer = await generateTechnicianExpensePDF({
+    checklist,
+    expenses: expenseData.expenses || [],
+    user,
+  });
+
+  return {
+    pdfBuffer,
+    checklist,
+    expenses: expenseData.expenses || [],
   };
 }
 

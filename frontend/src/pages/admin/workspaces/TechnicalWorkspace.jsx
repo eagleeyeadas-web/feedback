@@ -895,10 +895,10 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
             <div className="p-3.5 bg-purple-50 rounded-xl border border-purple-200 text-left space-y-1">
               <span className="text-[11px] font-bold text-purple-900 flex items-center gap-1.5">
                 <Receipt className="w-4 h-4 text-purple-600" />
-                <span>Step 2 — Record Technician Expenses</span>
+                <span>Step 2 — Technician Expenses (Download &amp; Print PDF)</span>
               </span>
               <p className="text-[11px] text-purple-700">
-                You can record travel, fuel, food, toll, and accommodation costs incurred for {postInstallCompletedJob.client_name} now, or return anytime from the Completed Jobs tab.
+                Enter job expenses, save them, and download the print-ready A4 PDF to physically submit it to accounts. You can do this now or return anytime from Completed Jobs.
               </p>
             </div>
 

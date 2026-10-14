@@ -3,25 +3,26 @@ import {
   Receipt,
   Plus,
   Trash2,
-  Upload,
   FileText,
+  Download,
+  Printer,
   CheckCircle2,
-  Clock,
   AlertTriangle,
   X,
   Loader2,
+  Save,
+  Tag,
+  Building,
+  User,
+  MapPin,
   Calendar,
   CreditCard,
-  Tag,
-  DollarSign,
   FileCheck,
-  ExternalLink,
 } from 'lucide-react';
 import {
   fetchJobExpenses,
   saveJobExpensesApi,
-  uploadExpenseReceiptApi,
-  fetchTechnicianMonthlyExpenseSummary,
+  downloadJobExpensePdfApi,
 } from '../../lib/api';
 
 const CATEGORIES = [
@@ -49,19 +50,18 @@ export default function TechnicianExpenseModal({
   onSuccess,
 }) {
   const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const [printingPdf, setPrintingPdf] = useState(false);
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
 
-  // Loaded expenses and metrics
-  const [existingExpenses, setExistingExpenses] = useState([]);
-  const [jobTotal, setJobTotal] = useState(0);
-  const [draftTotal, setDraftTotal] = useState(0);
-  const [draftCount, setDraftCount] = useState(0);
-  const [monthlyTotal, setMonthlyTotal] = useState(0);
+  // Persisted state
+  const [savedExpenses, setSavedExpenses] = useState([]);
+  const [deletedIds, setDeletedIds] = useState([]);
 
-  // New expense entries form
-  const [newEntries, setNewEntries] = useState([
+  // Form entries
+  const [entries, setEntries] = useState([
     {
       id: `new-${Date.now()}-0`,
       expense_date: new Date().toISOString().split('T')[0],
@@ -69,72 +69,69 @@ export default function TechnicianExpenseModal({
       description: '',
       amount: '',
       payment_method: 'Cash',
-      receipt_url: '',
-      receipt_filename: '',
       notes: '',
-      uploading: false,
     },
   ]);
 
-  // Load existing expenses and technician monthly total
+  // Load existing saved expenses for this checklist
   useEffect(() => {
     let isMounted = true;
 
-    async function loadData() {
+    async function loadExpenses() {
       if (!checklist?.id || !token) return;
       setLoading(true);
       setError('');
 
       try {
-        const [expData, monthlyData] = await Promise.all([
-          fetchJobExpenses(token, checklist.id),
-          fetchTechnicianMonthlyExpenseSummary(token).catch(() => ({ total: 0 })),
-        ]);
-
+        const expData = await fetchJobExpenses(token, checklist.id);
         if (isMounted) {
-          setExistingExpenses(expData.expenses || []);
-          setJobTotal(expData.job_total || 0);
-          setDraftTotal(expData.draft_total || 0);
-          setDraftCount(expData.draft_count || 0);
-          setMonthlyTotal(monthlyData.total || expData.technician_monthly_total || 0);
+          const loaded = expData.expenses || [];
+          setSavedExpenses(loaded);
 
-          // If there are existing draft entries, pre-fill them into the form for editing
-          const drafts = (expData.expenses || []).filter((e) => e.status === 'Draft');
-          if (drafts.length > 0) {
-            setNewEntries(
-              drafts.map((d) => ({
-                id: d.id,
-                expense_date: d.expense_date || new Date().toISOString().split('T')[0],
-                category: d.category || 'Travel',
-                description: d.description || '',
-                amount: String(d.amount || ''),
-                payment_method: d.payment_method || 'Cash',
-                receipt_url: d.receipt_url || '',
-                receipt_filename: d.receipt_filename || '',
-                notes: d.notes || '',
-                uploading: false,
+          if (loaded.length > 0) {
+            setEntries(
+              loaded.map((item) => ({
+                id: item.id,
+                expense_date: item.expense_date || new Date().toISOString().split('T')[0],
+                category: item.category || 'Travel',
+                description: item.description || '',
+                amount: String(item.amount || ''),
+                payment_method: item.payment_method || 'Cash',
+                notes: item.notes || '',
               }))
             );
+          } else {
+            setEntries([
+              {
+                id: `new-${Date.now()}-0`,
+                expense_date: new Date().toISOString().split('T')[0],
+                category: 'Travel',
+                description: '',
+                amount: '',
+                payment_method: 'Cash',
+                notes: '',
+              },
+            ]);
           }
         }
       } catch (err) {
         if (isMounted) {
-          setError(err.message || 'Failed to load expenses for this job');
+          setError(err.message || 'Failed to load expenses for this checklist');
         }
       } finally {
         if (isMounted) setLoading(false);
       }
     }
 
-    loadData();
+    loadExpenses();
     return () => {
       isMounted = false;
     };
   }, [checklist?.id, token]);
 
-  // Add another expense entry row
-  const handleAddEntry = () => {
-    setNewEntries((prev) => [
+  // Action 1: Add Expense
+  const handleAddExpense = () => {
+    setEntries((prev) => [
       ...prev,
       {
         id: `new-${Date.now()}-${prev.length}`,
@@ -143,168 +140,202 @@ export default function TechnicianExpenseModal({
         description: '',
         amount: '',
         payment_method: 'Cash',
-        receipt_url: '',
-        receipt_filename: '',
         notes: '',
-        uploading: false,
       },
     ]);
   };
 
-  // Remove an entry row
+  // Remove an expense entry
   const handleRemoveEntry = (index) => {
-    setNewEntries((prev) => prev.filter((_, i) => i !== index));
+    const item = entries[index];
+    if (item && item.id && !item.id.startsWith('new-')) {
+      setDeletedIds((prev) => [...prev, item.id]);
+    }
+    setEntries((prev) => prev.filter((_, i) => i !== index));
   };
 
-  // Update field of an entry row
+  // Update entry field
   const handleEntryChange = (index, field, value) => {
-    setNewEntries((prev) =>
+    setEntries((prev) =>
       prev.map((entry, i) => (i === index ? { ...entry, [field]: value } : entry))
     );
   };
 
-  // Upload receipt file for an entry
-  const handleReceiptUpload = async (index, file) => {
-    if (!file) return;
-    const allowed = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
-    if (!allowed.includes(file.type)) {
-      setError('Receipt must be an image (JPEG, PNG, WebP) or PDF file.');
-      return;
-    }
-    if (file.size > 10 * 1024 * 1024) {
-      setError('Receipt file size must be less than 10MB.');
-      return;
-    }
-
-    handleEntryChange(index, 'uploading', true);
-    setError('');
-
-    try {
-      const res = await uploadExpenseReceiptApi(token, checklist.id, file);
-      setNewEntries((prev) =>
-        prev.map((entry, i) =>
-          i === index
-            ? {
-                ...entry,
-                receipt_url: res.receipt_url,
-                receipt_filename: res.receipt_filename || file.name,
-                uploading: false,
-              }
-            : entry
-        )
-      );
-    } catch (err) {
-      setError(err.message || 'Failed to upload receipt');
-      handleEntryChange(index, 'uploading', false);
-    }
-  };
-
   // Validate form entries
-  const validateForm = () => {
-    if (newEntries.length === 0) {
-      return 'Please add at least one expense entry.';
+  const validateEntries = () => {
+    if (entries.length === 0) {
+      return 'Please add at least one expense entry before saving.';
     }
-
-    for (let i = 0; i < newEntries.length; i++) {
-      const entry = newEntries[i];
-      const amt = parseFloat(entry.amount);
+    for (let i = 0; i < entries.length; i++) {
+      const e = entries[i];
+      const amt = parseFloat(e.amount);
       if (isNaN(amt) || amt <= 0) {
         return `Expense #${i + 1}: Amount must be a positive number greater than ₹0.`;
       }
-      if (!entry.description.trim()) {
+      if (!e.description.trim()) {
         return `Expense #${i + 1}: Description is required.`;
+      }
+      if (!e.category) {
+        return `Expense #${i + 1}: Category is required.`;
+      }
+      if (!e.payment_method) {
+        return `Expense #${i + 1}: Payment method is required.`;
       }
     }
     return null;
   };
 
-  // Submit expenses (isDraft = false for Recorded, isDraft = true for Draft)
-  const handleSaveExpenses = async (isDraft = false) => {
+  // Action 2: Save Expenses
+  const handleSaveExpenses = async () => {
     setError('');
     setSuccessMsg('');
 
-    const validationErr = validateForm();
-    if (validationErr) {
-      setError(validationErr);
+    const valErr = validateEntries();
+    if (valErr) {
+      setError(valErr);
       return;
     }
 
-    setSubmitting(true);
-    const idempotencyKey = `exp-${checklist.id}-${Date.now()}`;
-
+    setSaving(true);
     try {
       const payload = {
-        is_draft: isDraft,
-        idempotency_key: idempotencyKey,
-        expenses: newEntries.map((e) => ({
+        is_draft: false,
+        delete_ids: deletedIds,
+        expenses: entries.map((e) => ({
+          id: e.id && !e.id.startsWith('new-') ? e.id : undefined,
           expense_date: e.expense_date,
           category: e.category,
           description: e.description.trim(),
           amount: parseFloat(e.amount),
           payment_method: e.payment_method,
-          receipt_url: e.receipt_url || null,
-          receipt_filename: e.receipt_filename || null,
           notes: e.notes ? e.notes.trim() : null,
         })),
       };
 
-      const result = await saveJobExpensesApi(token, checklist.id, payload);
+      const res = await saveJobExpensesApi(token, checklist.id, payload);
+      const updated = res.expenses || [];
+      setSavedExpenses(updated);
+      setDeletedIds([]);
 
-      setSuccessMsg(
-        isDraft
-          ? 'Draft expenses saved successfully!'
-          : 'Technician expenses recorded successfully!'
-      );
-
-      // Refresh loaded expenses
-      if (result.summary) {
-        setExistingExpenses(result.summary.expenses || []);
-        setJobTotal(result.summary.job_total || 0);
-        setDraftTotal(result.summary.draft_total || 0);
-        setDraftCount(result.summary.draft_count || 0);
-        setMonthlyTotal(result.summary.technician_monthly_total || monthlyTotal);
+      // Update entry IDs to match persisted IDs
+      if (updated.length > 0) {
+        setEntries(
+          updated.map((item) => ({
+            id: item.id,
+            expense_date: item.expense_date || new Date().toISOString().split('T')[0],
+            category: item.category || 'Travel',
+            description: item.description || '',
+            amount: String(item.amount || ''),
+            payment_method: item.payment_method || 'Cash',
+            notes: item.notes || '',
+          }))
+        );
       }
 
-      if (!isDraft) {
-        // Clear new form if fully recorded
-        setNewEntries([]);
-      }
-
-      if (onSuccess) {
-        onSuccess(result);
-      }
+      setSuccessMsg('Expenses saved successfully! You can now download or print your PDF report.');
+      if (onSuccess) onSuccess(res);
     } catch (err) {
       console.error('Failed to save expenses:', err);
-      setError(err.message || 'Failed to record expenses');
+      setError(err.message || 'Failed to save expenses');
     } finally {
-      setSubmitting(false);
+      setSaving(false);
     }
   };
 
-  // Sum of currently entered (unsubmitted) rows
-  const currentFormSum = newEntries.reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
+  // Action 3: Download Expense PDF
+  const handleDownloadExpensePdf = async () => {
+    setError('');
+    setSuccessMsg('');
+    setDownloadingPdf(true);
+
+    try {
+      const blob = await downloadJobExpensePdfApi(token, checklist.id, false);
+      const blobUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      const cleanChecklistNo = (checklist.checklist_number || 'job').replace(/[^a-zA-Z0-9-_]/g, '_');
+      link.download = `Expense-Report-${cleanChecklistNo}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(blobUrl);
+
+      setSuccessMsg('Expense report PDF downloaded. Please print this PDF and submit the physical printout manually.');
+    } catch (err) {
+      console.error('Download PDF error:', err);
+      setError(err.message || 'Failed to download expense report PDF');
+    } finally {
+      setDownloadingPdf(false);
+    }
+  };
+
+  // Action 4: Print Expense Report
+  const handlePrintExpenseReport = async () => {
+    setError('');
+    setSuccessMsg('');
+    setPrintingPdf(true);
+
+    try {
+      const blob = await downloadJobExpensePdfApi(token, checklist.id, true);
+      const blobUrl = URL.createObjectURL(blob);
+
+      // Open new window for print preview
+      const printWindow = window.open(blobUrl, '_blank');
+      if (printWindow) {
+        printWindow.focus();
+      } else {
+        // Fallback using invisible iframe if popup blocker is active
+        const iframe = document.createElement('iframe');
+        iframe.style.position = 'fixed';
+        iframe.style.right = '0';
+        iframe.style.bottom = '0';
+        iframe.style.width = '0';
+        iframe.style.height = '0';
+        iframe.style.border = '0';
+        iframe.src = blobUrl;
+        document.body.appendChild(iframe);
+        iframe.onload = () => {
+          setTimeout(() => {
+            iframe.contentWindow?.focus();
+            iframe.contentWindow?.print();
+          }, 300);
+        };
+      }
+      setSuccessMsg('Print preview opened. Please print and submit the physical copy to Accounts.');
+    } catch (err) {
+      console.error('Print PDF error:', err);
+      setError(err.message || 'Failed to open print preview for expense report');
+    } finally {
+      setPrintingPdf(false);
+    }
+  };
+
+  // Calculate total expense amount
+  const totalAmount = entries.reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
+  const hasSavedRecords = savedExpenses.length > 0;
 
   return (
     <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
       <div className="bg-white rounded-2xl max-w-3xl w-full p-6 shadow-2xl space-y-4 my-8 max-h-[92vh] overflow-y-auto border border-gray-100">
-        {/* Header with Workflow Step Breadcrumb */}
+        
+        {/* Header with Title and Close Button */}
         <div className="flex items-start justify-between border-b border-gray-100 pb-3">
           <div>
             <div className="flex items-center gap-2">
               <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 flex items-center gap-1">
-                <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Step 1: Report Submitted
+                <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Post-Installation Report Completed
               </span>
               <span className="text-gray-300">→</span>
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-purple-600 text-white uppercase tracking-wider">
-                Step 2: Technician Expenses
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-purple-700 text-white uppercase tracking-wider">
+                Technician Expenses
               </span>
             </div>
             <h3 className="text-lg font-bold text-gray-900 mt-1 flex items-center gap-2">
-              <Receipt className="w-5 h-5 text-purple-600" />
-              <span>Record Job Expenses — {checklist.client_name}</span>
+              <Receipt className="w-5 h-5 text-purple-700" />
+              <span>Technician Expenses — Download &amp; Print Only</span>
             </h3>
             <p className="text-xs text-gray-500 mt-0.5">
-              Record-only job travel, fuel, food, toll, and accommodation costs incurred during this installation.
+              Enter travel, fuel, food, toll, accommodation, or parking costs incurred for this job. Save, download as PDF, and print to submit manually on paper.
             </p>
           </div>
 
@@ -312,75 +343,103 @@ export default function TechnicianExpenseModal({
             type="button"
             onClick={onClose}
             className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors cursor-pointer"
+            title="Close"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Read-Only Populated Job Reference */}
+        {/* Read-Only Auto-Populated Information Card */}
         <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 text-xs">
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div>
-              <span className="text-gray-400 block text-[10px] font-semibold uppercase">Checklist No.</span>
-              <span className="font-mono font-bold text-purple-700">{checklist.checklist_number}</span>
+              <span className="text-gray-400 block text-[10px] font-semibold uppercase flex items-center gap-1">
+                <Tag className="w-2.5 h-2.5 text-purple-600" /> Checklist Number
+              </span>
+              <span className="font-mono font-bold text-purple-700 text-xs mt-0.5 block">
+                {checklist.checklist_number}
+              </span>
             </div>
             <div>
-              <span className="text-gray-400 block text-[10px] font-semibold uppercase">Client Name</span>
-              <span className="font-bold text-gray-900 truncate block">{checklist.client_name}</span>
+              <span className="text-gray-400 block text-[10px] font-semibold uppercase flex items-center gap-1">
+                <Building className="w-2.5 h-2.5 text-blue-600" /> Client Name
+              </span>
+              <span className="font-bold text-gray-900 truncate block mt-0.5">
+                {checklist.client_name}
+              </span>
             </div>
             <div>
-              <span className="text-gray-400 block text-[10px] font-semibold uppercase">Service Engineer</span>
-              <span className="font-semibold text-gray-800 truncate block">
+              <span className="text-gray-400 block text-[10px] font-semibold uppercase flex items-center gap-1">
+                <User className="w-2.5 h-2.5 text-emerald-600" /> Service Engineer
+              </span>
+              <span className="font-semibold text-gray-800 truncate block mt-0.5">
                 {checklist.service_engineer || 'Technician'}
               </span>
             </div>
             <div>
-              <span className="text-gray-400 block text-[10px] font-semibold uppercase">Job Location</span>
-              <span className="text-gray-700 truncate block">{checklist.client_location || 'Site Location'}</span>
+              <span className="text-gray-400 block text-[10px] font-semibold uppercase flex items-center gap-1">
+                <MapPin className="w-2.5 h-2.5 text-amber-600" /> Location / Site
+              </span>
+              <span className="text-gray-700 truncate block mt-0.5">
+                {checklist.client_location || 'On-site'}
+              </span>
             </div>
           </div>
         </div>
 
-        {/* Summary Metrics Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <div className="bg-gradient-to-br from-purple-50 to-indigo-50/40 p-3.5 rounded-xl border border-purple-200">
-            <span className="text-[10px] font-bold text-purple-700 uppercase tracking-wider block">
-              This Job Recorded Expenses
-            </span>
-            <span className="text-xl font-black text-purple-950 mt-1 block font-mono">
-              ₹{jobTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-            </span>
-            <span className="text-[10px] text-purple-600 block mt-0.5">
-              Confirmed &amp; recorded for this job
-            </span>
+        {/* Action Toolbar: Add Expense, Save Expenses, Download Expense PDF, Print Expense Report */}
+        <div className="flex flex-wrap items-center justify-between gap-2 p-3 bg-purple-50/70 rounded-xl border border-purple-200">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              id="btn-add-expense"
+              onClick={handleAddExpense}
+              className="px-3 py-1.5 text-xs font-bold text-purple-800 bg-white hover:bg-purple-100 border border-purple-300 rounded-lg transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5 text-purple-700" />
+              <span>Add Expense</span>
+            </button>
+
+            <button
+              type="button"
+              id="btn-save-expenses"
+              onClick={handleSaveExpenses}
+              disabled={saving}
+              className="px-4 py-1.5 text-xs font-bold text-white bg-purple-700 hover:bg-purple-800 rounded-lg transition-all flex items-center gap-1.5 shadow-xs cursor-pointer disabled:opacity-50"
+            >
+              {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+              <span>Save Expenses</span>
+            </button>
           </div>
 
-          <div className="bg-gradient-to-br from-blue-50 to-slate-50 p-3.5 rounded-xl border border-blue-200">
-            <span className="text-[10px] font-bold text-blue-700 uppercase tracking-wider block">
-              Monthly Recorded Total
-            </span>
-            <span className="text-xl font-black text-blue-950 mt-1 block font-mono">
-              ₹{monthlyTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-            </span>
-            <span className="text-[10px] text-blue-600 block mt-0.5">
-              Your submitted total this month
-            </span>
-          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              id="btn-download-expense-pdf"
+              onClick={handleDownloadExpensePdf}
+              disabled={downloadingPdf || !hasSavedRecords}
+              title={!hasSavedRecords ? 'Please click "Save Expenses" first to generate PDF' : 'Download printable A4 Expense Report PDF'}
+              className="px-3.5 py-1.5 text-xs font-bold text-indigo-700 bg-white hover:bg-indigo-50 border border-indigo-200 rounded-lg transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {downloadingPdf ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5 text-indigo-600" />}
+              <span>Download Expense PDF</span>
+            </button>
 
-          <div className="bg-gradient-to-br from-amber-50 to-slate-50 p-3.5 rounded-xl border border-amber-200">
-            <span className="text-[10px] font-bold text-amber-700 uppercase tracking-wider block">
-              Drafts Saved
-            </span>
-            <span className="text-xl font-black text-amber-950 mt-1 block font-mono">
-              {draftCount} Entry(ies)
-            </span>
-            <span className="text-[10px] text-amber-600 block mt-0.5">
-              Drafts excluded from submitted totals
-            </span>
+            <button
+              type="button"
+              id="btn-print-expense-report"
+              onClick={handlePrintExpenseReport}
+              disabled={printingPdf || !hasSavedRecords}
+              title={!hasSavedRecords ? 'Please click "Save Expenses" first to print report' : 'Print Expense Report for physical paper submission'}
+              className="px-3.5 py-1.5 text-xs font-bold text-slate-800 bg-white hover:bg-slate-100 border border-slate-300 rounded-lg transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {printingPdf ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Printer className="w-3.5 h-3.5 text-slate-700" />}
+              <span>Print Expense Report</span>
+            </button>
           </div>
         </div>
 
-        {/* Alerts */}
+        {/* Notification Alerts */}
         {error && (
           <div className="p-3 bg-rose-50 text-rose-800 border border-rose-200 rounded-xl text-xs flex items-center gap-2">
             <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
@@ -395,143 +454,53 @@ export default function TechnicianExpenseModal({
           </div>
         )}
 
-        {/* Previously Recorded Expenses (Audit Trail) */}
-        {existingExpenses.length > 0 && (
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <h4 className="text-xs font-bold text-gray-800 flex items-center gap-1.5">
-                <FileCheck className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Previously Recorded Expenses for this Job ({existingExpenses.length})</span>
-              </h4>
-              <span className="text-[11px] text-gray-500 font-mono">
-                Total: ₹{jobTotal.toFixed(2)}
-              </span>
-            </div>
-
-            <div className="border border-gray-200 rounded-xl overflow-x-auto max-h-48 overflow-y-auto">
-              <table className="w-full text-left border-collapse text-xs">
-                <thead className="bg-gray-50 border-b border-gray-200 text-[10px] font-bold text-gray-600 uppercase sticky top-0">
-                  <tr>
-                    <th className="py-2 px-3">Date</th>
-                    <th className="py-2 px-3">Category</th>
-                    <th className="py-2 px-3">Description</th>
-                    <th className="py-2 px-3 text-right">Amount (₹)</th>
-                    <th className="py-2 px-3 text-center">Payment</th>
-                    <th className="py-2 px-3 text-center">Status</th>
-                    <th className="py-2 px-3 text-center">Receipt</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {existingExpenses.map((exp) => (
-                    <tr key={exp.id} className="hover:bg-gray-50/60">
-                      <td className="py-2 px-3 font-mono text-[11px] text-gray-600 whitespace-nowrap">
-                        {exp.expense_date}
-                      </td>
-                      <td className="py-2 px-3">
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200">
-                          {exp.category}
-                        </span>
-                      </td>
-                      <td className="py-2 px-3 font-medium text-gray-900 max-w-xs truncate">
-                        {exp.description}
-                        {exp.notes && (
-                          <span className="block text-[10px] text-gray-400 font-normal">
-                            Note: {exp.notes}
-                          </span>
-                        )}
-                      </td>
-                      <td className="py-2 px-3 text-right font-mono font-bold text-gray-900">
-                        ₹{parseFloat(exp.amount).toFixed(2)}
-                      </td>
-                      <td className="py-2 px-3 text-center text-[10px] text-gray-600">
-                        {exp.payment_method}
-                      </td>
-                      <td className="py-2 px-3 text-center">
-                        <span
-                          className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                            exp.status === 'Recorded'
-                              ? 'bg-emerald-100 text-emerald-800'
-                              : 'bg-amber-100 text-amber-800'
-                          }`}
-                        >
-                          {exp.status}
-                        </span>
-                      </td>
-                      <td className="py-2 px-3 text-center">
-                        {exp.receipt_url ? (
-                          <a
-                            href={exp.receipt_url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="text-purple-600 hover:text-purple-800 flex items-center justify-center gap-1 font-semibold text-[11px]"
-                          >
-                            <span>View</span>
-                            <ExternalLink className="w-3 h-3" />
-                          </a>
-                        ) : (
-                          <span className="text-gray-400 text-[11px]">—</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
-        {/* Enter New Expense Items Form */}
-        <div className="space-y-3 pt-2 border-t border-gray-100">
+        {/* Expenses Table Form */}
+        <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <div>
-              <h4 className="text-xs font-bold text-gray-800 flex items-center gap-1.5">
-                <Plus className="w-3.5 h-3.5 text-purple-600" />
-                <span>Add Expense Entries</span>
-              </h4>
-              <span className="text-[11px] text-gray-500">
-                Enter all expenses incurred during this installation job.
-              </span>
-            </div>
-            <button
-              type="button"
-              onClick={handleAddEntry}
-              className="px-3 py-1.5 text-xs font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>Add Another Expense</span>
-            </button>
+            <h4 className="text-xs font-bold text-gray-800 flex items-center gap-1.5">
+              <FileCheck className="w-3.5 h-3.5 text-purple-700" />
+              <span>Expense Entries ({entries.length})</span>
+            </h4>
+            <span className="text-xs font-mono font-bold text-purple-900 bg-purple-100 px-2.5 py-0.5 rounded-full border border-purple-200">
+              Total: ₹{totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </span>
           </div>
 
-          {newEntries.length === 0 ? (
-            <div className="p-6 text-center border-2 border-dashed border-gray-200 rounded-xl space-y-2">
+          {loading ? (
+            <div className="p-8 text-center text-gray-500 space-y-2">
+              <Loader2 className="w-6 h-6 animate-spin text-purple-600 mx-auto" />
+              <p className="text-xs">Loading saved expenses...</p>
+            </div>
+          ) : entries.length === 0 ? (
+            <div className="p-8 text-center border-2 border-dashed border-gray-200 rounded-xl space-y-2">
               <Receipt className="w-8 h-8 text-gray-300 mx-auto" />
-              <p className="text-xs text-gray-500 font-medium">No new expense entries in this batch.</p>
+              <p className="text-xs text-gray-500 font-medium">No expenses entered yet.</p>
               <button
                 type="button"
-                onClick={handleAddEntry}
+                onClick={handleAddExpense}
                 className="px-3 py-1.5 text-xs font-bold text-white bg-purple-700 hover:bg-purple-800 rounded-lg cursor-pointer"
               >
-                + Add Expense Entry
+                + Add Expense
               </button>
             </div>
           ) : (
             <div className="space-y-3">
-              {newEntries.map((entry, index) => (
+              {entries.map((entry, index) => (
                 <div
                   key={entry.id || index}
-                  className="p-3.5 bg-gray-50/80 rounded-xl border border-gray-200 space-y-3 text-xs"
+                  className="p-3.5 bg-gray-50/80 rounded-xl border border-gray-200 space-y-2.5 text-xs shadow-2xs hover:border-gray-300 transition-colors"
                 >
                   <div className="flex items-center justify-between pb-1.5 border-b border-gray-200/60">
                     <span className="font-bold text-gray-700 flex items-center gap-1 text-[11px]">
-                      <Tag className="w-3.5 h-3.5 text-purple-600" />
+                      <Tag className="w-3 h-3 text-purple-600" />
                       <span>Expense #{index + 1}</span>
                     </span>
-                    {newEntries.length > 1 && (
+                    {entries.length > 1 && (
                       <button
                         type="button"
                         onClick={() => handleRemoveEntry(index)}
                         className="text-rose-600 hover:text-rose-800 flex items-center gap-1 text-[11px] cursor-pointer"
-                        title="Remove this expense row"
+                        title="Remove this expense"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                         <span>Remove</span>
@@ -539,7 +508,7 @@ export default function TechnicianExpenseModal({
                     )}
                   </div>
 
-                  {/* Grid 1: Date, Category, Amount, Payment Method */}
+                  {/* Row 1: Date, Category, Amount in ₹, Payment Method */}
                   <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5">
                     <div>
                       <label className="block text-[10px] font-bold text-gray-600 uppercase mb-1">
@@ -580,7 +549,7 @@ export default function TechnicianExpenseModal({
                         min="0.01"
                         step="0.01"
                         required
-                        placeholder="e.g. 350.00"
+                        placeholder="e.g. 450.00"
                         value={entry.amount}
                         onChange={(e) => handleEntryChange(index, 'amount', e.target.value)}
                         className="w-full p-2 bg-white border border-gray-200 rounded-lg font-mono font-bold text-gray-900 focus:outline-none focus:border-purple-500"
@@ -605,7 +574,7 @@ export default function TechnicianExpenseModal({
                     </div>
                   </div>
 
-                  {/* Grid 2: Description & Optional Notes */}
+                  {/* Row 2: Description and Optional Notes */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                     <div>
                       <label className="block text-[10px] font-bold text-gray-600 uppercase mb-1">
@@ -614,7 +583,7 @@ export default function TechnicianExpenseModal({
                       <input
                         type="text"
                         required
-                        placeholder="e.g. Diesel fuel for service vehicle / Highway toll"
+                        placeholder="e.g. Bus fare to customer depot / Fuel for vehicle"
                         value={entry.description}
                         onChange={(e) => handleEntryChange(index, 'description', e.target.value)}
                         className="w-full p-2 bg-white border border-gray-200 rounded-lg font-medium text-gray-800 focus:outline-none focus:border-purple-500"
@@ -627,114 +596,79 @@ export default function TechnicianExpenseModal({
                       </label>
                       <input
                         type="text"
-                        placeholder="e.g. Toll plaza receipt #44091"
+                        placeholder="e.g. Bill #1029 attach with paper submission"
                         value={entry.notes}
                         onChange={(e) => handleEntryChange(index, 'notes', e.target.value)}
                         className="w-full p-2 bg-white border border-gray-200 rounded-lg text-gray-700 focus:outline-none focus:border-purple-500"
                       />
                     </div>
                   </div>
-
-                  {/* Receipt Upload Row */}
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-1 border-t border-gray-200/50">
-                    <div className="flex items-center gap-2">
-                      <label className="px-2.5 py-1 text-[11px] font-semibold text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 flex items-center gap-1.5 cursor-pointer">
-                        <Upload className="w-3 h-3 text-purple-600" />
-                        <span>{entry.receipt_filename ? 'Replace Receipt' : 'Upload Receipt (Photo/PDF)'}</span>
-                        <input
-                          type="file"
-                          accept="image/jpeg,image/png,image/webp,application/pdf"
-                          className="hidden"
-                          onChange={(e) => handleReceiptUpload(index, e.target.files[0])}
-                        />
-                      </label>
-
-                      {entry.uploading && (
-                        <span className="text-[11px] text-purple-600 flex items-center gap-1">
-                          <Loader2 className="w-3 h-3 animate-spin" /> Uploading...
-                        </span>
-                      )}
-
-                      {entry.receipt_filename && !entry.uploading && (
-                        <div className="flex items-center gap-1 text-[11px] text-emerald-700 font-medium bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                          <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                          <span className="max-w-[180px] truncate">{entry.receipt_filename}</span>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              handleEntryChange(index, 'receipt_url', '');
-                              handleEntryChange(index, 'receipt_filename', '');
-                            }}
-                            className="text-gray-400 hover:text-gray-600 ml-1"
-                          >
-                            ×
-                          </button>
-                        </div>
-                      )}
-                    </div>
-
-                    <span className="text-[10px] text-gray-400">
-                      Receipt photo or PDF (max 10MB)
-                    </span>
-                  </div>
                 </div>
               ))}
             </div>
           )}
-
-          {/* New Entries Subtotal Banner */}
-          {newEntries.length > 0 && (
-            <div className="p-3 bg-purple-50/60 rounded-xl border border-purple-200/80 flex items-center justify-between text-xs">
-              <span className="font-bold text-purple-900">
-                New Expenses in this Submission ({newEntries.length} entries):
-              </span>
-              <span className="font-mono font-black text-purple-900 text-sm">
-                ₹{currentFormSum.toFixed(2)}
-              </span>
-            </div>
-          )}
         </div>
 
-        {/* Modal Actions Footer */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-gray-100">
-          <div className="text-[11px] text-gray-500">
-            <span>Expenses are recorded against </span>
-            <strong className="text-gray-800">{checklist.checklist_number}</strong>.
+        {/* Total Summary Footer & Physical Submission Instructions */}
+        <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+          <div>
+            <span className="font-bold text-slate-800 block">Physical Submission Notice:</span>
+            <span className="text-[11px] text-slate-500">
+              There is no multi-user approval process. After saving, download and print the A4 PDF to physically submit it with your original bills to the office.
+            </span>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="text-right shrink-0">
+            <span className="text-[10px] font-semibold text-gray-400 uppercase block">Total Expenses</span>
+            <span className="text-base font-black font-mono text-purple-900">
+              ₹{totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </span>
+          </div>
+        </div>
+
+        {/* Modal Bottom Action Controls */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-gray-100">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-100 rounded-xl transition-colors cursor-pointer"
+          >
+            Close
+          </button>
+
+          <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
-              onClick={onClose}
-              disabled={submitting}
-              className="px-4 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-100 rounded-xl transition-colors cursor-pointer"
-            >
-              Enter Later / Close
-            </button>
-
-            {newEntries.length > 0 && (
-              <button
-                type="button"
-                onClick={() => handleSaveExpenses(true)}
-                disabled={submitting}
-                className="px-4 py-2 text-xs font-bold text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-300 rounded-xl transition-all cursor-pointer disabled:opacity-50 flex items-center gap-1.5 shadow-2xs"
-              >
-                {submitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
-                <span>Save Draft</span>
-              </button>
-            )}
-
-            <button
-              type="button"
-              onClick={() => handleSaveExpenses(false)}
-              disabled={submitting || newEntries.length === 0}
+              onClick={handleSaveExpenses}
+              disabled={saving}
               className="px-5 py-2 text-xs font-bold text-white bg-purple-700 hover:bg-purple-800 rounded-xl transition-all cursor-pointer disabled:opacity-50 flex items-center gap-1.5 shadow-xs"
             >
-              {submitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Receipt className="w-3.5 h-3.5" />}
-              <span>Submit Expenses (Recorded)</span>
+              {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+              <span>Save Expenses</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleDownloadExpensePdf}
+              disabled={downloadingPdf || !hasSavedRecords}
+              className="px-4 py-2 text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-xl transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5"
+            >
+              {downloadingPdf ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+              <span>Download Expense PDF</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handlePrintExpenseReport}
+              disabled={printingPdf || !hasSavedRecords}
+              className="px-4 py-2 text-xs font-bold text-gray-800 bg-gray-100 hover:bg-gray-200 border border-gray-300 rounded-xl transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5"
+            >
+              {printingPdf ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Printer className="w-3.5 h-3.5" />}
+              <span>Print Expense Report</span>
             </button>
           </div>
         </div>
+
       </div>
     </div>
   );
