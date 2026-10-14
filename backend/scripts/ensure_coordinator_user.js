@@ -41,12 +41,8 @@ export async function ensureCoordinatorAccount() {
       },
     });
   } else {
-    // Determine secure password
-    let password = process.env.COORDINATOR_ACCOUNT_PASSWORD;
-    if (!password) {
-      // Generate secure 20-char random password
-      const randomStr = crypto.randomBytes(12).toString('base64url');
-      password = `${randomStr}#Coord2026!`;
+    // Determine password
+    let password = process.env.COORDINATOR_ACCOUNT_PASSWORD || 'booking@2026';
 
       // Persist securely to backend/.env (gitignored)
       try {
