@@ -37,11 +37,11 @@ async function runTestSuite() {
 
   try {
     // -------------------------------------------------------------
-    // SCENARIO 0: Verify 5 Main Service Engineers configuration
+    // SCENARIO 0: Verify 4 Authorized Service Engineers configuration
     // -------------------------------------------------------------
-    console.log('🔍 SCENARIO 0: Verify the 5 Main Service Engineers configuration...');
+    console.log('🔍 SCENARIO 0: Verify the 4 Authorized Service Engineers configuration...');
     const engineers = await getAllServiceEngineers();
-    const expectedNames = ['Mathi', 'Kamalesh', 'Dhinagaran', 'Sakthivel', 'Mithun'];
+    const expectedNames = ['Mathi', 'Guna', 'Sakthivel', 'Kamalesh'];
     const foundNames = engineers.map((e) => e.name);
     console.log('Configured Engineers:', foundNames);
     for (const name of expectedNames) {
@@ -49,7 +49,7 @@ async function runTestSuite() {
         throw new Error(`Main engineer ${name} is missing from configured engineers!`);
       }
     }
-    console.log('✅ Scenario 0: All 5 main service engineers exist with stable IDs.\n');
+    console.log('✅ Scenario 0: All 4 authorized service engineers exist with stable IDs.\n');
 
     // -------------------------------------------------------------
     // SCENARIO 1: One engineer assigned to a two-day job
@@ -121,7 +121,6 @@ async function runTestSuite() {
         expected_arrival_time: '09:00',
         installation_or_service: 'Installation',
         service_engineer: 'Mathi', // Overlaps on 2026-10-13
-        service_assistant: 'Dhinagaran',
         installation_status: 'Assigned',
         payment_status: 'Pending',
       });
@@ -241,7 +240,7 @@ async function runTestSuite() {
     // SCENARIO 6: Engineer reassignment and cancellation
     // -------------------------------------------------------------
     console.log('📋 SCENARIO 6: Engineer reassignment and cancellation...');
-    // 1. Assign Dhinagaran for 2026-10-25
+    // 1. Assign Guna for 2026-10-25
     const job6 = await createChecklist(DUMMY_USER_ID, {
       client_name: 'Test Client Delta (Scenario 6)',
       client_mobile: '9840111004',
@@ -256,35 +255,34 @@ async function runTestSuite() {
       expected_arrival_date: '2026-10-25',
       expected_arrival_time: '11:00',
       installation_or_service: 'Installation',
-      service_engineer: 'Dhinagaran',
-      service_assistant: 'Mithun',
+      service_engineer: 'Guna',
       installation_status: 'Assigned',
       payment_status: 'Pending',
     });
     createdChecklists.push(job6.id);
 
-    // Dhinagaran should be booked for 2026-10-25
-    let dhinaCheck = await checkEngineerAvailability({
-      engineerIdOrName: 'Dhinagaran',
+    // Guna should be booked for 2026-10-25
+    let gunaCheck = await checkEngineerAvailability({
+      engineerIdOrName: 'Guna',
       startDate: '2026-10-25',
       endDate: '2026-10-25',
     });
-    if (dhinaCheck.available) throw new Error('Dhinagaran should be booked before reassignment!');
+    if (gunaCheck.available) throw new Error('Guna should be booked before reassignment!');
 
     // 2. Reassign job6 to Sakthivel
-    console.log('Reassigning Job 6 from Dhinagaran to Sakthivel...');
+    console.log('Reassigning Job 6 from Guna to Sakthivel...');
     await updateChecklist(job6.id, {
       ...job6,
       service_engineer: 'Sakthivel',
     });
 
-    // Now Dhinagaran must be released (available) and Sakthivel must be booked
-    dhinaCheck = await checkEngineerAvailability({
-      engineerIdOrName: 'Dhinagaran',
+    // Now Guna must be released (available) and Sakthivel must be booked
+    gunaCheck = await checkEngineerAvailability({
+      engineerIdOrName: 'Guna',
       startDate: '2026-10-25',
       endDate: '2026-10-25',
     });
-    if (!dhinaCheck.available) throw new Error('Dhinagaran should have been released after reassignment!');
+    if (!gunaCheck.available) throw new Error('Guna should have been released after reassignment!');
 
     const sakthiCheck = await checkEngineerAvailability({
       engineerIdOrName: 'Sakthivel',
@@ -367,8 +365,8 @@ async function runTestSuite() {
     });
 
     console.log(`Calendar returned ${calendar.schedule?.length} engineers, range: ${calendar.start_date} to ${calendar.end_date}`);
-    if (!calendar.schedule || calendar.schedule.length < 5) {
-      throw new Error(`Calendar should contain at least 5 engineers, got ${calendar.schedule?.length}`);
+    if (!calendar.schedule || calendar.schedule.length < 4) {
+      throw new Error(`Calendar should contain 4 authorized engineers, got ${calendar.schedule?.length}`);
     }
 
     console.log('Engineers in calendar:', calendar.schedule.map((e) => `${e.engineer.name} (${e.total_booked_days} booked days)`).join(', '));

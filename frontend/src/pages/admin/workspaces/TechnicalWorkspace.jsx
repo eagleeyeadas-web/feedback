@@ -157,7 +157,6 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
         (item.client_name || '').toLowerCase().includes(s) ||
         (item.checklist_number || '').toLowerCase().includes(s) ||
         (item.service_engineer || '').toLowerCase().includes(s) ||
-        (item.service_assistant || '').toLowerCase().includes(s) ||
         (item.client_location || '').toLowerCase().includes(s);
     }
 
@@ -517,10 +516,7 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
                         {/* Assigned Team */}
                         <td className="py-3 px-4 text-gray-700">
                           <div>
-                            <strong className="text-gray-900">Eng:</strong> {item.service_engineer || 'Unassigned'}
-                          </div>
-                          <div className="text-[10px] text-gray-500">
-                            <strong>Asst:</strong> {item.service_assistant || 'Unassigned'}
+                            <strong className="text-gray-900">Engineer:</strong> {item.service_engineer || 'Unassigned'}
                           </div>
                           <div className="text-[10px] text-indigo-700 font-semibold mt-0.5">
                             <strong>Sales:</strong> {item.salesperson_name || '—'}
@@ -741,10 +737,7 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
                         {/* Assigned Team */}
                         <td className="py-3 px-4 text-gray-700">
                           <div>
-                            <strong className="text-gray-900">Eng:</strong> {item.service_engineer || 'Unassigned'}
-                          </div>
-                          <div className="text-[10px] text-gray-500">
-                            <strong>Asst:</strong> {item.service_assistant || 'Unassigned'}
+                            <strong className="text-gray-900">Engineer:</strong> {item.service_engineer || 'Unassigned'}
                           </div>
                           <div className="text-[10px] text-indigo-700 font-semibold mt-0.5">
                             <strong>Sales:</strong> {item.salesperson_name || '—'}

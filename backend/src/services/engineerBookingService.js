@@ -9,8 +9,15 @@ const __dirname = path.dirname(__filename);
 const STORAGE_FILE = path.resolve(__dirname, '../data/engineer_bookings_storage.json');
 
 /**
- * 1. THE FIVE MAIN SERVICE ENGINEERS (Deterministic, Stable UUIDs)
+ * 1. THE FOUR AUTHORIZED SERVICE ENGINEERS (Exact names & deterministic UUIDs)
  */
+export const SERVICE_ENGINEER_OPTIONS = [
+  'Mathi',
+  'Guna',
+  'Sakthivel',
+  'Kamalesh',
+];
+
 export const MAIN_SERVICE_ENGINEERS = [
   {
     id: 'e1000000-0000-0000-0000-000000000001',
@@ -20,32 +27,25 @@ export const MAIN_SERVICE_ENGINEERS = [
     email: 'mathi@eagleeyesafdrive.com',
   },
   {
-    id: 'e1000000-0000-0000-0000-000000000002',
-    name: 'Kamalesh',
+    id: 'e1000000-0000-0000-0000-000000000006',
+    name: 'Guna',
     role: 'Service Engineer',
     phone: '+91 98401 11002',
-    email: 'kamalesh@eagleeyesafdrive.com',
-  },
-  {
-    id: 'e1000000-0000-0000-0000-000000000003',
-    name: 'Dhinagaran',
-    role: 'Service Engineer',
-    phone: '+91 98401 11003',
-    email: 'dhinagaran@eagleeyesafdrive.com',
+    email: 'guna@eagleeyesafdrive.com',
   },
   {
     id: 'e1000000-0000-0000-0000-000000000004',
     name: 'Sakthivel',
     role: 'Service Engineer',
-    phone: '+91 98401 11004',
+    phone: '+91 98401 11003',
     email: 'sakthivel@eagleeyesafdrive.com',
   },
   {
-    id: 'e1000000-0000-0000-0000-000000000005',
-    name: 'Mithun',
+    id: 'e1000000-0000-0000-0000-000000000002',
+    name: 'Kamalesh',
     role: 'Service Engineer',
-    phone: '+91 98401 11005',
-    email: 'mithun@eagleeyesafdrive.com',
+    phone: '+91 98401 11004',
+    email: 'kamalesh@eagleeyesafdrive.com',
   },
 ];
 
@@ -187,38 +187,29 @@ export function resolveEngineer(idOrName) {
 }
 
 /**
- * Fetch all configured service engineers (ensuring the 5 main engineers are present)
+ * Fetch all configured service engineers (strictly restricted to the four authorized engineers)
  */
 export async function getAllServiceEngineers() {
   const map = new Map();
 
-  // 1. Seed the 5 main engineers first
+  // 1. Seed the 4 authorized main engineers
   MAIN_SERVICE_ENGINEERS.forEach((eng) => {
-    map.set(eng.id, { ...eng });
+    map.set(eng.name.toLowerCase(), { ...eng });
   });
 
-  // 2. Query database service_engineers table if present
+  // 2. Query database service_engineers table if present (only matching the 4 authorized names)
   try {
     const { data: dbEngineers, error } = await supabase
       .from('service_engineers')
       .select('*')
+      .in('name', SERVICE_ENGINEER_OPTIONS)
       .eq('is_active', true);
 
     if (!error && Array.isArray(dbEngineers)) {
       dbEngineers.forEach((dbE) => {
-        const existing = Array.from(map.values()).find(
-          (m) => m.name.toLowerCase() === dbE.name.toLowerCase() || m.id === dbE.id
-        );
-        if (existing) {
-          map.set(existing.id, { ...existing, ...dbE });
-        } else {
-          map.set(dbE.id, {
-            id: dbE.id,
-            name: dbE.name,
-            role: dbE.role || 'Service Engineer',
-            email: dbE.email || '',
-            phone: dbE.phone || '',
-          });
+        const key = dbE.name.toLowerCase();
+        if (map.has(key)) {
+          map.set(key, { ...map.get(key), ...dbE });
         }
       });
     }
@@ -226,36 +217,8 @@ export async function getAllServiceEngineers() {
     // Database table might not be migrated yet
   }
 
-  // 3. Check admin_users with TECHNICAL role
-  try {
-    const { data: adminUsers, error } = await supabase
-      .from('admin_users')
-      .select('id, full_name, email, role')
-      .in('role', ['TECHNICAL', 'admin', 'super_admin']);
-
-    if (!error && Array.isArray(adminUsers)) {
-      adminUsers.forEach((u) => {
-        const name = u.full_name || u.email;
-        if (name) {
-          const match = Array.from(map.values()).find(
-            (m) => m.name.toLowerCase() === name.toLowerCase()
-          );
-          if (!match && !['System Admin', 'Eagle Eye Admin', 'Sales Executive', 'Store Manager'].includes(name)) {
-            map.set(u.id, {
-              id: u.id,
-              name,
-              role: u.role || 'TECHNICAL',
-              email: u.email || '',
-            });
-          }
-        }
-      });
-    }
-  } catch (err) {
-    // Non-blocking
-  }
-
-  return Array.from(map.values());
+  // Return exactly the 4 authorized engineers in the required order: Mathi, Guna, Sakthivel, Kamalesh
+  return SERVICE_ENGINEER_OPTIONS.map((name) => map.get(name.toLowerCase())).filter(Boolean);
 }
 
 /**

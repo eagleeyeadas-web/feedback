@@ -77,6 +77,13 @@ export const SALESPERSON_OPTIONS = [
   'Padmapriya',
 ];
 
+export const SERVICE_ENGINEER_OPTIONS = [
+  'Mathi',
+  'Guna',
+  'Sakthivel',
+  'Kamalesh',
+];
+
 const indianMobileRegex = /^[6-9]\d{9}$/;
 
 export const deviceConfigItemSchema = z.object({
@@ -129,10 +136,12 @@ export const checklistValidationSchema = z.object({
   installation_or_service: z.enum(['Installation', 'Service'], {
     errorMap: () => ({ message: 'Installation or Service selection is required' }),
   }),
-  service_engineer: z.string().min(1, 'Team Member 1 – Service Engineer is required'),
+  service_engineer: z.enum(SERVICE_ENGINEER_OPTIONS, {
+    errorMap: () => ({ message: 'Service Engineer is required. Please select one of: Mathi, Guna, Sakthivel, or Kamalesh.' }),
+  }),
   service_engineer_id: z.string().nullable().optional(),
   booking_end_date: z.string().nullable().optional(),
-  service_assistant: z.string().min(1, 'Team Member 2 – Service Assistant is required'),
+  service_assistant: z.string().nullable().optional().default(''),
   installation_status: z.enum(['Assigned', 'Completed'], {
     errorMap: () => ({ message: 'Installation Status must be either Assigned or Completed' }),
   }).default('Assigned'),
@@ -199,6 +208,14 @@ router.get('/stats', requireRole('ADMIN', 'SALES', 'TECHNICAL', 'STORE_MANAGER')
     console.error('Error fetching installation stats:', err);
     return res.status(500).json({ error: 'Failed to fetch installation statistics' });
   }
+});
+
+/**
+ * GET /api/admin/installations/service-engineers
+ * Dropdown options for authorized Service Engineers
+ */
+router.get('/service-engineers', requireRole('ADMIN', 'SALES', 'TECHNICAL', 'STORE_MANAGER'), (req, res) => {
+  return res.json(SERVICE_ENGINEER_OPTIONS);
 });
 
 /**

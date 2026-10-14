@@ -805,20 +805,16 @@ export default function InstallationChecklistDetails({ id: propId, onEdit, onBac
         <div className="space-y-3">
           <h3 className="text-xs font-black text-navy uppercase tracking-wider pb-1 border-b border-gray-200 flex items-center gap-2">
             <Users size={15} className="text-blue-600" />
-            5. INSTALLATION TEAM
+            5. ASSIGNED PERSONNEL
           </h3>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs bg-gray-50/50 p-4 rounded-xl border border-gray-100">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs bg-gray-50/50 p-4 rounded-xl border border-gray-100">
             <div>
               <span className="text-gray-500 block text-[11px]">Salesperson Name</span>
               <span className="font-bold text-navy">{checklist.salesperson_name || '—'}</span>
             </div>
             <div>
-              <span className="text-gray-500 block text-[11px]">Team Member 1 – Service Engineer</span>
+              <span className="text-gray-500 block text-[11px]">Service Engineer</span>
               <span className="font-bold text-gray-900">{checklist.service_engineer || '—'}</span>
-            </div>
-            <div>
-              <span className="text-gray-500 block text-[11px]">Team Member 2 – Service Assistant</span>
-              <span className="font-bold text-gray-900">{checklist.service_assistant || '—'}</span>
             </div>
           </div>
         </div>

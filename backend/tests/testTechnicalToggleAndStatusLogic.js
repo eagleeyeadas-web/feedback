@@ -45,7 +45,6 @@ async function testTechnicalToggleAndStatusLogic() {
         (item.client_name || '').toLowerCase().includes(s) ||
         (item.checklist_number || '').toLowerCase().includes(s) ||
         (item.service_engineer || '').toLowerCase().includes(s) ||
-        (item.service_assistant || '').toLowerCase().includes(s) ||
         (item.client_location || '').toLowerCase().includes(s);
     }
     return matchesEngineer && matchesSearch;

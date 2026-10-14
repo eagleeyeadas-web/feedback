@@ -444,14 +444,13 @@ export async function generateInstallationChecklistPDF(item) {
   y = 22;
   drawCompactHeader(2);
 
-  // SECTION 5 — 5. INSTALLATION TEAM (3 Equal Columns)
-  y = drawSectionHeader(doc, '5. INSTALLATION TEAM', y);
+  // SECTION 5 — 5. ASSIGNED PERSONNEL
+  y = drawSectionHeader(doc, '5. ASSIGNED PERSONNEL', y);
 
   const teamRows = [
     [
       { label: 'Salesperson Name', value: item.salesperson_name || '—', color: COLORS.navy },
-      { label: 'Team Member 1 - Service Engineer', value: item.service_engineer || '—' },
-      { label: 'Team Member 2 - Service Assistant', value: item.service_assistant || '—' },
+      { label: 'Service Engineer', value: item.service_engineer || '—' },
     ],
   ];
 

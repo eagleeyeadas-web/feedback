@@ -417,15 +417,14 @@ export async function generateStoreManagerRequirementPDF(data) {
   // ============================================================
   // 3. ASSIGNED INSTALLATION TEAM & SALESPERSON
   // ============================================================
-  y = drawSectionHeader(doc, '2. ASSIGNED INSTALLATION TEAM & SALESPERSON', 'Personnel responsible for site execution and job creation', y);
+  y = drawSectionHeader(doc, '2. ASSIGNED SERVICE ENGINEER & SALESPERSON', 'Personnel responsible for site execution and job creation', y);
 
   const teamGrid = [
     { label: 'Service Engineer (Technician)', value: data.service_engineer || 'Unassigned' },
-    { label: 'Service Assistant (Team Member 2)', value: data.service_assistant || 'None Assigned' },
     { label: 'Salesperson Name', value: data.salesperson_name || '—', highlight: true },
   ];
 
-  const teamColWidth = CONTENT_WIDTH / 3;
+  const teamColWidth = CONTENT_WIDTH / 2;
   const teamCellH = 11;
 
   teamGrid.forEach((cell, idx) => {

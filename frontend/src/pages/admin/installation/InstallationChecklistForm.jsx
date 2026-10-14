@@ -55,6 +55,13 @@ export const SALESPERSON_OPTIONS = [
   'Padmapriya',
 ];
 
+export const SERVICE_ENGINEER_OPTIONS = [
+  'Mathi',
+  'Guna',
+  'Sakthivel',
+  'Kamalesh',
+];
+
 // Helper to compute inclusive booking end date
 function computeEndDate(startDate, durationStr) {
   if (!startDate) return '';
@@ -123,7 +130,6 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
     expected_arrival_time: '10:00',
     installation_or_service: 'Installation',
     service_engineer: '',
-    service_assistant: '',
     installation_status: 'Assigned',
     payment_status: 'Pending',
     remarks: '',
@@ -245,7 +251,6 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
             expected_arrival_time: data.expected_arrival_time || '',
             installation_or_service: data.installation_or_service || 'Installation',
             service_engineer: data.service_engineer || '',
-            service_assistant: data.service_assistant || '',
             installation_status: safeStatus,
             payment_status: data.payment_status || 'Pending',
             remarks: data.remarks || '',
@@ -492,34 +497,20 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
     if (!formData.expected_arrival_date) return 'Expected Date of Arrival is required';
     if (!formData.expected_arrival_time) return 'Expected Time of Arrival is required';
 
-    if (!formData.service_engineer.trim()) return 'Team Member 1 – Service Engineer is required';
-    if (!formData.service_assistant.trim()) return 'Team Member 2 – Service Assistant is required';
+    if (!formData.service_engineer.trim()) {
+      return 'Service Engineer is required. Please select one of the authorized engineers: Mathi, Guna, Sakthivel, or Kamalesh.';
+    }
+    if (!SERVICE_ENGINEER_OPTIONS.includes(formData.service_engineer.trim())) {
+      return 'Please select a valid Service Engineer: Mathi, Guna, Sakthivel, or Kamalesh.';
+    }
 
-    // 1. Availability validation: check if chosen Service Engineer has a conflicting booking
+    // Availability validation: check if chosen Service Engineer has a conflicting booking
     const selectedEngStatus = engineersAvailability.find(
       (e) => e.name.toLowerCase() === formData.service_engineer.trim().toLowerCase()
     );
     if (selectedEngStatus && !selectedEngStatus.available) {
       const c = selectedEngStatus.conflict;
       return `Booking Conflict: ${formData.service_engineer} is already booked for checklist ${c?.checklist_number || 'another job'} from ${c?.booking_start_date} to ${c?.booking_end_date}. Please select an available engineer.`;
-    }
-
-    // 2. Prevent assigning the same person as both Engineer and Assistant on the same job
-    if (
-      formData.service_engineer &&
-      formData.service_assistant &&
-      formData.service_engineer.trim().toLowerCase() === formData.service_assistant.trim().toLowerCase()
-    ) {
-      return 'Team Member 2 (Service Assistant) cannot be the same person as Team Member 1 (Service Engineer).';
-    }
-
-    // 3. Prevent double-booking assistant if assistant is a managed service engineer
-    const selectedAsstStatus = engineersAvailability.find(
-      (e) => e.name.toLowerCase() === formData.service_assistant.trim().toLowerCase()
-    );
-    if (selectedAsstStatus && !selectedAsstStatus.available) {
-      const c = selectedAsstStatus.conflict;
-      return `Booking Conflict: Assistant ${formData.service_assistant} is already booked for checklist ${c?.checklist_number} from ${c?.booking_start_date} to ${c?.booking_end_date}.`;
     }
 
     if (!formData.installation_status || !INSTALLATION_STATUSES.includes(formData.installation_status)) {
@@ -644,7 +635,7 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
         expected_arrival_time: formData.expected_arrival_time,
         installation_or_service: formData.installation_or_service,
         service_engineer: formData.service_engineer.trim(),
-        service_assistant: formData.service_assistant.trim(),
+        service_assistant: null,
         installation_status: isAuthoritativeCompleted ? 'Completed' : formData.installation_status,
         payment_status: formData.payment_status,
         bom_snapshot: formData.installation_or_service === 'Installation' ? (bomSnapshot || null) : null,
@@ -1511,12 +1502,12 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
           )}
         </div>
 
-        {/* SECTION 10 — 5. INSTALLATION TEAM */}
+        {/* SECTION 10 — 5. SERVICE ENGINEER */}
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4">
           <div className="flex items-center justify-between pb-3 border-b border-gray-100">
             <h3 className="text-sm font-bold text-navy flex items-center gap-2">
               <Users className="text-blue-600" size={18} />
-              5. INSTALLATION TEAM & ENGINEER AVAILABILITY
+              5. SERVICE ENGINEER ASSIGNMENT
             </h3>
             {checkingAvailability && (
               <span className="text-[11px] text-blue-600 animate-pulse font-medium flex items-center gap-1">
@@ -1525,11 +1516,11 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
             )}
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-            {/* Team Member 1 - Service Engineer with Availability-Aware Select */}
+          <div className="space-y-4 max-w-xl">
+            {/* Service Engineer with Availability-Aware Select */}
             <div className="space-y-2">
               <label className="block text-xs font-semibold text-gray-700">
-                Team Member 1 – Service Engineer <span className="text-rose-500">*</span>
+                Service Engineer <span className="text-rose-500">*</span>
               </label>
 
               <select
@@ -1539,62 +1530,55 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
                 className="w-full text-xs p-2.5 border border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 font-semibold bg-white"
               >
                 <option value="">-- Select Service Engineer --</option>
-                {engineersAvailability && engineersAvailability.length > 0 ? (
-                  engineersAvailability.map((eng) => (
+                {SERVICE_ENGINEER_OPTIONS.map((name) => {
+                  const eng = engineersAvailability?.find(
+                    (e) => e.name.toLowerCase() === name.toLowerCase()
+                  );
+                  const isAvailable = eng ? eng.available : true;
+                  return (
                     <option
-                      key={eng.id || eng.name}
-                      value={eng.name}
-                      disabled={!eng.available}
-                      className={eng.available ? 'text-gray-900 font-medium' : 'text-gray-400 bg-gray-50 italic'}
+                      key={name}
+                      value={name}
+                      disabled={!isAvailable}
+                      className={isAvailable ? 'text-gray-900 font-medium' : 'text-gray-400 bg-gray-50 italic'}
                     >
-                      {eng.available
-                        ? `✓ ${eng.name} — Available`
-                        : `🚫 ${eng.name} — Booked (${eng.conflict?.booking_start_date} to ${eng.conflict?.booking_end_date}, Job #${eng.conflict?.checklist_number || 'Reserved'})`}
+                      {isAvailable
+                        ? `✓ ${name} — Available`
+                        : `🚫 ${name} — Booked (${eng?.conflict?.booking_start_date} to ${eng?.conflict?.booking_end_date}, Job #${eng?.conflict?.checklist_number || 'Reserved'})`}
                     </option>
-                  ))
-                ) : (
-                  ['Mathi', 'Kamalesh', 'Dhinagaran', 'Sakthivel', 'Mithun'].map((name) => (
-                    <option key={name} value={name}>
-                      {name}
-                    </option>
-                  ))
-                )}
+                  );
+                })}
               </select>
 
               {/* Quick Select Engineer Chips */}
               <div className="pt-1">
                 <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider block mb-1">
-                  Engineers Availability Status:
+                  Service Engineers Availability Status:
                 </span>
-                <div className="flex flex-wrap gap-1.5">
-                  {(engineersAvailability && engineersAvailability.length > 0
-                    ? engineersAvailability
-                    : [
-                        { name: 'Mathi', available: true },
-                        { name: 'Kamalesh', available: true },
-                        { name: 'Dhinagaran', available: true },
-                        { name: 'Sakthivel', available: true },
-                        { name: 'Mithun', available: true },
-                      ]
-                  ).map((eng) => {
-                    const isSelected = formData.service_engineer.toLowerCase() === eng.name.toLowerCase();
+                <div className="flex flex-wrap gap-2">
+                  {SERVICE_ENGINEER_OPTIONS.map((name) => {
+                    const eng = engineersAvailability?.find(
+                      (e) => e.name.toLowerCase() === name.toLowerCase()
+                    );
+                    const isAvailable = eng ? eng.available : true;
+                    const isSelected = formData.service_engineer.toLowerCase() === name.toLowerCase();
                     return (
                       <button
-                        key={eng.id || eng.name}
+                        key={name}
                         type="button"
-                        disabled={!eng.available}
+                        disabled={!isAvailable}
                         onClick={() => {
-                          if (eng.available) {
-                            handleChange('service_engineer', eng.name);
+                          if (isAvailable) {
+                            handleChange('service_engineer', name);
                           }
                         }}
                         title={
-                          eng.available
-                            ? `${eng.name} is available for this period`
-                            : `${eng.name} is booked for Job #${eng.conflict?.checklist_number || 'Busy'} (${eng.conflict?.booking_start_date} to ${eng.conflict?.booking_end_date})`
+                          isAvailable
+                            ? `${name} is available for this period`
+                            : `${name} is booked for Job #${eng?.conflict?.checklist_number || 'Busy'} (${eng?.conflict?.booking_start_date} to ${eng?.conflict?.booking_end_date})`
                         }
-                        className={`text-[11px] px-2.5 py-1 rounded-lg font-medium border flex items-center gap-1.5 transition-all ${
-                          !eng.available
+                        className={`text-[11px] px-3 py-1.5 rounded-lg font-medium border flex items-center gap-1.5 transition-all ${
+                          !isAvailable
                             ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed opacity-75 line-through'
                             : isSelected
                             ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
@@ -1603,12 +1587,12 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
                       >
                         <span
                           className={`w-2 h-2 rounded-full ${
-                            eng.available ? 'bg-emerald-500' : 'bg-rose-500'
+                            isAvailable ? 'bg-emerald-500' : 'bg-rose-500'
                           }`}
                         />
-                        {eng.name}
+                        {name}
                         <span className="text-[9px] font-bold">
-                          {eng.available ? 'Avail' : 'Booked'}
+                          {isAvailable ? 'Avail' : 'Booked'}
                         </span>
                       </button>
                     );
@@ -1634,80 +1618,6 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
                           <strong>{selectedEng.conflict?.booking_end_date}</strong> ({selectedEng.conflict?.client_name || 'Client'}). Please select an available engineer.
                         </p>
                       </div>
-                    </div>
-                  );
-                }
-                return null;
-              })()}
-            </div>
-
-            {/* Team Member 2 - Service Assistant */}
-            <div className="space-y-2">
-              <label className="block text-xs font-semibold text-gray-700">
-                Team Member 2 – Service Assistant <span className="text-rose-500">*</span>
-              </label>
-
-              <input
-                type="text"
-                required
-                value={formData.service_assistant}
-                onChange={(e) => handleChange('service_assistant', e.target.value)}
-                placeholder="Name of Service Assistant"
-                className="w-full text-xs p-2.5 border border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 font-medium"
-              />
-
-              {/* Quick suggestions for assistant */}
-              <div className="pt-1">
-                <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider block mb-1">
-                  Quick Assistant Suggestions:
-                </span>
-                <div className="flex flex-wrap gap-1.5">
-                  {['Kamalesh', 'Dhinagaran', 'Sakthivel', 'Mithun', 'Mathi'].map((name) => {
-                    const isSelected = formData.service_assistant.toLowerCase() === name.toLowerCase();
-                    const isSameAsEng = formData.service_engineer.toLowerCase() === name.toLowerCase();
-                    return (
-                      <button
-                        key={name}
-                        type="button"
-                        disabled={isSameAsEng}
-                        onClick={() => handleChange('service_assistant', name)}
-                        className={`text-[11px] px-2.5 py-1 rounded-lg font-medium border transition-all ${
-                          isSameAsEng
-                            ? 'bg-gray-100 text-gray-300 border-gray-200 cursor-not-allowed opacity-50'
-                            : isSelected
-                            ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
-                            : 'bg-white text-gray-700 border-gray-200 hover:border-blue-400 hover:bg-blue-50/50'
-                        }`}
-                      >
-                        {name}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Warning if Assistant is the same person as Service Engineer */}
-              {formData.service_engineer &&
-                formData.service_assistant &&
-                formData.service_engineer.trim().toLowerCase() === formData.service_assistant.trim().toLowerCase() && (
-                  <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-xs flex items-center gap-2">
-                    <AlertTriangle size={15} className="text-amber-600 shrink-0" />
-                    <span>Team Member 2 cannot be the same person as Team Member 1.</span>
-                  </div>
-                )}
-
-              {/* Warning if Assistant is booked as engineer */}
-              {(() => {
-                const asstStatus = engineersAvailability?.find(
-                  (e) => e.name.toLowerCase() === (formData.service_assistant || '').trim().toLowerCase()
-                );
-                if (asstStatus && !asstStatus.available && formData.service_assistant.trim().toLowerCase() !== formData.service_engineer.trim().toLowerCase()) {
-                  return (
-                    <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-xs flex items-start gap-2">
-                      <AlertTriangle size={15} className="text-amber-600 shrink-0 mt-0.5" />
-                      <span className="text-[11px]">
-                        Notice: <strong>{asstStatus.name}</strong> has a scheduled booking for Job #{asstStatus.conflict?.checklist_number} ({asstStatus.conflict?.booking_start_date} to {asstStatus.conflict?.booking_end_date}). Double-booking should be avoided.
-                      </span>
                     </div>
                   );
                 }

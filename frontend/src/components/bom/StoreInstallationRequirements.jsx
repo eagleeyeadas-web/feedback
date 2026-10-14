@@ -564,12 +564,6 @@ export default function StoreInstallationRequirements({ token, onSelectChecklist
                         <span className="text-gray-500">Service Engineer: </span>
                         <strong className="text-gray-900">{req.service_engineer || 'Unassigned'}</strong>
                       </div>
-                      {req.service_assistant && (
-                        <div className="text-[11px] text-gray-600">
-                          <span>Assistant: </span>
-                          <strong>{req.service_assistant}</strong>
-                        </div>
-                      )}
                     </div>
                   </div>
 

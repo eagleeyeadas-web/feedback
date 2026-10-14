@@ -90,7 +90,7 @@ export default function EngineerAvailabilityCalendar({ token, onSelectChecklist,
             Service Engineer Availability Calendar
           </h3>
           <p className="text-xs text-gray-500 mt-0.5">
-            Real-time schedule for Mathi, Kamalesh, Dhinagaran, Sakthivel, and Mithun across scheduled installation dates.
+            Real-time schedule for Mathi, Guna, Sakthivel, and Kamalesh across scheduled installation dates.
           </p>
         </div>
 
