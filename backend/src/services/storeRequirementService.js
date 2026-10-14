@@ -8,6 +8,7 @@ import {
   combineCarriedDevicesAllocation,
 } from './bomService.js';
 import { enrichChecklistsWithWorkflowStatus } from './workflowService.js';
+import { getBackupDeclaration } from './backupItemService.js';
 
 // In-memory fallback cache
 const inMemoryStoreRequirements = new Map();
@@ -435,13 +436,13 @@ export async function getStoreMaterialRequirements(params = {}) {
       try {
         const { data, error } = await supabase
           .from('installation_checklists')
-          .select('id, checklist_number, salesperson_name, service_engineer, service_assistant, expected_arrival_date, expected_arrival_time, installation_duration, installation_status, final_bom_snapshot, actual_materials_used, actual_materials_returned, material_return_status')
+          .select('id, checklist_number, salesperson_name, service_engineer, service_assistant, expected_arrival_date, expected_arrival_time, installation_duration, installation_status, final_bom_snapshot, actual_materials_used, actual_materials_returned, material_return_status, carry_extra_backup_items, extra_devices')
           .in('id', allChecklistIds);
         if (!error && Array.isArray(data)) chkRows = data;
       } catch (colErr) {
         const { data } = await supabase
           .from('installation_checklists')
-          .select('id, checklist_number, salesperson_name, service_engineer, service_assistant, expected_arrival_date, expected_arrival_time, installation_duration, installation_status')
+          .select('id, checklist_number, salesperson_name, service_engineer, service_assistant, expected_arrival_date, expected_arrival_time, installation_duration, installation_status, carry_extra_backup_items, extra_devices')
           .in('id', allChecklistIds);
         if (Array.isArray(data)) chkRows = data;
       }
@@ -467,6 +468,7 @@ export async function getStoreMaterialRequirements(params = {}) {
             r.returns = matched.returns || r.returns || null;
             r.material_returns = matched.material_returns || r.material_returns || null;
             r.is_completion_submitted = matched.is_completion_submitted || false;
+            r.carry_extra_backup_items = matched.carry_extra_backup_items !== undefined ? matched.carry_extra_backup_items : matched.extra_devices;
           }
         });
       }
@@ -612,10 +614,13 @@ export async function getStoreMaterialRequirements(params = {}) {
       liveStatus = 'READY_FOR_ISSUANCE';
     }
 
+    const backupDecl = await getBackupDeclaration(rec.checklist_id || rec.id).catch(() => null);
+
     return {
       ...rec,
       device_items: enrichedDevices,
       material_items: enrichedMaterials,
+      backup_declaration: backupDecl,
       has_shortage: liveHasShortage,
       shortage_count: liveShortageCount,
       shortage_details: liveShortageDetails,

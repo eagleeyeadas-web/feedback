@@ -162,34 +162,24 @@ export async function createChecklist(adminUserId, data) {
         ? deviceConfigs.map((c) => `${c.device_type} (${c.number_of_devices})`).join(', ')
         : (data.device_type || '2 Channel Live'));
 
-  const extraConfigs = parseExtraDeviceConfigurations(
-    data.extra_device_configurations || (data.extra_devices ? data : null)
-  );
-  const totalExtraDevices = extraConfigs.reduce((sum, c) => sum + (Number(c.extra_quantity) || 0), 0);
-  const hasExtra = Boolean(data.extra_devices) && extraConfigs.length > 0;
-  const extraTypeSummary = hasExtra
-    ? (extraConfigs.length === 1
-        ? extraConfigs[0].device_type
-        : extraConfigs.map((c) => `${c.device_type} (${c.extra_quantity})`).join(', '))
-    : null;
+  // Sales declaration: Will technician carry extra backup items? (Yes/No)
+  const carryBackupItems = Boolean(data.carry_extra_backup_items ?? data.extra_devices);
 
-  // Calculate preliminary BOM for all devices carried (ONLY for Installation jobs)
-  // Calculates required BOM, extra BOM, and combined preliminary BOM for all devices carried
+  // Calculate preliminary BOM strictly for REQUIRED installation devices (ONLY for Installation jobs)
+  // Extra loose backup items do NOT increase Sales preliminary BOM
   const isInstallationJob = (data.installation_or_service || 'Installation') === 'Installation';
   let bomSnapshot = null;
-  if (isInstallationJob) {
-    if (deviceConfigs.length > 0 || extraConfigs.length > 0) {
-      try {
-        const prelimCalc = await calculateJobPreliminaryBom({
-          requiredConfigs: deviceConfigs,
-          extraConfigs,
-        });
-        if (prelimCalc && prelimCalc.configured) {
-          bomSnapshot = prelimCalc;
-        }
-      } catch (e) {
-        console.warn('Could not auto-calculate preliminary BOM snapshot:', e.message);
+  if (isInstallationJob && deviceConfigs.length > 0) {
+    try {
+      const prelimCalc = await calculateJobPreliminaryBom({
+        requiredConfigs: deviceConfigs,
+        extraConfigs: [], // strictly empty: extra backup items never increase Sales preliminary BOM
+      });
+      if (prelimCalc && prelimCalc.configured) {
+        bomSnapshot = prelimCalc;
       }
+    } catch (e) {
+      console.warn('Could not auto-calculate preliminary BOM snapshot:', e.message);
     }
     if (!bomSnapshot && data.bom_snapshot?.items) {
       bomSnapshot = data.bom_snapshot;
@@ -197,6 +187,8 @@ export async function createChecklist(adminUserId, data) {
   } else {
     bomSnapshot = null;
   }
+
+  const extraConfigs = [];
 
   const payload = {
     checklist_number: checklistNumber,
@@ -209,10 +201,11 @@ export async function createChecklist(adminUserId, data) {
     number_of_devices: totalDevices,
     number_of_vehicles: totalVehicles,
     device_configurations: deviceConfigs,
-    extra_devices: hasExtra,
-    extra_device_type: extraTypeSummary,
-    extra_device_count: hasExtra ? totalExtraDevices : null,
-    extra_device_configurations: hasExtra ? extraConfigs : [],
+    carry_extra_backup_items: carryBackupItems,
+    extra_devices: carryBackupItems, // backward-compatible flag
+    extra_device_type: null,
+    extra_device_count: null,
+    extra_device_configurations: [],
     confirmed_price: confirmedPrice,
     payment_method: data.payment_method || 'UPI',
     advance_received: Boolean(data.advance_received),
@@ -628,37 +621,20 @@ export async function updateChecklist(id, data) {
   // If job type is Installation: maintain or calculate snapshot
   // If job type is Service: ensure no installation BOM snapshot is saved or attached
   let updatedBomSnapshot = null;
-  let extraConfigs = [];
-  if (data.extra_device_configurations !== undefined) {
-    extraConfigs = parseExtraDeviceConfigurations(data.extra_device_configurations);
-  } else if (data.extra_devices !== undefined) {
-    extraConfigs = data.extra_devices ? parseExtraDeviceConfigurations(data) : [];
-  } else {
-    extraConfigs = parseExtraDeviceConfigurations(
-      existing.extra_device_configurations || (existing.extra_devices ? existing : null)
-    );
-  }
-
-  const hasExtra = (data.extra_devices !== undefined ? Boolean(data.extra_devices) : existing.extra_devices) && extraConfigs.length > 0;
-  const totalExtraDevices = extraConfigs.reduce((sum, c) => sum + (Number(c.extra_quantity) || 0), 0);
-  const extraTypeSummary = hasExtra
-    ? (extraConfigs.length === 1
-        ? extraConfigs[0].device_type
-        : extraConfigs.map((c) => `${c.device_type} (${c.extra_quantity})`).join(', '))
-    : null;
+  const carryBackupItems = data.carry_extra_backup_items !== undefined
+    ? Boolean(data.carry_extra_backup_items)
+    : (data.extra_devices !== undefined ? Boolean(data.extra_devices) : Boolean(existing.carry_extra_backup_items ?? existing.extra_devices));
 
   if (isInstallation) {
-    const configsChanged =
-      JSON.stringify(deviceConfigs) !== JSON.stringify(existing.device_configurations) ||
-      JSON.stringify(extraConfigs) !== JSON.stringify(existing.extra_device_configurations);
+    const configsChanged = JSON.stringify(deviceConfigs) !== JSON.stringify(existing.device_configurations);
     updatedBomSnapshot = existing.bom_snapshot;
     if (data.bom_snapshot !== undefined) {
       updatedBomSnapshot = data.bom_snapshot;
-    } else if (configsChanged && (deviceConfigs.length > 0 || extraConfigs.length > 0)) {
+    } else if (configsChanged && deviceConfigs.length > 0) {
       try {
         const prelimCalc = await calculateJobPreliminaryBom({
           requiredConfigs: deviceConfigs,
-          extraConfigs,
+          extraConfigs: [], // strictly empty: extra backup items never increase Sales preliminary BOM
         });
         if (prelimCalc && prelimCalc.configured) {
           updatedBomSnapshot = prelimCalc;
@@ -672,6 +648,8 @@ export async function updateChecklist(id, data) {
     updatedBomSnapshot = null;
   }
 
+  const extraConfigs = [];
+
   const payload = {
     client_name: data.client_name ? data.client_name.trim() : existing.client_name,
     client_mobile: data.client_mobile ? data.client_mobile.trim() : existing.client_mobile,
@@ -681,10 +659,11 @@ export async function updateChecklist(id, data) {
     number_of_devices: totalDevices,
     number_of_vehicles: totalVehicles,
     device_configurations: deviceConfigs.length > 0 ? deviceConfigs : (existing.device_configurations || null),
-    extra_devices: hasExtra,
-    extra_device_type: extraTypeSummary,
-    extra_device_count: hasExtra ? totalExtraDevices : null,
-    extra_device_configurations: hasExtra ? extraConfigs : [],
+    carry_extra_backup_items: carryBackupItems,
+    extra_devices: carryBackupItems, // backward-compatible flag
+    extra_device_type: null,
+    extra_device_count: null,
+    extra_device_configurations: [],
     confirmed_price: confirmedPrice,
     payment_method: data.payment_method || existing.payment_method,
     advance_received: Boolean(data.advance_received),

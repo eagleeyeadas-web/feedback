@@ -19,6 +19,7 @@ import {
   CalendarPlus,
   Coffee,
   History,
+  Package,
 } from 'lucide-react';
 import InstallationCompletionModal from '../../../components/workspaces/InstallationCompletionModal';
 import TechnicianExpenseModal from '../../../components/workspaces/TechnicianExpenseModal';
@@ -26,35 +27,20 @@ import TechnicianScheduleExtensionModal from '../../../components/workspaces/Tec
 import TechnicianRestDayModal from '../../../components/workspaces/TechnicianRestDayModal';
 import TechnicianLeaveModal from '../../../components/workspaces/TechnicianLeaveModal';
 import ScheduleHistoryModal from '../../../components/workspaces/ScheduleHistoryModal';
+import TechnicianBackupDeclarationModal from '../../../components/workspaces/TechnicianBackupDeclarationModal';
 import { fetchInstallationChecklists, fetchServiceEngineers, startInstallationJob } from '../../../lib/api';
 
 // Helper to extract separated required and extra device allocations
 function getDeviceAllocationSummary(item) {
-  if (!item) return { reqConfigs: [], extraConfigs: [], totalReq: 0, totalExtra: 0, totalCarried: 0 };
+  if (!item) return { reqConfigs: [], carryExtra: false, totalReq: 0 };
   const reqConfigs = Array.isArray(item.device_configurations) && item.device_configurations.length > 0
     ? item.device_configurations
     : (item.device_type ? [{ device_type: item.device_type, number_of_devices: item.number_of_devices || 1 }] : []);
 
-  let extraConfigs = [];
-  if (item.extra_devices) {
-    if (Array.isArray(item.extra_device_configurations) && item.extra_device_configurations.length > 0) {
-      extraConfigs = item.extra_device_configurations;
-    } else if (item.extra_device_type) {
-      const parts = String(item.extra_device_type).split(/[,;\n]+/).map((p) => p.trim()).filter(Boolean);
-      extraConfigs = parts.map((p) => {
-        const m = p.match(/\((\d+)/);
-        const q = m ? parseInt(m[1], 10) : (item.extra_device_count || 1);
-        const name = p.replace(/\(.*?\)/g, '').trim();
-        return { device_type: name, extra_quantity: q };
-      });
-    }
-  }
-
+  const carryExtra = Boolean(item.carry_extra_backup_items ?? item.extra_devices);
   const totalReq = reqConfigs.reduce((sum, c) => sum + (Number(c.number_of_devices ?? c.quantity_carried) || 1), 0);
-  const totalExtra = extraConfigs.reduce((sum, c) => sum + (Number(c.extra_quantity ?? c.quantity) || 1), 0);
-  const totalCarried = item.total_devices_carried || (totalReq + totalExtra);
 
-  return { reqConfigs, extraConfigs, totalReq, totalExtra, totalCarried };
+  return { reqConfigs, carryExtra, totalReq };
 }
 
 export default function TechnicalWorkspace({ onSelectChecklist }) {
@@ -83,6 +69,7 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
   const [isRestDayModalOpen, setIsRestDayModalOpen] = useState(false);
   const [isLeaveModalOpen, setIsLeaveModalOpen] = useState(false);
   const [historyModalJob, setHistoryModalJob] = useState(null);
+  const [backupModalJob, setBackupModalJob] = useState(null);
 
   const loadData = useCallback(async () => {
     if (!token) {
@@ -500,21 +487,18 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
                         {/* Devices Carried to Site (Sales Allocation - Read-Only) */}
                         <td className="py-3 px-4">
                           {(() => {
-                            const { reqConfigs, extraConfigs, totalReq, totalExtra, totalCarried } = getDeviceAllocationSummary(item);
+                            const { reqConfigs, carryExtra, totalReq } = getDeviceAllocationSummary(item);
                             return (
                               <div className="space-y-1.5 min-w-[200px]">
                                 <div className="flex items-center justify-between gap-1 text-xs font-mono font-bold text-gray-900 border-b border-gray-100 pb-1">
-                                  <span>Total Carried:</span>
+                                  <span>Required Devices:</span>
                                   <span className="text-purple-700 bg-purple-50 px-2 py-0.5 rounded border border-purple-200">
-                                    {totalCarried} Units
+                                    {totalReq} Units
                                   </span>
                                 </div>
 
                                 {/* Required Devices */}
                                 <div className="space-y-1">
-                                  <span className="text-[10px] font-bold text-blue-700 uppercase tracking-wider block">
-                                    Required ({totalReq}):
-                                  </span>
                                   {reqConfigs.map((dc, idx) => (
                                     <div key={idx} className="flex items-center justify-between gap-1 text-[11px] bg-blue-50/60 px-2 py-0.5 rounded border border-blue-100">
                                       <span className="font-semibold text-gray-800 truncate">{dc.device_type}</span>
@@ -525,22 +509,19 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
                                   ))}
                                 </div>
 
-                                {/* Extra Devices Carried */}
-                                {extraConfigs.length > 0 && (
-                                  <div className="space-y-1 pt-0.5">
-                                    <span className="text-[10px] font-bold text-amber-800 uppercase tracking-wider block">
-                                      Extra Backup ({totalExtra}):
-                                    </span>
-                                    {extraConfigs.map((ec, idx) => (
-                                      <div key={idx} className="flex items-center justify-between gap-1 text-[11px] bg-amber-50/80 px-2 py-0.5 rounded border border-amber-200">
-                                        <span className="font-semibold text-gray-800 truncate">{ec.device_type}</span>
-                                        <span className="font-mono font-bold text-amber-800 shrink-0">
-                                          +{ec.extra_quantity ?? 1} extra
-                                        </span>
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
+                                {/* Extra Backup Items Expected */}
+                                <div className="pt-0.5 flex items-center justify-between text-[10px]">
+                                  <span className="font-bold text-gray-500 uppercase tracking-wider">Extra Backup:</span>
+                                  <span
+                                    className={`px-1.5 py-0.2 rounded font-extrabold border ${
+                                      carryExtra
+                                        ? 'bg-amber-50 text-amber-800 border-amber-300'
+                                        : 'bg-slate-100 text-slate-600 border-slate-200'
+                                    }`}
+                                  >
+                                    {carryExtra ? 'EXPECTED' : 'NONE'}
+                                  </span>
+                                </div>
                               </div>
                             );
                           })()}
@@ -608,6 +589,18 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
                           <div className="flex flex-col gap-1.5">
                             {!item.has_completion_report ? (
                               <div className="flex flex-wrap gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => setBackupModalJob(item)}
+                                  className={`px-2.5 py-1.5 text-xs font-bold rounded-lg flex items-center gap-1 cursor-pointer w-fit shadow-2xs ${
+                                    item.carry_extra_backup_items
+                                      ? 'text-amber-900 bg-amber-50 hover:bg-amber-100 border border-amber-300'
+                                      : 'text-gray-700 bg-gray-50 hover:bg-gray-100 border border-gray-200'
+                                  }`}
+                                  title="Pre-Installation: Extra Backup Items Declaration"
+                                >
+                                  <Package className="w-3.5 h-3.5 text-amber-600" /> Pre-Installation Backup Items
+                                </button>
                                 <button
                                   onClick={() => setCompletionModalJob(item)}
                                   className="px-3 py-1.5 text-xs font-bold text-white bg-purple-700 hover:bg-purple-800 rounded-lg shadow-2xs flex items-center gap-1.5 cursor-pointer w-fit"
@@ -1076,6 +1069,20 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
           checklist={historyModalJob}
           token={token}
           onClose={() => setHistoryModalJob(null)}
+        />
+      )}
+      {/* PRE-INSTALLATION BACKUP ITEMS DECLARATION MODAL */}
+      {backupModalJob && (
+        <TechnicianBackupDeclarationModal
+          isOpen={Boolean(backupModalJob)}
+          job={backupModalJob}
+          token={token}
+          onClose={() => setBackupModalJob(null)}
+          onSaved={() => {
+            showToast(`Backup items declaration recorded for ${backupModalJob.checklist_number}!`);
+            loadData();
+            setBackupModalJob(null);
+          }}
         />
       )}
     </div>

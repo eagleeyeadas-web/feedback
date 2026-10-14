@@ -1177,6 +1177,49 @@ export async function fetchTechnicianNotifications(token) {
   return json;
 }
 
+/**
+ * Loose Backup Items API Helpers
+ */
+export async function fetchBackupProducts(token) {
+  const res = await fetch(`${API_BASE}/admin/installations/backup-products`, {
+    headers: adminHeaders(token),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to fetch backup products');
+  return json.products || [];
+}
+
+export async function fetchBackupDeclaration(token, checklistId) {
+  const res = await fetch(`${API_BASE}/admin/installations/${checklistId}/backup-declaration`, {
+    headers: adminHeaders(token),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to fetch backup declaration');
+  return json.declaration || null;
+}
+
+export async function saveBackupDeclaration(token, checklistId, data) {
+  const res = await fetch(`${API_BASE}/admin/installations/${checklistId}/backup-declaration`, {
+    method: 'POST',
+    headers: adminHeaders(token),
+    body: JSON.stringify(data),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to save backup declaration');
+  return json;
+}
+
+export async function verifyStoreBackupReturns(token, checklistId, data) {
+  const res = await fetch(`${API_BASE}/admin/installations/${checklistId}/backup-returns/verify`, {
+    method: 'POST',
+    headers: adminHeaders(token),
+    body: JSON.stringify(data),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to verify backup returns');
+  return json;
+}
+
 
 
 

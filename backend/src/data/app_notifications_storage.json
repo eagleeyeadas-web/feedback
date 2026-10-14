@@ -1108,7 +1108,183 @@
       },
       "is_read": false,
       "created_at": "2026-10-14T09:37:18.671Z"
+    },
+    {
+      "id": "b29de5eb-9b1d-4b9b-848e-096ecd7895fb",
+      "target_role": "COORDINATOR",
+      "target_user_id": null,
+      "title": "Extension Request: EE-INST-20261014-0066",
+      "message": "tech@gmail.com requested extension to 2028-11-04 (2 extra days). Reason: Additional client vehicles required custom brackets on site.",
+      "type": "EXTENSION_REQUEST",
+      "checklist_id": "774bcd14-cbea-4cb7-b6b0-475c320ebba0",
+      "checklist_number": "EE-INST-20261014-0066",
+      "metadata": {
+        "extension_id": "4585280a-24aa-4efd-9a1f-cfe774161f0c",
+        "requested_completion_date": "2028-11-04",
+        "rest_day_requested": true,
+        "requested_rest_date": "2028-11-06"
+      },
+      "is_read": false,
+      "created_at": "2026-10-14T10:45:53.102Z"
+    },
+    {
+      "id": "6efe4210-0f63-4e13-b467-712388fcd73b",
+      "target_role": "TECHNICAL",
+      "target_user_id": "00000000-0000-0000-0000-000000000002",
+      "title": "Extension Approved: EE-INST-20261014-0066",
+      "message": "Your schedule extension for EE-INST-20261014-0066 to 2028-11-04 was approved by the Coordinator. Note: Approved extension due to custom brackets on site. Extra day verified with client.",
+      "type": "EXTENSION_APPROVED",
+      "checklist_id": "774bcd14-cbea-4cb7-b6b0-475c320ebba0",
+      "checklist_number": "EE-INST-20261014-0066",
+      "metadata": {
+        "extension_id": "4585280a-24aa-4efd-9a1f-cfe774161f0c",
+        "new_completion_date": "2028-11-04",
+        "decision_notes": "Approved extension due to custom brackets on site. Extra day verified with client."
+      },
+      "is_read": false,
+      "created_at": "2026-10-14T10:45:56.012Z"
+    },
+    {
+      "id": "84a86cbf-b56b-4905-8cd4-ce6d4ed2055f",
+      "target_role": "COORDINATOR",
+      "target_user_id": null,
+      "title": "Extension Request: EE-INST-20261014-0066",
+      "message": "tech@gmail.com requested extension to 2028-11-08 (1 extra days). Reason: Tech wanted extra day for travel.",
+      "type": "EXTENSION_REQUEST",
+      "checklist_id": "774bcd14-cbea-4cb7-b6b0-475c320ebba0",
+      "checklist_number": "EE-INST-20261014-0066",
+      "metadata": {
+        "extension_id": "1a00a0a2-b803-45ea-9b84-9d438440ce08",
+        "requested_completion_date": "2028-11-08",
+        "rest_day_requested": false,
+        "requested_rest_date": null
+      },
+      "is_read": false,
+      "created_at": "2026-10-14T10:46:01.041Z"
+    },
+    {
+      "id": "86e95736-e698-4c2b-b557-a75097d3e201",
+      "target_role": "TECHNICAL",
+      "target_user_id": "00000000-0000-0000-0000-000000000002",
+      "title": "Extension Request Declined: EE-INST-20261014-0066",
+      "message": "Your schedule extension request was not approved. Reason: Rejected: job must be handed over as agreed.",
+      "type": "EXTENSION_REJECTED",
+      "checklist_id": "774bcd14-cbea-4cb7-b6b0-475c320ebba0",
+      "checklist_number": "EE-INST-20261014-0066",
+      "metadata": {
+        "extension_id": "1a00a0a2-b803-45ea-9b84-9d438440ce08",
+        "decision_notes": "Rejected: job must be handed over as agreed."
+      },
+      "is_read": false,
+      "created_at": "2026-10-14T10:46:01.860Z"
+    },
+    {
+      "id": "f557da88-aed5-4cb8-ad12-101d1578f5a0",
+      "target_role": "COORDINATOR",
+      "target_user_id": null,
+      "title": "Rest-Day Request: Guna",
+      "message": "Guna requested rest from 2028-11-10 to 2028-11-10. Reason: Compensatory rest day after outstation job.",
+      "type": "REST_REQUEST",
+      "checklist_id": null,
+      "checklist_number": null,
+      "metadata": {
+        "rest_id": "e0bad1a2-ccff-4a6e-829f-adfe557567ee",
+        "engineer_id": "e1000000-0000-0000-0000-000000000006",
+        "engineer_name": "Guna",
+        "start_date": "2028-11-10",
+        "end_date": "2028-11-10"
+      },
+      "is_read": false,
+      "created_at": "2026-10-14T10:46:02.823Z"
+    },
+    {
+      "id": "b8cb86fd-8597-4020-831d-bac298395c50",
+      "target_role": "TECHNICAL",
+      "target_user_id": "00000000-0000-0000-0000-000000000002",
+      "title": "Rest Day Approved: Guna",
+      "message": "Rest period from 2028-11-10 to 2028-11-10 has been approved. Note: Approved rest day for Guna.",
+      "type": "REST_APPROVED",
+      "checklist_id": null,
+      "checklist_number": null,
+      "metadata": {
+        "rest_id": "e0bad1a2-ccff-4a6e-829f-adfe557567ee",
+        "start_date": "2028-11-10",
+        "end_date": "2028-11-10"
+      },
+      "is_read": false,
+      "created_at": "2026-10-14T10:46:04.130Z"
+    },
+    {
+      "id": "1376f3f1-e53b-4ef7-ad5d-44aab20992d8",
+      "target_role": "COORDINATOR",
+      "target_user_id": null,
+      "title": "Leave Request: Sakthivel",
+      "message": "Sakthivel requested leave (Casual) from 2028-11-15 to 2028-11-16. Reason: Family function in hometown.",
+      "type": "LEAVE_REQUEST",
+      "checklist_id": null,
+      "checklist_number": null,
+      "metadata": {
+        "leave_id": "bff700b6-c058-4c26-93c6-1d4fd0d87408",
+        "engineer_id": "e1000000-0000-0000-0000-000000000004",
+        "engineer_name": "Sakthivel",
+        "start_date": "2028-11-15",
+        "end_date": "2028-11-16"
+      },
+      "is_read": false,
+      "created_at": "2026-10-14T10:46:08.242Z"
+    },
+    {
+      "id": "e601c1fa-4b92-41b8-b263-d5fbe5e9df5c",
+      "target_role": "TECHNICAL",
+      "target_user_id": "00000000-0000-0000-0000-000000000002",
+      "title": "Leave Approved: Sakthivel",
+      "message": "Your leave request from 2028-11-15 to 2028-11-16 has been approved. Note: Approved 2 days casual leave.",
+      "type": "LEAVE_APPROVED",
+      "checklist_id": null,
+      "checklist_number": null,
+      "metadata": {
+        "leave_id": "bff700b6-c058-4c26-93c6-1d4fd0d87408",
+        "start_date": "2028-11-15",
+        "end_date": "2028-11-16"
+      },
+      "is_read": false,
+      "created_at": "2026-10-14T10:46:09.553Z"
+    },
+    {
+      "id": "6297d6b7-f294-4d4a-aaed-52fd812e48f1",
+      "target_role": "COORDINATOR",
+      "target_user_id": null,
+      "title": "Extension Request: EE-INST-20261014-0068",
+      "message": "tech@gmail.com requested extension to 2028-11-23 (2 extra days). Reason: Client added 2 more vehicles on site.",
+      "type": "EXTENSION_REQUEST",
+      "checklist_id": "72ce31aa-b286-4b7f-bcb1-f4e646c9801f",
+      "checklist_number": "EE-INST-20261014-0068",
+      "metadata": {
+        "extension_id": "386e34cd-b76f-4d2e-b273-0482bfacf893",
+        "requested_completion_date": "2028-11-23",
+        "rest_day_requested": false,
+        "requested_rest_date": null
+      },
+      "is_read": false,
+      "created_at": "2026-10-14T10:46:19.393Z"
+    },
+    {
+      "id": "8e819e95-e1d7-47be-87bd-bbadc4caa3c0",
+      "target_role": "TECHNICAL",
+      "target_user_id": "00000000-0000-0000-0000-000000000002",
+      "title": "Extension Approved: EE-INST-20261014-0068",
+      "message": "Your schedule extension for EE-INST-20261014-0068 to 2028-11-23 was approved by the Coordinator. Note: Approved additional days. Need to re-book travel & room.",
+      "type": "EXTENSION_APPROVED",
+      "checklist_id": "72ce31aa-b286-4b7f-bcb1-f4e646c9801f",
+      "checklist_number": "EE-INST-20261014-0068",
+      "metadata": {
+        "extension_id": "386e34cd-b76f-4d2e-b273-0482bfacf893",
+        "new_completion_date": "2028-11-23",
+        "decision_notes": "Approved additional days. Need to re-book travel & room."
+      },
+      "is_read": false,
+      "created_at": "2026-10-14T10:46:21.799Z"
     }
   ],
-  "updated_at": "2026-10-14T09:37:18.823Z"
+  "updated_at": "2026-10-14T10:46:22.011Z"
 }

@@ -21,6 +21,7 @@ import {
 import {
   submitInstallationCompletionReport,
   fetchInstallationCompletionReport,
+  fetchBackupDeclaration,
 } from '../../lib/api';
 
 export default function InstallationCompletionModal({
@@ -39,7 +40,9 @@ export default function InstallationCompletionModal({
   const [materialItems, setMaterialItems] = useState([]);
   const [reportSnapshot, setReportSnapshot] = useState(null);
   const [expandedDamagedMissing, setExpandedDamagedMissing] = useState({});
-  const [activeTab, setActiveTab] = useState('devices'); // 'devices' | 'materials' | 'final_bom'
+  const [activeTab, setActiveTab] = useState('devices'); // 'devices' | 'materials' | 'backup_items' | 'final_bom'
+  const [backupItems, setBackupItems] = useState([]);
+  const [hasBackupDeclaration, setHasBackupDeclaration] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -78,6 +81,11 @@ export default function InstallationCompletionModal({
 
             if (Array.isArray(report.material_items) && report.material_items.length > 0) {
               setMaterialItems(report.material_items);
+            }
+
+            if (Array.isArray(report.backup_items) && report.backup_items.length > 0) {
+              setBackupItems(report.backup_items);
+              setHasBackupDeclaration(true);
             }
 
             setCompletionStatus(report.completion_status || 'Completed');
@@ -203,6 +211,34 @@ export default function InstallationCompletionModal({
           setMaterialItems([]);
         }
 
+        // Fetch pre-installation loose backup items declaration if present
+        try {
+          const bDecl = await fetchBackupDeclaration(token, checklist.id);
+          if (isMounted && bDecl && bDecl.has_backup_items && Array.isArray(bDecl.items) && bDecl.items.length > 0) {
+            setHasBackupDeclaration(true);
+            setBackupItems(
+              bDecl.items.map((it) => {
+                const qtyCarried = Number(it.quantity) || 0;
+                const qtyUsed = Number(it.quantity_used) || 0;
+                const qtyRet = it.quantity_returned !== undefined && it.quantity_returned !== null
+                  ? Number(it.quantity_returned)
+                  : Math.max(0, qtyCarried - qtyUsed);
+                return {
+                  ...it,
+                  quantity_carried: qtyCarried,
+                  quantity_used: qtyUsed,
+                  quantity_returned: qtyRet,
+                  quantity_damaged: Number(it.quantity_damaged) || 0,
+                  quantity_missing: Number(it.quantity_missing) || 0,
+                  discrepancy_reason: it.discrepancy_reason || '',
+                };
+              })
+            );
+          }
+        } catch (e) {
+          // Non-blocking
+        }
+
         setFetchingReport(false);
       }
     }
@@ -237,6 +273,15 @@ export default function InstallationCompletionModal({
     setMaterialItems((prev) => {
       const next = [...prev];
       next[index] = { ...next[index], [field]: value };
+      return next;
+    });
+  };
+
+  const handleBackupItemChange = (index, field, value) => {
+    setBackupItems((prev) => {
+      const next = [...prev];
+      const parsed = field.startsWith('quantity_') ? (value === '' ? '' : parseFloat(value) || 0) : value;
+      next[index] = { ...next[index], [field]: parsed };
       return next;
     });
   };
@@ -291,6 +336,31 @@ export default function InstallationCompletionModal({
       }
     }
 
+    // Validate loose backup items reconciliation
+    if (hasBackupDeclaration && backupItems.length > 0) {
+      for (let bIdx = 0; bIdx < backupItems.length; bIdx++) {
+        const bi = backupItems[bIdx];
+        const carried = Number(bi.quantity_carried ?? bi.quantity) || 0;
+        const used = Math.max(0, Number(bi.quantity_used) || 0);
+        const ret = Math.max(0, Number(bi.quantity_returned) || 0);
+        const dam = Math.max(0, Number(bi.quantity_damaged) || 0);
+        const mis = Math.max(0, Number(bi.quantity_missing) || 0);
+
+        if (used < 0 || ret < 0 || dam < 0 || mis < 0) {
+          return `Quantities for backup item "${bi.item_name}" cannot be negative numbers.`;
+        }
+
+        const totalAcc = used + ret + dam + mis;
+        if (totalAcc !== carried) {
+          return `Backup item reconciliation mismatch for "${bi.item_name}": Quantity carried (${carried}) must equal Used (${used}) + Returned (${ret}) + Damaged (${dam}) + Missing (${mis}). Currently totals ${totalAcc}.`;
+        }
+
+        if ((dam > 0 || mis > 0) && (!bi.discrepancy_reason || !bi.discrepancy_reason.trim())) {
+          return `Explanation remark is required for backup item "${bi.item_name}" when damaged (${dam}) or missing (${mis}) items are recorded.`;
+        }
+      }
+    }
+
     return null;
   };
 
@@ -330,6 +400,18 @@ export default function InstallationCompletionModal({
           quantity_missing: parseFloat(m.quantity_missing) || 0,
           remarks: m.remarks ? m.remarks.trim() : null,
         })),
+        backup_items: hasBackupDeclaration
+          ? backupItems.map((b) => ({
+              item_name: b.item_name,
+              unit: b.unit || 'Nos.',
+              quantity_carried: Number(b.quantity_carried ?? b.quantity) || 0,
+              quantity_used: Number(b.quantity_used) || 0,
+              quantity_returned: Number(b.quantity_returned) || 0,
+              quantity_damaged: Number(b.quantity_damaged) || 0,
+              quantity_missing: Number(b.quantity_missing) || 0,
+              discrepancy_reason: b.discrepancy_reason ? b.discrepancy_reason.trim() : null,
+            }))
+          : [],
         completion_status: completionStatus,
         remarks: generalRemarks.trim() || null,
       };
@@ -437,6 +519,24 @@ export default function InstallationCompletionModal({
               </span>
             )}
           </button>
+
+          {hasBackupDeclaration && (
+            <button
+              type="button"
+              onClick={() => setActiveTab('backup_items')}
+              className={`flex-1 py-2 px-3 rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                activeTab === 'backup_items'
+                  ? 'bg-white text-amber-900 shadow-2xs font-extrabold'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              <Package className="w-3.5 h-3.5 text-amber-600" />
+              <span>Loose Backup Items</span>
+              <span className="text-[10px] bg-amber-100 text-amber-800 px-1.5 py-0.2 rounded-full font-mono">
+                {backupItems.length}
+              </span>
+            </button>
+          )}
 
           {finalBomSnapshot && (
             <button
@@ -785,6 +885,128 @@ export default function InstallationCompletionModal({
                     </table>
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* ============================================================
+                TAB 2B: EXTRA LOOSE BACKUP ITEMS RECONCILIATION
+                ============================================================ */}
+            {activeTab === 'backup_items' && hasBackupDeclaration && (
+              <div className="space-y-3">
+                <div className="p-3.5 bg-amber-50/80 border border-amber-200/90 rounded-xl text-xs text-amber-950 flex items-start gap-2.5">
+                  <Package className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                  <div className="text-[11px] leading-relaxed">
+                    <strong>Pre-Installation Backup Items Reconciliation:</strong> Track actual usage and returns for individual loose components carried to site. Carried must equal Used + Returned + Damaged + Missing. Unused usable items will be verified by the Store Manager before return to stock.
+                  </div>
+                </div>
+
+                <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-2xs">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className="bg-slate-50 border-b border-gray-200 text-[10px] font-bold text-gray-600 uppercase tracking-wider">
+                        <th className="py-2.5 px-3">Loose Component</th>
+                        <th className="py-2.5 px-3 text-center">Unit</th>
+                        <th className="py-2.5 px-3 text-center bg-slate-100/70">Carried</th>
+                        <th className="py-2.5 px-3 text-center">Used / Installed</th>
+                        <th className="py-2.5 px-3 text-center bg-blue-50/50">To Return</th>
+                        <th className="py-2.5 px-3 text-center">Damaged</th>
+                        <th className="py-2.5 px-3 text-center">Missing</th>
+                        <th className="py-2.5 px-3 text-center">Balance</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {backupItems.map((bi, bIdx) => {
+                        const carried = Number(bi.quantity_carried ?? bi.quantity) || 0;
+                        const used = Number(bi.quantity_used) || 0;
+                        const ret = Number(bi.quantity_returned) || 0;
+                        const dam = Number(bi.quantity_damaged) || 0;
+                        const mis = Number(bi.quantity_missing) || 0;
+                        const totalAcc = used + ret + dam + mis;
+                        const isBalanced = totalAcc === carried;
+
+                        return (
+                          <tr key={bIdx} className="hover:bg-slate-50/70 transition-colors">
+                            <td className="py-2.5 px-3">
+                              <span className="font-bold text-gray-900 block">{bi.item_name}</span>
+                              {(dam > 0 || mis > 0) && (
+                                <input
+                                  type="text"
+                                  disabled={readOnly}
+                                  value={bi.discrepancy_reason || ''}
+                                  onChange={(e) => handleBackupItemChange(bIdx, 'discrepancy_reason', e.target.value)}
+                                  placeholder="Explain damaged/missing reason..."
+                                  className="mt-1 w-full p-1 border border-rose-300 rounded text-[11px] bg-rose-50/40"
+                                  required
+                                />
+                              )}
+                            </td>
+                            <td className="py-2.5 px-3 text-center font-mono text-gray-500">
+                              {bi.unit || 'Nos.'}
+                            </td>
+                            <td className="py-2.5 px-3 text-center font-mono font-bold text-gray-900 bg-slate-50">
+                              {carried}
+                            </td>
+                            <td className="py-2.5 px-3 text-center">
+                              <input
+                                type="number"
+                                min="0"
+                                step="any"
+                                disabled={readOnly}
+                                value={bi.quantity_used}
+                                onChange={(e) => handleBackupItemChange(bIdx, 'quantity_used', e.target.value)}
+                                className="w-16 p-1 border border-gray-300 rounded text-xs text-center font-mono font-semibold"
+                              />
+                            </td>
+                            <td className="py-2.5 px-3 text-center bg-blue-50/30">
+                              <input
+                                type="number"
+                                min="0"
+                                step="any"
+                                disabled={readOnly}
+                                value={bi.quantity_returned}
+                                onChange={(e) => handleBackupItemChange(bIdx, 'quantity_returned', e.target.value)}
+                                className="w-16 p-1 border border-blue-300 rounded text-xs text-center font-mono font-bold text-blue-700"
+                              />
+                            </td>
+                            <td className="py-2.5 px-3 text-center">
+                              <input
+                                type="number"
+                                min="0"
+                                step="any"
+                                disabled={readOnly}
+                                value={bi.quantity_damaged}
+                                onChange={(e) => handleBackupItemChange(bIdx, 'quantity_damaged', e.target.value)}
+                                className="w-16 p-1 border border-amber-300 rounded text-xs text-center font-mono text-amber-700"
+                              />
+                            </td>
+                            <td className="py-2.5 px-3 text-center">
+                              <input
+                                type="number"
+                                min="0"
+                                step="any"
+                                disabled={readOnly}
+                                value={bi.quantity_missing}
+                                onChange={(e) => handleBackupItemChange(bIdx, 'quantity_missing', e.target.value)}
+                                className="w-16 p-1 border border-rose-300 rounded text-xs text-center font-mono text-rose-700"
+                              />
+                            </td>
+                            <td className="py-2.5 px-3 text-center">
+                              <span
+                                className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                  isBalanced
+                                    ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                    : 'bg-rose-100 text-rose-800 border border-rose-300'
+                                }`}
+                              >
+                                {isBalanced ? 'Balanced' : `${totalAcc}/${carried}`}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             )}
 

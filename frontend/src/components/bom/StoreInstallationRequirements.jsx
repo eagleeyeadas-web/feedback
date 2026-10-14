@@ -30,6 +30,7 @@ import {
   downloadStoreRequirementPDF,
   downloadInstallationPDF,
   verifyStoreMaterialReturnApi,
+  verifyStoreBackupReturns,
 } from '../../lib/api';
 import IssueMaterialsModal from './IssueMaterialsModal';
 
@@ -65,6 +66,13 @@ export default function StoreInstallationRequirements({ token, onSelectChecklist
   });
   const [submittingVerification, setSubmittingVerification] = useState(false);
   const [verificationError, setVerificationError] = useState('');
+
+  // Loose Backup Return Verification Modal State
+  const [backupReturnModal, setBackupReturnModal] = useState(null);
+  const [backupReturnRows, setBackupReturnRows] = useState([]);
+  const [backupReturnRemarks, setBackupReturnRemarks] = useState('');
+  const [submittingBackupReturn, setSubmittingBackupReturn] = useState(false);
+  const [backupReturnError, setBackupReturnError] = useState('');
 
   const loadRequirements = useCallback(async () => {
     if (!token) return;
@@ -157,6 +165,48 @@ export default function StoreInstallationRequirements({ token, onSelectChecklist
       setVerificationError(err.message || 'Failed to verify material return');
     } finally {
       setSubmittingVerification(false);
+    }
+  };
+
+  const handleOpenBackupReturnModal = (checklistId, checklistNumber, backupItems) => {
+    setBackupReturnError('');
+    setBackupReturnRemarks('');
+    setBackupReturnRows(
+      (backupItems || []).map((item) => ({
+        item_name: item.item_name,
+        unit: item.unit || 'Nos.',
+        declared_carried: Number(item.quantity) || 0,
+        quantity_returned: Number(item.quantity_returned) || 0,
+        accepted_usable_qty: Number(item.quantity_returned) || 0,
+        damaged_qty: Number(item.quantity_damaged) || 0,
+        missing_qty: Number(item.quantity_missing) || 0,
+      }))
+    );
+    setBackupReturnModal({ checklistId, checklistNumber });
+  };
+
+  const handleVerifyBackupReturnSubmit = async (e) => {
+    e.preventDefault();
+    if (!token || !backupReturnModal) return;
+    setBackupReturnError('');
+    setSubmittingBackupReturn(true);
+    try {
+      await verifyStoreBackupReturns(token, backupReturnModal.checklistId, {
+        verification_items: backupReturnRows.map((r) => ({
+          item_name: r.item_name,
+          accepted_usable_qty: parseFloat(r.accepted_usable_qty) || 0,
+          damaged_qty: parseFloat(r.damaged_qty) || 0,
+          missing_qty: parseFloat(r.missing_qty) || 0,
+        })),
+        remarks: backupReturnRemarks.trim(),
+      });
+      showToast(`Physical return verified for loose backup items of ${backupReturnModal.checklistNumber}! Usable store stock updated.`);
+      setBackupReturnModal(null);
+      loadRequirements();
+    } catch (err) {
+      setBackupReturnError(err.message || 'Failed to verify backup item returns');
+    } finally {
+      setSubmittingBackupReturn(false);
     }
   };
 
@@ -569,7 +619,7 @@ export default function StoreInstallationRequirements({ token, onSelectChecklist
 
                   {/* Col 3: Device Models & Quantities Carried */}
                   <div>
-                    <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">Devices Carried to Site</span>
+                    <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">Required Devices &amp; Backup</span>
                     <div className="mt-1 space-y-1.5 min-w-[170px]">
                       {/* Required Devices */}
                       <div className="space-y-0.5">
@@ -582,23 +632,34 @@ export default function StoreInstallationRequirements({ token, onSelectChecklist
                         ))}
                       </div>
 
-                      {/* Extra Backup Devices */}
+                      {/* Extra Backup Items Expected Flag */}
+                      <div className="pt-0.5">
+                        <span className="text-[10px] text-gray-500 block uppercase font-bold">Extra Backup Items:</span>
+                        <span className={`inline-block text-[10px] font-bold px-1.5 py-0.5 rounded border mt-0.5 ${
+                          req.carry_extra_backup_items
+                            ? 'bg-amber-100 text-amber-900 border-amber-300'
+                            : 'bg-slate-100 text-slate-700 border-slate-200'
+                        }`}>
+                          {req.carry_extra_backup_items ? 'Yes (Carried by Tech)' : 'No (None expected)'}
+                        </span>
+                      </div>
+
                       {extraDeviceItems.length > 0 && (
                         <div className="space-y-0.5 pt-0.5">
-                          <span className="text-[10px] font-bold text-amber-800 block uppercase">Extra / Backup:</span>
+                          <span className="text-[10px] font-bold text-amber-800 block uppercase">Legacy Extra Devices:</span>
                           {extraDeviceItems.map((d, idx) => (
                             <div key={idx} className="flex items-center justify-between text-[11px] bg-amber-50/70 px-1.5 py-0.5 rounded border border-amber-200">
                               <span className="font-semibold text-gray-900 truncate">{d.device_type}</span>
-                              <span className="font-mono text-amber-900 font-bold shrink-0">+{d.extra_quantity ?? 1} extra</span>
+                              <span className="font-mono text-amber-900 font-bold shrink-0">+{d.extra_quantity ?? 1}</span>
                             </div>
                           ))}
                         </div>
                       )}
 
                       <div className="pt-1 border-t border-gray-200/80 flex items-center justify-between font-bold text-[11px]">
-                        <span className="text-navy">Total to Issue:</span>
-                        <span className="font-mono text-purple-800 bg-purple-50 px-2 py-0.5 rounded border border-purple-200">
-                          {req.total_devices_carried || req.number_of_devices || 0} Units
+                        <span className="text-navy">Required Device Sets:</span>
+                        <span className="font-mono text-blue-900 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                          {req.number_of_devices || req.total_devices_required || 1} Sets
                         </span>
                       </div>
                       {req.number_of_vehicles && (
@@ -729,11 +790,90 @@ export default function StoreInstallationRequirements({ token, onSelectChecklist
                         </div>
                       </div>
 
-                      {/* 1B. Extra / Backup Devices Carried */}
+                      {/* 1B. Pre-Installation Loose Backup Items (Separate from Sales BOM) */}
+                      <div className="space-y-2 pt-2 border-t border-blue-100">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                          <div>
+                            <span className="text-[11px] font-bold text-amber-900 uppercase tracking-wider flex items-center gap-1.5">
+                              <Package className="w-3.5 h-3.5 text-amber-600" />
+                              <span>1B. Pre-Installation Loose Backup Items (Separate from Sales BOM)</span>
+                            </span>
+                            <span className="text-[10px] text-gray-500 block">
+                              Sales declared extra backup items: <strong>{req.carry_extra_backup_items ? 'Yes (Technician to carry items)' : 'No'}</strong>. Loose backup items do NOT increase Sales BOM or device set counts.
+                            </span>
+                          </div>
+                          {req.backup_declaration?.items?.some((it) => Number(it.quantity_returned) > 0) && (
+                            <button
+                              type="button"
+                              onClick={() => handleOpenBackupReturnModal(req.checklist_id || req.id, req.checklist_number, req.backup_declaration.items)}
+                              className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white text-[11px] font-bold rounded-lg shadow-2xs flex items-center gap-1 cursor-pointer transition-all self-start sm:self-auto"
+                            >
+                              <ShieldCheck className="w-3.5 h-3.5" />
+                              <span>Verify Loose Backup Returns</span>
+                            </button>
+                          )}
+                        </div>
+
+                        {req.backup_declaration?.items && req.backup_declaration.items.length > 0 ? (
+                          <div className="border border-amber-200 rounded-xl overflow-x-auto bg-amber-50/20">
+                            <table className="w-full text-left border-collapse text-xs">
+                              <thead className="bg-amber-100/70 border-b border-amber-200 text-[10px] font-bold text-amber-950 uppercase">
+                                <tr>
+                                  <th className="py-2 px-3 w-10 text-center">#</th>
+                                  <th className="py-2 px-3">Item Name</th>
+                                  <th className="py-2 px-3">SKU</th>
+                                  <th className="py-2 px-3 text-center">Declared Carried</th>
+                                  <th className="py-2 px-3 text-center">Unit</th>
+                                  <th className="py-2 px-3 text-center">Used on Site</th>
+                                  <th className="py-2 px-3 text-center">Returned</th>
+                                  <th className="py-2 px-3 text-center">Damaged</th>
+                                  <th className="py-2 px-3 text-center">Missing</th>
+                                  <th className="py-2 px-3">Discrepancy Notes</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-amber-100">
+                                {req.backup_declaration.items.map((it, idx) => (
+                                  <tr key={idx} className="hover:bg-amber-50/50">
+                                    <td className="py-2 px-3 text-center font-mono text-gray-400">{idx + 1}</td>
+                                    <td className="py-2 px-3 font-bold text-gray-900">{it.item_name}</td>
+                                    <td className="py-2 px-3 font-mono text-[11px] text-gray-500">{it.item_sku || it.sku || '—'}</td>
+                                    <td className="py-2 px-3 text-center font-bold text-amber-900 font-mono">{it.quantity}</td>
+                                    <td className="py-2 px-3 text-center text-gray-600">{it.unit || 'Nos.'}</td>
+                                    <td className="py-2 px-3 text-center font-mono text-blue-700">{it.quantity_used || 0}</td>
+                                    <td className="py-2 px-3 text-center font-mono font-bold text-emerald-700">{it.quantity_returned || 0}</td>
+                                    <td className="py-2 px-3 text-center font-mono font-bold text-rose-700">{it.quantity_damaged > 0 ? it.quantity_damaged : 0}</td>
+                                    <td className="py-2 px-3 text-center font-mono font-bold text-amber-700">{it.quantity_missing > 0 ? it.quantity_missing : 0}</td>
+                                    <td className="py-2 px-3 text-[11px] text-gray-600">{it.discrepancy_reason || '—'}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        ) : req.backup_declaration?.has_backup_items === false ? (
+                          <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-[11px] text-slate-700 flex items-center gap-2">
+                            <Info className="w-4 h-4 text-blue-600 shrink-0" />
+                            <span>
+                              Technician confirmed no extra backup items were carried to site.
+                              {req.backup_declaration.no_items_reason && (
+                                <span className="font-semibold text-gray-900 ml-1">Reason: &ldquo;{req.backup_declaration.no_items_reason}&rdquo;</span>
+                              )}
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="p-3 bg-amber-50/60 border border-amber-200/80 rounded-xl text-[11px] text-amber-900 flex items-center gap-2">
+                            <Clock className="w-4 h-4 text-amber-600 shrink-0" />
+                            <span>
+                              Pre-installation loose items declaration pending from technician before job initiation.
+                            </span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Legacy Extra Devices Carried (if any) */}
                       {extraDeviceItems.length > 0 && (
                         <div className="space-y-1.5">
                           <span className="text-[11px] font-bold text-amber-900 uppercase tracking-wider block">
-                            1B. Extra / Backup Devices Carried to Site
+                            Legacy Extra Devices Carried to Site
                           </span>
                           <div className="border border-amber-200 rounded-xl overflow-x-auto">
                             <table className="w-full text-left border-collapse text-xs">
@@ -1203,6 +1343,139 @@ export default function StoreInstallationRequirements({ token, onSelectChecklist
                   className="px-5 py-2 font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-xs cursor-pointer disabled:opacity-50"
                 >
                   {submittingVerification ? 'Updating Stock...' : 'Confirm Verification & Credit Stock'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Loose Backup Return Physical Verification Modal */}
+      {backupReturnModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl space-y-4 border border-gray-100 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-gray-100">
+              <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                <ShieldCheck className="w-5 h-5 text-emerald-600" />
+                <span>Physically Verify Loose Backup Returns: {backupReturnModal.checklistNumber}</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setBackupReturnModal(null)}
+                className="text-gray-400 hover:text-gray-600 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-3 bg-amber-50 rounded-xl text-amber-900 border border-amber-200 text-xs flex items-start gap-2">
+              <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+              <span>
+                <strong>Store Physical Verification:</strong> Only usable items verified by Store Manager will be restored to warehouse inventory. Damaged items will be recorded separately and missing items are strictly never added to stock.
+              </span>
+            </div>
+
+            {backupReturnError && (
+              <div className="p-3 bg-rose-50 text-rose-800 border border-rose-200 rounded-xl text-xs font-semibold">
+                {backupReturnError}
+              </div>
+            )}
+
+            <form onSubmit={handleVerifyBackupReturnSubmit} className="space-y-4 text-xs">
+              <div className="border border-gray-200 rounded-xl overflow-hidden">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead className="bg-gray-50 border-b border-gray-200 text-[10px] font-bold text-gray-600 uppercase">
+                    <tr>
+                      <th className="py-2.5 px-3">Item</th>
+                      <th className="py-2.5 px-3 text-center">Tech Returned</th>
+                      <th className="py-2.5 px-3 text-center">Accepted Usable (Restored)</th>
+                      <th className="py-2.5 px-3 text-center">Damaged</th>
+                      <th className="py-2.5 px-3 text-center">Missing</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {backupReturnRows.map((row, idx) => (
+                      <tr key={idx} className="hover:bg-gray-50/50">
+                        <td className="py-2.5 px-3 font-semibold text-gray-900">
+                          {row.item_name}
+                          <span className="text-[10px] text-gray-400 block font-normal">Unit: {row.unit}</span>
+                        </td>
+                        <td className="py-2.5 px-3 text-center font-bold text-emerald-800 font-mono">
+                          {row.quantity_returned} {row.unit}
+                        </td>
+                        <td className="py-2.5 px-3 text-center">
+                          <input
+                            type="number"
+                            min="0"
+                            step="any"
+                            value={row.accepted_usable_qty}
+                            onChange={(e) => {
+                              const updated = [...backupReturnRows];
+                              updated[idx].accepted_usable_qty = e.target.value;
+                              setBackupReturnRows(updated);
+                            }}
+                            className="w-20 p-1.5 text-center border border-gray-300 rounded-lg font-mono font-bold text-emerald-900 focus:outline-none focus:border-amber-500"
+                          />
+                        </td>
+                        <td className="py-2.5 px-3 text-center">
+                          <input
+                            type="number"
+                            min="0"
+                            step="any"
+                            value={row.damaged_qty}
+                            onChange={(e) => {
+                              const updated = [...backupReturnRows];
+                              updated[idx].damaged_qty = e.target.value;
+                              setBackupReturnRows(updated);
+                            }}
+                            className="w-16 p-1.5 text-center border border-gray-300 rounded-lg font-mono font-bold text-rose-700 focus:outline-none focus:border-amber-500"
+                          />
+                        </td>
+                        <td className="py-2.5 px-3 text-center">
+                          <input
+                            type="number"
+                            min="0"
+                            step="any"
+                            value={row.missing_qty}
+                            onChange={(e) => {
+                              const updated = [...backupReturnRows];
+                              updated[idx].missing_qty = e.target.value;
+                              setBackupReturnRows(updated);
+                            }}
+                            className="w-16 p-1.5 text-center border border-gray-300 rounded-lg font-mono font-bold text-amber-700 focus:outline-none focus:border-amber-500"
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div>
+                <label className="block font-bold text-gray-700 mb-1">Store Physical Verification Remarks</label>
+                <input
+                  type="text"
+                  value={backupReturnRemarks}
+                  onChange={(e) => setBackupReturnRemarks(e.target.value)}
+                  placeholder="e.g. Loose cameras and cables physically counted and inspected on warehouse shelf"
+                  className="w-full p-2.5 border border-gray-200 rounded-xl focus:outline-none focus:border-amber-500"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => setBackupReturnModal(null)}
+                  className="px-4 py-2 font-semibold text-gray-600 hover:bg-gray-100 rounded-xl cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingBackupReturn}
+                  className="px-5 py-2 font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-xs cursor-pointer disabled:opacity-50"
+                >
+                  {submittingBackupReturn ? 'Crediting Usable Stock...' : 'Confirm Verification & Restore Usable Stock'}
                 </button>
               </div>
             </form>

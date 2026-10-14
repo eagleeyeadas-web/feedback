@@ -3,7 +3,8 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import supabase from './supabase.js';
 import { logAudit } from './auditService.js';
-import { getMaterialInventory, receiveMaterialStock } from './materialStockService.js';
+import { getMaterialInventory, adjustMaterialStock } from './materialStockService.js';
+import { getInventoryProducts, adjustStock } from './inventoryService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -489,18 +490,44 @@ export async function verifyStoreBackupItemReturn({
       continue;
     }
 
-    // Only restore stock if the item was actually issued or returned from authorized stock
+    // Only restore stock if the item was physically verified as usable by Store Manager
     // And only add the accepted usable quantity (never damaged or missing)
     if (acceptedUsable > 0) {
-      await receiveMaterialStock({
-        material_name: itemName,
-        quantity: acceptedUsable,
-        unit: matchingDeclItem.unit || 'Nos.',
-        notes: `Physical return verification for checklist ${checklistId} by Store Manager ${user?.email || user?.name || ''}`,
-        source: 'STORE_RETURN_VERIFICATION',
-        checklist_id: checklistId,
-        user,
-      });
+      try {
+        const allMats = await getMaterialInventory();
+        const matExists = allMats.some((m) => m.material_name.toLowerCase() === itemName.toLowerCase());
+        if (matExists) {
+          await adjustMaterialStock({
+            material_name: itemName,
+            action: 'ADD',
+            quantity: acceptedUsable,
+            reason: `Physical return verification for checklist ${checklistId}: ${acceptedUsable} ${matchingDeclItem.unit || 'Nos.'} usable stock restored. ${remarks || ''}`.trim(),
+            user,
+          });
+        } else {
+          const allDevs = await getInventoryProducts();
+          const devExists = allDevs.some((d) => d.device_type.toLowerCase() === itemName.toLowerCase());
+          if (devExists) {
+            await adjustStock({
+              device_type: itemName,
+              action: 'ADD',
+              quantity: acceptedUsable,
+              reason: `Physical return verification for checklist ${checklistId}: ${acceptedUsable} units usable stock restored. ${remarks || ''}`.trim(),
+              user,
+            });
+          } else {
+            await adjustMaterialStock({
+              material_name: itemName,
+              action: 'ADD',
+              quantity: acceptedUsable,
+              reason: `Physical return verification for checklist ${checklistId}: ${acceptedUsable} ${matchingDeclItem.unit || 'Nos.'} usable stock restored. ${remarks || ''}`.trim(),
+              user,
+            });
+          }
+        }
+      } catch (stockAdjErr) {
+        console.warn(`Stock adjustment on return verification for ${itemName}:`, stockAdjErr.message);
+      }
     }
 
     verificationResults.push({

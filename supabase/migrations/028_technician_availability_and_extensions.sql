@@ -24,11 +24,11 @@ SET
   original_expected_arrival_date = COALESCE(original_expected_arrival_date, expected_arrival_date),
   original_expected_arrival_time = COALESCE(original_expected_arrival_time, expected_arrival_time::TEXT),
   original_installation_duration = COALESCE(original_installation_duration, installation_duration),
-  original_booking_end_date = COALESCE(original_booking_end_date, booking_end_date, expected_arrival_date),
+  original_booking_end_date = COALESCE(original_booking_end_date, expected_arrival_date),
   current_expected_arrival_date = COALESCE(current_expected_arrival_date, expected_arrival_date),
   current_expected_arrival_time = COALESCE(current_expected_arrival_time, expected_arrival_time::TEXT),
   current_installation_duration = COALESCE(current_installation_duration, installation_duration),
-  current_booking_end_date = COALESCE(current_booking_end_date, booking_end_date, expected_arrival_date),
+  current_booking_end_date = COALESCE(current_booking_end_date, expected_arrival_date),
   schedule_last_updated_at = COALESCE(schedule_last_updated_at, updated_at)
 WHERE original_expected_arrival_date IS NULL OR current_expected_arrival_date IS NULL;
 

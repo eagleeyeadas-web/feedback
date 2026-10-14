@@ -61,6 +61,12 @@ import {
   getNotifications,
   markNotificationRead,
 } from '../services/appNotificationService.js';
+import {
+  getAvailableBackupProducts,
+  getBackupDeclaration,
+  saveBackupDeclaration,
+  verifyStoreBackupItemReturn,
+} from '../services/backupItemService.js';
 
 const uploadReceipt = multer({
   storage: multer.memoryStorage(),
@@ -973,6 +979,71 @@ router.get('/notifications/tech', requireRole('TECHNICAL', 'ADMIN'), async (req,
     return res.json({ notifications: notifs });
   } catch (err) {
     return res.status(500).json({ error: 'Failed to fetch technician notifications' });
+  }
+});
+
+/**
+ * GET /api/admin/installations/backup-products
+ * Available inventory items and units for loose backup item declaration
+ */
+router.get('/backup-products', requireRole('TECHNICAL', 'ADMIN', 'STORE_MANAGER', 'SALES', 'COORDINATOR'), async (req, res) => {
+  try {
+    const products = await getAvailableBackupProducts();
+    return res.json({ products });
+  } catch (err) {
+    return res.status(500).json({ error: 'Failed to fetch backup products: ' + err.message });
+  }
+});
+
+/**
+ * GET /api/admin/installations/:id/backup-declaration
+ * Fetch pre-installation backup declaration for a checklist
+ */
+router.get('/:id/backup-declaration', requireRole('TECHNICAL', 'ADMIN', 'STORE_MANAGER', 'SALES', 'COORDINATOR'), async (req, res) => {
+  try {
+    const declaration = await getBackupDeclaration(req.params.id);
+    return res.json({ declaration });
+  } catch (err) {
+    return res.status(500).json({ error: 'Failed to fetch backup declaration: ' + err.message });
+  }
+});
+
+/**
+ * POST /api/admin/installations/:id/backup-declaration
+ * Technician saves / corrects pre-installation backup item declaration
+ */
+router.post('/:id/backup-declaration', requireRole('TECHNICAL', 'ADMIN'), async (req, res) => {
+  try {
+    const { has_backup_items, no_items_reason, items } = req.body;
+    const declaration = await saveBackupDeclaration({
+      checklistId: req.params.id,
+      user: req.profile || req.user,
+      hasBackupItems: has_backup_items,
+      noItemsReason: no_items_reason,
+      items: items || [],
+    });
+    return res.json({ success: true, declaration });
+  } catch (err) {
+    return res.status(400).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /api/admin/installations/:id/backup-returns/verify
+ * Store Manager physically verifies returned loose backup items and restores usable stock
+ */
+router.post('/:id/backup-returns/verify', requireRole('STORE_MANAGER', 'ADMIN'), async (req, res) => {
+  try {
+    const { verification_items, remarks } = req.body;
+    const result = await verifyStoreBackupItemReturn({
+      checklistId: req.params.id,
+      user: req.profile || req.user,
+      verificationItems: verification_items || [],
+      remarks,
+    });
+    return res.json(result);
+  } catch (err) {
+    return res.status(400).json({ error: err.message });
   }
 });
 

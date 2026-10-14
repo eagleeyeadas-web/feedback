@@ -503,6 +503,22 @@ export async function submitInstallationCompletionReport(param1, param2) {
     };
   });
 
+  // Reconcile extra loose backup items if declared/provided
+  let processedBackupItems = [];
+  const rawBackupItems = opts.backup_items || opts.backupItems || [];
+  if (Array.isArray(rawBackupItems) && rawBackupItems.length > 0) {
+    const { reconcileBackupItems } = await import('./backupItemService.js');
+    const reconResult = await reconcileBackupItems({
+      checklistId: checklist_id,
+      user,
+      items: rawBackupItems,
+    });
+    processedBackupItems = reconResult.items || [];
+    if (processedBackupItems.some((b) => (Number(b.quantity_damaged) > 0 || Number(b.quantity_missing) > 0))) {
+      hasDiscrepancy = true;
+    }
+  }
+
   // 3. Calculate Final BOM based on ALL devices actually installed (including extra devices installed)
   // Formula: Final BOM = Sum of (actual installed quantity for each device type × configured BOM quantity per device type)
   const installedConfigs = processedItems
@@ -537,6 +553,7 @@ export async function submitInstallationCompletionReport(param1, param2) {
     devices_damaged_qty: totalDamaged,
     devices_missing_qty: totalMissing,
     material_items: processedMaterialItems,
+    backup_items: processedBackupItems,
     final_bom: finalBomSnapshot,
     completion_status: completion_status === 'Completed' ? 'Completed' : 'Site Work Completed',
     remarks: remarks ? remarks.trim() : null,

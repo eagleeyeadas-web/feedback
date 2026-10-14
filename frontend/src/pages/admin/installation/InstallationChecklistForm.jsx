@@ -101,11 +101,8 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
     { id: 'dev-1', device_type: DEVICE_OPTIONS[0], number_of_devices: 1, quantity_carried: 1 },
   ]);
 
-  // Extra Devices Carried State
-  const [hasExtraDevices, setHasExtraDevices] = useState(false);
-  const [extraDeviceConfigs, setExtraDeviceConfigs] = useState([
-    { id: 'extra-1', device_type: DEVICE_OPTIONS[0], extra_quantity: 1 },
-  ]);
+  // Extra Backup Items Question (Sales declaration: Yes/No)
+  const [carryExtraBackupItems, setCarryExtraBackupItems] = useState(false);
 
   // Form State matching all 27 questions exactly
   const [formData, setFormData] = useState({
@@ -183,51 +180,9 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
             ]);
           }
 
-          // Populate Extra Devices (if present)
-          if (data.extra_devices) {
-            setHasExtraDevices(true);
-            if (Array.isArray(data.extra_device_configurations) && data.extra_device_configurations.length > 0) {
-              setExtraDeviceConfigs(
-                data.extra_device_configurations.map((ed, i) => ({
-                  id: `extra-${i + 1}-${Date.now()}`,
-                  device_type: ed.device_type || DEVICE_OPTIONS[0],
-                  extra_quantity: Math.max(1, parseInt(ed.extra_quantity || ed.quantity || 1, 10)),
-                }))
-              );
-            } else if (data.extra_device_type) {
-              const parts = String(data.extra_device_type).split(/[,;\n]+/).map((p) => p.trim()).filter(Boolean);
-              if (parts.length > 1) {
-                const parsed = parts.map((p, i) => {
-                  const qtyMatch = p.match(/\((\d+)(?:\s*devices?)?\)/i) || p.match(/(?:x|[:\-])\s*(\d+)/i);
-                  const qty = qtyMatch ? parseInt(qtyMatch[1], 10) : 1;
-                  const nameClean = p.replace(/\(.*?\)/g, '').replace(/(?:x|[:\-])\s*\d+/gi, '').trim();
-                  return {
-                    id: `extra-${i + 1}-${Date.now()}`,
-                    device_type: nameClean || DEVICE_OPTIONS[0],
-                    extra_quantity: Math.max(1, isNaN(qty) ? 1 : qty),
-                  };
-                });
-                setExtraDeviceConfigs(parsed);
-              } else {
-                setExtraDeviceConfigs([
-                  {
-                    id: 'extra-1',
-                    device_type: data.extra_device_type,
-                    extra_quantity: Math.max(1, parseInt(data.extra_device_count, 10) || 1),
-                  },
-                ]);
-              }
-            } else {
-              setExtraDeviceConfigs([
-                { id: 'extra-1', device_type: DEVICE_OPTIONS[0], extra_quantity: 1 },
-              ]);
-            }
-          } else {
-            setHasExtraDevices(false);
-            setExtraDeviceConfigs([
-              { id: 'extra-1', device_type: DEVICE_OPTIONS[0], extra_quantity: 1 },
-            ]);
-          }
+          // Populate Extra Backup Items expectation (Sales Yes/No)
+          const carriesBackup = Boolean(data.carry_extra_backup_items ?? data.extra_devices);
+          setCarryExtraBackupItems(carriesBackup);
 
           setFormData({
             salesperson_name: data.salesperson_name || '',
@@ -368,58 +323,12 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
     );
   };
 
-  // Extra Devices Carried Handlers
-  const handleExtraToggle = (isYes) => {
-    setHasExtraDevices(isYes);
-    if (isYes && extraDeviceConfigs.length === 0) {
-      setExtraDeviceConfigs([
-        { id: `extra-${Date.now()}`, device_type: DEVICE_OPTIONS[0], extra_quantity: 1 },
-      ]);
-    }
-  };
-
-  const handleAddExtraDevice = () => {
-    const selectedTypes = new Set(extraDeviceConfigs.map((c) => c.device_type));
-    const availableOption = DEVICE_OPTIONS.find((opt) => !selectedTypes.has(opt)) || DEVICE_OPTIONS[0];
-    setExtraDeviceConfigs((prev) => [
-      ...prev,
-      {
-        id: `extra-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
-        device_type: availableOption,
-        extra_quantity: 1,
-      },
-    ]);
-  };
-
-  const handleRemoveExtraDevice = (id) => {
-    if (extraDeviceConfigs.length <= 1) {
-      setHasExtraDevices(false);
-      return;
-    }
-    setExtraDeviceConfigs((prev) => prev.filter((c) => c.id !== id));
-  };
-
-  const handleUpdateExtraDevice = (id, field, value) => {
-    setExtraDeviceConfigs((prev) =>
-      prev.map((c) => {
-        if (c.id !== id) return c;
-        if (field === 'extra_quantity') {
-          const parsed = value === '' ? '' : parseInt(value, 10);
-          return { ...c, extra_quantity: isNaN(parsed) ? '' : Math.max(1, parsed) };
-        }
-        return { ...c, [field]: value };
-      })
-    );
-  };
-
   const totalRequiredDevices = deviceConfigs.reduce(
     (sum, c) => sum + (parseInt(c.number_of_devices || c.quantity_carried, 10) || 0),
     0
   );
-  const totalExtraDevices = hasExtraDevices
-    ? extraDeviceConfigs.reduce((sum, c) => sum + (parseInt(c.extra_quantity, 10) || 0), 0)
-    : 0;
-  const totalDevicesCarried = totalRequiredDevices + totalExtraDevices;
+  // Extra loose backup items are not full device sets and do not alter customer device count
+  const totalDevicesCarried = totalRequiredDevices;
 
   const validateForm = () => {
     if (!formData.salesperson_name || !SALESPERSON_OPTIONS.includes(formData.salesperson_name)) {
@@ -452,22 +361,6 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
       }
     }
 
-    // Extra Devices Carried Validation
-    if (hasExtraDevices) {
-      if (!extraDeviceConfigs || extraDeviceConfigs.length === 0) {
-        return 'Please specify at least one extra device or toggle "Are you carrying any extra devices?" to No.';
-      }
-      for (let i = 0; i < extraDeviceConfigs.length; i++) {
-        const ec = extraDeviceConfigs[i];
-        if (!ec.device_type || !DEVICE_OPTIONS.includes(ec.device_type)) {
-          return `Extra Device #${i + 1}: Please select a valid device type.`;
-        }
-        const eq = Number(ec.extra_quantity);
-        if (isNaN(eq) || eq <= 0 || !Number.isInteger(eq)) {
-          return `Extra Device #${i + 1} (${ec.device_type}): Extra Quantity must be a positive whole number greater than 0.`;
-        }
-      }
-    }
 
     const confPrice = Number(formData.confirmed_price);
     if (isNaN(confPrice) || confPrice < 0) return 'Please enter a valid Confirmed Price (>= 0)';
@@ -557,56 +450,6 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
 
       // Combine duplicates in extra devices if any
       let normalizedExtraConfigs = [];
-      let totalExtra = 0;
-      let extraTypeSummary = null;
-
-      if (hasExtraDevices && extraDeviceConfigs.length > 0) {
-        const combinedExtraMap = new Map();
-        extraDeviceConfigs.forEach((c) => {
-          const dt = (c.device_type || '').trim();
-          if (!dt) return;
-          const eq = Math.max(1, parseInt(c.extra_quantity, 10) || 1);
-          if (combinedExtraMap.has(dt)) {
-            const ex = combinedExtraMap.get(dt);
-            ex.extra_quantity += eq;
-          } else {
-            combinedExtraMap.set(dt, { device_type: dt, extra_quantity: eq });
-          }
-        });
-        normalizedExtraConfigs = Array.from(combinedExtraMap.values());
-        totalExtra = normalizedExtraConfigs.reduce((acc, c) => acc + c.extra_quantity, 0);
-        extraTypeSummary = normalizedExtraConfigs.length === 1
-          ? normalizedExtraConfigs[0].device_type
-          : normalizedExtraConfigs.map((c) => `${c.device_type} (${c.extra_quantity})`).join(', ');
-      }
-
-      // Authoritative combined carried list for Technical & Store reconciliation
-      const combinedCarriedMap = new Map();
-      normalizedReqConfigs.forEach((r) => {
-        combinedCarriedMap.set(r.device_type, {
-          device_type: r.device_type,
-          required_quantity: r.number_of_devices,
-          extra_quantity: 0,
-          quantity_carried: r.number_of_devices,
-        });
-      });
-      normalizedExtraConfigs.forEach((e) => {
-        if (combinedCarriedMap.has(e.device_type)) {
-          const ex = combinedCarriedMap.get(e.device_type);
-          ex.extra_quantity += e.extra_quantity;
-          ex.quantity_carried += e.extra_quantity;
-        } else {
-          combinedCarriedMap.set(e.device_type, {
-            device_type: e.device_type,
-            required_quantity: 0,
-            extra_quantity: e.extra_quantity,
-            quantity_carried: e.extra_quantity,
-          });
-        }
-      });
-      const combinedCarriedList = Array.from(combinedCarriedMap.values());
-      const totalCarried = totalReq + totalExtra;
-
       const payload = {
         salesperson_name: formData.salesperson_name,
         client_name: formData.client_name.trim(),
@@ -615,14 +458,20 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
         google_maps_location: formData.google_maps_location.trim() || null,
         device_type: summaryDeviceType,
         number_of_devices: totalReq, // Customer installation requirements
-        total_devices_carried: totalCarried,
+        total_devices_carried: totalReq, // Calculated strictly from required installation devices
         number_of_vehicles: totalVeh,
         device_configurations: normalizedReqConfigs,
-        extra_devices: Boolean(hasExtraDevices && normalizedExtraConfigs.length > 0),
-        extra_device_type: extraTypeSummary,
-        extra_device_count: hasExtraDevices ? totalExtra : null,
-        extra_device_configurations: hasExtraDevices ? normalizedExtraConfigs : [],
-        devices_carried: combinedCarriedList,
+        carry_extra_backup_items: Boolean(carryExtraBackupItems),
+        extra_devices: Boolean(carryExtraBackupItems), // backward-compatible flag
+        extra_device_type: null,
+        extra_device_count: null,
+        extra_device_configurations: [],
+        devices_carried: normalizedReqConfigs.map((r) => ({
+          device_type: r.device_type,
+          required_quantity: r.number_of_devices,
+          extra_quantity: 0,
+          quantity_carried: r.number_of_devices,
+        })),
         confirmed_price: Number(formData.confirmed_price) || 0,
         payment_method: formData.payment_method,
         advance_received: formData.advance_received,
@@ -977,7 +826,7 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
             <div className="pt-2">
               <BomRequirementSummary
                 deviceConfigurations={deviceConfigs}
-                extraDeviceConfigurations={hasExtraDevices ? extraDeviceConfigs : EMPTY_EXTRA_DEVICES}
+                extraDeviceConfigurations={EMPTY_EXTRA_DEVICES}
                 token={token}
                 jobType={formData.installation_or_service}
                 onCalculated={(snapshot) => {
@@ -1002,134 +851,59 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
           )}
         </div>
 
-        {/* SECTION 2A — EXTRA DEVICES CARRIED */}
+        {/* SECTION 2A — EXTRA BACKUP ITEMS (SALES QUESTION) */}
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-2 border-b border-gray-200 gap-2">
             <div>
               <h3 className="text-sm font-bold text-navy flex items-center gap-2">
                 <Sparkles className="text-amber-500" size={18} />
-                EXTRA DEVICES CARRIED
+                EXTRA BACKUP ITEMS
               </h3>
               <p className="text-[11px] text-gray-500 mt-0.5">
-                Record extra backup hardware carried to site beyond customer-requested quantities. Backup stock does not increase installation BOM requirements.
+                Declare whether the technician will carry extra backup hardware to the site. Loose backup items do not increase the Sales BOM or installation requirements.
               </p>
             </div>
           </div>
 
-          {/* Question: Are you carrying any extra devices? */}
+          {/* Simple Required Question: Will the technician carry extra backup items? */}
           <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <span className="block text-xs font-bold text-gray-900">
-                Are you carrying any extra devices?
+                Will the technician carry extra backup items? <span className="text-rose-500">*</span>
               </span>
               <span className="text-[11px] text-gray-500">
-                Select "Yes" to record backup camera units taken to the site.
+                Select "Yes" if the technician is expected to carry backup items for site safety and contingencies.
               </span>
             </div>
             <div className="flex items-center gap-4">
               <label className="inline-flex items-center gap-2 cursor-pointer">
                 <input
                   type="radio"
-                  name="hasExtraDevicesRadio"
-                  checked={!hasExtraDevices}
-                  onChange={() => handleExtraToggle(false)}
-                  className="w-4 h-4 text-blue-600 focus:ring-blue-500"
+                  name="carryExtraBackupItemsRadio"
+                  checked={!carryExtraBackupItems}
+                  onChange={() => setCarryExtraBackupItems(false)}
+                  className="w-4 h-4 text-blue-600 focus:ring-blue-500 cursor-pointer"
                 />
                 <span className="text-xs font-semibold text-gray-700">No</span>
               </label>
               <label className="inline-flex items-center gap-2 cursor-pointer">
                 <input
                   type="radio"
-                  name="hasExtraDevicesRadio"
-                  checked={hasExtraDevices}
-                  onChange={() => handleExtraToggle(true)}
-                  className="w-4 h-4 text-blue-600 focus:ring-blue-500"
+                  name="carryExtraBackupItemsRadio"
+                  checked={carryExtraBackupItems}
+                  onChange={() => setCarryExtraBackupItems(true)}
+                  className="w-4 h-4 text-blue-600 focus:ring-blue-500 cursor-pointer"
                 />
                 <span className="text-xs font-bold text-blue-700">Yes</span>
               </label>
             </div>
           </div>
 
-          {/* Repeatable Extra Devices Form when Yes is selected */}
-          {hasExtraDevices && (
-            <div className="space-y-3 pt-2">
-              {extraDeviceConfigs.map((extraRow, idx) => {
-                const otherSelectedExtraTypes = new Set(
-                  extraDeviceConfigs.filter((c) => c.id !== extraRow.id).map((c) => c.device_type)
-                );
-
-                return (
-                  <div
-                    key={extraRow.id}
-                    className="p-4 bg-amber-50/40 border border-amber-200/70 rounded-2xl relative transition-all hover:border-amber-300"
-                  >
-                    <div className="flex items-center justify-between pb-2.5 mb-3 border-b border-amber-200/50">
-                      <span className="text-xs font-bold text-amber-900 uppercase tracking-wider flex items-center gap-1.5">
-                        <span className="w-5 h-5 rounded-full bg-amber-200 text-amber-900 font-mono text-[11px] flex items-center justify-center font-bold">
-                          {idx + 1}
-                        </span>
-                        Extra Device #{idx + 1}
-                      </span>
-
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveExtraDevice(extraRow.id)}
-                        className="text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50 px-2.5 py-1 rounded-lg font-semibold flex items-center gap-1 transition-colors cursor-pointer border border-rose-200/60"
-                        title="Remove this extra device row"
-                      >
-                        <Trash2 size={13} />
-                        Remove
-                      </button>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-xs font-semibold text-gray-700 mb-1">
-                          Type of Device <span className="text-rose-500">*</span>
-                        </label>
-                        <select
-                          value={extraRow.device_type}
-                          onChange={(e) => handleUpdateExtraDevice(extraRow.id, 'device_type', e.target.value)}
-                          className="w-full text-xs p-2.5 border border-gray-200 rounded-xl focus:outline-none focus:border-amber-500 font-medium bg-white"
-                        >
-                          {DEVICE_OPTIONS.map((opt) => (
-                            <option key={opt} value={opt}>
-                              {opt} {otherSelectedExtraTypes.has(opt) ? '(Already added)' : ''}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="block text-xs font-semibold text-gray-700 mb-1">
-                          Extra Quantity <span className="text-rose-500">*</span>
-                        </label>
-                        <input
-                          type="number"
-                          min="1"
-                          step="1"
-                          required
-                          value={extraRow.extra_quantity}
-                          onChange={(e) => handleUpdateExtraDevice(extraRow.id, 'extra_quantity', e.target.value)}
-                          placeholder="1"
-                          className="w-full text-xs p-2.5 border border-gray-200 rounded-xl focus:outline-none focus:border-amber-500 font-semibold bg-white"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-
-              {/* Add Another Extra Device Button */}
-              <div className="pt-1 flex items-center justify-between">
-                <button
-                  type="button"
-                  onClick={handleAddExtraDevice}
-                  className="text-xs px-3.5 py-2 rounded-xl font-bold flex items-center gap-1.5 transition-all cursor-pointer bg-amber-50 text-amber-800 hover:bg-amber-100 border border-amber-200 hover:border-amber-300 shadow-2xs"
-                >
-                  <Plus size={14} />
-                  Add Another Extra Device
-                </button>
+          {carryExtraBackupItems && (
+            <div className="p-3 bg-amber-50/70 border border-amber-200/80 rounded-xl text-xs text-amber-900 flex items-start gap-2.5">
+              <Info size={16} className="text-amber-600 shrink-0 mt-0.5" />
+              <div>
+                <strong>Technical Team Notice:</strong> The technician will declare specific loose products and quantities in the Technical Workspace before installation begins. Sales preliminary BOM is calculated strictly from required installation devices only.
               </div>
             </div>
           )}
@@ -1140,10 +914,10 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
               <HardDrive size={13} className="text-blue-600" />
               Device Allocation Summary
             </h4>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-center">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-center">
               <div className="p-3 bg-white rounded-xl border border-blue-100 shadow-2xs">
                 <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">
-                  Devices Required for Installation
+                  Required Installation Devices
                 </span>
                 <span className="text-lg font-black font-mono text-blue-900 mt-0.5 block">
                   {totalRequiredDevices} <span className="text-xs font-normal text-gray-500">Units</span>
@@ -1152,19 +926,10 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
 
               <div className="p-3 bg-white rounded-xl border border-amber-100 shadow-2xs">
                 <span className="text-[10px] font-bold text-amber-800 uppercase tracking-wider block">
-                  Extra Devices Carried
+                  Extra Backup Items Expected
                 </span>
-                <span className="text-lg font-black font-mono text-amber-700 mt-0.5 block">
-                  {totalExtraDevices} <span className="text-xs font-normal text-gray-500">Units</span>
-                </span>
-              </div>
-
-              <div className="p-3 bg-white rounded-xl border border-emerald-100 shadow-2xs">
-                <span className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider block">
-                  Total Devices Carried to Site
-                </span>
-                <span className="text-lg font-black font-mono text-emerald-700 mt-0.5 block">
-                  {totalDevicesCarried} <span className="text-xs font-normal text-gray-500">Units</span>
+                <span className={`text-lg font-black font-mono mt-0.5 block ${carryExtraBackupItems ? 'text-amber-600' : 'text-gray-400'}`}>
+                  {carryExtraBackupItems ? 'YES' : 'NO'}
                 </span>
               </div>
             </div>
