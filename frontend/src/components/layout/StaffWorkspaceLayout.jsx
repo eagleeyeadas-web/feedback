@@ -21,6 +21,7 @@ export default function StaffWorkspaceLayout({
     SALES: 'bg-blue-100 text-blue-800 border-blue-300',
     TECHNICAL: 'bg-teal-100 text-teal-800 border-teal-300',
     STORE_MANAGER: 'bg-amber-100 text-amber-800 border-amber-300',
+    COORDINATOR: 'bg-indigo-100 text-indigo-800 border-indigo-300',
     ADMIN: 'bg-purple-100 text-purple-800 border-purple-300',
   };
 

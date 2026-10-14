@@ -11,6 +11,7 @@ const Login = lazy(() => import('./pages/admin/Login'));
 const SalesWorkspacePage = lazy(() => import('./pages/staff/SalesWorkspacePage'));
 const TechnicalWorkspacePage = lazy(() => import('./pages/staff/TechnicalWorkspacePage'));
 const StoreWorkspacePage = lazy(() => import('./pages/staff/StoreWorkspacePage'));
+const CoordinatorWorkspacePage = lazy(() => import('./pages/staff/CoordinatorWorkspacePage'));
 
 function PageLoader() {
   return (
@@ -45,6 +46,9 @@ function DashboardRedirect() {
   if (userRole === 'STORE_MANAGER') {
     return <Navigate to="/store-manager" replace />;
   }
+  if (userRole === 'COORDINATOR') {
+    return <Navigate to="/coordinator" replace />;
+  }
 
   // Fallback for Admin
   return <Navigate to="/sales" replace />;
@@ -71,6 +75,9 @@ function ChecklistDetailRedirect() {
   if (userRole === 'STORE_MANAGER') {
     return <Navigate to={`/store-manager?view=${id}${actionQuery}`} replace />;
   }
+  if (userRole === 'COORDINATOR') {
+    return <Navigate to={`/coordinator?view=${id}${actionQuery}`} replace />;
+  }
   return <Navigate to={`/sales?view=${id}${actionQuery}`} replace />;
 }
 
@@ -87,7 +94,7 @@ function AppRoutes() {
 
         {/* 3. Single Staff Login Page */}
         <Route path="/login" element={<Login />} />
-        <Route path="/admin/login" element={<Navigate to="/login" replace />} />
+        <Route path="/admin/login" element={<Login />} />
 
         {/* 4. Dedicated Department Workspaces with Strict Role Route Protection */}
         {/* Sales Workspace: Accessible ONLY to SALES */}
@@ -129,6 +136,19 @@ function AppRoutes() {
           }
         />
         <Route path="/store" element={<Navigate to="/store-manager" replace />} />
+
+        {/* Coordinator Workspace: Accessible ONLY to COORDINATOR */}
+        <Route
+          path="/coordinator"
+          element={
+            <RoleProtectedRoute
+              allowedRoles={['COORDINATOR', 'ADMIN']}
+              targetResource="Coordinator Workspace"
+            >
+              <CoordinatorWorkspacePage />
+            </RoleProtectedRoute>
+          }
+        />
 
         {/* 5. Legacy / Nested Checklist Redirects */}
         <Route

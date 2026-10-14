@@ -11,6 +11,7 @@ import {
   Eye,
   CheckCircle2,
   Sparkles,
+  CalendarCheck,
 } from 'lucide-react';
 
 export default function LandingPage() {
@@ -64,6 +65,22 @@ export default function LandingPage() {
       iconBg: 'bg-purple-50 text-purple-600 border-purple-200/60',
       badgeClass: 'bg-purple-50 text-purple-700 border-purple-200',
       features: ['Inward Stock Receiving', 'Technician Returns', 'Hardware Audit Trail'],
+    },
+    {
+      id: 'coordinator',
+      title: 'Coordinator',
+      subtitle: 'Travel & Accommodation',
+      icon: CalendarCheck,
+      description: 'Arrange travel, bus tickets and room bookings for technical jobs',
+      buttonText: 'Coordinator Login',
+      color: 'indigo',
+      badge: 'Travel & Rooms',
+      action: () => navigate('/login?portal=coordinator'),
+      buttonClass:
+        'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-500/20 hover:shadow-indigo-500/35',
+      iconBg: 'bg-indigo-50 text-indigo-600 border-indigo-200/60',
+      badgeClass: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+      features: ['Bus & Travel Arrangements', 'Room Bookings', 'WhatsApp Ticket Logistics'],
     },
     {
       id: 'customer',

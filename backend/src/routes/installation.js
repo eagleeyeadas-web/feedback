@@ -264,7 +264,7 @@ router.get('/engineers/availability', requireRole('ADMIN', 'SALES', 'TECHNICAL',
  * GET /api/admin/installations/engineers/calendar
  * Date-based calendar view of all service engineers and their booked dates
  */
-router.get('/engineers/calendar', requireRole('ADMIN', 'SALES', 'TECHNICAL', 'STORE_MANAGER'), async (req, res) => {
+router.get('/engineers/calendar', requireRole('ADMIN', 'SALES', 'TECHNICAL', 'STORE_MANAGER', 'COORDINATOR'), async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
     const calendar = await getAvailabilityCalendar({ startDate, endDate });
@@ -325,9 +325,9 @@ router.get('/technician-expenses/monthly-summary', requireRole('TECHNICAL', 'ADM
 
 /**
  * GET /api/admin/installations
- * List installation checklists with search, filters, pagination (Accessible to all 4 roles)
+ * List installation checklists with search, filters, pagination (Accessible to all authorized roles)
  */
-router.get('/', requireRole('ADMIN', 'SALES', 'TECHNICAL', 'STORE_MANAGER'), async (req, res) => {
+router.get('/', requireRole('ADMIN', 'SALES', 'TECHNICAL', 'STORE_MANAGER', 'COORDINATOR'), async (req, res) => {
   try {
     const result = await getChecklists(req.query);
     if (result && Array.isArray(result.checklists)) {
@@ -341,24 +341,10 @@ router.get('/', requireRole('ADMIN', 'SALES', 'TECHNICAL', 'STORE_MANAGER'), asy
 });
 
 /**
- * GET /api/admin/installations/technician-expenses/monthly-summary
- * Current month technician expense total for authenticated technician
- */
-router.get('/technician-expenses/monthly-summary', requireRole('TECHNICAL', 'ADMIN'), async (req, res) => {
-  try {
-    const total = await getTechnicianCurrentMonthTotal(req.profile?.id, req.profile?.full_name);
-    return res.json({ total, month: new Date().toISOString().slice(0, 7) });
-  } catch (err) {
-    console.error('Error in GET /technician-expenses/monthly-summary:', err);
-    return res.status(500).json({ error: err.message || 'Failed to fetch monthly expense summary' });
-  }
-});
-
-/**
  * GET /api/admin/installations/:id
- * Get single installation checklist by ID (Accessible to all 4 roles)
+ * Get single installation checklist by ID (Accessible to all authorized roles)
  */
-router.get('/:id', requireRole('ADMIN', 'SALES', 'TECHNICAL', 'STORE_MANAGER'), async (req, res) => {
+router.get('/:id', requireRole('ADMIN', 'SALES', 'TECHNICAL', 'STORE_MANAGER', 'COORDINATOR'), async (req, res) => {
   try {
     let item = await getChecklistById(req.params.id);
     if (item) {
@@ -374,9 +360,9 @@ router.get('/:id', requireRole('ADMIN', 'SALES', 'TECHNICAL', 'STORE_MANAGER'), 
 
 /**
  * GET /api/admin/installations/:id/pdf
- * Download PDF for an installation checklist (Accessible to all 4 roles)
+ * Download PDF for an installation checklist (Accessible to all authorized roles)
  */
-router.get('/:id/pdf', requireRole('ADMIN', 'SALES', 'TECHNICAL', 'STORE_MANAGER'), async (req, res) => {
+router.get('/:id/pdf', requireRole('ADMIN', 'SALES', 'TECHNICAL', 'STORE_MANAGER', 'COORDINATOR'), async (req, res) => {
   try {
     let item = await getChecklistById(req.params.id);
     if (!item) {

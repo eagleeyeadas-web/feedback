@@ -16,6 +16,7 @@ import userRoutes from './routes/users.js';
 import auditRoutes from './routes/audit.js';
 import bomRoutes from './routes/bom.js';
 import materialRoutes from './routes/materials.js';
+import coordinatorRoutes from './routes/coordinator.js';
 import { runFullCleanup, handleCleanupEndpoint, handleCleanupStatusEndpoint, executeActivityTriggeredCleanup } from './services/quotationCleanupService.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -72,6 +73,8 @@ app.use('/api/admin/bom', bomRoutes);
 app.use('/api/bom', bomRoutes);
 app.use('/api/admin/materials', materialRoutes);
 app.use('/api/materials', materialRoutes);
+app.use('/api/admin/coordinator', coordinatorRoutes);
+app.use('/api/coordinator', coordinatorRoutes);
 app.use('/api/admin/customers', customerRoutes);
 app.use('/api/admin/users', userRoutes);
 app.use('/api/admin/audit-logs', auditRoutes);

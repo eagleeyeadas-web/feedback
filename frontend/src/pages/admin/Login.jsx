@@ -13,6 +13,7 @@ import {
   Briefcase,
   Wrench,
   Warehouse,
+  CalendarCheck,
   CheckCircle2,
   LogOut,
   ArrowRight,
@@ -68,6 +69,22 @@ const PORTALS = {
     iconBgClass: 'bg-purple-500/20 text-purple-300 border-purple-400/30',
     activeTabClass: 'bg-purple-600 text-white shadow-md shadow-purple-600/30',
   },
+  coordinator: {
+    id: 'coordinator',
+    name: 'Coordinator',
+    title: 'Coordinator Sign In',
+    subtitle: 'Travel arrangements, bus and room booking management',
+    role: 'COORDINATOR',
+    defaultEmail: 'coordinator@gmail.com',
+    targetPath: '/coordinator',
+    badge: 'Travel & Accommodation',
+    icon: CalendarCheck,
+    color: 'indigo',
+    badgeClass: 'bg-indigo-500/20 text-indigo-300 border-indigo-400/30',
+    btnClass: 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-600/30 hover:shadow-indigo-600/40',
+    iconBgClass: 'bg-indigo-500/20 text-indigo-300 border-indigo-400/30',
+    activeTabClass: 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30',
+  },
 };
 
 export default function Login() {
@@ -116,6 +133,7 @@ export default function Login() {
         if (userRole === 'SALES') navigate('/sales', { replace: true });
         else if (userRole === 'TECHNICAL') navigate('/technical', { replace: true });
         else if (userRole === 'STORE_MANAGER') navigate('/store-manager', { replace: true });
+        else if (userRole === 'COORDINATOR') navigate('/coordinator', { replace: true });
       }
     }
   }, [session, role, portalConfig, searchParams, navigate]);
@@ -137,6 +155,7 @@ export default function Login() {
     if (userRole === 'SALES') navigate('/sales', { replace: true });
     else if (userRole === 'TECHNICAL') navigate('/technical', { replace: true });
     else if (userRole === 'STORE_MANAGER') navigate('/store-manager', { replace: true });
+    else if (userRole === 'COORDINATOR') navigate('/coordinator', { replace: true });
     else navigate('/sales', { replace: true });
   };
 
@@ -168,6 +187,8 @@ export default function Login() {
         navigate('/technical', { replace: true });
       } else if (userRole === 'STORE_MANAGER') {
         navigate('/store-manager', { replace: true });
+      } else if (userRole === 'COORDINATOR') {
+        navigate('/coordinator', { replace: true });
       } else if (userRole === 'ADMIN') {
         // Admin gets directed to the workspace for the selected portal
         navigate(portalConfig.targetPath || '/sales', { replace: true });

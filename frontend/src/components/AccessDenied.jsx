@@ -15,6 +15,10 @@ const DEFAULT_WORKSPACE_BY_ROLE = {
     path: '/store-manager',
     name: 'Store Manager Workspace',
   },
+  COORDINATOR: {
+    path: '/coordinator',
+    name: 'Coordinator Workspace',
+  },
   ADMIN: {
     path: '/sales',
     name: 'Sales Workspace',
@@ -25,6 +29,7 @@ const ROLE_PERMITTED_DESCRIPTIONS = {
   SALES: 'Customer intake, Sales Workspace, Quotations, and Installation job creation.',
   TECHNICAL: 'Technical Workspace, device carry recording, installation reports, and return declarations.',
   STORE_MANAGER: 'Store Manager Workspace, device inventory receipts, adjustments, and return verification.',
+  COORDINATOR: 'Coordinator Workspace, travel and accommodation bookings for technical jobs.',
   ADMIN: 'System-wide administration, user management, and operational oversight.',
 };
 

@@ -40,6 +40,13 @@ function getTargetAccounts() {
       fullName: 'Store Manager',
       defaultWorkspace: 'Store Manager Workspace',
     },
+    {
+      email: 'coordinator@gmail.com',
+      password: getAccountPassword('COORDINATOR_ACCOUNT_PASSWORD', 'COORDINATOR'),
+      role: 'COORDINATOR',
+      fullName: 'Travel & Accommodation Coordinator',
+      defaultWorkspace: 'Coordinator Workspace',
+    },
   ];
 }
 

@@ -19,6 +19,10 @@ setInterval(() => {
  */
 export async function requireAuth(req, res, next) {
   try {
+    if (req.user && req.profile) {
+      return next();
+    }
+
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return res.status(401).json({ error: 'Missing or invalid authorization header' });
@@ -64,13 +68,14 @@ export async function requireAuth(req, res, next) {
       'sales@gmail.com': 'SALES',
       'tech@gmail.com': 'TECHNICAL',
       'store@gmail.com': 'STORE_MANAGER',
+      'coordinator@gmail.com': 'COORDINATOR',
     };
 
     // Resolve authoritative role from trusted database record & server-signed auth identity
     let role = null;
     const userEmail = (user.email || '').toLowerCase().trim();
     const dbRole = adminUser.role ? String(adminUser.role).trim().toUpperCase() : '';
-    const DEPARTMENT_ROLES = ['SALES', 'TECHNICAL', 'STORE_MANAGER'];
+    const DEPARTMENT_ROLES = ['SALES', 'TECHNICAL', 'STORE_MANAGER', 'COORDINATOR'];
     const appRole = (user.app_metadata?.role || '').toUpperCase();
     const userMetaRole = (user.user_metadata?.role || '').toUpperCase();
 

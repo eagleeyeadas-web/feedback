@@ -875,6 +875,59 @@ export async function fetchTechnicianMonthlyExpenseSummary(token) {
   return res.json();
 }
 
+/**
+ * Coordinator Travel & Accommodation Booking APIs
+ */
+export async function fetchCoordinatorBookings(token, params = {}) {
+  const query = new URLSearchParams(params).toString();
+  const res = await fetch(`${API_BASE}/admin/coordinator/bookings?${query}`, {
+    headers: adminHeaders(token),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to fetch coordinator bookings');
+  return json;
+}
+
+export async function fetchCoordinatorBookingDetails(token, checklistId) {
+  const res = await fetch(`${API_BASE}/admin/coordinator/bookings/${checklistId}`, {
+    headers: adminHeaders(token),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to fetch booking details');
+  return json;
+}
+
+export async function saveCoordinatorBookingApi(token, checklistId, data) {
+  const res = await fetch(`${API_BASE}/admin/coordinator/bookings/${checklistId}`, {
+    method: 'POST',
+    headers: adminHeaders(token),
+    body: JSON.stringify(data),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to save booking details');
+  return json;
+}
+
+export async function updateCoordinatorBookingStatusApi(token, checklistId, status, notes) {
+  const res = await fetch(`${API_BASE}/admin/coordinator/bookings/${checklistId}/status`, {
+    method: 'POST',
+    headers: adminHeaders(token),
+    body: JSON.stringify({ status, notes }),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to update booking status');
+  return json;
+}
+
+export async function fetchCoordinatorBookingHistory(token, checklistId) {
+  const res = await fetch(`${API_BASE}/admin/coordinator/bookings/${checklistId}/history`, {
+    headers: adminHeaders(token),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to fetch booking history');
+  return json;
+}
+
 
 
 
