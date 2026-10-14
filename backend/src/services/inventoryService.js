@@ -3,6 +3,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import supabase from './supabase.js';
 import { logAudit } from './auditService.js';
+import { recordStockMovement } from './stockMovementService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -313,6 +314,25 @@ export async function setDeviceOpeningStock({
     console.warn('DB device opening tx insert error:', txErr.message);
   }
 
+  // Record into persistent stock_movements ledger in Supabase
+  await recordStockMovement({
+    item_id: targetId,
+    product_id: targetId,
+    item_name: product.device_name || targetType,
+    sku: product.sku,
+    category: 'Camera Device',
+    movement_type: 'OPENING_STOCK',
+    quantity: qty,
+    unit: product.unit || 'Nos.',
+    balance_before: previousBalance,
+    balance_after: newBalance,
+    performed_by: user?.id,
+    performer_name: user?.full_name || user?.email || 'Store Manager',
+    performer_email: user?.email,
+    reason_or_remarks: txRecord.reason_or_remarks,
+    idempotency_key: txRecord.idempotency_key,
+  }).catch((e) => console.warn('recordStockMovement error:', e.message));
+
   inMemoryTransactions.unshift(txRecord);
   saveInventoryStorage();
 
@@ -438,6 +458,25 @@ export async function receiveNewStock({
   } catch (txErr) {
     console.warn('DB transaction insert failed, stored in memory:', txErr.message);
   }
+
+  // Record into persistent stock_movements ledger in Supabase
+  await recordStockMovement({
+    item_id: productId,
+    product_id: productId,
+    item_name: product?.device_name || `${device_type} System`,
+    sku: product?.sku,
+    category: 'Camera Device',
+    movement_type: 'STOCK_RECEIVED',
+    quantity: qty,
+    unit: product?.unit || 'Nos.',
+    balance_before: previousBalance,
+    balance_after: newUsable,
+    performed_by: user?.id,
+    performer_name: user?.full_name || user?.email || 'Store Manager',
+    performer_email: user?.email,
+    reason_or_remarks: transactionRecord.reason_or_remarks,
+    idempotency_key: transactionRecord.idempotency_key,
+  }).catch((e) => console.warn('recordStockMovement error:', e.message));
 
   inMemoryTransactions.unshift(transactionRecord);
   saveInventoryStorage();
@@ -584,6 +623,25 @@ export async function adjustStock({
     console.warn('DB transaction insert error:', txErr.message);
   }
 
+  // Record into persistent stock_movements ledger in Supabase
+  await recordStockMovement({
+    item_id: productId,
+    product_id: productId,
+    item_name: product?.device_name || `${device_type} System`,
+    sku: product?.sku,
+    category: 'Camera Device',
+    movement_type: txType,
+    quantity: Math.abs(qtyDelta),
+    unit: product?.unit || 'Nos.',
+    balance_before: currentUsable,
+    balance_after: newUsable,
+    performed_by: user?.id,
+    performer_name: user?.full_name || user?.email || 'Store Manager',
+    performer_email: user?.email,
+    reason_or_remarks: remarkFormatted,
+    idempotency_key: transactionRecord.idempotency_key,
+  }).catch((e) => console.warn('recordStockMovement error:', e.message));
+
   inMemoryTransactions.unshift(transactionRecord);
   saveInventoryStorage();
 
@@ -705,6 +763,24 @@ export async function addNewDeviceProduct({
     } catch (e) {
       // In-memory fallback
     }
+
+    await recordStockMovement({
+      item_id: productId,
+      product_id: productId,
+      item_name: trimmedName,
+      sku: generatedSku,
+      category: 'Camera Device',
+      movement_type: 'OPENING_STOCK',
+      quantity: openingQty,
+      unit: unit || 'Nos.',
+      balance_before: 0,
+      balance_after: openingQty,
+      performed_by: user?.id,
+      performer_name: user?.full_name || user?.email || 'Store Manager',
+      performer_email: user?.email,
+      reason_or_remarks: txRecord.reason_or_remarks,
+      idempotency_key: txRecord.idempotency_key,
+    }).catch((err) => console.warn('recordStockMovement error:', err.message));
   }
 
   // Attempt DB insert
@@ -877,6 +953,26 @@ export async function issueDevicesForChecklist({
     } catch (txErr) {
       console.warn('DB device transaction insert error:', txErr.message);
     }
+
+    // Record into persistent stock_movements ledger in Supabase
+    await recordStockMovement({
+      item_id: productId,
+      product_id: productId,
+      item_name: devType,
+      sku: prod?.sku,
+      category: 'Camera Device',
+      movement_type: 'STOCK_ISSUED',
+      quantity: qty,
+      unit: prod?.unit || 'Nos.',
+      balance_before: previousBalance,
+      balance_after: newUsable,
+      checklist_id,
+      performed_by: user?.id,
+      performer_name: user?.full_name || user?.email || 'Store Manager',
+      performer_email: user?.email,
+      reason_or_remarks: txRecord.reason_or_remarks,
+      idempotency_key: idempotencyKey,
+    }).catch((e) => console.warn('recordStockMovement error:', e.message));
 
     inMemoryTransactions.unshift(txRecord);
     issuedRecords.push({
@@ -1134,6 +1230,27 @@ export async function creditStockForVerifiedReturn({
       console.warn('DB tx insert error:', e.message);
     }
 
+    // Record into persistent stock_movements ledger in Supabase
+    await recordStockMovement({
+      item_id: productId,
+      product_id: productId,
+      item_name: prod?.device_name || `${device_type} System`,
+      sku: prod?.sku,
+      category: 'Camera Device',
+      movement_type: 'USABLE_STOCK_RETURNED',
+      quantity: usableQty,
+      unit: prod?.unit || 'Nos.',
+      balance_before: previousUsable,
+      balance_after: newUsable,
+      checklist_id,
+      reference_transaction_id: return_id,
+      performed_by: user?.id,
+      performer_name: user?.full_name || user?.email || 'Store Manager',
+      performer_email: user?.email,
+      reason_or_remarks: usableTx.reason_or_remarks,
+      idempotency_key: usableTx.idempotency_key,
+    }).catch((e) => console.warn('recordStockMovement error:', e.message));
+
     inMemoryTransactions.unshift(usableTx);
   }
 
@@ -1171,6 +1288,27 @@ export async function creditStockForVerifiedReturn({
     } catch (e) {
       console.warn('DB tx insert error:', e.message);
     }
+
+    // Record into persistent stock_movements ledger in Supabase
+    await recordStockMovement({
+      item_id: productId,
+      product_id: productId,
+      item_name: prod?.device_name || `${device_type} System`,
+      sku: prod?.sku,
+      category: 'Camera Device',
+      movement_type: 'DAMAGED_STOCK_RECEIVED',
+      quantity: dmgQty,
+      unit: prod?.unit || 'Nos.',
+      balance_before: Number(prod?.damaged_stock) || 0,
+      balance_after: newDamaged,
+      checklist_id,
+      reference_transaction_id: return_id,
+      performed_by: user?.id,
+      performer_name: user?.full_name || user?.email || 'Store Manager',
+      performer_email: user?.email,
+      reason_or_remarks: dmgTx.reason_or_remarks,
+      idempotency_key: dmgTx.idempotency_key,
+    }).catch((e) => console.warn('recordStockMovement error:', e.message));
 
     inMemoryTransactions.unshift(dmgTx);
   }

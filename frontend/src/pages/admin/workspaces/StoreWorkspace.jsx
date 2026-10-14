@@ -42,6 +42,7 @@ import {
   fetchAllMovements,
   fetchAllStoreReturns,
   verifyStoreReturnApi,
+  triggerInventoryCleanupApi,
   fetchStoreMaterialRequirements,
   createDeviceProductApi,
 } from '../../../lib/api';
@@ -78,10 +79,14 @@ export default function StoreWorkspace({ onSelectChecklist }) {
   const [loading, setLoading] = useState(true);
   const [toastMessage, setToastMessage] = useState('');
 
-  // Movements Filters
+  // Movements Filters & Pagination
   const [movementCategory, setMovementCategory] = useState('All');
   const [movementType, setMovementType] = useState('All');
   const [movementSearch, setMovementSearch] = useState('');
+  const [movementPage, setMovementPage] = useState(1);
+  const [movementTotalPages, setMovementTotalPages] = useState(1);
+  const [movementTotalCount, setMovementTotalCount] = useState(0);
+  const [cleanupRunning, setCleanupRunning] = useState(false);
 
   // Manage Stock Modal State (Unified Simplified Stock Management)
   const [manageStockItem, setManageStockItem] = useState(null); // { type: 'DEVICE' | 'MATERIAL', name, unit, currentStock, rawItem }
@@ -139,7 +144,9 @@ export default function StoreWorkspace({ onSelectChecklist }) {
           category: movementCategory,
           type: movementType,
           search: movementSearch,
-        }).catch(() => ({ transactions: [] })),
+          page: movementPage,
+          limit: 50,
+        }).catch(() => ({ transactions: [], totalCount: 0, totalPages: 1 })),
         fetchAllStoreReturns(token).catch(() => []),
         fetchStoreMaterialRequirements(token, { limit: 15, issuance_status: 'PENDING' }).catch(() => ({ requirements: [] })),
       ]);
@@ -147,6 +154,8 @@ export default function StoreWorkspace({ onSelectChecklist }) {
       setProducts(prodData || []);
       setMaterials(matData || []);
       setMovements(movData.transactions || []);
+      setMovementTotalCount(movData.totalCount !== undefined ? movData.totalCount : (movData.transactions?.length || 0));
+      setMovementTotalPages(movData.totalPages || 1);
       setStoreReturns(returnsData || []);
       setPendingRequirements(reqData.requirements || []);
 
@@ -166,11 +175,28 @@ export default function StoreWorkspace({ onSelectChecklist }) {
     } finally {
       setLoading(false);
     }
-  }, [token, movementCategory, movementType, movementSearch]);
+  }, [token, movementCategory, movementType, movementSearch, movementPage]);
 
   useEffect(() => {
     loadAllData();
   }, [loadAllData]);
+
+  // Handle Manual 20-Day Retention Cleanup Trigger
+  const handleTriggerCleanup = async () => {
+    if (!token || cleanupRunning) return;
+    setCleanupRunning(true);
+    try {
+      const res = await triggerInventoryCleanupApi(token);
+      showToast(
+        `20-day cleanup completed! Deleted ${res.movements_deleted || 0} old movements, ${res.device_returns_deleted || 0} device returns, ${res.material_returns_deleted || 0} material returns.`
+      );
+      loadAllData();
+    } catch (err) {
+      showToast(`Cleanup notice: ${err.message}`);
+    } finally {
+      setCleanupRunning(false);
+    }
+  };
 
   // Handle Adding New Camera Device Model
   const handleAddDeviceSubmit = async (e) => {
@@ -1055,20 +1081,32 @@ export default function StoreWorkspace({ onSelectChecklist }) {
                         <td className="py-3 px-4 font-semibold text-gray-900">
                           {r.material_name || r.device_type}
                         </td>
-                        <td className="py-3 px-4 text-center font-bold font-mono">{r.declared_return_qty} {unitStr}</td>
+                        <td className="py-3 px-4 text-center font-bold font-mono">
+                          {r.declared_return_qty !== null && r.declared_return_qty !== undefined ? `${r.declared_return_qty} ${unitStr}` : `0 ${unitStr}`}
+                        </td>
                         <td className="py-3 px-4 text-center font-bold font-mono text-emerald-700">
-                          {r.accepted_usable_qty !== null ? `${r.accepted_usable_qty} ${unitStr}` : '—'}
+                          {r.accepted_usable_qty !== null && r.accepted_usable_qty !== undefined
+                            ? `${r.accepted_usable_qty} ${unitStr}`
+                            : (r.status === 'PENDING_STORE_VERIFICATION' ? '—' : `0 ${unitStr}`)}
                         </td>
                         <td className="py-3 px-4 text-center font-bold font-mono text-rose-600">
-                          {r.damaged_qty !== null ? `${r.damaged_qty} ${unitStr}` : '—'}
+                          {r.damaged_qty !== null && r.damaged_qty !== undefined
+                            ? `${r.damaged_qty} ${unitStr}`
+                            : (r.status === 'PENDING_STORE_VERIFICATION' ? '—' : `0 ${unitStr}`)}
                         </td>
                         <td className="py-3 px-4 text-center">
                           <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                            r.status === 'VERIFIED_ACCEPTED'
+                            r.status === 'VERIFIED_ACCEPTED' || r.status === 'VERIFIED_AND_RECONCILED'
                               ? 'bg-emerald-100 text-emerald-800'
+                              : r.status === 'DISCREPANCY_FLAGGED'
+                              ? 'bg-rose-100 text-rose-800'
                               : 'bg-amber-100 text-amber-800'
                           }`}>
-                            {r.status === 'VERIFIED_ACCEPTED' ? 'Verified & Credited' : 'Awaiting Store Verification'}
+                            {r.status === 'VERIFIED_ACCEPTED' || r.status === 'VERIFIED_AND_RECONCILED'
+                              ? 'Verified & Credited'
+                              : r.status === 'DISCREPANCY_FLAGGED'
+                              ? 'Discrepancy Flagged'
+                              : 'Awaiting Store Verification'}
                           </span>
                         </td>
                         <td className="py-3 px-4 text-right">
@@ -1210,6 +1248,54 @@ export default function StoreWorkspace({ onSelectChecklist }) {
                 )}
               </tbody>
             </table>
+
+            {/* Pagination Controls */}
+            <div className="flex flex-col sm:flex-row items-center justify-between p-3 bg-gray-50 border-t border-gray-100 rounded-b-2xl text-xs gap-2">
+              <span className="text-gray-500 font-medium">
+                Showing {movements.length} of {movementTotalCount} movements (Page {movementPage} of {movementTotalPages})
+              </span>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setMovementPage((p) => Math.max(1, p - 1))}
+                  disabled={movementPage <= 1}
+                  className="px-3 py-1 bg-white border border-gray-200 rounded-lg text-gray-700 font-bold hover:bg-gray-100 disabled:opacity-40 cursor-pointer"
+                >
+                  Previous
+                </button>
+                <span className="px-2 font-mono font-bold text-gray-800">{movementPage} / {movementTotalPages}</span>
+                <button
+                  type="button"
+                  onClick={() => setMovementPage((p) => Math.min(movementTotalPages, p + 1))}
+                  disabled={movementPage >= movementTotalPages}
+                  className="px-3 py-1 bg-white border border-gray-200 rounded-lg text-gray-700 font-bold hover:bg-gray-100 disabled:opacity-40 cursor-pointer"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Automatic 20-Day Retention Notice & Manual Trigger */}
+          <div className="bg-amber-50/70 border border-amber-200/60 rounded-2xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
+            <div className="flex items-start gap-2.5">
+              <Clock className="w-5 h-5 text-amber-700 shrink-0 mt-0.5" />
+              <div>
+                <h4 className="font-bold text-amber-950">Automatic 20-Day History Retention Active</h4>
+                <p className="text-amber-800/80 mt-0.5 max-w-2xl leading-relaxed">
+                  Completed stock movements and verified returns strictly older than 20 days are automatically pruned daily by the server. Authoritative inventory stock balances, pending returns, and unresolved discrepancy records are permanently preserved and protected.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={handleTriggerCleanup}
+              disabled={cleanupRunning}
+              className="px-3.5 py-2 bg-amber-700 hover:bg-amber-800 text-white font-bold rounded-xl shadow-xs shrink-0 flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${cleanupRunning ? 'animate-spin' : ''}`} />
+              <span>{cleanupRunning ? 'Running Cleanup...' : 'Run 20-Day Cleanup Now'}</span>
+            </button>
           </div>
         </div>
       )}

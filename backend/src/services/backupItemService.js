@@ -1,0 +1,538 @@
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import supabase from './supabase.js';
+import { logAudit } from './auditService.js';
+import { getMaterialInventory, receiveMaterialStock } from './materialStockService.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const STORAGE_FILE = path.join(__dirname, '../data/backup_items_storage.json');
+
+/**
+ * Resilient in-memory store with file backing for loose backup item declarations
+ */
+const inMemoryDeclarations = new Map(); // checklist_id -> declaration object
+const inMemoryVerifiedReturns = new Set(); // verification keys to prevent duplicate return credits
+
+export function loadBackupItemsStorage() {
+  try {
+    if (fs.existsSync(STORAGE_FILE)) {
+      const raw = fs.readFileSync(STORAGE_FILE, 'utf-8');
+      const data = JSON.parse(raw);
+      if (data.declarations && typeof data.declarations === 'object') {
+        Object.entries(data.declarations).forEach(([k, v]) => {
+          inMemoryDeclarations.set(k, { ...v });
+        });
+      }
+      if (Array.isArray(data.verifiedReturns)) {
+        data.verifiedReturns.forEach((key) => inMemoryVerifiedReturns.add(key));
+      }
+    } else {
+      saveBackupItemsStorage();
+    }
+  } catch (err) {
+    console.warn('Could not load backup items storage:', err.message);
+  }
+}
+
+function saveBackupItemsStorage() {
+  try {
+    const dir = path.dirname(STORAGE_FILE);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    const data = {
+      declarations: Object.fromEntries(inMemoryDeclarations.entries()),
+      verifiedReturns: Array.from(inMemoryVerifiedReturns),
+      updated_at: new Date().toISOString(),
+    };
+    fs.writeFileSync(STORAGE_FILE, JSON.stringify(data, null, 2), 'utf-8');
+  } catch (err) {
+    console.warn('Could not save backup items storage:', err.message);
+  }
+}
+
+// Initial load
+loadBackupItemsStorage();
+
+/**
+ * Get available loose backup products from material inventory catalog
+ */
+export async function getAvailableBackupProducts() {
+  try {
+    const materials = await getMaterialInventory();
+    return materials.map((m) => ({
+      id: m.id,
+      item_id: m.id,
+      material_id: m.id,
+      item_name: m.material_name,
+      material_name: m.material_name,
+      sku: m.sku,
+      unit: m.unit || 'Nos.',
+      available_stock: Number(m.current_stock) || 0,
+      current_stock: Number(m.current_stock) || 0,
+      min_stock_level: Number(m.min_stock_level) || 0,
+    }));
+  } catch (err) {
+    console.warn('Could not load materials for backup products:', err.message);
+    return [];
+  }
+}
+
+/**
+ * Get pre-installation backup declaration for a checklist
+ */
+export async function getBackupDeclaration(checklistId) {
+  if (!checklistId) return null;
+
+  // 1. Fetch checklist to determine sales expectation
+  let checklist = null;
+  try {
+    const { data, error } = await supabase
+      .from('installation_checklists')
+      .select('id, checklist_number, carry_extra_backup_items, extra_devices, service_engineer, service_engineer_id, installation_status')
+      .eq('id', checklistId)
+      .maybeSingle();
+    if (!error && data) {
+      checklist = data;
+    }
+  } catch (e) {
+    // Non-blocking
+  }
+
+  const salesExpected = Boolean(checklist?.carry_extra_backup_items ?? checklist?.extra_devices);
+
+  // 2. Try Supabase
+  try {
+    const { data: decl, error: declErr } = await supabase
+      .from('pre_installation_backup_declarations')
+      .select('*')
+      .eq('checklist_id', checklistId)
+      .maybeSingle();
+
+    if (!declErr && decl) {
+      const { data: rows, error: rowsErr } = await supabase
+        .from('pre_installation_backup_items')
+        .select('*')
+        .eq('declaration_id', decl.id)
+        .order('created_at', { ascending: true });
+
+      const items = !rowsErr && Array.isArray(rows) ? rows : [];
+      const result = {
+        ...decl,
+        sales_expected: salesExpected,
+        items,
+      };
+      // Keep memory synced
+      inMemoryDeclarations.set(checklistId, result);
+      return result;
+    }
+  } catch (e) {
+    // Fall back to memory
+  }
+
+  // 3. Fallback to memory
+  const cached = inMemoryDeclarations.get(checklistId);
+  if (cached) {
+    return {
+      ...cached,
+      sales_expected: salesExpected,
+    };
+  }
+
+  // Default empty declaration state
+  return {
+    checklist_id: checklistId,
+    sales_expected: salesExpected,
+    has_backup_items: false,
+    no_items_reason: null,
+    status: 'NOT_RECORDED',
+    items: [],
+  };
+}
+
+/**
+ * Save / Update pre-installation backup declaration
+ */
+export async function saveBackupDeclaration({
+  checklistId,
+  user,
+  hasBackupItems,
+  noItemsReason = '',
+  items = [],
+}) {
+  if (!checklistId) {
+    throw new Error('Checklist ID is required.');
+  }
+
+  // Fetch checklist
+  let checklist = null;
+  try {
+    const { data, error } = await supabase
+      .from('installation_checklists')
+      .select('id, checklist_number, carry_extra_backup_items, extra_devices, service_engineer, service_engineer_id, installation_status')
+      .eq('id', checklistId)
+      .maybeSingle();
+    if (!error && data) checklist = data;
+  } catch (e) {
+    // Non-blocking
+  }
+
+  const salesExpected = Boolean(checklist?.carry_extra_backup_items ?? checklist?.extra_devices);
+  const isCarrying = Boolean(hasBackupItems);
+
+  // Validations per requirement:
+  // If Sales selected Yes, technician must record backup items or explicitly confirm none were carried with reason
+  if (salesExpected && !isCarrying) {
+    if (!noItemsReason || !noItemsReason.trim()) {
+      throw new Error('Sales indicated extra backup items are expected. Please specify backup items or provide a reason why no extra items were carried.');
+    }
+  }
+
+  let validatedItems = [];
+  if (isCarrying) {
+    if (!Array.isArray(items) || items.length === 0) {
+      throw new Error('Please add at least one backup item with a positive quantity.');
+    }
+
+    const itemMap = new Map();
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i];
+      const name = (it.item_name || it.material_name || '').trim();
+      if (!name) {
+        throw new Error(`Row #${i + 1}: Please select a product.`);
+      }
+      const qty = Number(it.quantity);
+      if (isNaN(qty) || qty <= 0) {
+        throw new Error(`Row #${i + 1} (${name}): Quantity must be a positive number greater than 0.`);
+      }
+
+      const unit = (it.unit || 'Nos.').trim();
+      const itemId = (it.item_id || it.id || `item-${name.toLowerCase().replace(/\s+/g, '-')}`).trim();
+      const sku = (it.sku || it.item_sku || '').trim();
+
+      // Combine duplicate rows if user selected same item
+      if (itemMap.has(name.toLowerCase())) {
+        const existing = itemMap.get(name.toLowerCase());
+        existing.quantity += qty;
+      } else {
+        itemMap.set(name.toLowerCase(), {
+          item_id: itemId,
+          item_name: name,
+          item_sku: sku || null,
+          quantity: qty,
+          unit: unit || 'Nos.',
+          quantity_issued: 0,
+          quantity_used: 0,
+          quantity_returned: 0,
+          quantity_damaged: 0,
+          quantity_missing: 0,
+          discrepancy_reason: null,
+        });
+      }
+    }
+    validatedItems = Array.from(itemMap.values());
+  }
+
+  const existingDecl = await getBackupDeclaration(checklistId);
+  const isCorrection = Boolean(existingDecl && existingDecl.status && existingDecl.status !== 'NOT_RECORDED');
+
+  // Maintain history when correcting
+  const history = Array.isArray(existingDecl?.history) ? [...existingDecl.history] : [];
+  if (isCorrection) {
+    history.push({
+      modified_at: new Date().toISOString(),
+      modified_by: user?.email || user?.id || 'Technician',
+      previous_has_backup_items: existingDecl.has_backup_items,
+      previous_items_count: existingDecl.items?.length || 0,
+      previous_items: existingDecl.items || [],
+    });
+  }
+
+  const nowIso = new Date().toISOString();
+  const declarationPayload = {
+    checklist_id: checklistId,
+    technician_id: user?.id || checklist?.service_engineer_id || null,
+    technician_name: user?.name || user?.email || checklist?.service_engineer || 'Technician',
+    has_backup_items: isCarrying,
+    no_items_reason: isCarrying ? null : (noItemsReason ? noItemsReason.trim() : null),
+    status: isCorrection ? 'CORRECTED' : 'DECLARED',
+    declaration_timestamp: nowIso,
+    history,
+    updated_at: nowIso,
+  };
+
+  let savedDeclaration = null;
+
+  // 1. Try Supabase upsert
+  try {
+    const { data: upsertedDecl, error: declErr } = await supabase
+      .from('pre_installation_backup_declarations')
+      .upsert(
+        {
+          ...(existingDecl?.id ? { id: existingDecl.id } : {}),
+          ...declarationPayload,
+          created_at: existingDecl?.created_at || nowIso,
+        },
+        { onConflict: 'checklist_id' }
+      )
+      .select()
+      .single();
+
+    if (!declErr && upsertedDecl) {
+      savedDeclaration = upsertedDecl;
+
+      // Delete old items and insert fresh rows
+      await supabase
+        .from('pre_installation_backup_items')
+        .delete()
+        .eq('declaration_id', savedDeclaration.id);
+
+      if (validatedItems.length > 0) {
+        const rowsToInsert = validatedItems.map((vi) => ({
+          declaration_id: savedDeclaration.id,
+          checklist_id: checklistId,
+          item_id: vi.item_id,
+          item_name: vi.item_name,
+          item_sku: vi.item_sku,
+          quantity: vi.quantity,
+          unit: vi.unit,
+          quantity_issued: vi.quantity_issued || 0,
+          quantity_used: vi.quantity_used || 0,
+          quantity_returned: vi.quantity_returned || 0,
+          quantity_damaged: vi.quantity_damaged || 0,
+          quantity_missing: vi.quantity_missing || 0,
+          discrepancy_reason: vi.discrepancy_reason || null,
+          created_at: nowIso,
+          updated_at: nowIso,
+        }));
+
+        const { data: insertedRows } = await supabase
+          .from('pre_installation_backup_items')
+          .insert(rowsToInsert)
+          .select();
+
+        savedDeclaration.items = insertedRows || rowsToInsert;
+      } else {
+        savedDeclaration.items = [];
+      }
+    }
+  } catch (err) {
+    console.warn('Supabase backup declaration save failed, falling back to local store:', err.message);
+  }
+
+  // 2. Fallback to in-memory / local storage
+  if (!savedDeclaration) {
+    const declId = existingDecl?.id || `decl-${checklistId}`;
+    savedDeclaration = {
+      id: declId,
+      ...declarationPayload,
+      created_at: existingDecl?.created_at || nowIso,
+      items: validatedItems.map((vi, idx) => ({
+        id: `bitem-${declId}-${idx + 1}`,
+        declaration_id: declId,
+        checklist_id: checklistId,
+        ...vi,
+        created_at: nowIso,
+        updated_at: nowIso,
+      })),
+    };
+  }
+
+  savedDeclaration.sales_expected = salesExpected;
+  inMemoryDeclarations.set(checklistId, savedDeclaration);
+  saveBackupItemsStorage();
+
+  // Audit log
+  await logAudit({
+    actor_id: user?.id,
+    actor_email: user?.email,
+    actor_role: user?.role || 'TECHNICAL',
+    action: isCorrection ? 'CORRECT_BACKUP_ITEMS_DECLARATION' : 'DECLARE_BACKUP_ITEMS',
+    target_table: 'pre_installation_backup_declarations',
+    target_id: savedDeclaration.id,
+    details: {
+      checklist_id: checklistId,
+      has_backup_items: isCarrying,
+      items_count: validatedItems.length,
+      is_correction: isCorrection,
+    },
+  });
+
+  return savedDeclaration;
+}
+
+/**
+ * Reconcile backup items during post-installation report submission
+ */
+export async function reconcileBackupItems({ checklistId, user, items = [] }) {
+  const declaration = await getBackupDeclaration(checklistId);
+  if (!declaration || !declaration.has_backup_items) {
+    return { reconciled: true, items: [] };
+  }
+
+  const declaredItems = declaration.items || [];
+  const inputMap = new Map();
+  items.forEach((it) => {
+    const key = (it.item_name || it.material_name || '').toLowerCase();
+    inputMap.set(key, it);
+  });
+
+  const reconciledRows = [];
+
+  for (const decItem of declaredItems) {
+    const key = decItem.item_name.toLowerCase();
+    const rep = inputMap.get(key) || {};
+
+    const qtyCarried = Number(decItem.quantity) || 0;
+    const qtyUsed = Math.max(0, Number(rep.quantity_used || rep.quantity_installed || 0));
+    const qtyReturned = Math.max(0, Number(rep.quantity_returned || rep.quantity_to_return || 0));
+    const qtyDamaged = Math.max(0, Number(rep.quantity_damaged || 0));
+    const qtyMissing = Math.max(0, Number(rep.quantity_missing || 0));
+
+    const totalAccounted = qtyUsed + qtyReturned + qtyDamaged + qtyMissing;
+    if (totalAccounted !== qtyCarried) {
+      throw new Error(
+        `Backup item reconciliation mismatch for "${decItem.item_name}": Declared quantity (${qtyCarried}) must equal Used (${qtyUsed}) + Returned (${qtyReturned}) + Damaged (${qtyDamaged}) + Missing (${qtyMissing}). Currently accounts for ${totalAccounted}.`
+      );
+    }
+
+    if ((qtyDamaged > 0 || qtyMissing > 0) && (!rep.discrepancy_reason || !rep.discrepancy_reason.trim())) {
+      throw new Error(
+        `Discrepancy remark is required for backup item "${decItem.item_name}" when reporting damaged (${qtyDamaged}) or missing (${qtyMissing}) items.`
+      );
+    }
+
+    reconciledRows.push({
+      ...decItem,
+      quantity_used: qtyUsed,
+      quantity_returned: qtyReturned,
+      quantity_damaged: qtyDamaged,
+      quantity_missing: qtyMissing,
+      discrepancy_reason: rep.discrepancy_reason ? rep.discrepancy_reason.trim() : null,
+      updated_at: new Date().toISOString(),
+    });
+  }
+
+  // Update rows in Supabase
+  try {
+    for (const r of reconciledRows) {
+      if (r.id) {
+        await supabase
+          .from('pre_installation_backup_items')
+          .update({
+            quantity_used: r.quantity_used,
+            quantity_returned: r.quantity_returned,
+            quantity_damaged: r.quantity_damaged,
+            quantity_missing: r.quantity_missing,
+            discrepancy_reason: r.discrepancy_reason,
+            updated_at: r.updated_at,
+          })
+          .eq('id', r.id);
+      }
+    }
+  } catch (e) {
+    console.warn('Failed to update reconciled backup items in Supabase:', e.message);
+  }
+
+  // Update memory
+  declaration.items = reconciledRows;
+  declaration.status = 'RECONCILED';
+  inMemoryDeclarations.set(checklistId, declaration);
+  saveBackupItemsStorage();
+
+  return {
+    reconciled: true,
+    items: reconciledRows,
+  };
+}
+
+/**
+ * Store Manager physically verifies returned loose backup items
+ * Restores usable stock ONLY after physical verification.
+ * Missing items are never added to stock.
+ * Damaged items are recorded separately and not added to usable stock.
+ * Prevents duplicate additions.
+ */
+export async function verifyStoreBackupItemReturn({
+  checklistId,
+  user,
+  verificationItems = [],
+  remarks = '',
+}) {
+  if (!checklistId) throw new Error('Checklist ID is required.');
+  const verificationKey = `backup-ret-${checklistId}`;
+
+  if (inMemoryVerifiedReturns.has(verificationKey)) {
+    throw new Error('Returned backup items for this checklist have already been physically verified and processed.');
+  }
+
+  const declaration = await getBackupDeclaration(checklistId);
+  if (!declaration || !declaration.items || declaration.items.length === 0) {
+    throw new Error('No declared backup items found for this checklist.');
+  }
+
+  const verificationResults = [];
+
+  for (const row of verificationItems) {
+    const itemName = (row.item_name || '').trim();
+    const acceptedUsable = Math.max(0, Number(row.accepted_usable_qty) || 0);
+    const damagedQty = Math.max(0, Number(row.damaged_qty) || 0);
+    const missingQty = Math.max(0, Number(row.missing_qty) || 0);
+
+    const matchingDeclItem = declaration.items.find(
+      (it) => it.item_name.toLowerCase() === itemName.toLowerCase()
+    );
+
+    if (!matchingDeclItem) {
+      continue;
+    }
+
+    // Only restore stock if the item was actually issued or returned from authorized stock
+    // And only add the accepted usable quantity (never damaged or missing)
+    if (acceptedUsable > 0) {
+      await receiveMaterialStock({
+        material_name: itemName,
+        quantity: acceptedUsable,
+        unit: matchingDeclItem.unit || 'Nos.',
+        notes: `Physical return verification for checklist ${checklistId} by Store Manager ${user?.email || user?.name || ''}`,
+        source: 'STORE_RETURN_VERIFICATION',
+        checklist_id: checklistId,
+        user,
+      });
+    }
+
+    verificationResults.push({
+      item_name: itemName,
+      unit: matchingDeclItem.unit,
+      accepted_usable_qty: acceptedUsable,
+      damaged_qty: damagedQty,
+      missing_qty: missingQty,
+      verified_at: new Date().toISOString(),
+    });
+  }
+
+  inMemoryVerifiedReturns.add(verificationKey);
+  saveBackupItemsStorage();
+
+  await logAudit({
+    actor_id: user?.id,
+    actor_email: user?.email,
+    actor_role: user?.role || 'STORE_MANAGER',
+    action: 'VERIFY_BACKUP_ITEMS_RETURN',
+    target_table: 'pre_installation_backup_declarations',
+    target_id: declaration.id,
+    details: {
+      checklist_id: checklistId,
+      verification_results: verificationResults,
+      remarks,
+    },
+  });
+
+  return {
+    success: true,
+    message: 'Returned backup items physically verified and usable stock restored.',
+    verification_results: verificationResults,
+  };
+}

@@ -5,6 +5,7 @@ import {
   resolveEngineer,
   reserveEngineerAtomic,
   releaseEngineerBooking,
+  checkEngineerAvailability,
 } from './engineerBookingService.js';
 import {
   calculateBomRequirements,
@@ -19,6 +20,7 @@ import { notifyStoreManagerOnInstallationChecklist } from './notificationService
 // In-memory structured extra configurations cache for active runtime sessions
 export const inMemoryChecklistExtraConfigs = new Map();
 export const inMemoryChecklistBomSnapshots = new Map();
+export const inMemoryChecklistSchedules = new Map();
 
 const DEVICE_TYPES = [
   '2 Channel Live',
@@ -122,17 +124,22 @@ export async function createChecklist(adminUserId, data) {
     resolvedEng = resolveEngineer(engineerName);
     bookingEndDate = calculateBookingEndDate(startDate, duration);
 
-    // Concurrency-safe atomic reservation (throws 409 conflict if already booked)
-    await reserveEngineerAtomic({
+    // Validate availability before creating checklist (throws 409 conflict if already booked)
+    const availCheck = await checkEngineerAvailability({
       engineerIdOrName: resolvedEng ? resolvedEng.id : engineerName,
-      checklistId: null,
-      checklistNumber,
       startDate,
       endDate: bookingEndDate,
       duration,
-      user: { id: adminUserId },
-      status: data.installation_status || 'Assigned',
     });
+    if (!availCheck.available) {
+      const c = availCheck.conflict;
+      const errorMsg = `Booking Conflict: ${c?.reason || `Engineer ${engineerName} is already committed from ${c?.booking_start_date} to ${c?.booking_end_date}.`}`;
+      const err = new Error(errorMsg);
+      err.statusCode = 409;
+      err.conflict = c;
+      err.suggestedEngineers = availCheck.suggested_engineers;
+      throw err;
+    }
   }
 
   // Normalize device configurations using robust parser
@@ -216,7 +223,17 @@ export async function createChecklist(adminUserId, data) {
     vehicle_type: data.vehicle_type === 'Other' && data.custom_vehicle_type ? data.custom_vehicle_type.trim() : (data.vehicle_type || 'Truck'),
     expected_arrival_date: startDate,
     expected_arrival_time: data.expected_arrival_time || '10:00 AM',
-    installation_or_service: data.installation_or_service,
+    original_expected_arrival_date: startDate,
+    original_expected_arrival_time: data.expected_arrival_time || '10:00 AM',
+    original_installation_duration: duration,
+    original_booking_end_date: bookingEndDate,
+    current_expected_arrival_date: startDate,
+    current_expected_arrival_time: data.expected_arrival_time || '10:00 AM',
+    current_installation_duration: duration,
+    current_booking_end_date: bookingEndDate,
+    schedule_revision_number: 0,
+    schedule_last_updated_at: new Date().toISOString(),
+    installation_or_service: data.installation_or_service || 'Installation',
     salesperson_name: data.salesperson_name ? data.salesperson_name.trim() : null,
     service_engineer: engineerName,
     service_engineer_id: resolvedEng ? resolvedEng.id : null,
@@ -262,6 +279,16 @@ export async function createChecklist(adminUserId, data) {
       delete fallbackPayload.bom_snapshot;
       delete fallbackPayload.material_issuance_status;
       delete fallbackPayload.salesperson_name;
+      delete fallbackPayload.original_expected_arrival_date;
+      delete fallbackPayload.original_expected_arrival_time;
+      delete fallbackPayload.original_installation_duration;
+      delete fallbackPayload.original_booking_end_date;
+      delete fallbackPayload.current_expected_arrival_date;
+      delete fallbackPayload.current_expected_arrival_time;
+      delete fallbackPayload.current_installation_duration;
+      delete fallbackPayload.current_booking_end_date;
+      delete fallbackPayload.schedule_revision_number;
+      delete fallbackPayload.schedule_last_updated_at;
       const { data: res2, error: err2 } = await supabase
         .from('installation_checklists')
         .insert(fallbackPayload)
@@ -269,6 +296,18 @@ export async function createChecklist(adminUserId, data) {
         .single();
       if (err2) throw err2;
       inserted = { ...payload, ...res2, id: res2.id };
+      inMemoryChecklistSchedules.set(res2.id, {
+        original_expected_arrival_date: payload.original_expected_arrival_date,
+        original_expected_arrival_time: payload.original_expected_arrival_time,
+        original_installation_duration: payload.original_installation_duration,
+        original_booking_end_date: payload.original_booking_end_date,
+        current_expected_arrival_date: payload.current_expected_arrival_date,
+        current_expected_arrival_time: payload.current_expected_arrival_time,
+        current_installation_duration: payload.current_installation_duration,
+        current_booking_end_date: payload.current_booking_end_date,
+        schedule_revision_number: payload.schedule_revision_number,
+        schedule_last_updated_at: payload.schedule_last_updated_at,
+      });
     } else {
       console.error('Database insert error for checklist:', error);
       if (error.code === 'PGRST205' || error.message?.includes("Could not find the table 'public.installation_checklists'")) {
@@ -351,6 +390,27 @@ export function normalizeChecklistDeviceConfigs(checklist) {
     checklist.bom_snapshot.total_devices_required = checklist.bom_snapshot.total_devices_required ?? checklist.total_devices_required;
     checklist.bom_snapshot.total_extra_devices = checklist.bom_snapshot.total_extra_devices ?? checklist.total_extra_devices;
     checklist.bom_snapshot.total_devices_carried = checklist.bom_snapshot.total_devices_carried ?? checklist.total_devices_carried;
+  }
+
+  const inMemSchedule = checklist.id ? inMemoryChecklistSchedules.get(checklist.id) : null;
+  if (inMemSchedule) {
+    Object.assign(checklist, inMemSchedule);
+  } else {
+    if (!checklist.original_expected_arrival_date) {
+      checklist.original_expected_arrival_date = checklist.expected_arrival_date;
+      checklist.original_expected_arrival_time = checklist.expected_arrival_time;
+      checklist.original_installation_duration = checklist.installation_duration;
+      checklist.original_booking_end_date = checklist.booking_end_date || checklist.expected_arrival_date;
+    }
+    if (!checklist.current_expected_arrival_date) {
+      checklist.current_expected_arrival_date = checklist.expected_arrival_date;
+      checklist.current_expected_arrival_time = checklist.expected_arrival_time;
+      checklist.current_installation_duration = checklist.installation_duration;
+      checklist.current_booking_end_date = checklist.booking_end_date || checklist.expected_arrival_date;
+    }
+    if (checklist.schedule_revision_number === undefined) {
+      checklist.schedule_revision_number = 0;
+    }
   }
 
   return checklist;
@@ -635,6 +695,18 @@ export async function updateChecklist(id, data) {
     vehicle_type: data.vehicle_type === 'Other' && data.custom_vehicle_type ? data.custom_vehicle_type.trim() : (data.vehicle_type || existing.vehicle_type),
     expected_arrival_date: newStartDate,
     expected_arrival_time: data.expected_arrival_time || existing.expected_arrival_time,
+    original_expected_arrival_date: existing.original_expected_arrival_date || existing.expected_arrival_date,
+    original_expected_arrival_time: existing.original_expected_arrival_time || existing.expected_arrival_time,
+    original_installation_duration: existing.original_installation_duration || existing.installation_duration,
+    original_booking_end_date: existing.original_booking_end_date || existing.booking_end_date,
+    current_expected_arrival_date: newStartDate,
+    current_expected_arrival_time: data.expected_arrival_time || existing.current_expected_arrival_time || existing.expected_arrival_time,
+    current_installation_duration: newDuration,
+    current_booking_end_date: newBookingEndDate,
+    schedule_revision_number: (newStartDate !== existing.expected_arrival_date || newDuration !== existing.installation_duration)
+      ? ((existing.schedule_revision_number || 0) + 1)
+      : (existing.schedule_revision_number || 0),
+    schedule_last_updated_at: new Date().toISOString(),
     installation_or_service: effectiveJobType,
     salesperson_name: data.salesperson_name !== undefined ? (data.salesperson_name ? data.salesperson_name.trim() : existing.salesperson_name) : existing.salesperson_name,
     service_engineer: newEngName,
@@ -687,6 +759,16 @@ export async function updateChecklist(id, data) {
       delete fallbackPayload.bom_snapshot;
       delete fallbackPayload.material_issuance_status;
       delete fallbackPayload.salesperson_name;
+      delete fallbackPayload.original_expected_arrival_date;
+      delete fallbackPayload.original_expected_arrival_time;
+      delete fallbackPayload.original_installation_duration;
+      delete fallbackPayload.original_booking_end_date;
+      delete fallbackPayload.current_expected_arrival_date;
+      delete fallbackPayload.current_expected_arrival_time;
+      delete fallbackPayload.current_installation_duration;
+      delete fallbackPayload.current_booking_end_date;
+      delete fallbackPayload.schedule_revision_number;
+      delete fallbackPayload.schedule_last_updated_at;
       const { data: res2, error: err2 } = await supabase
         .from('installation_checklists')
         .update(fallbackPayload)
@@ -695,6 +777,18 @@ export async function updateChecklist(id, data) {
         .single();
       if (err2) throw err2;
       updated = { ...existing, ...payload, ...res2, id: existing.id };
+      inMemoryChecklistSchedules.set(existing.id, {
+        original_expected_arrival_date: payload.original_expected_arrival_date,
+        original_expected_arrival_time: payload.original_expected_arrival_time,
+        original_installation_duration: payload.original_installation_duration,
+        original_booking_end_date: payload.original_booking_end_date,
+        current_expected_arrival_date: payload.current_expected_arrival_date,
+        current_expected_arrival_time: payload.current_expected_arrival_time,
+        current_installation_duration: payload.current_installation_duration,
+        current_booking_end_date: payload.current_booking_end_date,
+        schedule_revision_number: payload.schedule_revision_number,
+        schedule_last_updated_at: payload.schedule_last_updated_at,
+      });
       if (extraConfigs && extraConfigs.length > 0) {
         inMemoryChecklistExtraConfigs.set(existing.id, extraConfigs);
       }

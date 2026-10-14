@@ -1607,17 +1607,44 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
                 );
                 if (selectedEng && !selectedEng.available) {
                   return (
-                    <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-800 text-xs flex items-start gap-2 animate-in fade-in">
-                      <AlertTriangle size={16} className="text-rose-600 shrink-0 mt-0.5" />
-                      <div>
-                        <p className="font-bold">Schedule Conflict Detected!</p>
-                        <p className="text-[11px] mt-0.5 text-rose-700">
-                          <strong>{selectedEng.name}</strong> is already assigned to Checklist{' '}
-                          <strong>#{selectedEng.conflict?.checklist_number || 'Reserved'}</strong> from{' '}
-                          <strong>{selectedEng.conflict?.booking_start_date}</strong> to{' '}
-                          <strong>{selectedEng.conflict?.booking_end_date}</strong> ({selectedEng.conflict?.client_name || 'Client'}). Please select an available engineer.
-                        </p>
+                    <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl text-rose-800 text-xs flex flex-col gap-2.5 animate-in fade-in">
+                      <div className="flex items-start gap-2">
+                        <AlertTriangle size={16} className="text-rose-600 shrink-0 mt-0.5" />
+                        <div>
+                          <p className="font-bold">Schedule Conflict Detected!</p>
+                          <p className="text-[11px] mt-0.5 text-rose-700">
+                            {selectedEng.conflict?.reason || (
+                              <>
+                                <strong>{selectedEng.name}</strong> is already assigned to Checklist{' '}
+                                <strong>#{selectedEng.conflict?.checklist_number || 'Reserved'}</strong> from{' '}
+                                <strong>{selectedEng.conflict?.booking_start_date}</strong> to{' '}
+                                <strong>{selectedEng.conflict?.booking_end_date}</strong> ({selectedEng.conflict?.client_name || 'Client'}). Please select an available engineer.
+                              </>
+                            )}
+                          </p>
+                        </div>
                       </div>
+
+                      {Array.isArray(selectedEng.suggested_engineers) && selectedEng.suggested_engineers.length > 0 && (
+                        <div className="pt-2 border-t border-rose-200/60">
+                          <span className="text-[10px] font-bold text-rose-900 uppercase tracking-wider block mb-1.5">
+                            Suggested Available Engineers For These Dates:
+                          </span>
+                          <div className="flex flex-wrap gap-1.5">
+                            {selectedEng.suggested_engineers.map((sug) => (
+                              <button
+                                key={sug.name || sug.id}
+                                type="button"
+                                onClick={() => handleChange('service_engineer', sug.name)}
+                                className="px-2.5 py-1 text-xs font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded-lg flex items-center gap-1.5 cursor-pointer transition-colors shadow-2xs"
+                              >
+                                <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                                <span>Select {sug.name}</span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   );
                 }

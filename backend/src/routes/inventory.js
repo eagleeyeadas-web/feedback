@@ -20,6 +20,13 @@ import {
   verifyStoreReturn,
   verifyStoreMaterialReturn,
 } from '../services/workflowService.js';
+import {
+  getStockMovements,
+} from '../services/stockMovementService.js';
+import {
+  executeInventoryCleanup,
+  getCleanupLogs,
+} from '../services/inventoryCleanupService.js';
 import supabase from '../services/supabase.js';
 
 const router = Router();
@@ -113,11 +120,31 @@ router.get('/transactions', requireRole('STORE_MANAGER', 'ADMIN'), async (req, r
 /**
  * GET /api/admin/inventory/all-movements
  * Returns unified auditable movements across BOTH camera devices and installation materials
+ * Saved permanently in PostgreSQL stock_movements with 20-day retention
  */
 router.get('/all-movements', requireRole('STORE_MANAGER', 'ADMIN'), async (req, res) => {
   try {
-    const { category = 'All', search = '', type = '' } = req.query;
+    const { category = 'All', search = '', type = '', page = 1, limit = 100 } = req.query;
 
+    // 1. Fetch from persistent stock_movements table
+    const result = await getStockMovements({
+      category,
+      search,
+      type,
+      page,
+      limit,
+    });
+
+    if (result.movements && result.movements.length > 0) {
+      return res.json({
+        transactions: result.movements,
+        totalCount: result.totalCount,
+        page: result.page,
+        totalPages: result.totalPages,
+      });
+    }
+
+    // 2. Fallback / legacy merge if stock_movements is still populating
     const [devTx, matTx] = await Promise.all([
       category === 'Materials' ? { transactions: [] } : getInventoryTransactions({ limit: 100, search, type }),
       category === 'Devices' ? { transactions: [] } : getMaterialTransactions({ limit: 100, search, type }),
@@ -144,6 +171,8 @@ router.get('/all-movements', requireRole('STORE_MANAGER', 'ADMIN'), async (req, 
     return res.json({
       transactions: combined,
       totalCount: combined.length,
+      page: 1,
+      totalPages: 1,
     });
   } catch (err) {
     console.error('Error in GET /inventory/all-movements:', err);
@@ -248,13 +277,38 @@ router.get('/returns', requireRole('STORE_MANAGER', 'ADMIN'), async (req, res) =
   try {
     const deviceReturns = await getAllStoreReturns();
     const materialReturns = await getAllStoreMaterialReturns();
-    const formattedDevice = (deviceReturns || []).map((r) => ({ ...r, return_category: 'DEVICE' }));
+
+    const formattedDevice = (deviceReturns || []).map((r) => ({
+      ...r,
+      return_category: 'DEVICE',
+      unit: 'Nos.',
+      checklist: r.checklist || r.installation_checklists || { checklist_number: 'N/A', client_name: 'Customer' },
+      technician: r.technician || { full_name: r.checklist?.service_engineer || r.installation_checklists?.service_engineer || 'Technician' },
+      accepted_usable_qty: r.accepted_usable_qty !== null && r.accepted_usable_qty !== undefined ? r.accepted_usable_qty : (r.status === 'PENDING_STORE_VERIFICATION' ? null : 0),
+      damaged_qty: r.damaged_qty !== null && r.damaged_qty !== undefined ? r.damaged_qty : (r.status === 'PENDING_STORE_VERIFICATION' ? null : 0),
+      missing_qty: r.missing_qty !== null && r.missing_qty !== undefined ? r.missing_qty : 0,
+    }));
+
     const formattedMaterial = (materialReturns || []).map((r) => ({
       ...r,
       return_category: 'MATERIAL',
+      unit: r.unit || 'Nos.',
       device_type: `${r.material_name} (${r.unit || 'Nos.'})`,
+      checklist: r.checklist || r.installation_checklists || { checklist_number: 'N/A', client_name: 'Customer' },
+      technician: r.technician || { full_name: r.checklist?.service_engineer || r.installation_checklists?.service_engineer || 'Technician' },
+      accepted_usable_qty: r.accepted_usable_qty !== null && r.accepted_usable_qty !== undefined ? r.accepted_usable_qty : (r.status === 'PENDING_STORE_VERIFICATION' ? null : 0),
+      damaged_qty: r.damaged_qty !== null && r.damaged_qty !== undefined ? r.damaged_qty : (r.status === 'PENDING_STORE_VERIFICATION' ? null : 0),
+      missing_qty: r.missing_qty !== null && r.missing_qty !== undefined ? r.missing_qty : 0,
     }));
-    return res.json([...formattedDevice, ...formattedMaterial]);
+
+    const combined = [...formattedDevice, ...formattedMaterial].sort((a, b) => {
+      // Pending first, then newest
+      if (a.status === 'PENDING_STORE_VERIFICATION' && b.status !== 'PENDING_STORE_VERIFICATION') return -1;
+      if (b.status === 'PENDING_STORE_VERIFICATION' && a.status !== 'PENDING_STORE_VERIFICATION') return 1;
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    });
+
+    return res.json(combined);
   } catch (err) {
     console.error('Error in GET /inventory/returns:', err);
     return res.status(500).json({ error: err.message || 'Failed to fetch store returns' });
@@ -317,6 +371,38 @@ router.get('/discrepancies', requireRole('STORE_MANAGER', 'ADMIN'), async (req, 
   } catch (err) {
     console.error('Error in GET /inventory/discrepancies:', err);
     return res.status(500).json({ error: err.message || 'Failed to fetch discrepancies' });
+  }
+});
+
+/**
+ * POST /api/admin/inventory/cleanup
+ * Trigger server-side 20-day automatic history retention cleanup (STORE_MANAGER, ADMIN)
+ */
+router.post('/cleanup', requireRole('STORE_MANAGER', 'ADMIN'), async (req, res) => {
+  try {
+    const result = await executeInventoryCleanup({
+      executed_by: req.profile?.email || 'STORE_MANAGER_API',
+      user: req.profile,
+    });
+    return res.json(result);
+  } catch (err) {
+    console.error('Error triggering inventory cleanup:', err);
+    return res.status(500).json({ error: err.message || 'Failed to execute history cleanup' });
+  }
+});
+
+/**
+ * GET /api/admin/inventory/cleanup-logs
+ * Fetch retention cleanup audit logs (STORE_MANAGER, ADMIN)
+ */
+router.get('/cleanup-logs', requireRole('STORE_MANAGER', 'ADMIN'), async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit, 10) || 20;
+    const logs = await getCleanupLogs(limit);
+    return res.json(logs);
+  } catch (err) {
+    console.error('Error fetching cleanup logs:', err);
+    return res.status(500).json({ error: err.message || 'Failed to fetch cleanup logs' });
   }
 });
 

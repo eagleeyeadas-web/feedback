@@ -1,0 +1,220 @@
+{
+  "extensions": [
+    {
+      "id": "c64dae1c-ebec-48de-a166-16d3795d54a8",
+      "checklist_id": "2f4ef81e-e080-4877-9c68-7c3e3cc7c69a",
+      "checklist_number": "EE-INST-20261014-0034",
+      "client_name": "Test A Transport 1791969004830",
+      "client_location": "Chennai Central",
+      "technician_user_id": "00000000-0000-0000-0000-000000000002",
+      "technician_name": "tech@gmail.com",
+      "engineer_name": "Mathi",
+      "original_dates": {
+        "arrival_date": "2026-12-04",
+        "arrival_time": "09:00:00",
+        "duration": "2 Days"
+      },
+      "current_dates": {
+        "arrival_date": "2026-12-04",
+        "arrival_time": "09:00:00",
+        "duration": "2 Days"
+      },
+      "requested_completion_date": "2026-12-07",
+      "requested_return_travel_date": "2026-12-08",
+      "additional_working_days": 2,
+      "rest_day_requested": true,
+      "requested_rest_date": "2026-12-09",
+      "reason": "Additional client vehicles required custom brackets on site.",
+      "notes": null,
+      "status": "PENDING",
+      "coordinator_decision_notes": null,
+      "decided_by": null,
+      "decided_at": null,
+      "created_at": "2026-10-14T09:10:23.151Z",
+      "updated_at": "2026-10-14T09:10:23.151Z"
+    },
+    {
+      "id": "cb63b67b-8f23-4408-a4dd-4a21c859b189",
+      "checklist_id": "51a45ef0-a387-46c7-99f7-e0738393628c",
+      "checklist_number": "EE-INST-20261014-0037",
+      "client_name": "Test A Transport 1791969111627",
+      "client_location": "Chennai Central",
+      "technician_user_id": "00000000-0000-0000-0000-000000000002",
+      "technician_name": "tech@gmail.com",
+      "engineer_name": "Mathi",
+      "original_dates": {
+        "arrival_date": "2026-12-01",
+        "arrival_time": "09:00:00",
+        "duration": "2 Days"
+      },
+      "current_dates": {
+        "arrival_date": "2026-12-01",
+        "arrival_time": "09:00:00",
+        "duration": "2 Days"
+      },
+      "requested_completion_date": "2026-12-04",
+      "requested_return_travel_date": "2026-12-05",
+      "additional_working_days": 2,
+      "rest_day_requested": true,
+      "requested_rest_date": "2026-12-06",
+      "reason": "Additional client vehicles required custom brackets on site.",
+      "notes": null,
+      "status": "PENDING",
+      "coordinator_decision_notes": null,
+      "decided_by": null,
+      "decided_at": null,
+      "created_at": "2026-10-14T09:12:05.417Z",
+      "updated_at": "2026-10-14T09:12:05.417Z"
+    },
+    {
+      "id": "2342b947-5870-40e8-8eba-30e815ce6cd6",
+      "checklist_id": "227f7637-68b5-40f6-b865-8b8e06ddb7b9",
+      "checklist_number": "EE-INST-20261014-0061",
+      "client_name": "Test A Transport 1791970593510",
+      "client_location": "Chennai Central",
+      "technician_user_id": "00000000-0000-0000-0000-000000000002",
+      "technician_name": "tech@gmail.com",
+      "engineer_name": "Mathi",
+      "original_dates": {
+        "arrival_date": "2028-11-01",
+        "arrival_time": "09:00:00",
+        "duration": "2 Days"
+      },
+      "current_dates": {
+        "arrival_date": "2028-11-01",
+        "arrival_time": "09:00:00",
+        "duration": "2 Days"
+      },
+      "requested_completion_date": "2028-11-04",
+      "requested_return_travel_date": "2028-11-05",
+      "additional_working_days": 2,
+      "rest_day_requested": true,
+      "requested_rest_date": "2028-11-06",
+      "reason": "Additional client vehicles required custom brackets on site.",
+      "notes": null,
+      "status": "APPROVED",
+      "coordinator_decision_notes": "Approved extension due to custom brackets on site. Extra day verified with client.",
+      "decided_by": "00000000-0000-0000-0000-000000000004",
+      "decided_at": "2026-10-14T09:36:51.206Z",
+      "created_at": "2026-10-14T09:36:49.201Z",
+      "updated_at": "2026-10-14T09:36:51.206Z"
+    },
+    {
+      "id": "e796b915-6edc-4c36-936c-ee7f3216a7a0",
+      "checklist_id": "227f7637-68b5-40f6-b865-8b8e06ddb7b9",
+      "checklist_number": "EE-INST-20261014-0061",
+      "client_name": "Test A Transport 1791970593510",
+      "client_location": "Chennai Central",
+      "technician_user_id": "00000000-0000-0000-0000-000000000002",
+      "technician_name": "tech@gmail.com",
+      "engineer_name": "Mathi",
+      "original_dates": {
+        "arrival_date": "2028-11-01",
+        "arrival_time": "09:00:00",
+        "duration": "2 Days"
+      },
+      "current_dates": {
+        "arrival_date": "2028-11-01",
+        "arrival_time": "09:00:00",
+        "duration": "2 Days"
+      },
+      "requested_completion_date": "2028-11-08",
+      "requested_return_travel_date": null,
+      "additional_working_days": 1,
+      "rest_day_requested": false,
+      "requested_rest_date": null,
+      "reason": "Tech wanted extra day for travel.",
+      "notes": null,
+      "status": "REJECTED",
+      "coordinator_decision_notes": "Rejected: job must be handed over as agreed.",
+      "decided_by": "00000000-0000-0000-0000-000000000004",
+      "decided_at": "2026-10-14T09:36:57.909Z",
+      "created_at": "2026-10-14T09:36:57.235Z",
+      "updated_at": "2026-10-14T09:36:57.909Z"
+    },
+    {
+      "id": "a9960fda-80be-4e29-81fc-0a4791a0e575",
+      "checklist_id": "b4195900-602a-4870-9961-9690e898c2ba",
+      "checklist_number": "EE-INST-20261014-0063",
+      "client_name": "Hotel Booking Client 1791970593510",
+      "client_location": "Madurai Outer",
+      "technician_user_id": "00000000-0000-0000-0000-000000000002",
+      "technician_name": "tech@gmail.com",
+      "engineer_name": "Kamalesh",
+      "original_dates": {
+        "arrival_date": "2028-11-20",
+        "arrival_time": "08:00:00",
+        "duration": "1 Day"
+      },
+      "current_dates": {
+        "arrival_date": "2028-11-20",
+        "arrival_time": "08:00:00",
+        "duration": "1 Day"
+      },
+      "requested_completion_date": "2028-11-23",
+      "requested_return_travel_date": null,
+      "additional_working_days": 2,
+      "rest_day_requested": false,
+      "requested_rest_date": null,
+      "reason": "Client added 2 more vehicles on site.",
+      "notes": null,
+      "status": "APPROVED",
+      "coordinator_decision_notes": "Approved additional days. Need to re-book travel & room.",
+      "decided_by": "00000000-0000-0000-0000-000000000004",
+      "decided_at": "2026-10-14T09:37:17.888Z",
+      "created_at": "2026-10-14T09:37:16.236Z",
+      "updated_at": "2026-10-14T09:37:17.888Z"
+    }
+  ],
+  "revisions": [
+    {
+      "id": "f57a2bc0-77d7-4ed2-85a8-136725f037e4",
+      "checklist_id": "227f7637-68b5-40f6-b865-8b8e06ddb7b9",
+      "revision_number": 1,
+      "previous_schedule": {
+        "arrival_date": "2028-11-01",
+        "arrival_time": "09:00:00",
+        "duration": "2 Days",
+        "revision_number": 0
+      },
+      "new_schedule": {
+        "arrival_date": "2028-11-01",
+        "arrival_time": "09:00:00",
+        "duration": "4 Days",
+        "completion_date": "2028-11-04",
+        "revision_number": 1
+      },
+      "reason": "Extension Request Approved: Additional client vehicles required custom brackets on site. | Note: Approved extension due to custom brackets on site. Extra day verified with client.",
+      "changed_by": "00000000-0000-0000-0000-000000000004",
+      "changed_by_email": "coordinator@gmail.com",
+      "changed_by_role": "COORDINATOR",
+      "related_extension_id": "2342b947-5870-40e8-8eba-30e815ce6cd6",
+      "created_at": "2026-10-14T09:36:51.206Z"
+    },
+    {
+      "id": "5e4add94-8a69-4ee3-8157-ad336af8ee68",
+      "checklist_id": "b4195900-602a-4870-9961-9690e898c2ba",
+      "revision_number": 1,
+      "previous_schedule": {
+        "arrival_date": "2028-11-20",
+        "arrival_time": "08:00:00",
+        "duration": "1 Day",
+        "revision_number": 0
+      },
+      "new_schedule": {
+        "arrival_date": "2028-11-20",
+        "arrival_time": "08:00:00",
+        "duration": "4 Days",
+        "completion_date": "2028-11-23",
+        "revision_number": 1
+      },
+      "reason": "Extension Request Approved: Client added 2 more vehicles on site. | Note: Approved additional days. Need to re-book travel & room.",
+      "changed_by": "00000000-0000-0000-0000-000000000004",
+      "changed_by_email": "coordinator@gmail.com",
+      "changed_by_role": "COORDINATOR",
+      "related_extension_id": "a9960fda-80be-4e29-81fc-0a4791a0e575",
+      "created_at": "2026-10-14T09:37:17.888Z"
+    }
+  ],
+  "updated_at": "2026-10-14T09:37:18.668Z"
+}

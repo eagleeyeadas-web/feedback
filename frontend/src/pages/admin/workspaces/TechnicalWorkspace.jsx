@@ -14,11 +14,18 @@ import {
   Filter,
   RefreshCw,
   Eye,
-  Archive,
   Receipt,
+  Calendar,
+  CalendarPlus,
+  Coffee,
+  History,
 } from 'lucide-react';
 import InstallationCompletionModal from '../../../components/workspaces/InstallationCompletionModal';
 import TechnicianExpenseModal from '../../../components/workspaces/TechnicianExpenseModal';
+import TechnicianScheduleExtensionModal from '../../../components/workspaces/TechnicianScheduleExtensionModal';
+import TechnicianRestDayModal from '../../../components/workspaces/TechnicianRestDayModal';
+import TechnicianLeaveModal from '../../../components/workspaces/TechnicianLeaveModal';
+import ScheduleHistoryModal from '../../../components/workspaces/ScheduleHistoryModal';
 import { fetchInstallationChecklists, fetchServiceEngineers, startInstallationJob } from '../../../lib/api';
 
 // Helper to extract separated required and extra device allocations
@@ -72,6 +79,10 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
   const [viewReportModalJob, setViewReportModalJob] = useState(null);
   const [expenseModalJob, setExpenseModalJob] = useState(null);
   const [postInstallCompletedJob, setPostInstallCompletedJob] = useState(null);
+  const [extensionModalJob, setExtensionModalJob] = useState(null);
+  const [isRestDayModalOpen, setIsRestDayModalOpen] = useState(false);
+  const [isLeaveModalOpen, setIsLeaveModalOpen] = useState(false);
+  const [historyModalJob, setHistoryModalJob] = useState(null);
 
   const loadData = useCallback(async () => {
     if (!token) {
@@ -197,14 +208,36 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
           </p>
         </div>
 
-        <button
-          onClick={loadData}
-          disabled={loading}
-          className="self-start md:self-auto flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white text-xs font-semibold px-4 py-2.5 rounded-xl border border-white/20 transition-all cursor-pointer disabled:opacity-50"
-        >
-          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-          <span>Refresh Jobs</span>
-        </button>
+        <div className="flex flex-wrap items-center gap-2 self-start md:self-auto">
+          <button
+            type="button"
+            onClick={() => setIsRestDayModalOpen(true)}
+            className="flex items-center gap-1.5 bg-purple-600/60 hover:bg-purple-600 text-white text-xs font-semibold px-3 py-2 rounded-xl border border-purple-400/40 transition-all cursor-pointer shadow-xs"
+            title="Request post-job or scheduled rest days"
+          >
+            <Coffee className="w-3.5 h-3.5 text-amber-300" />
+            <span>Request Rest Day</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setIsLeaveModalOpen(true)}
+            className="flex items-center gap-1.5 bg-indigo-600/60 hover:bg-indigo-600 text-white text-xs font-semibold px-3 py-2 rounded-xl border border-indigo-400/40 transition-all cursor-pointer shadow-xs"
+            title="Request casual or sick leave"
+          >
+            <Calendar className="w-3.5 h-3.5 text-blue-300" />
+            <span>Request Leave</span>
+          </button>
+
+          <button
+            onClick={loadData}
+            disabled={loading}
+            className="flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white text-xs font-semibold px-4 py-2 rounded-xl border border-white/20 transition-all cursor-pointer disabled:opacity-50"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+            <span>Refresh Jobs</span>
+          </button>
+        </div>
       </div>
 
       {/* Metrics Bar */}
@@ -525,8 +558,36 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
 
                         {/* Arrival Schedule */}
                         <td className="py-3 px-4 text-gray-600">
-                          <div>{item.expected_arrival_date || 'TBD'}</div>
-                          <div className="text-[10px] text-gray-400">{item.expected_arrival_time}</div>
+                          <div className="space-y-1">
+                            <div>
+                              <span className="text-[10px] text-gray-400 uppercase font-bold block">Original Planned</span>
+                              <span className="font-semibold text-gray-900">
+                                {item.original_arrival_date || item.expected_arrival_date || 'TBD'}
+                              </span>
+                              <span className="text-[10px] text-gray-500 ml-1">
+                                ({item.original_installation_duration || item.installation_duration || '1'}d)
+                              </span>
+                            </div>
+
+                            {(item.schedule_revision_count > 0 || item.current_expected_arrival_date) && (
+                              <div className="pt-1 border-t border-purple-100">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-[10px] font-bold text-purple-700 uppercase">Current Expected</span>
+                                  <span className="text-[9px] font-extrabold bg-purple-100 text-purple-800 px-1.5 py-0.2 rounded border border-purple-300">
+                                    Rev {item.schedule_revision_count || 1}
+                                  </span>
+                                </div>
+                                <span className="font-bold text-purple-900 block text-xs">
+                                  {item.current_expected_arrival_date || item.expected_arrival_date}
+                                </span>
+                                <span className="text-[10px] text-purple-700">
+                                  Duration: {item.current_installation_duration || item.installation_duration || '1'} Days
+                                </span>
+                              </div>
+                            )}
+
+                            <div className="text-[10px] text-gray-400 font-mono">{item.expected_arrival_time}</div>
+                          </div>
                         </td>
 
                         {/* Installation Status Badge */}
@@ -542,16 +603,26 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
                           </span>
                         </td>
 
-                        {/* Actions Column: Direct Post-Installation Device Report */}
+                        {/* Actions Column: Direct Post-Installation Device Report & Extensions */}
                         <td className="py-3 px-4">
                           <div className="flex flex-col gap-1.5">
                             {!item.has_completion_report ? (
-                              <button
-                                onClick={() => setCompletionModalJob(item)}
-                                className="px-3 py-1.5 text-xs font-bold text-white bg-purple-700 hover:bg-purple-800 rounded-lg shadow-2xs flex items-center gap-1.5 cursor-pointer w-fit"
-                              >
-                                <FileCheck className="w-3.5 h-3.5" /> Post-Installation Device Report
-                              </button>
+                              <div className="flex flex-wrap gap-1">
+                                <button
+                                  onClick={() => setCompletionModalJob(item)}
+                                  className="px-3 py-1.5 text-xs font-bold text-white bg-purple-700 hover:bg-purple-800 rounded-lg shadow-2xs flex items-center gap-1.5 cursor-pointer w-fit"
+                                >
+                                  <FileCheck className="w-3.5 h-3.5" /> Post-Installation Device Report
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setExtensionModalJob(item)}
+                                  className="px-2.5 py-1.5 text-xs font-semibold text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg flex items-center gap-1 cursor-pointer w-fit"
+                                  title="Request schedule extension for additional workdays or rest"
+                                >
+                                  <CalendarPlus className="w-3.5 h-3.5 text-amber-600" /> Request Extension
+                                </button>
+                              </div>
                             ) : (
                               <div className="flex flex-wrap gap-1">
                                 <button
@@ -569,8 +640,17 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
                               </div>
                             )}
 
-                            {/* Job Details Link */}
-                            <div className="flex items-center gap-2 text-[10px] mt-0.5 text-gray-500">
+                            {/* Revision History & Job Details */}
+                            <div className="flex items-center gap-2.5 text-[10px] mt-0.5 text-gray-500">
+                              <button
+                                type="button"
+                                onClick={() => setHistoryModalJob(item)}
+                                className="font-semibold text-indigo-700 hover:text-indigo-900 flex items-center gap-0.5 cursor-pointer"
+                              >
+                                <History className="w-3 h-3" />
+                                <span>Schedule History</span>
+                              </button>
+                              <span>•</span>
                               <button
                                 onClick={() =>
                                   onSelectChecklist
@@ -799,7 +879,16 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
                               </button>
                             </div>
 
-                            <div className="flex items-center gap-2 text-[10px] mt-0.5 text-gray-500">
+                            <div className="flex items-center gap-2.5 text-[10px] mt-0.5 text-gray-500">
+                              <button
+                                type="button"
+                                onClick={() => setHistoryModalJob(item)}
+                                className="font-semibold text-indigo-700 hover:text-indigo-900 flex items-center gap-0.5 cursor-pointer"
+                              >
+                                <History className="w-3 h-3" />
+                                <span>Schedule History</span>
+                              </button>
+                              <span>•</span>
                               <button
                                 onClick={() =>
                                   onSelectChecklist
@@ -941,6 +1030,52 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
             showToast(`Expenses updated for ${expenseModalJob.checklist_number}!`);
             loadData();
           }}
+        />
+      )}
+
+      {/* SCHEDULE EXTENSION REQUEST MODAL */}
+      {extensionModalJob && (
+        <TechnicianScheduleExtensionModal
+          checklist={extensionModalJob}
+          token={token}
+          onClose={() => setExtensionModalJob(null)}
+          onSuccess={() => {
+            showToast(`Extension request submitted for ${extensionModalJob.checklist_number}! Coordinator will review.`);
+            loadData();
+          }}
+        />
+      )}
+
+      {/* REST DAY REQUEST MODAL */}
+      {isRestDayModalOpen && (
+        <TechnicianRestDayModal
+          token={token}
+          onClose={() => setIsRestDayModalOpen(false)}
+          onSuccess={() => {
+            showToast('Rest day request submitted successfully! Coordinator will review.');
+            loadData();
+          }}
+        />
+      )}
+
+      {/* LEAVE REQUEST MODAL */}
+      {isLeaveModalOpen && (
+        <TechnicianLeaveModal
+          token={token}
+          onClose={() => setIsLeaveModalOpen(false)}
+          onSuccess={() => {
+            showToast('Leave request submitted successfully! Coordinator will review.');
+            loadData();
+          }}
+        />
+      )}
+
+      {/* SCHEDULE REVISION HISTORY MODAL */}
+      {historyModalJob && (
+        <ScheduleHistoryModal
+          checklist={historyModalJob}
+          token={token}
+          onClose={() => setHistoryModalJob(null)}
         />
       )}
     </div>

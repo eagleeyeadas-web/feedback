@@ -614,16 +614,34 @@ export default function StoreInstallationRequirements({ token, onSelectChecklist
                     <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">Arrival Schedule</span>
                     <div className="mt-1 space-y-1 text-[11px]">
                       <div>
-                        <span className="text-gray-500 block text-[10px]">Expected Arrival:</span>
-                        <strong className="text-gray-900">{req.expected_arrival_date || 'TBD'}</strong>
+                        <span className="text-gray-400 block text-[10px] uppercase font-bold">Original Planned:</span>
+                        <strong className="text-gray-900">
+                          {req.original_arrival_date || req.expected_arrival_date || 'TBD'}
+                        </strong>
+                        <span className="text-gray-500 ml-1">
+                          ({req.original_installation_duration || req.installation_duration || '1'}d)
+                        </span>
                         {req.expected_arrival_time && (
-                          <span className="text-gray-600 ml-1 font-mono">({req.expected_arrival_time})</span>
+                          <div className="text-gray-500 text-[10px] font-mono">{req.expected_arrival_time}</div>
                         )}
                       </div>
-                      <div>
-                        <span className="text-gray-500">Duration: </span>
-                        <strong className="text-gray-800">{req.installation_duration || '1 Day'}</strong>
-                      </div>
+
+                      {(req.schedule_revision_count > 0 || req.current_expected_arrival_date) && (
+                        <div className="pt-1 border-t border-amber-200/60 mt-1">
+                          <div className="flex items-center gap-1">
+                            <span className="text-[10px] font-bold text-amber-800 uppercase">Current Expected:</span>
+                            <span className="text-[9px] font-extrabold bg-amber-100 text-amber-900 px-1.5 py-0.2 rounded border border-amber-300">
+                              Rev {req.schedule_revision_count || 1}
+                            </span>
+                          </div>
+                          <strong className="text-amber-950 block text-[11px]">
+                            {req.current_expected_arrival_date || req.expected_arrival_date}
+                          </strong>
+                          <span className="text-amber-800 text-[10px]">
+                            Duration: {req.current_installation_duration || req.installation_duration || '1'} Days
+                          </span>
+                        </div>
+                      )}
                     </div>
                   </div>
 

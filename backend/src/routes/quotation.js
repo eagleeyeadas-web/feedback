@@ -466,22 +466,7 @@ router.get('/:id/pdf', async (req, res) => {
       .eq('quotation_id', id)
       .order('sno', { ascending: true });
 
-    // Try downloading existing PDF from storage
-    if (quotation.pdf_path) {
-      const { data: fileData, error: downloadError } = await supabase.storage
-        .from('pdfs')
-        .download(quotation.pdf_path);
-
-      if (!downloadError && fileData) {
-        const buffer = Buffer.from(await fileData.arrayBuffer());
-        const filename = `EagleEye_Quotation_${quotation.quotation_number.replace(/\//g, '-')}.pdf`;
-        res.setHeader('Content-Type', 'application/pdf');
-        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-        return res.send(buffer);
-      }
-    }
-
-    // Fallback: Regenerate PDF dynamically
+    // Generate quotation PDF using the saved quotation record and its saved GST number
     const pdfBuffer = await generateQuotationPDF(quotation, items || []);
     const filename = `EagleEye_Quotation_${quotation.quotation_number.replace(/\//g, '-')}.pdf`;
     res.setHeader('Content-Type', 'application/pdf');

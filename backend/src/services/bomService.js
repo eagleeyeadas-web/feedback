@@ -735,7 +735,7 @@ export async function calculateJobPreliminaryBom({ requiredConfigs = [], extraCo
   const parsedRequired = parseDeviceConfigurations(requiredConfigs);
   const parsedExtra = parseExtraDeviceConfigurations(extraConfigs);
 
-  // 1. Calculate Required Devices BOM
+  // 1. Calculate Required Devices BOM (Strict Sales Preliminary BOM)
   let requiredBom = null;
   if (parsedRequired.length > 0) {
     try {
@@ -745,7 +745,7 @@ export async function calculateJobPreliminaryBom({ requiredConfigs = [], extraCo
     }
   }
 
-  // 2. Calculate Extra Devices BOM
+  // 2. Extra items do not increase Sales BOM
   let extraBom = null;
   if (parsedExtra.length > 0) {
     try {
@@ -760,28 +760,14 @@ export async function calculateJobPreliminaryBom({ requiredConfigs = [], extraCo
     }
   }
 
-  // 3. Combine both groups into all carried configs
   const combinedAllocations = combineCarriedDevicesAllocation(parsedRequired, parsedExtra);
-  const allCarriedConfigs = combinedAllocations.map((c) => ({
-    device_type: c.device_type,
-    number_of_devices: Number(c.quantity_carried) || 1,
-    number_of_vehicles: Number(c.quantity_carried) || 1,
-  }));
-
-  let combinedBom = null;
-  if (allCarriedConfigs.length > 0) {
-    try {
-      combinedBom = await calculateBomRequirements(allCarriedConfigs);
-    } catch (e) {
-      console.warn('Could not calculate combined carried BOM:', e.message);
-    }
-  }
 
   const totalRequired = parsedRequired.reduce((sum, c) => sum + (Number(c.number_of_devices) || 0), 0);
   const totalExtra = parsedExtra.reduce((sum, c) => sum + (Number(c.extra_quantity) || 0), 0);
   const totalCarried = totalRequired + totalExtra;
 
-  const baseResult = combinedBom || requiredBom || {
+  // Preliminary BOM is strictly derived from required installation devices
+  const baseResult = requiredBom || {
     configured: false,
     warning: 'No BOM calculation available',
     items: [],
@@ -800,9 +786,9 @@ export async function calculateJobPreliminaryBom({ requiredConfigs = [], extraCo
     combined_allocations: combinedAllocations,
     required_bom: requiredBom,
     extra_bom: extraBom,
-    combined_preliminary_bom: combinedBom,
-    // Preserve items pointing to the combined preliminary requirements for full planning
-    items: combinedBom?.items || requiredBom?.items || [],
+    combined_preliminary_bom: requiredBom,
+    // Sales preliminary BOM items strictly derived from required installation devices only
+    items: requiredBom?.items || [],
     calculated_at: new Date().toISOString(),
   };
 }

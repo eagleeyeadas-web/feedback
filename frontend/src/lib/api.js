@@ -437,6 +437,25 @@ export async function verifyStoreReturnApi(token, data) {
   return json;
 }
 
+export async function triggerInventoryCleanupApi(token) {
+  const res = await fetch(`${API_BASE}/admin/inventory/cleanup`, {
+    method: 'POST',
+    headers: adminHeaders(token),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to trigger history cleanup');
+  return json;
+}
+
+export async function fetchInventoryCleanupLogsApi(token, limit = 20) {
+  const res = await fetch(`${API_BASE}/admin/inventory/cleanup-logs?limit=${limit}`, {
+    headers: adminHeaders(token),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to fetch history cleanup logs');
+  return json;
+}
+
 /**
  * Trigger user-activity-based 24-hour retention cleanup check
  */
@@ -938,6 +957,226 @@ export async function fetchCoordinatorBookingHistory(token, checklistId) {
   if (!res.ok) throw new Error(json.error || 'Failed to fetch booking history');
   return json;
 }
+
+/**
+ * Coordinator Schedule & Availability Management APIs
+ */
+export async function fetchCoordinatorExtensionRequests(token, params = {}) {
+  const query = new URLSearchParams(params).toString();
+  const res = await fetch(`${API_BASE}/admin/coordinator/schedule/extensions?${query}`, {
+    headers: adminHeaders(token),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to fetch extension requests');
+  return json;
+}
+
+export async function approveCoordinatorExtensionRequest(token, id, decisionNotes = '') {
+  const res = await fetch(`${API_BASE}/admin/coordinator/schedule/extensions/${id}/approve`, {
+    method: 'POST',
+    headers: adminHeaders(token),
+    body: JSON.stringify({ decision_notes: decisionNotes }),
+  });
+  const json = await res.json();
+  if (!res.ok) {
+    const err = new Error(json.error || 'Failed to approve extension request');
+    err.conflict = json.conflict;
+    throw err;
+  }
+  return json;
+}
+
+export async function rejectCoordinatorExtensionRequest(token, id, decisionNotes = '') {
+  const res = await fetch(`${API_BASE}/admin/coordinator/schedule/extensions/${id}/reject`, {
+    method: 'POST',
+    headers: adminHeaders(token),
+    body: JSON.stringify({ decision_notes: decisionNotes }),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to reject extension request');
+  return json;
+}
+
+export async function fetchCoordinatorRestDayRequests(token, params = {}) {
+  const query = new URLSearchParams(params).toString();
+  const res = await fetch(`${API_BASE}/admin/coordinator/schedule/rest-days?${query}`, {
+    headers: adminHeaders(token),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to fetch rest days');
+  return json;
+}
+
+export async function approveCoordinatorRestDay(token, id, decisionNotes = '') {
+  const res = await fetch(`${API_BASE}/admin/coordinator/schedule/rest-days/${id}/approve`, {
+    method: 'POST',
+    headers: adminHeaders(token),
+    body: JSON.stringify({ decision_notes: decisionNotes }),
+  });
+  const json = await res.json();
+  if (!res.ok) {
+    const err = new Error(json.error || 'Failed to approve rest day');
+    err.conflict = json.conflict;
+    throw err;
+  }
+  return json;
+}
+
+export async function rejectCoordinatorRestDay(token, id, decisionNotes = '') {
+  const res = await fetch(`${API_BASE}/admin/coordinator/schedule/rest-days/${id}/reject`, {
+    method: 'POST',
+    headers: adminHeaders(token),
+    body: JSON.stringify({ decision_notes: decisionNotes }),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to reject rest day');
+  return json;
+}
+
+export async function fetchCoordinatorLeaveRequests(token, params = {}) {
+  const query = new URLSearchParams(params).toString();
+  const res = await fetch(`${API_BASE}/admin/coordinator/schedule/leaves?${query}`, {
+    headers: adminHeaders(token),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to fetch leaves');
+  return json;
+}
+
+export async function approveCoordinatorLeave(token, id, decisionNotes = '') {
+  const res = await fetch(`${API_BASE}/admin/coordinator/schedule/leaves/${id}/approve`, {
+    method: 'POST',
+    headers: adminHeaders(token),
+    body: JSON.stringify({ decision_notes: decisionNotes }),
+  });
+  const json = await res.json();
+  if (!res.ok) {
+    const err = new Error(json.error || 'Failed to approve leave request');
+    err.conflict = json.conflict;
+    throw err;
+  }
+  return json;
+}
+
+export async function rejectCoordinatorLeave(token, id, decisionNotes = '') {
+  const res = await fetch(`${API_BASE}/admin/coordinator/schedule/leaves/${id}/reject`, {
+    method: 'POST',
+    headers: adminHeaders(token),
+    body: JSON.stringify({ decision_notes: decisionNotes }),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to reject leave request');
+  return json;
+}
+
+export async function fetchCoordinatorScheduleCalendar(token, params = {}) {
+  const query = new URLSearchParams(params).toString();
+  const res = await fetch(`${API_BASE}/admin/coordinator/schedule/calendar?${query}`, {
+    headers: adminHeaders(token),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to fetch schedule calendar');
+  return json;
+}
+
+export async function fetchCoordinatorScheduleConflicts(token) {
+  const res = await fetch(`${API_BASE}/admin/coordinator/schedule/conflicts`, {
+    headers: adminHeaders(token),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to fetch schedule conflicts');
+  return json;
+}
+
+export async function fetchCoordinatorAffectedBookings(token) {
+  const res = await fetch(`${API_BASE}/admin/coordinator/schedule/affected-bookings`, {
+    headers: adminHeaders(token),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to fetch affected bookings');
+  return json;
+}
+
+export async function fetchScheduleRevisionHistory(token, checklistId) {
+  const res = await fetch(`${API_BASE}/admin/coordinator/schedule/history/${checklistId}`, {
+    headers: adminHeaders(token),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to fetch schedule revision history');
+  return json;
+}
+
+export async function fetchCoordinatorNotifications(token) {
+  const res = await fetch(`${API_BASE}/admin/coordinator/notifications`, {
+    headers: adminHeaders(token),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to fetch notifications');
+  return json;
+}
+
+export async function markCoordinatorNotificationReadApi(token, id) {
+  const res = await fetch(`${API_BASE}/admin/coordinator/notifications/${id}/read`, {
+    method: 'POST',
+    headers: adminHeaders(token),
+  });
+  return res.json();
+}
+
+/**
+ * Technician Schedule Extension, Rest & Leave Request APIs
+ */
+export async function submitTechnicianScheduleExtension(token, checklistId, data) {
+  const res = await fetch(`${API_BASE}/admin/installations/${checklistId}/request-extension`, {
+    method: 'POST',
+    headers: adminHeaders(token),
+    body: JSON.stringify(data),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to submit schedule extension request');
+  return json;
+}
+
+export async function fetchTechnicianExtensionRequests(token, checklistId) {
+  const res = await fetch(`${API_BASE}/admin/installations/${checklistId}/extension-requests`, {
+    headers: adminHeaders(token),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to fetch extension requests');
+  return json;
+}
+
+export async function submitTechnicianRestDayRequest(token, data) {
+  const res = await fetch(`${API_BASE}/admin/installations/rest-days/request`, {
+    method: 'POST',
+    headers: adminHeaders(token),
+    body: JSON.stringify(data),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to submit rest-day request');
+  return json;
+}
+
+export async function submitTechnicianLeaveRequest(token, data) {
+  const res = await fetch(`${API_BASE}/admin/installations/leaves/request`, {
+    method: 'POST',
+    headers: adminHeaders(token),
+    body: JSON.stringify(data),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to submit leave request');
+  return json;
+}
+
+export async function fetchTechnicianNotifications(token) {
+  const res = await fetch(`${API_BASE}/admin/installations/notifications/tech`, {
+    headers: adminHeaders(token),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to fetch technician notifications');
+  return json;
+}
+
 
 
 

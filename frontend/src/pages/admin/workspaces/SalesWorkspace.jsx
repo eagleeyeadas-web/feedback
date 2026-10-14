@@ -233,8 +233,36 @@ export default function SalesWorkspace({ onSelectChecklist, onCreateChecklist, o
                     <td className="py-3 px-4 font-medium text-gray-700">{item.number_of_vehicles} vehicles ({item.vehicle_type || 'Lorry'})</td>
                     <td className="py-3 px-4 font-mono font-bold text-gray-900">₹{item.confirmed_price || 0}</td>
                     <td className="py-3 px-4 text-gray-600">
-                      <div>{item.expected_arrival_date || 'TBD'}</div>
-                      <div className="text-[10px] text-gray-400">{item.expected_arrival_time}</div>
+                      <div className="space-y-1">
+                        <div>
+                          <span className="text-[10px] text-gray-400 uppercase font-bold block">Original Planned</span>
+                          <span className="font-semibold text-gray-900">
+                            {item.original_arrival_date || item.expected_arrival_date || 'TBD'}
+                          </span>
+                          <span className="text-[10px] text-gray-500 ml-1">
+                            ({item.original_installation_duration || item.installation_duration || '1'}d)
+                          </span>
+                        </div>
+
+                        {(item.schedule_revision_count > 0 || item.current_expected_arrival_date) && (
+                          <div className="pt-1 border-t border-blue-100">
+                            <div className="flex items-center gap-1">
+                              <span className="text-[10px] font-bold text-blue-700 uppercase">Current Expected</span>
+                              <span className="text-[9px] font-extrabold bg-blue-100 text-blue-800 px-1.5 py-0.2 rounded border border-blue-300">
+                                Rev {item.schedule_revision_count || 1}
+                              </span>
+                            </div>
+                            <span className="font-bold text-blue-900 block text-xs">
+                              {item.current_expected_arrival_date || item.expected_arrival_date}
+                            </span>
+                            <span className="text-[10px] text-blue-700">
+                              Duration: {item.current_installation_duration || item.installation_duration || '1'} Days
+                            </span>
+                          </div>
+                        )}
+
+                        <div className="text-[10px] text-gray-400 font-mono">{item.expected_arrival_time}</div>
+                      </div>
                     </td>
                     <td className="py-3 px-4">
                       <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${

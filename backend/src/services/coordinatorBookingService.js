@@ -48,6 +48,16 @@ function saveFallbackStorage() {
 // Load storage on module initialization
 loadFallbackStorage();
 
+export function cleanupTestCoordinatorBookingsForYear(year = '2028') {
+  inMemoryBookings.forEach((b, k) => {
+    if (b.travel_datetime?.startsWith(year) || b.check_in_date?.startsWith(year)) {
+      inMemoryBookings.delete(k);
+    }
+  });
+  saveFallbackStorage();
+}
+
+
 /**
  * Validate that all required booking details are present before allowing COMPLETED status.
  * Prevent accidental completion when an arranged booking is still outstanding.
@@ -501,3 +511,43 @@ export async function getBookingAuditHistory(checklistId) {
 
   return inMemoryAuditLogs.get(checklistId) || [];
 }
+
+/**
+ * Flag a booking for review when a schedule extension or change occurs
+ */
+export async function flagBookingForReview({
+  checklistId,
+  reason,
+  returnTravelAffected = false,
+  accommodationAffected = false,
+}) {
+  if (!checklistId) return;
+  const nowIso = new Date().toISOString();
+
+  try {
+    await supabase
+      .from('coordinator_bookings')
+      .update({
+        schedule_flagged_for_review: true,
+        schedule_review_reason: reason,
+        schedule_flagged_at: nowIso,
+        return_travel_date_affected: Boolean(returnTravelAffected),
+        accommodation_dates_affected: Boolean(accommodationAffected),
+        updated_at: nowIso,
+      })
+      .eq('checklist_id', checklistId);
+  } catch (e) {}
+
+  const mem = inMemoryBookings.get(checklistId);
+  if (mem) {
+    mem.schedule_flagged_for_review = true;
+    mem.schedule_review_reason = reason;
+    mem.schedule_flagged_at = nowIso;
+    mem.return_travel_date_affected = Boolean(returnTravelAffected);
+    mem.accommodation_dates_affected = Boolean(accommodationAffected);
+    mem.updated_at = nowIso;
+    inMemoryBookings.set(checklistId, mem);
+    saveFallbackStorage();
+  }
+}
+

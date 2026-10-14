@@ -315,7 +315,9 @@ export async function generateQuotationPDF(quotation, items = [], logoBase64 = n
   // ============================================================
   // CUSTOMER & QUOTATION NO SECTION (Split 2 Columns)
   // ============================================================
-  const custBoxH = 28;
+  const rawCustomerGst = quotation.gst_number || quotation.customer_gst || quotation.customer_gstin || '';
+  const sanitizedGst = sanitizePdfText(rawCustomerGst).trim();
+  const custBoxH = sanitizedGst ? 30 : 28;
   const halfW = CONTENT_WIDTH / 2;
 
   // Header Cells
@@ -334,7 +336,7 @@ export async function generateQuotationPDF(quotation, items = [], logoBase64 = n
   doc.line(MARGIN_X, y + 5.5, MARGIN_X + CONTENT_WIDTH, y + 5.5);
   doc.line(MARGIN_X + halfW, y, MARGIN_X + halfW, y + custBoxH);
 
-  let leftY = y + 8.5;
+  let leftY = y + 8.2;
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
 
@@ -345,43 +347,63 @@ export async function generateQuotationPDF(quotation, items = [], logoBase64 = n
 
   // TO Left Side
   doc.text('TO', MARGIN_X + 2, leftY);
-  leftY += 3.8;
+  leftY += 3.5;
   doc.setFont('helvetica', 'bold');
   doc.text(sanitizedCustName, MARGIN_X + 2, leftY);
-  leftY += 3.8;
+  leftY += 3.5;
   doc.setFont('helvetica', 'normal');
   if (sanitizedContact) {
     doc.text(sanitizedContact, MARGIN_X + 2, leftY);
-    leftY += 3.8;
+    leftY += 3.5;
   }
   if (sanitizedAddress) {
     const addLines = doc.splitTextToSize(sanitizedAddress, halfW - 4);
-    doc.text(addLines, MARGIN_X + 2, leftY);
-    leftY += (addLines.length * 3.5);
+    const linesToPrint = addLines.slice(0, 2);
+    doc.text(linesToPrint, MARGIN_X + 2, leftY);
+    leftY += (linesToPrint.length * 3.3);
   }
   if (sanitizedPhone) {
     doc.text(sanitizedPhone, MARGIN_X + 2, leftY);
+    leftY += 3.5;
+  }
+  if (sanitizedGst) {
+    doc.setFont('helvetica', 'bold');
+    doc.text('Customer GSTIN: ', MARGIN_X + 2, leftY);
+    const labelW = doc.getTextWidth('Customer GSTIN: ');
+    doc.setFont('helvetica', 'normal');
+    doc.text(sanitizedGst, MARGIN_X + 2 + labelW, leftY);
+    leftY += 3.5;
   }
 
   // TO Right Side
-  let rightY = y + 8.5;
+  let rightY = y + 8.2;
   doc.text('TO', MARGIN_X + halfW + 2, rightY);
-  rightY += 3.8;
+  rightY += 3.5;
   doc.setFont('helvetica', 'bold');
   doc.text(sanitizedCustName, MARGIN_X + halfW + 2, rightY);
-  rightY += 3.8;
+  rightY += 3.5;
   doc.setFont('helvetica', 'normal');
   if (sanitizedContact) {
     doc.text(sanitizedContact, MARGIN_X + halfW + 2, rightY);
-    rightY += 3.8;
+    rightY += 3.5;
   }
   if (sanitizedAddress) {
     const addLinesR = doc.splitTextToSize(sanitizedAddress, halfW - 4);
-    doc.text(addLinesR, MARGIN_X + halfW + 2, rightY);
-    rightY += (addLinesR.length * 3.5);
+    const linesToPrintR = addLinesR.slice(0, 2);
+    doc.text(linesToPrintR, MARGIN_X + halfW + 2, rightY);
+    rightY += (linesToPrintR.length * 3.3);
   }
   if (sanitizedPhone) {
     doc.text(sanitizedPhone, MARGIN_X + halfW + 2, rightY);
+    rightY += 3.5;
+  }
+  if (sanitizedGst) {
+    doc.setFont('helvetica', 'bold');
+    doc.text('Customer GSTIN: ', MARGIN_X + halfW + 2, rightY);
+    const labelWR = doc.getTextWidth('Customer GSTIN: ');
+    doc.setFont('helvetica', 'normal');
+    doc.text(sanitizedGst, MARGIN_X + halfW + 2 + labelWR, rightY);
+    rightY += 3.5;
   }
 
   y += custBoxH;

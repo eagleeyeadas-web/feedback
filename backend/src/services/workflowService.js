@@ -11,7 +11,8 @@ import {
   calculateJobFinalBom,
 } from './bomService.js';
 import { creditMaterialStockForVerifiedReturn } from './materialStockService.js';
-import { normalizeChecklistDeviceConfigs, inMemoryChecklistBomSnapshots } from './installationService.js';
+import { normalizeChecklistDeviceConfigs, inMemoryChecklistBomSnapshots, inMemoryChecklistSchedules } from './installationService.js';
+import { completeEngineerBookingByChecklistId } from './engineerBookingService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -300,17 +301,62 @@ export async function startInstallationJob({ checklist_id, user }) {
     throw new Error('Mandatory Pre-Installation Device Carry Form must be completed before starting installation.');
   }
 
-  const { data: updated, error } = await supabase
-    .from('installation_checklists')
-    .update({
-      installation_status: 'In Progress',
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', checklist_id)
-    .select()
-    .single();
+  let updated = null;
+  const nowIso = new Date().toISOString();
 
-  if (error) throw new Error(error.message);
+  try {
+    const { data, error } = await supabase
+      .from('installation_checklists')
+      .update({
+        installation_status: 'In Progress',
+        actual_start_datetime: nowIso,
+        updated_at: nowIso,
+      })
+      .eq('id', checklist_id)
+      .select()
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST204' || (error.message && error.message.includes('schema cache'))) {
+        const { data: fbData, error: fbErr } = await supabase
+          .from('installation_checklists')
+          .update({
+            installation_status: 'In Progress',
+            updated_at: nowIso,
+          })
+          .eq('id', checklist_id)
+          .select()
+          .single();
+        if (fbErr) throw new Error(fbErr.message);
+        updated = fbData;
+      } else {
+        throw new Error(error.message);
+      }
+    } else {
+      updated = data;
+    }
+  } catch (err) {
+    if (err.message && err.message.includes('schema cache')) {
+      const { data: fbData } = await supabase
+        .from('installation_checklists')
+        .update({
+          installation_status: 'In Progress',
+          updated_at: nowIso,
+        })
+        .eq('id', checklist_id)
+        .select()
+        .single();
+      updated = fbData || { id: checklist_id, installation_status: 'In Progress' };
+    } else {
+      throw err;
+    }
+  }
+
+  // Update in-memory schedule store
+  const existingSched = inMemoryChecklistSchedules.get(checklist_id) || {};
+  existingSched.actual_start_datetime = nowIso;
+  existingSched.installation_status = 'In Progress';
+  inMemoryChecklistSchedules.set(checklist_id, existingSched);
 
   await logAudit({
     actor_id: user.id,
@@ -567,7 +613,7 @@ export async function submitInstallationCompletionReport(param1, param2) {
     saveFallbackStorage();
   }
 
-  const now = new Date().toISOString();
+  const now = opts.actual_completion_datetime || opts.actual_completion_date || new Date().toISOString();
   try {
     const { error: updErr } = await supabase
       .from('installation_checklists')
@@ -578,24 +624,57 @@ export async function submitInstallationCompletionReport(param1, param2) {
         actual_materials_used: processedMaterialItems.filter((m) => m.quantity_used > 0),
         actual_materials_returned: returnedMaterialItems,
         material_return_status: returnedMaterialItems.length > 0 ? 'PENDING_STORE_VERIFICATION' : 'NOT_APPLICABLE',
+        actual_completion_datetime: now,
         updated_at: now,
       })
       .eq('id', checklist_id);
 
     if (updErr) {
       console.warn('DB update warning for checklist status, falling back to core status update:', updErr.message);
-      await supabase
+      const { error: coreErr } = await supabase
         .from('installation_checklists')
         .update({
           installation_status: finalInstStatus,
           reconciliation_status: finalReconStatus,
+          actual_completion_datetime: now,
           updated_at: now,
         })
         .eq('id', checklist_id);
+
+      if (coreErr) {
+        await supabase
+          .from('installation_checklists')
+          .update({
+            installation_status: finalInstStatus,
+            updated_at: now,
+          })
+          .eq('id', checklist_id);
+      }
     }
+
+    // Update in-memory schedule store
+    const compSched = inMemoryChecklistSchedules.get(checklist_id) || {};
+    compSched.actual_completion_datetime = now;
+    compSched.installation_status = finalInstStatus;
+    inMemoryChecklistSchedules.set(checklist_id, compSched);
+
+    // Update engineer_bookings to COMPLETED with actual completion date
+    await supabase
+      .from('engineer_bookings')
+      .update({
+        status: 'COMPLETED',
+        actual_completion_datetime: now,
+        updated_at: now,
+      })
+      .eq('checklist_id', checklist_id);
   } catch (err) {
     console.warn('DB update warning for checklist status:', err.message);
   }
+
+  // Also sync in-memory and persistent storage fallback
+  try {
+    completeEngineerBookingByChecklistId(checklist_id, now);
+  } catch (e) {}
 
   await logAudit({
     actor_id: user.id,

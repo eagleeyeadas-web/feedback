@@ -4,6 +4,7 @@ import { fileURLToPath } from 'url';
 import supabase from './supabase.js';
 import { logAudit } from './auditService.js';
 import { updateRequirementIssuanceStatus } from './storeRequirementService.js';
+import { recordStockMovement } from './stockMovementService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -19,6 +20,8 @@ export const STANDARD_MATERIALS = [
   { id: 'mat-007', sku: 'MAT-WIRE-0.5MM', material_name: '0.5 mm Wire', unit: 'Metres', opening_stock: 1000, current_stock: 1000, opening_stock_set: true, min_stock_level: 100 },
   { id: 'mat-008', sku: 'MAT-CBL-5M', material_name: '5-metre Cable', unit: 'Nos.', opening_stock: 150, current_stock: 150, opening_stock_set: true, min_stock_level: 25 },
   { id: 'mat-009', sku: 'MAT-CBL-15M', material_name: '15-metre Cable', unit: 'Nos.', opening_stock: 50, current_stock: 50, opening_stock_set: true, min_stock_level: 10 },
+  { id: 'mat-010', sku: 'MAT-CAM-LOOSE', material_name: 'Camera', unit: 'Nos.', opening_stock: 50, current_stock: 50, opening_stock_set: true, min_stock_level: 10 },
+  { id: 'mat-011', sku: 'MAT-DISP-LOOSE', material_name: 'Display', unit: 'Nos.', opening_stock: 50, current_stock: 50, opening_stock_set: true, min_stock_level: 10 },
 ];
 
 /**
@@ -267,6 +270,24 @@ export async function setMaterialOpeningStock({
     console.warn('DB transaction insert error:', txErr.message);
   }
 
+  // Record into persistent stock_movements ledger in Supabase
+  await recordStockMovement({
+    item_id: targetId,
+    item_name: targetName,
+    sku: material?.sku || null,
+    category: 'Installation Material',
+    movement_type: 'OPENING_STOCK',
+    quantity: qty,
+    unit,
+    balance_before: previousBalance,
+    balance_after: newBalance,
+    performed_by: user?.id,
+    performer_name: user?.full_name || user?.email || 'Store Manager',
+    performer_email: user?.email,
+    reason_or_remarks: txRecord.reason_or_remarks,
+    idempotency_key: txRecord.idempotency_key,
+  }).catch((e) => console.warn('recordStockMovement error:', e.message));
+
   inMemoryMaterialTransactions.unshift(txRecord);
   saveMaterialFallbackStorage();
 
@@ -458,6 +479,24 @@ export async function adjustMaterialStock({
   } catch (txErr) {
     console.warn('DB transaction insert error for material stock:', txErr.message);
   }
+
+  // Record into persistent stock_movements ledger in Supabase
+  await recordStockMovement({
+    item_id: materialId,
+    item_name: name,
+    sku: material?.sku || null,
+    category: 'Installation Material',
+    movement_type: txType,
+    quantity: Math.abs(qtyDelta),
+    unit: material.unit,
+    balance_before: previousBalance,
+    balance_after: newCurrent,
+    performed_by: user?.id,
+    performer_name: user?.full_name || user?.email || 'Store Manager',
+    performer_email: user?.email,
+    reason_or_remarks: txRecord.reason_or_remarks,
+    idempotency_key: txRecord.idempotency_key,
+  }).catch((e) => console.warn('recordStockMovement error:', e.message));
 
   inMemoryMaterialTransactions.unshift(txRecord);
   saveMaterialFallbackStorage();
@@ -660,6 +699,25 @@ export async function issueMaterialsForChecklist({
     } catch (txErr) {
       console.warn('DB material transaction insert error:', txErr.message);
     }
+
+    // Record into persistent stock_movements ledger in Supabase
+    await recordStockMovement({
+      item_id: materialId,
+      item_name: matName,
+      sku: existingMat?.sku || null,
+      category: 'Installation Material',
+      movement_type: 'STOCK_ISSUED',
+      quantity: qtyRequired,
+      unit,
+      balance_before: previousBalance,
+      balance_after: newStock,
+      checklist_id,
+      performed_by: user?.id,
+      performer_name: user?.full_name || user?.email || 'Store Manager',
+      performer_email: user?.email,
+      reason_or_remarks: txRecord.reason_or_remarks,
+      idempotency_key: idempotencyKey,
+    }).catch((e) => console.warn('recordStockMovement error:', e.message));
 
     inMemoryMaterialTransactions.unshift(txRecord);
     issuedRecords.push({
@@ -938,6 +996,27 @@ export async function creditMaterialStockForVerifiedReturn({
       } catch (txErr) {
         console.warn('DB tx insert error for usable material return:', txErr.message);
       }
+
+      // Record into persistent stock_movements ledger in Supabase
+      await recordStockMovement({
+        item_id: targetId,
+        item_name: targetName,
+        sku: matched?.sku || null,
+        category: 'Installation Material',
+        movement_type: 'RETURNED_USABLE',
+        quantity: usableQty,
+        unit,
+        balance_before: previousBalance,
+        balance_after: newBalance,
+        checklist_id,
+        reference_transaction_id: return_id,
+        performed_by: user?.id,
+        performer_name: user?.full_name || user?.email || 'Store Manager',
+        performer_email: user?.email,
+        reason_or_remarks: txUsable.reason_or_remarks,
+        idempotency_key: idempotencyKeyUsable,
+      }).catch((e) => console.warn('recordStockMovement error:', e.message));
+
       inMemoryMaterialTransactions.unshift(txUsable);
     }
 
@@ -978,6 +1057,27 @@ export async function creditMaterialStockForVerifiedReturn({
       } catch (txErr) {
         console.warn('DB tx insert error for damaged material return:', txErr.message);
       }
+
+      // Record into persistent stock_movements ledger in Supabase
+      await recordStockMovement({
+        item_id: targetId,
+        item_name: targetName,
+        sku: matched?.sku || null,
+        category: 'Installation Material',
+        movement_type: 'RETURNED_DAMAGED',
+        quantity: damagedQty,
+        unit,
+        balance_before: previousDamaged,
+        balance_after: newDamaged,
+        checklist_id,
+        reference_transaction_id: return_id,
+        performed_by: user?.id,
+        performer_name: user?.full_name || user?.email || 'Store Manager',
+        performer_email: user?.email,
+        reason_or_remarks: txDmg.reason_or_remarks,
+        idempotency_key: idempotencyKeyDmg,
+      }).catch((e) => console.warn('recordStockMovement error:', e.message));
+
       inMemoryMaterialTransactions.unshift(txDmg);
     }
 

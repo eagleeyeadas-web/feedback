@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { fetchAdminQuotations, downloadQuotationPDF, deleteQuotation, fetchQuotationDetail, exportQuotationCSV } from '../../lib/api';
-import { Search, Download, Trash2, Eye, FileText, ChevronLeft, ChevronRight, AlertTriangle, X, FileDown, Plus } from 'lucide-react';
+import { Search, Download, Trash2, Eye, FileText, ChevronLeft, ChevronRight, AlertTriangle, X, FileDown, Plus, RotateCcw } from 'lucide-react';
 
 export default function QuotationHistory({ onNavigateToGenerator, onBackToChecklists } = {}) {
   const { session } = useAuth();
@@ -99,6 +99,30 @@ export default function QuotationHistory({ onNavigateToGenerator, onBackToCheckl
     } catch (err) {
       console.error('Delete error:', err);
       alert('Failed to delete quotation');
+    }
+  };
+
+  const handleReopenQuotation = async (q) => {
+    try {
+      let items = selectedItems;
+      if (!selectedQuotation || selectedQuotation.id !== q.id) {
+        const detail = await fetchQuotationDetail(token, q.id);
+        items = detail.items || [];
+      }
+      const dataToSave = {
+        ...q,
+        items,
+      };
+      sessionStorage.setItem('ee_reopen_quotation', JSON.stringify(dataToSave));
+      if (onNavigateToGenerator) {
+        onNavigateToGenerator();
+      } else {
+        window.dispatchEvent(new CustomEvent('ee_reopen_quotation_event', { detail: dataToSave }));
+      }
+    } catch (err) {
+      console.error('Failed to prepare quotation for reopening:', err);
+      sessionStorage.setItem('ee_reopen_quotation', JSON.stringify(q));
+      if (onNavigateToGenerator) onNavigateToGenerator();
     }
   };
 
@@ -247,6 +271,14 @@ export default function QuotationHistory({ onNavigateToGenerator, onBackToCheckl
                           </button>
                           <button
                             type="button"
+                            onClick={() => handleReopenQuotation(q)}
+                            className="p-1.5 text-purple-600 hover:bg-purple-50 rounded-lg transition"
+                            title="Reopen in Generator (Restores Customer GSTIN)"
+                          >
+                            <RotateCcw className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
                             onClick={() => setDeleteTarget(q)}
                             className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition"
                             title="Delete Quotation"
@@ -366,8 +398,15 @@ export default function QuotationHistory({ onNavigateToGenerator, onBackToCheckl
             <div className="flex justify-end gap-3 pt-2">
               <button
                 type="button"
+                onClick={() => handleReopenQuotation(selectedQuotation)}
+                className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+              >
+                <RotateCcw className="w-4 h-4" /> Reopen in Generator
+              </button>
+              <button
+                type="button"
                 onClick={() => handleDownload(selectedQuotation.id, selectedQuotation.quotation_number)}
-                className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5"
+                className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 cursor-pointer"
               >
                 <Download className="w-4 h-4" /> Download PDF
               </button>

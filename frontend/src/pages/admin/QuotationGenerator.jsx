@@ -65,6 +65,60 @@ export default function QuotationGenerator({ onNavigateToHistory, onBackToCheckl
     fetchNextQuotationNumber();
   }, [token]);
 
+  // Support reopening saved quotations from Quotation History (restoring GST number & details)
+  useEffect(() => {
+    const loadReopenedQuotation = (qData) => {
+      if (!qData) return;
+      setCustomerName(qData.customer_name || '');
+      setContactPerson(qData.contact_person || '');
+      setAddress(qData.address || '');
+      setPhoneNumber(qData.phone_number || '');
+      // Restore Customer GST number exactly as saved
+      setGstNumber(qData.gst_number || qData.customer_gst || '');
+      if (qData.quotation_date) setQuotationDate(qData.quotation_date);
+      setGstApplicable(qData.gst_applicable !== undefined ? Boolean(qData.gst_applicable) : true);
+      if (qData.gst_type) setGstType(qData.gst_type);
+      if (qData.cgst_pct !== undefined) setCgstPct(parseFloat(qData.cgst_pct) || 9);
+      if (qData.sgst_pct !== undefined) setSgstPct(parseFloat(qData.sgst_pct) || 9);
+      if (qData.igst_pct !== undefined) setIgstPct(parseFloat(qData.igst_pct) || 18);
+      if (qData.display_size) setDisplaySize(qData.display_size);
+      if (qData.include_tech_specs !== undefined) setIncludeTechSpecs(Boolean(qData.include_tech_specs));
+      if (qData.tech_spec_template) setTechSpecTemplate(qData.tech_spec_template);
+      if (Array.isArray(qData.terms_conditions) && qData.terms_conditions.length > 0) {
+        setTerms(qData.terms_conditions);
+      }
+      if (Array.isArray(qData.items) && qData.items.length > 0) {
+        setItems(qData.items.map((it, idx) => ({
+          id: String(idx + 1),
+          product_option: it.item_description || '2 Channel Live',
+          item_description: it.item_description,
+          hsn_sac: it.hsn_sac || '852589',
+          qty: it.qty || 1,
+          uom: it.uom || 'Nos',
+          rate: it.rate || 0,
+          discount_pct: it.discount_pct || 0,
+        })));
+      }
+      setSuccessMsg(`Quotation ${qData.quotation_number || ''} restored into generator with customer GST number.`);
+    };
+
+    try {
+      const stored = sessionStorage.getItem('ee_reopen_quotation');
+      if (stored) {
+        sessionStorage.removeItem('ee_reopen_quotation');
+        loadReopenedQuotation(JSON.parse(stored));
+      }
+    } catch (e) {
+      console.warn('Could not read reopened quotation from sessionStorage:', e);
+    }
+
+    const handleCustomReopen = (e) => {
+      if (e.detail) loadReopenedQuotation(e.detail);
+    };
+    window.addEventListener('ee_reopen_quotation_event', handleCustomReopen);
+    return () => window.removeEventListener('ee_reopen_quotation_event', handleCustomReopen);
+  }, []);
+
   const fetchNextQuotationNumber = async () => {
     if (!token) return;
     try {

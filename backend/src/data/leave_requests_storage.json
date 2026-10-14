@@ -1,0 +1,22 @@
+{
+  "leaves": [
+    {
+      "id": "496a6bbc-860c-43fe-a51c-1f6853412ce4",
+      "engineer_id": "e1000000-0000-0000-0000-000000000004",
+      "engineer_name": "Sakthivel",
+      "leave_start_date": "2028-11-15",
+      "leave_end_date": "2028-11-16",
+      "leave_type": "Casual",
+      "reason": "Family function in hometown.",
+      "notes": null,
+      "status": "APPROVED",
+      "coordinator_decision_notes": "Approved 2 days casual leave.",
+      "decided_by": "00000000-0000-0000-0000-000000000004",
+      "decided_at": "2026-10-14T09:37:05.653Z",
+      "created_by": "00000000-0000-0000-0000-000000000002",
+      "created_at": "2026-10-14T09:37:04.315Z",
+      "updated_at": "2026-10-14T09:37:05.653Z"
+    }
+  ],
+  "updated_at": "2026-10-14T09:37:05.808Z"
+}

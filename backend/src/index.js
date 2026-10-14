@@ -18,6 +18,7 @@ import bomRoutes from './routes/bom.js';
 import materialRoutes from './routes/materials.js';
 import coordinatorRoutes from './routes/coordinator.js';
 import { runFullCleanup, handleCleanupEndpoint, handleCleanupStatusEndpoint, executeActivityTriggeredCleanup } from './services/quotationCleanupService.js';
+import { startDailyCleanupSchedule } from './services/inventoryCleanupService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -120,6 +121,9 @@ app.listen(config.port, '0.0.0.0', () => {
   setInterval(() => {
     executeActivityTriggeredCleanup({ userId: null, force: false }).catch(err => console.error('Scheduled daily cleanup check error:', err));
   }, CLEANUP_INTERVAL_MS);
+
+  // Automatic 20-day inventory and returns history retention cleanup
+  startDailyCleanupSchedule();
 });
 
 export default app;

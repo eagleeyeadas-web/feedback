@@ -640,8 +640,16 @@ export default function Dashboard() {
           {activeTab === 'customers' && <CustomerManagement />}
           {activeTab === 'users' && <UserManagement />}
           {activeTab === 'audit_logs' && <AuditLogs />}
-          {activeTab === 'quotation_generator' && <QuotationGenerator />}
-          {activeTab === 'quotation_history' && <QuotationHistory />}
+          {activeTab === 'quotation_generator' && (
+            <QuotationGenerator
+              onNavigateToHistory={() => setActiveTab('quotation_history')}
+            />
+          )}
+          {activeTab === 'quotation_history' && (
+            <QuotationHistory
+              onNavigateToGenerator={() => setActiveTab('quotation_generator')}
+            />
+          )}
 
           {activeTab === 'installation_checklists' && (
             <div>

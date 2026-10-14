@@ -44,6 +44,23 @@ import {
   uploadExpenseReceipt,
   generateTechnicianExpensePDFForChecklist,
 } from '../services/expenseService.js';
+import {
+  requestScheduleExtension,
+  getExtensionRequests,
+  getScheduleRevisionHistory,
+} from '../services/scheduleExtensionService.js';
+import {
+  requestRestDay,
+  getRestDays,
+} from '../services/restDayService.js';
+import {
+  requestLeave,
+  getLeaveRequests,
+} from '../services/leaveService.js';
+import {
+  getNotifications,
+  markNotificationRead,
+} from '../services/appNotificationService.js';
 
 const uploadReceipt = multer({
   storage: multer.memoryStorage(),
@@ -245,7 +262,7 @@ router.get('/engineers', requireRole('ADMIN', 'SALES', 'TECHNICAL', 'STORE_MANAG
  * GET /api/admin/installations/engineers/availability
  * Real-time availability for all service engineers across a date range
  */
-router.get('/engineers/availability', requireRole('ADMIN', 'SALES', 'TECHNICAL', 'STORE_MANAGER'), async (req, res) => {
+router.get('/engineers/availability', requireRole('ADMIN', 'SALES', 'TECHNICAL', 'STORE_MANAGER', 'COORDINATOR'), async (req, res) => {
   try {
     const { startDate, endDate, duration, excludeChecklistId } = req.query;
     const availability = await getEngineersAvailabilityForRange({
@@ -811,6 +828,152 @@ router.post('/:id/expenses/receipt', requireRole('TECHNICAL', 'ADMIN'), (req, re
       return res.status(status).json({ error: uploadErr.message || 'Failed to upload receipt' });
     }
   });
+});
+
+/**
+ * POST /api/admin/installations/:id/request-extension
+ * Technician submits schedule extension request (TECHNICAL, ADMIN)
+ */
+router.post('/:id/request-extension', requireRole('TECHNICAL', 'ADMIN'), async (req, res) => {
+  try {
+    const {
+      requested_completion_date,
+      requested_return_travel_date,
+      additional_working_days,
+      rest_day_requested,
+      requested_rest_date,
+      reason,
+      notes,
+    } = req.body;
+
+    const result = await requestScheduleExtension({
+      checklistId: req.params.id,
+      user: req.profile || req.user,
+      requestedCompletionDate: requested_completion_date,
+      requestedReturnTravelDate: requested_return_travel_date,
+      additionalWorkingDays: additional_working_days,
+      restDayRequested: rest_day_requested,
+      requestedRestDate: requested_rest_date,
+      reason,
+      notes,
+    });
+
+    return res.status(201).json({ success: true, extension: result });
+  } catch (err) {
+    console.error('Error in POST /installations/:id/request-extension:', err);
+    const status = err.statusCode || 400;
+    return res.status(status).json({ error: err.message || 'Failed to submit extension request' });
+  }
+});
+
+/**
+ * GET /api/admin/installations/:id/extension-requests
+ * Fetch extension requests for a checklist
+ */
+router.get('/:id/extension-requests', requireRole('TECHNICAL', 'ADMIN', 'COORDINATOR', 'SALES'), async (req, res) => {
+  try {
+    const requests = await getExtensionRequests({ checklistId: req.params.id });
+    return res.json({ requests });
+  } catch (err) {
+    return res.status(500).json({ error: 'Failed to fetch extension requests' });
+  }
+});
+
+/**
+ * POST /api/admin/installations/rest-days/request
+ * Technician requests rest day
+ */
+router.post('/rest-days/request', requireRole('TECHNICAL', 'ADMIN'), async (req, res) => {
+  try {
+    const { engineer_name, checklist_id, checklist_number, rest_start_date, rest_end_date, reason, notes } = req.body;
+    const result = await requestRestDay({
+      engineerIdOrName: engineer_name || req.profile?.full_name || req.profile?.email,
+      checklistId: checklist_id,
+      checklistNumber: checklist_number,
+      restStartDate: rest_start_date,
+      restEndDate: rest_end_date,
+      reason,
+      notes,
+      user: req.profile || req.user,
+    });
+    return res.status(201).json({ success: true, rest_day: result });
+  } catch (err) {
+    console.error('Error requesting rest day:', err);
+    const status = err.statusCode || 400;
+    return res.status(status).json({ error: err.message || 'Failed to request rest day' });
+  }
+});
+
+/**
+ * GET /api/admin/installations/rest-days
+ */
+router.get('/rest-days', requireRole('TECHNICAL', 'ADMIN', 'COORDINATOR'), async (req, res) => {
+  try {
+    const list = await getRestDays(req.query);
+    return res.json({ rest_days: list });
+  } catch (err) {
+    return res.status(500).json({ error: 'Failed to fetch rest days' });
+  }
+});
+
+/**
+ * POST /api/admin/installations/leaves/request
+ * Technician requests leave
+ */
+router.post('/leaves/request', requireRole('TECHNICAL', 'ADMIN'), async (req, res) => {
+  try {
+    const { engineer_name, leave_start_date, leave_end_date, leave_type, reason, notes } = req.body;
+    const result = await requestLeave({
+      engineerIdOrName: engineer_name || req.profile?.full_name || req.profile?.email,
+      leaveStartDate: leave_start_date,
+      leaveEndDate: leave_end_date,
+      leaveType: leave_type,
+      reason,
+      notes,
+      user: req.profile || req.user,
+    });
+    return res.status(201).json({ success: true, leave: result });
+  } catch (err) {
+    console.error('Error requesting leave:', err);
+    const status = err.statusCode || 400;
+    return res.status(status).json({ error: err.message || 'Failed to request leave' });
+  }
+});
+
+/**
+ * GET /api/admin/installations/leaves
+ */
+router.get('/leaves', requireRole('TECHNICAL', 'ADMIN', 'COORDINATOR'), async (req, res) => {
+  try {
+    const list = await getLeaveRequests(req.query);
+    return res.json({ leaves: list });
+  } catch (err) {
+    return res.status(500).json({ error: 'Failed to fetch leaves' });
+  }
+});
+
+/**
+ * GET /api/admin/installations/:id/schedule-history
+ */
+router.get('/:id/schedule-history', requireRole('TECHNICAL', 'ADMIN', 'COORDINATOR', 'SALES'), async (req, res) => {
+  try {
+    const history = await getScheduleRevisionHistory(req.params.id);
+    return res.json({ history });
+  } catch (err) {
+    return res.status(500).json({ error: 'Failed to fetch schedule history' });
+  }
+});
+
+/**
+ * GET /api/admin/installations/notifications/tech
+ */
+router.get('/notifications/tech', requireRole('TECHNICAL', 'ADMIN'), async (req, res) => {
+  try {
+    const notifs = await getNotifications({ role: 'TECHNICAL', userId: req.profile?.id, limit: 50 });
+    return res.json({ notifications: notifs });
+  } catch (err) {
+    return res.status(500).json({ error: 'Failed to fetch technician notifications' });
+  }
 });
 
 export default router;
