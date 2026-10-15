@@ -188,8 +188,8 @@ async function runModalUpdateAcceptanceTests() {
   // -------------------------------------------------------------------------
   console.log('\n--- TEST 5: Declaration Revision History ---');
   const correctedItems = [
-    { item_name: 'Camera', quantity: 3, unit: 'Nos.' },
-    { item_name: 'Display', quantity: 1, unit: 'Nos.' },
+    { item_name: 'Camera', quantity: 2, unit: 'Nos.' },
+    { item_name: 'Display', quantity: 2, unit: 'Nos.' },
     { item_name: 'Insulation Tape', quantity: 2, unit: 'Nos.' },
     { item_name: '0.5 mm Wire', quantity: 10, unit: 'Metres' },
   ];

@@ -137,8 +137,22 @@ export async function getAvailableBackupProducts() {
       }
     });
 
-    // Return Category A components first (Cameras, Displays, MDVRs), then Category B installation materials
-    return [...categoryAComponents, ...deviceProducts, ...categoryBMaterials];
+    // Deduplicate by normalized lowercase product name, prioritizing real UUID records over synthetic aliases
+    const productMap = new Map();
+    [...categoryAComponents, ...deviceProducts, ...categoryBMaterials].forEach((prod) => {
+      const key = (prod.item_name || '').trim().toLowerCase();
+      if (!key) return;
+      if (!productMap.has(key)) {
+        productMap.set(key, prod);
+      } else {
+        const existing = productMap.get(key);
+        if (existing.canonical_id && !prod.canonical_id) {
+          productMap.set(key, prod);
+        }
+      }
+    });
+
+    return Array.from(productMap.values());
   } catch (err) {
     console.warn('Could not load authoritative catalogue for backup products:', err.message);
     return [];

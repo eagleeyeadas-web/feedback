@@ -351,6 +351,68 @@ router.get('/technician-expenses/monthly-summary', requireRole('TECHNICAL', 'ADM
 });
 
 /**
+ * GET /api/admin/installations/backup-products
+ * Available inventory items and units for loose backup item declaration
+ */
+router.get('/backup-products', requireRole('TECHNICAL', 'ADMIN', 'STORE_MANAGER', 'SALES', 'COORDINATOR'), async (req, res) => {
+  try {
+    const products = await getAvailableBackupProducts();
+    return res.json({ products });
+  } catch (err) {
+    return res.status(500).json({ error: 'Failed to fetch backup products: ' + err.message });
+  }
+});
+
+/**
+ * GET /api/admin/installations/device-configurations
+ * Authoritative component breakdown rules for camera configurations
+ */
+router.get('/device-configurations', requireRole('TECHNICAL', 'COORDINATOR', 'ADMIN', 'SUPER_ADMIN', 'SALES', 'STORE_MANAGER'), async (req, res) => {
+  try {
+    return res.json(STANDARD_DEVICE_CONFIGURATIONS);
+  } catch (err) {
+    console.error('Error fetching device configurations:', err);
+    return res.status(500).json({ error: 'Failed to fetch device configurations' });
+  }
+});
+
+/**
+ * GET /api/admin/installations/rest-days
+ */
+router.get('/rest-days', requireRole('TECHNICAL', 'ADMIN', 'COORDINATOR'), async (req, res) => {
+  try {
+    const list = await getRestDays(req.query);
+    return res.json({ rest_days: list });
+  } catch (err) {
+    return res.status(500).json({ error: 'Failed to fetch rest days' });
+  }
+});
+
+/**
+ * GET /api/admin/installations/leaves
+ */
+router.get('/leaves', requireRole('TECHNICAL', 'ADMIN', 'COORDINATOR'), async (req, res) => {
+  try {
+    const list = await getLeaveRequests(req.query);
+    return res.json({ leaves: list });
+  } catch (err) {
+    return res.status(500).json({ error: 'Failed to fetch leaves' });
+  }
+});
+
+/**
+ * GET /api/admin/installations/notifications/tech
+ */
+router.get('/notifications/tech', requireRole('TECHNICAL', 'ADMIN'), async (req, res) => {
+  try {
+    const notifs = await getNotifications({ role: 'TECHNICAL', userId: req.profile?.id, limit: 50 });
+    return res.json({ notifications: notifs });
+  } catch (err) {
+    return res.status(500).json({ error: 'Failed to fetch technician notifications' });
+  }
+});
+
+/**
  * GET /api/admin/installations
  * List installation checklists with search, filters, pagination (Accessible to all authorized roles)
  */
@@ -371,7 +433,25 @@ router.get('/', requireRole('ADMIN', 'SALES', 'TECHNICAL', 'STORE_MANAGER', 'COO
  * GET /api/admin/installations/:id
  * Get single installation checklist by ID (Accessible to all authorized roles)
  */
-router.get('/:id', requireRole('ADMIN', 'SALES', 'TECHNICAL', 'STORE_MANAGER', 'COORDINATOR'), async (req, res) => {
+router.get('/:id', requireRole('ADMIN', 'SALES', 'TECHNICAL', 'STORE_MANAGER', 'COORDINATOR'), async (req, res, next) => {
+  const STATIC_ROUTE_KEYS = [
+    'backup-products',
+    'device-configurations',
+    'rest-days',
+    'leaves',
+    'notifications',
+    'technician-expenses',
+    'pending-returns',
+    'pending-material-returns',
+    'stats',
+    'service-engineers',
+    'salespersons',
+    'engineers',
+  ];
+  if (STATIC_ROUTE_KEYS.includes(req.params.id)) {
+    return next();
+  }
+
   try {
     let item = await getChecklistById(req.params.id);
     if (item) {
@@ -608,18 +688,7 @@ router.get('/:id/completion-report', requireRole('ADMIN', 'SALES', 'TECHNICAL', 
   }
 });
 
-/**
- * GET /api/admin/installations/device-configurations
- * Authoritative component breakdown rules for camera configurations
- */
-router.get('/device-configurations', requireRole('TECHNICAL', 'COORDINATOR', 'ADMIN', 'SUPER_ADMIN', 'SALES', 'STORE_MANAGER'), async (req, res) => {
-  try {
-    return res.json(STANDARD_DEVICE_CONFIGURATIONS);
-  } catch (err) {
-    console.error('Error fetching device configurations:', err);
-    return res.status(500).json({ error: 'Failed to fetch device configurations' });
-  }
-});
+
 
 /**
  * GET /api/admin/installations/:id/additional-installations
@@ -1032,18 +1101,7 @@ router.get('/notifications/tech', requireRole('TECHNICAL', 'ADMIN'), async (req,
   }
 });
 
-/**
- * GET /api/admin/installations/backup-products
- * Available inventory items and units for loose backup item declaration
- */
-router.get('/backup-products', requireRole('TECHNICAL', 'ADMIN', 'STORE_MANAGER', 'SALES', 'COORDINATOR'), async (req, res) => {
-  try {
-    const products = await getAvailableBackupProducts();
-    return res.json({ products });
-  } catch (err) {
-    return res.status(500).json({ error: 'Failed to fetch backup products: ' + err.message });
-  }
-});
+
 
 /**
  * GET /api/admin/installations/:id/backup-declaration
