@@ -178,3 +178,43 @@ export async function getUnreadCount({ role = null, userId = null }) {
   const notifs = await getNotifications({ role, userId, unreadOnly: true, limit: 100 });
   return notifs.length;
 }
+
+/**
+ * Delete a single notification by ID
+ */
+export async function deleteNotificationById(id) {
+  try {
+    await supabase.from('app_notifications').delete().eq('id', id);
+  } catch (err) {
+    // Non-blocking
+  }
+  inMemoryNotifications.delete(id);
+  saveStorage();
+  return { success: true, id };
+}
+
+/**
+ * Delete all notifications for a role/user
+ */
+export async function clearNotifications({ role = null, userId = null } = {}) {
+  try {
+    let q = supabase.from('app_notifications').delete();
+    if (role) q = q.eq('target_role', role);
+    if (userId) q = q.eq('target_user_id', userId);
+    await q;
+  } catch (err) {
+    // Non-blocking
+  }
+
+  let deletedCount = 0;
+  inMemoryNotifications.forEach((n, k) => {
+    const roleMatch = !role || (n.target_role && n.target_role.toLowerCase() === role.toLowerCase());
+    const userMatch = !userId || n.target_user_id === userId;
+    if (roleMatch || userMatch) {
+      inMemoryNotifications.delete(k);
+      deletedCount++;
+    }
+  });
+  saveStorage();
+  return { success: true, deletedCount };
+}

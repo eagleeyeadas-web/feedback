@@ -480,6 +480,90 @@ router.get('/:id/pdf', async (req, res) => {
 });
 
 /**
+ * POST /api/admin/quotations/delete-test
+ * Dedicated, protected endpoint to safely clear development/test quotations ONLY.
+ * Quotation history is strictly protected by default: legitimate customer quotations are never deleted.
+ * Requires explicit confirmation phrase 'DELETE TEST QUOTATIONS'.
+ */
+router.post('/delete-test', async (req, res) => {
+  try {
+    const { confirmationPhrase, search = '' } = req.body;
+
+    if (confirmationPhrase !== 'DELETE TEST QUOTATIONS') {
+      return res.status(400).json({
+        error: 'Confirmation failed. You must provide the exact phrase "DELETE TEST QUOTATIONS" to perform test quotation cleanup.',
+      });
+    }
+
+    const { data: allQuotations, error: fetchErr } = await supabase
+      .from('quotations')
+      .select('id, quotation_number, customer_name, phone_number, net_amount, quotation_date')
+      .order('quotation_number', { ascending: false });
+
+    if (fetchErr) {
+      return res.status(500).json({ error: fetchErr.message || 'Failed to fetch quotations' });
+    }
+
+    const records = allQuotations || [];
+    const testPattern = /(test|demo|sample|dummy|temp)/i;
+
+    const testQuotations = [];
+    let preservedCount = 0;
+
+    for (const q of records) {
+      const isTestByName = testPattern.test(q.customer_name || '');
+      const isTestByPhone = testPattern.test(q.phone_number || '');
+      const matchesSearch = search && (
+        (q.customer_name || '').toLowerCase().includes(search.toLowerCase()) ||
+        (q.quotation_number || '').toLowerCase().includes(search.toLowerCase())
+      );
+
+      // Only treat as test if explicitly matching test keywords or search
+      if (isTestByName || isTestByPhone || matchesSearch) {
+        testQuotations.push(q);
+      } else {
+        preservedCount++;
+      }
+    }
+
+    let deletedCount = 0;
+    let failedCount = 0;
+    const deletedDetails = [];
+
+    // Delete in descending sequence order so sequence number can be cleanly reclaimed if latest
+    for (const tq of testQuotations) {
+      try {
+        const result = await handleQuotationDeletion(tq.id);
+        if (result && result.success) {
+          deletedCount++;
+          deletedDetails.push({
+            quotationNumber: result.quotationNumber,
+            reclaimed: result.reclaimed,
+          });
+        } else {
+          failedCount++;
+        }
+      } catch {
+        failedCount++;
+      }
+    }
+
+    return res.json({
+      success: true,
+      message: `Cleaned up ${deletedCount} test quotation(s). Strictly preserved ${preservedCount} legitimate customer quotation(s).`,
+      deletedCount,
+      skippedCount: preservedCount,
+      failedCount,
+      totalEvaluated: records.length,
+      deletedDetails,
+    });
+  } catch (error) {
+    console.error('Error in POST /quotations/delete-test:', error);
+    return res.status(500).json({ error: 'Internal server error while cleaning test quotations' });
+  }
+});
+
+/**
  * DELETE /api/admin/quotations/:id
  * Delete a quotation record
  */

@@ -813,7 +813,7 @@ export default function TechnicianBackupDeclarationModal({
               {/* Extra Items Entry Table */}
               {hasBackupItems && (
                 <div className="space-y-3 pt-1">
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
                     <div>
                       <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wider">
                         Extra Items Declaration Table
@@ -822,13 +822,29 @@ export default function TechnicianBackupDeclarationModal({
                         Select category and product, then specify the exact quantity to carry.
                       </p>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => handleAddItemRow('Device Component')}
-                      className="px-3.5 py-1.5 text-xs font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-xl flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs"
-                    >
-                      <Plus size={15} /> Add Product
-                    </button>
+                    <div className="flex items-center gap-2">
+                      {items.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (window.confirm('Are you sure you want to clear all declared backup items from this list?')) {
+                              setItems([]);
+                            }
+                          }}
+                          className="px-3 py-1.5 text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-xl flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs"
+                          title="Clear all declared items from list"
+                        >
+                          <Trash2 size={14} /> Clear All Items
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => handleAddItemRow('Device Component')}
+                        className="px-3.5 py-1.5 text-xs font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-xl flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs"
+                      >
+                        <Plus size={15} /> Add Product
+                      </button>
+                    </div>
                   </div>
 
                   {/* Desktop Table View */}

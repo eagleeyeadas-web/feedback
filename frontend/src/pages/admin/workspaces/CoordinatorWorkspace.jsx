@@ -18,8 +18,12 @@ import {
   fetchChecklistDeletionPreviewApi,
   deleteAllEligibleChecklistsApi,
   checkChecklistDeletionEligibilityApi,
-  deleteChecklistApi,
-  cancelChecklistApi,
+  deleteCoordinatorExtensionRequest,
+  deleteAllCoordinatorExtensionRequests,
+  deleteCoordinatorRestDayRequest,
+  deleteAllCoordinatorRestDayRequests,
+  deleteCoordinatorLeaveRequest,
+  deleteAllCoordinatorLeaveRequests,
 } from '../../../lib/api';
 import EngineerAvailabilityCalendar from '../../../components/workspaces/EngineerAvailabilityCalendar';
 import {
@@ -207,6 +211,88 @@ export default function CoordinatorWorkspace() {
   );
 
   const pendingApprovalsCount = pendingExtensions.length + pendingRest.length + pendingLeaves.length;
+
+  // Deletion Handlers for Coordinator Requests (Test/History Cleanup)
+  const handleDeleteExtensionRequest = async (id, name) => {
+    if (!window.confirm(`Are you sure you want to delete this availability date request for ${name || 'technician'}?`)) {
+      return;
+    }
+    try {
+      await deleteCoordinatorExtensionRequest(token, id);
+      showToast('Availability date request deleted successfully');
+      loadScheduleData();
+    } catch (err) {
+      showToast(err.message || 'Failed to delete request');
+    }
+  };
+
+  const handleDeleteAllExtensionRequests = async () => {
+    const total = extensionRequests.length;
+    if (!window.confirm(`Are you sure you want to delete all ${total} availability date request(s)? This will clear testing and development requests.`)) {
+      return;
+    }
+    try {
+      const res = await deleteAllCoordinatorExtensionRequests(token);
+      showToast(`Cleared ${res.deletedCount || total} availability date request(s)`);
+      loadScheduleData();
+    } catch (err) {
+      showToast(err.message || 'Failed to clear extension requests');
+    }
+  };
+
+  const handleDeleteRestDayRequest = async (id, name) => {
+    if (!window.confirm(`Are you sure you want to delete this rest day request for ${name || 'technician'}?`)) {
+      return;
+    }
+    try {
+      await deleteCoordinatorRestDayRequest(token, id);
+      showToast('Rest day request deleted successfully');
+      loadScheduleData();
+    } catch (err) {
+      showToast(err.message || 'Failed to delete rest day request');
+    }
+  };
+
+  const handleDeleteAllRestDayRequests = async () => {
+    const total = restDayRequests.length;
+    if (!window.confirm(`Are you sure you want to delete all ${total} rest day request(s)? This will clear testing and development requests.`)) {
+      return;
+    }
+    try {
+      const res = await deleteAllCoordinatorRestDayRequests(token);
+      showToast(`Cleared ${res.deletedCount || total} rest day request(s)`);
+      loadScheduleData();
+    } catch (err) {
+      showToast(err.message || 'Failed to clear rest day requests');
+    }
+  };
+
+  const handleDeleteLeaveRequest = async (id, name) => {
+    if (!window.confirm(`Are you sure you want to delete this leave request for ${name || 'technician'}?`)) {
+      return;
+    }
+    try {
+      await deleteCoordinatorLeaveRequest(token, id);
+      showToast('Leave request deleted successfully');
+      loadScheduleData();
+    } catch (err) {
+      showToast(err.message || 'Failed to delete leave request');
+    }
+  };
+
+  const handleDeleteAllLeaveRequests = async () => {
+    const total = leaveRequests.length;
+    if (!window.confirm(`Are you sure you want to delete all ${total} leave request(s)? This will clear testing and development requests.`)) {
+      return;
+    }
+    try {
+      const res = await deleteAllCoordinatorLeaveRequests(token);
+      showToast(`Cleared ${res.deletedCount || total} leave request(s)`);
+      loadScheduleData();
+    } catch (err) {
+      showToast(err.message || 'Failed to clear leave requests');
+    }
+  };
 
   // Open Manage Booking Modal
   const openManageModal = async (chk) => {
@@ -929,7 +1015,7 @@ export default function CoordinatorWorkspace() {
             <div className="space-y-6">
               {/* 1A. Availability Date Requests */}
               <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-xs space-y-4">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
                     <h3 className="text-sm font-black text-gray-900 flex items-center gap-2">
                       <Clock className="w-4 h-4 text-amber-600" />
@@ -939,6 +1025,17 @@ export default function CoordinatorWorkspace() {
                       Technicians requested revised availability dates for ongoing installations.
                     </p>
                   </div>
+                  {isAuthorizedCoordinator && extensionRequests.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleDeleteAllExtensionRequests}
+                      className="px-3 py-1.5 text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                      title="Delete all extension requests (test/history cleanup)"
+                    >
+                      <Trash2 size={13} />
+                      <span>Delete All Requests ({extensionRequests.length})</span>
+                    </button>
+                  )}
                 </div>
 
                 {pendingExtensions.length === 0 ? (
@@ -990,24 +1087,36 @@ export default function CoordinatorWorkspace() {
                           )}
                         </div>
 
-                        <div className="flex items-center justify-end gap-2 pt-1">
-                          <button
-                            type="button"
-                            id={`reject-ext-${ext.id}`}
-                            onClick={() => openDecisionModal('EXTENSION', 'REJECT', ext)}
-                            className="px-3.5 py-1.5 bg-white hover:bg-rose-50 text-rose-700 border border-rose-200 rounded-xl font-bold text-xs transition cursor-pointer"
-                          >
-                            Reject
-                          </button>
-                          <button
-                            type="button"
-                            id={`approve-ext-${ext.id}`}
-                            onClick={() => openDecisionModal('EXTENSION', 'APPROVE', ext)}
-                            className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs transition cursor-pointer shadow-xs flex items-center gap-1"
-                          >
-                            <Check size={14} />
-                            <span>Approve</span>
-                          </button>
+                        <div className="flex items-center justify-between pt-1">
+                          {isAuthorizedCoordinator && (
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteExtensionRequest(ext.id, ext.engineer_name || ext.technician_name)}
+                              className="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
+                              title="Delete this request"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          )}
+                          <div className="flex items-center gap-2 ml-auto">
+                            <button
+                              type="button"
+                              id={`reject-ext-${ext.id}`}
+                              onClick={() => openDecisionModal('EXTENSION', 'REJECT', ext)}
+                              className="px-3.5 py-1.5 bg-white hover:bg-rose-50 text-rose-700 border border-rose-200 rounded-xl font-bold text-xs transition cursor-pointer"
+                            >
+                              Reject
+                            </button>
+                            <button
+                              type="button"
+                              id={`approve-ext-${ext.id}`}
+                              onClick={() => openDecisionModal('EXTENSION', 'APPROVE', ext)}
+                              className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs transition cursor-pointer shadow-xs flex items-center gap-1"
+                            >
+                              <Check size={14} />
+                              <span>Approve</span>
+                            </button>
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -1017,10 +1126,28 @@ export default function CoordinatorWorkspace() {
 
               {/* 1B. Rest Day Requests */}
               <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-xs space-y-4">
-                <h3 className="text-sm font-black text-gray-900 flex items-center gap-2">
-                  <Moon className="w-4 h-4 text-indigo-600" />
-                  <span>Pending Rest-Day Requests ({pendingRest.length})</span>
-                </h3>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <h3 className="text-sm font-black text-gray-900 flex items-center gap-2">
+                      <Moon className="w-4 h-4 text-indigo-600" />
+                      <span>Pending Rest-Day Requests ({pendingRest.length})</span>
+                    </h3>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      Technicians requested recovery rest days.
+                    </p>
+                  </div>
+                  {isAuthorizedCoordinator && restDayRequests.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleDeleteAllRestDayRequests}
+                      className="px-3 py-1.5 text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                      title="Delete all rest day requests (test/history cleanup)"
+                    >
+                      <Trash2 size={13} />
+                      <span>Delete All Rest Days ({restDayRequests.length})</span>
+                    </button>
+                  )}
+                </div>
 
                 {pendingRest.length === 0 ? (
                   <div className="p-8 text-center bg-gray-50 rounded-xl text-xs text-gray-500">
@@ -1053,22 +1180,34 @@ export default function CoordinatorWorkspace() {
                           </div>
                         </div>
 
-                        <div className="flex items-center justify-end gap-2 pt-1">
-                          <button
-                            type="button"
-                            onClick={() => openDecisionModal('REST', 'REJECT', r)}
-                            className="px-3 py-1.5 bg-white hover:bg-rose-50 text-rose-700 border border-rose-200 rounded-xl font-bold text-xs transition cursor-pointer"
-                          >
-                            Reject
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => openDecisionModal('REST', 'APPROVE', r)}
-                            className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs transition cursor-pointer shadow-xs flex items-center gap-1"
-                          >
-                            <Check size={14} />
-                            <span>Approve Rest</span>
-                          </button>
+                        <div className="flex items-center justify-between pt-1">
+                          {isAuthorizedCoordinator && (
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteRestDayRequest(r.id, r.engineer_name)}
+                              className="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
+                              title="Delete this rest day request"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          )}
+                          <div className="flex items-center gap-2 ml-auto">
+                            <button
+                              type="button"
+                              onClick={() => openDecisionModal('REST', 'REJECT', r)}
+                              className="px-3.5 py-1.5 bg-white hover:bg-rose-50 text-rose-700 border border-rose-200 rounded-xl font-bold text-xs transition cursor-pointer"
+                            >
+                              Reject
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => openDecisionModal('REST', 'APPROVE', r)}
+                              className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs transition cursor-pointer shadow-xs flex items-center gap-1"
+                            >
+                              <Check size={14} />
+                              <span>Approve Rest</span>
+                            </button>
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -1078,10 +1217,28 @@ export default function CoordinatorWorkspace() {
 
               {/* 1C. Leave Requests */}
               <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-xs space-y-4">
-                <h3 className="text-sm font-black text-gray-900 flex items-center gap-2">
-                  <CalendarOff className="w-4 h-4 text-rose-600" />
-                  <span>Pending Leave Requests ({pendingLeaves.length})</span>
-                </h3>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <h3 className="text-sm font-black text-gray-900 flex items-center gap-2">
+                      <CalendarOff className="w-4 h-4 text-rose-600" />
+                      <span>Pending Leave Requests ({pendingLeaves.length})</span>
+                    </h3>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      Technicians applied for leave.
+                    </p>
+                  </div>
+                  {isAuthorizedCoordinator && leaveRequests.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleDeleteAllLeaveRequests}
+                      className="px-3 py-1.5 text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                      title="Delete all leave requests (test/history cleanup)"
+                    >
+                      <Trash2 size={13} />
+                      <span>Delete All Leaves ({leaveRequests.length})</span>
+                    </button>
+                  )}
+                </div>
 
                 {pendingLeaves.length === 0 ? (
                   <div className="p-8 text-center bg-gray-50 rounded-xl text-xs text-gray-500">
@@ -1114,22 +1271,34 @@ export default function CoordinatorWorkspace() {
                           </div>
                         </div>
 
-                        <div className="flex items-center justify-end gap-2 pt-1">
-                          <button
-                            type="button"
-                            onClick={() => openDecisionModal('LEAVE', 'REJECT', l)}
-                            className="px-3 py-1.5 bg-white hover:bg-rose-50 text-rose-700 border border-rose-200 rounded-xl font-bold text-xs transition cursor-pointer"
-                          >
-                            Reject
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => openDecisionModal('LEAVE', 'APPROVE', l)}
-                            className="px-4 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-bold text-xs transition cursor-pointer shadow-xs flex items-center gap-1"
-                          >
-                            <Check size={14} />
-                            <span>Approve Leave</span>
-                          </button>
+                        <div className="flex items-center justify-between pt-1">
+                          {isAuthorizedCoordinator && (
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteLeaveRequest(l.id, l.engineer_name)}
+                              className="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
+                              title="Delete this leave request"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          )}
+                          <div className="flex items-center gap-2 ml-auto">
+                            <button
+                              type="button"
+                              onClick={() => openDecisionModal('LEAVE', 'REJECT', l)}
+                              className="px-3.5 py-1.5 bg-white hover:bg-rose-50 text-rose-700 border border-rose-200 rounded-xl font-bold text-xs transition cursor-pointer"
+                            >
+                              Reject
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => openDecisionModal('LEAVE', 'APPROVE', l)}
+                              className="px-4 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-bold text-xs transition cursor-pointer shadow-xs flex items-center gap-1"
+                            >
+                              <Check size={14} />
+                              <span>Approve Leave</span>
+                            </button>
+                          </div>
                         </div>
                       </div>
                     ))}

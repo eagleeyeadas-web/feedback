@@ -154,6 +154,36 @@ export default function TechnicianExpenseModal({
     setEntries((prev) => prev.filter((_, i) => i !== index));
   };
 
+  // Clear all expense entries for this checklist
+  const handleClearAllExpenses = async () => {
+    if (!window.confirm(`Are you sure you want to clear all ${entries.length} expense entry(ies) for this job? This will remove saved expense records.`)) {
+      return;
+    }
+    const allSavedIds = entries.filter((e) => e.id && !e.id.startsWith('new-')).map((e) => e.id);
+    const combinedDeleted = Array.from(new Set([...deletedIds, ...allSavedIds]));
+
+    setSaving(true);
+    setError('');
+    setSuccessMsg('');
+    try {
+      if (combinedDeleted.length > 0) {
+        await saveJobExpensesApi(token, checklist.id, {
+          expenses: [],
+          deletedExpenseIds: combinedDeleted,
+        });
+      }
+      setEntries([]);
+      setSavedExpenses([]);
+      setDeletedIds([]);
+      setSuccessMsg('All expenses cleared successfully.');
+      if (onSuccess) onSuccess();
+    } catch (err) {
+      setError(err.message || 'Failed to clear expenses');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   // Update entry field
   const handleEntryChange = (index, field, value) => {
     setEntries((prev) =>
@@ -456,14 +486,36 @@ export default function TechnicianExpenseModal({
 
         {/* Expenses Table Form */}
         <div className="space-y-3">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <h4 className="text-xs font-bold text-gray-800 flex items-center gap-1.5">
               <FileCheck className="w-3.5 h-3.5 text-purple-700" />
               <span>Expense Entries ({entries.length})</span>
             </h4>
-            <span className="text-xs font-mono font-bold text-purple-900 bg-purple-100 px-2.5 py-0.5 rounded-full border border-purple-200">
-              Total: ₹{totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </span>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={handleAddExpense}
+                className="px-2.5 py-1 text-xs font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-lg transition-colors cursor-pointer flex items-center gap-1 shadow-2xs"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Add Entry</span>
+              </button>
+              {entries.length > 0 && (
+                <button
+                  type="button"
+                  onClick={handleClearAllExpenses}
+                  disabled={saving}
+                  className="px-2.5 py-1 text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-lg transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-1 shadow-2xs"
+                  title="Clear all expense entries for this job"
+                >
+                  <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                  <span>Clear All Expenses</span>
+                </button>
+              )}
+              <span className="text-xs font-mono font-bold text-purple-900 bg-purple-100 px-2.5 py-0.5 rounded-full border border-purple-200">
+                Total: ₹{totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </span>
+            </div>
           </div>
 
           {loading ? (

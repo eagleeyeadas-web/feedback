@@ -28,13 +28,13 @@
       "opening_stock_set": false,
       "usable_stock": 0,
       "reserved_stock": 0,
-      "issued_stock": 4,
+      "issued_stock": 6,
       "returned_usable_stock": 0,
       "damaged_stock": 0,
       "min_stock_level": 5,
       "is_active": true,
       "created_at": "2026-10-14T10:17:13.435702+00:00",
-      "updated_at": "2026-10-15T07:49:52.245+00:00"
+      "updated_at": "2026-10-15T08:55:04.037+00:00"
     },
     "4 Channel Live": {
       "id": "aecfb17b-40a8-4f6c-a7bc-ae393c0e5f7b",
@@ -44,15 +44,15 @@
       "unit": "Nos.",
       "opening_quantity": 0,
       "opening_stock_set": false,
-      "usable_stock": 10,
+      "usable_stock": 12,
       "reserved_stock": 0,
-      "issued_stock": 1,
-      "returned_usable_stock": 11,
+      "issued_stock": 0,
+      "returned_usable_stock": 13,
       "damaged_stock": 0,
       "min_stock_level": 5,
       "is_active": true,
       "created_at": "2026-10-14T10:17:13.435702+00:00",
-      "updated_at": "2026-10-14T12:06:56.121+00:00"
+      "updated_at": "2026-10-15T09:00:22.598+00:00"
     },
     "4 Channel Recording": {
       "id": "4833ea52-354b-46c2-968b-07a9a1a63b08",
@@ -680,7 +680,7 @@
       "sku": "MAT-INSU-TAPE",
       "material_name": "Insulation Tape",
       "unit": "Nos.",
-      "current_stock": 96,
+      "current_stock": 92,
       "opening_stock": 100,
       "opening_stock_set": true,
       "issued_stock": 0,
@@ -688,7 +688,7 @@
       "min_stock_level": 20,
       "is_active": true,
       "created_at": "2026-10-14T10:17:13.435702+00:00",
-      "updated_at": "2026-10-15T04:04:22.259229+00:00"
+      "updated_at": "2026-10-15T09:35:31.822737+00:00"
     },
     "Cable Tie – 200 mm": {
       "id": "bd1ed5a4-94c0-4f38-aabc-f6a46b0b0159",
@@ -778,7 +778,7 @@
       "min_stock_level": 100,
       "is_active": true,
       "created_at": "2026-10-14T10:17:13.435702+00:00",
-      "updated_at": "2026-10-15T04:04:36.336463+00:00"
+      "updated_at": "2026-10-15T09:35:48.113506+00:00"
     },
     "5-metre Cable": {
       "id": "d9583db5-eb4c-4059-b86c-f9548c99ac85",
@@ -815,7 +815,7 @@
       "sku": "MAT-CAM-LOOSE",
       "material_name": "Camera",
       "unit": "Nos.",
-      "current_stock": 38,
+      "current_stock": 1,
       "opening_stock": 50,
       "opening_stock_set": true,
       "issued_stock": 0,
@@ -823,14 +823,14 @@
       "min_stock_level": 10,
       "is_active": true,
       "created_at": "2026-10-14T10:17:13.435702+00:00",
-      "updated_at": "2026-10-15T08:16:58.028011+00:00"
+      "updated_at": "2026-10-15T09:35:38.304516+00:00"
     },
     "Display": {
       "id": "b6d9a205-f951-4e02-ae32-75b2bbcf005b",
       "sku": "MAT-DISP-LOOSE",
       "material_name": "Display",
       "unit": "Nos.",
-      "current_stock": 55,
+      "current_stock": 52,
       "opening_stock": 50,
       "opening_stock_set": true,
       "issued_stock": 0,
@@ -838,14 +838,14 @@
       "min_stock_level": 10,
       "is_active": true,
       "created_at": "2026-10-14T10:17:13.435702+00:00",
-      "updated_at": "2026-10-15T04:04:21.15756+00:00"
+      "updated_at": "2026-10-15T09:35:30.502075+00:00"
     },
     "Live Display": {
       "id": "7eb8416b-3226-4017-9298-fc2438634176",
       "sku": "MAT-DISP-LIVE",
       "material_name": "Live Display",
       "unit": "Nos.",
-      "current_stock": 23,
+      "current_stock": 1,
       "opening_stock": 0,
       "opening_stock_set": false,
       "issued_stock": 0,
@@ -853,7 +853,7 @@
       "min_stock_level": 5,
       "is_active": true,
       "created_at": "2026-10-15T06:02:59.014663+00:00",
-      "updated_at": "2026-10-15T08:17:04.262128+00:00"
+      "updated_at": "2026-10-15T08:55:11.948195+00:00"
     },
     "Recording Display": {
       "id": "db8e8411-cda3-4423-8d34-3443e8407d61",
@@ -868,7 +868,7 @@
       "min_stock_level": 5,
       "is_active": true,
       "created_at": "2026-10-15T06:02:59.014663+00:00",
-      "updated_at": "2026-10-15T07:49:54.183197+00:00"
+      "updated_at": "2026-10-15T08:55:06.426656+00:00"
     },
     "0.5 mm wire": {
       "id": "aa02f56d-db74-415b-a5f1-ab4c87960a37",

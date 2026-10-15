@@ -462,3 +462,38 @@ export async function getApprovedRestDaysForEngineer(engineerIdOrName) {
   const all = await getRestDays({ status: 'APPROVED', engineerId: engId, limit: 100 });
   return all;
 }
+
+/**
+ * 7. Delete an individual rest day request
+ */
+export async function deleteRestDayById(id) {
+  try {
+    await supabase.from('rest_day_requests').delete().eq('id', id);
+  } catch (err) {
+    console.warn('Could not delete rest day from Supabase:', err.message);
+  }
+
+  const existed = inMemoryRestDays.has(id);
+  if (existed) {
+    inMemoryRestDays.delete(id);
+    saveStorage();
+  }
+  return { success: true, id };
+}
+
+/**
+ * 8. Bulk delete rest day requests
+ */
+export async function clearRestDays({ status = 'ALL', engineerId = null } = {}) {
+  const all = await getRestDays({ status, engineerId, limit: 200 });
+  let deletedCount = 0;
+
+  for (const item of all) {
+    try {
+      await deleteRestDayById(item.id);
+      deletedCount++;
+    } catch { /* continue */ }
+  }
+
+  return { success: true, deletedCount };
+}

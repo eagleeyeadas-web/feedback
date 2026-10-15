@@ -11,16 +11,22 @@ import {
   approveScheduleExtension,
   rejectScheduleExtension,
   getScheduleRevisionHistory,
+  deleteScheduleExtensionById,
+  clearScheduleExtensions,
 } from '../services/scheduleExtensionService.js';
 import {
   getRestDays,
   approveRestDay,
   rejectRestDay,
+  deleteRestDayById,
+  clearRestDays,
 } from '../services/restDayService.js';
 import {
   getLeaveRequests,
   approveLeave,
   rejectLeave,
+  deleteLeaveById,
+  clearLeaveRequests,
 } from '../services/leaveService.js';
 import {
   getAvailabilityCalendar,
@@ -32,6 +38,8 @@ import {
   getNotifications,
   markNotificationRead,
   markAllNotificationsRead,
+  deleteNotificationById,
+  clearNotifications,
 } from '../services/appNotificationService.js';
 import {
   previewChecklistsDeletion,
@@ -296,6 +304,35 @@ router.post('/schedule/extensions/:id/reject', async (req, res) => {
 });
 
 /**
+ * DELETE /api/admin/coordinator/schedule/extensions/:id
+ * Delete an individual schedule extension request
+ */
+router.delete('/schedule/extensions/:id', async (req, res) => {
+  try {
+    const result = await deleteScheduleExtensionById(req.params.id);
+    return res.json({ success: true, message: 'Extension request deleted', id: result.id });
+  } catch (err) {
+    console.error('Error deleting extension request:', err);
+    return res.status(500).json({ error: 'Failed to delete extension request' });
+  }
+});
+
+/**
+ * POST /api/admin/coordinator/schedule/extensions/delete-all
+ * Clear or bulk delete schedule extension requests
+ */
+router.post('/schedule/extensions/delete-all', async (req, res) => {
+  try {
+    const { status = 'ALL', checklist_id = null } = req.body;
+    const result = await clearScheduleExtensions({ status, checklistId: checklist_id });
+    return res.json({ success: true, message: `Deleted ${result.deletedCount} extension request(s)`, deletedCount: result.deletedCount });
+  } catch (err) {
+    console.error('Error clearing extension requests:', err);
+    return res.status(500).json({ error: 'Failed to clear extension requests' });
+  }
+});
+
+/**
  * GET /api/admin/coordinator/schedule/rest-days
  * Fetch rest day requests
  */
@@ -353,6 +390,35 @@ router.post('/schedule/rest-days/:id/reject', async (req, res) => {
 });
 
 /**
+ * DELETE /api/admin/coordinator/schedule/rest-days/:id
+ * Delete an individual rest day request
+ */
+router.delete('/schedule/rest-days/:id', async (req, res) => {
+  try {
+    const result = await deleteRestDayById(req.params.id);
+    return res.json({ success: true, message: 'Rest day request deleted', id: result.id });
+  } catch (err) {
+    console.error('Error deleting rest day:', err);
+    return res.status(500).json({ error: 'Failed to delete rest day request' });
+  }
+});
+
+/**
+ * POST /api/admin/coordinator/schedule/rest-days/delete-all
+ * Clear or bulk delete rest day requests
+ */
+router.post('/schedule/rest-days/delete-all', async (req, res) => {
+  try {
+    const { status = 'ALL', engineer_id = null } = req.body;
+    const result = await clearRestDays({ status, engineerId: engineer_id });
+    return res.json({ success: true, message: `Deleted ${result.deletedCount} rest day request(s)`, deletedCount: result.deletedCount });
+  } catch (err) {
+    console.error('Error clearing rest day requests:', err);
+    return res.status(500).json({ error: 'Failed to clear rest day requests' });
+  }
+});
+
+/**
  * GET /api/admin/coordinator/schedule/leaves
  * Fetch leave requests
  */
@@ -406,6 +472,35 @@ router.post('/schedule/leaves/:id/reject', async (req, res) => {
     console.error('Error rejecting leave:', err);
     const status = err.statusCode || 400;
     return res.status(status).json({ error: err.message || 'Failed to reject leave request' });
+  }
+});
+
+/**
+ * DELETE /api/admin/coordinator/schedule/leaves/:id
+ * Delete an individual leave request
+ */
+router.delete('/schedule/leaves/:id', async (req, res) => {
+  try {
+    const result = await deleteLeaveById(req.params.id);
+    return res.json({ success: true, message: 'Leave request deleted', id: result.id });
+  } catch (err) {
+    console.error('Error deleting leave request:', err);
+    return res.status(500).json({ error: 'Failed to delete leave request' });
+  }
+});
+
+/**
+ * POST /api/admin/coordinator/schedule/leaves/delete-all
+ * Clear or bulk delete leave requests
+ */
+router.post('/schedule/leaves/delete-all', async (req, res) => {
+  try {
+    const { status = 'ALL', engineer_id = null } = req.body;
+    const result = await clearLeaveRequests({ status, engineerId: engineer_id });
+    return res.json({ success: true, message: `Deleted ${result.deletedCount} leave request(s)`, deletedCount: result.deletedCount });
+  } catch (err) {
+    console.error('Error clearing leave requests:', err);
+    return res.status(500).json({ error: 'Failed to clear leave requests' });
   }
 });
 
@@ -521,6 +616,24 @@ router.post('/notifications/read-all', async (req, res) => {
     return res.json({ success: true });
   } catch (err) {
     return res.status(500).json({ error: 'Failed to mark all as read' });
+  }
+});
+
+router.delete('/notifications/:id', async (req, res) => {
+  try {
+    await deleteNotificationById(req.params.id);
+    return res.json({ success: true, message: 'Notification deleted' });
+  } catch (err) {
+    return res.status(500).json({ error: 'Failed to delete notification' });
+  }
+});
+
+router.post('/notifications/delete-all', async (req, res) => {
+  try {
+    const result = await clearNotifications({ role: 'COORDINATOR' });
+    return res.json({ success: true, message: `Cleared ${result.deletedCount} notification(s)`, deletedCount: result.deletedCount });
+  } catch (err) {
+    return res.status(500).json({ error: 'Failed to clear notifications' });
   }
 });
 

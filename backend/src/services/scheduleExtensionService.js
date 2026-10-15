@@ -798,3 +798,38 @@ export async function getScheduleRevisionHistory(checklistId) {
   revisions.sort((a, b) => (a.revision_number || 0) - (b.revision_number || 0));
   return revisions;
 }
+
+/**
+ * 7. Delete an individual schedule extension request
+ */
+export async function deleteScheduleExtensionById(id) {
+  try {
+    await supabase.from('schedule_extension_requests').delete().eq('id', id);
+  } catch (err) {
+    console.warn('Could not delete extension from Supabase:', err.message);
+  }
+
+  const existed = inMemoryExtensions.has(id);
+  if (existed) {
+    inMemoryExtensions.delete(id);
+    saveStorage();
+  }
+  return { success: true, id };
+}
+
+/**
+ * 8. Bulk delete schedule extension requests (pending or test)
+ */
+export async function clearScheduleExtensions({ status = 'ALL', checklistId = null } = {}) {
+  const all = await getExtensionRequests({ status, checklistId, limit: 200 });
+  let deletedCount = 0;
+
+  for (const item of all) {
+    try {
+      await deleteScheduleExtensionById(item.id);
+      deletedCount++;
+    } catch { /* continue */ }
+  }
+
+  return { success: true, deletedCount };
+}

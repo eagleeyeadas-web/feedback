@@ -164,6 +164,222 @@ router.get('/feedback', async (req, res) => {
 });
 
 /**
+ * GET /api/admin/feedback/deletion-preview
+ * Previews feedback records eligible for deletion based on scope (TEST, FILTERED, ALL)
+ */
+router.get('/feedback/deletion-preview', async (req, res) => {
+  try {
+    const { scope = 'ALL', search = '', dateFrom = '', dateTo = '' } = req.query;
+
+    const { data: allRecords, error } = await supabase
+      .from('feedback')
+      .select('id, feedback_id, customer_name, phone_number, product_service, submitted_at, average_rating')
+      .order('submitted_at', { ascending: false });
+
+    if (error) {
+      return res.status(500).json({ error: error.message || 'Failed to fetch feedback records for preview' });
+    }
+
+    const records = allRecords || [];
+    const testPattern = /(test|demo|sample|dummy|temp)/i;
+
+    let eligible = [];
+    let protectedRecords = [];
+
+    if (scope === 'TEST') {
+      eligible = records.filter(
+        (r) =>
+          testPattern.test(r.customer_name || '') ||
+          testPattern.test(r.feedback_id || '') ||
+          testPattern.test(r.phone_number || '')
+      );
+      protectedRecords = records.filter(
+        (r) =>
+          !testPattern.test(r.customer_name || '') &&
+          !testPattern.test(r.feedback_id || '') &&
+          !testPattern.test(r.phone_number || '')
+      );
+    } else if (scope === 'FILTERED' && search) {
+      eligible = records.filter(
+        (r) =>
+          (r.customer_name || '').toLowerCase().includes(search.toLowerCase()) ||
+          (r.feedback_id || '').toLowerCase().includes(search.toLowerCase()) ||
+          (r.phone_number || '').toLowerCase().includes(search.toLowerCase())
+      );
+      protectedRecords = records.filter(
+        (r) =>
+          !(r.customer_name || '').toLowerCase().includes(search.toLowerCase()) &&
+          !(r.feedback_id || '').toLowerCase().includes(search.toLowerCase()) &&
+          !(r.phone_number || '').toLowerCase().includes(search.toLowerCase())
+      );
+    } else {
+      eligible = records;
+      protectedRecords = [];
+    }
+
+    return res.json({
+      totalCount: records.length,
+      eligibleCount: eligible.length,
+      protectedCount: protectedRecords.length,
+      eligibleRecords: eligible.slice(0, 100),
+      protectedRecords: protectedRecords.slice(0, 20),
+      scope,
+    });
+  } catch (error) {
+    console.error('Feedback deletion preview error:', error);
+    return res.status(500).json({ error: 'Internal server error while previewing feedback deletion' });
+  }
+});
+
+/**
+ * POST /api/admin/feedback/delete-all
+ * Delete multiple or all feedback records safely with verified count confirmation
+ */
+router.post('/feedback/delete-all', async (req, res) => {
+  try {
+    const { scope = 'ALL', confirmedCount, search = '' } = req.body;
+
+    const { data: allRecords, error: fetchErr } = await supabase
+      .from('feedback')
+      .select('id, feedback_id, customer_name, phone_number, signature_path, pdf_path');
+
+    if (fetchErr) {
+      return res.status(500).json({ error: fetchErr.message || 'Failed to fetch feedback records' });
+    }
+
+    const records = allRecords || [];
+    const testPattern = /(test|demo|sample|dummy|temp)/i;
+
+    let targetRecords = [];
+    if (scope === 'TEST') {
+      targetRecords = records.filter(
+        (r) =>
+          testPattern.test(r.customer_name || '') ||
+          testPattern.test(r.feedback_id || '') ||
+          testPattern.test(r.phone_number || '')
+      );
+    } else if (scope === 'FILTERED' && search) {
+      targetRecords = records.filter(
+        (r) =>
+          (r.customer_name || '').toLowerCase().includes(search.toLowerCase()) ||
+          (r.feedback_id || '').toLowerCase().includes(search.toLowerCase()) ||
+          (r.phone_number || '').toLowerCase().includes(search.toLowerCase())
+      );
+    } else {
+      targetRecords = records;
+    }
+
+    const eligibleCount = targetRecords.length;
+
+    // Safety check: require explicit confirmed count match if provided
+    if (typeof confirmedCount === 'number' && confirmedCount !== eligibleCount) {
+      return res.status(400).json({
+        error: `Confirmation count mismatch. Expected ${eligibleCount} record(s), but received ${confirmedCount}. Please re-confirm.`,
+        eligibleCount,
+        totalCount: records.length,
+      });
+    }
+
+    let deletedCount = 0;
+    let failedCount = 0;
+    const skippedCount = records.length - eligibleCount;
+
+    for (const rec of targetRecords) {
+      try {
+        const { error: delErr } = await supabase
+          .from('feedback')
+          .delete()
+          .eq('id', rec.id);
+
+        if (delErr) {
+          failedCount++;
+        } else {
+          deletedCount++;
+          // Clean storage assets if present
+          if (rec.signature_path) {
+            try {
+              await supabase.storage.from('signatures').remove([rec.signature_path]);
+            } catch { /* ignore */ }
+          }
+          if (rec.pdf_path) {
+            try {
+              await supabase.storage.from('pdfs').remove([rec.pdf_path]);
+            } catch { /* ignore */ }
+          }
+        }
+      } catch {
+        failedCount++;
+      }
+    }
+
+    return res.json({
+      success: true,
+      message: `Successfully deleted ${deletedCount} customer feedback record(s).`,
+      deletedCount,
+      skippedCount,
+      failedCount,
+      totalEvaluated: records.length,
+    });
+  } catch (error) {
+    console.error('Feedback delete-all error:', error);
+    return res.status(500).json({ error: 'Internal server error while deleting feedback records' });
+  }
+});
+
+/**
+ * DELETE /api/admin/feedback/:id
+ * Delete a single feedback record
+ */
+router.delete('/feedback/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    let query = supabase.from('feedback').select('*');
+    if (UUID_RE.test(id)) {
+      query = query.or(`id.eq.${id},feedback_id.eq.${id}`);
+    } else {
+      query = query.eq('feedback_id', id);
+    }
+    const { data: feedback, error: fetchError } = await query.single();
+
+    if (fetchError || !feedback) {
+      return res.status(404).json({ error: 'Feedback record not found' });
+    }
+
+    const { error: delError } = await supabase
+      .from('feedback')
+      .delete()
+      .eq('id', feedback.id);
+
+    if (delError) {
+      return res.status(500).json({ error: delError.message || 'Failed to delete feedback record' });
+    }
+
+    // Clean storage assets
+    if (feedback.signature_path) {
+      try {
+        await supabase.storage.from('signatures').remove([feedback.signature_path]);
+      } catch { /* ignore */ }
+    }
+    if (feedback.pdf_path) {
+      try {
+        await supabase.storage.from('pdfs').remove([feedback.pdf_path]);
+      } catch { /* ignore */ }
+    }
+
+    return res.json({
+      success: true,
+      message: `Feedback record ${feedback.feedback_id} deleted successfully.`,
+      id: feedback.id,
+      feedback_id: feedback.feedback_id,
+    });
+  } catch (error) {
+    console.error('Feedback delete error:', error);
+    return res.status(500).json({ error: 'Internal server error while deleting feedback record' });
+  }
+});
+
+/**
  * GET /api/admin/feedback/:id
  * Get individual feedback detail
  */

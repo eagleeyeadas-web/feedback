@@ -1432,6 +1432,178 @@ export async function releaseDeviceAllocationApi(token, allocationId, reason = '
   return json;
 }
 
+/**
+ * Customer Feedback Deletion APIs
+ */
+export async function fetchFeedbackDeletionPreview(token, params = {}) {
+  const query = new URLSearchParams(params).toString();
+  const res = await fetch(`${API_BASE}/admin/feedback/deletion-preview?${query}`, {
+    headers: adminHeaders(token),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to preview feedback deletion');
+  return json;
+}
+
+export async function deleteAdminFeedback(token, id) {
+  const res = await fetch(`${API_BASE}/admin/feedback/${id}`, {
+    method: 'DELETE',
+    headers: adminHeaders(token),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to delete feedback');
+  return json;
+}
+
+export async function deleteAllAdminFeedback(token, data = {}) {
+  const res = await fetch(`${API_BASE}/admin/feedback/delete-all`, {
+    method: 'POST',
+    headers: adminHeaders(token),
+    body: JSON.stringify(data),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to delete feedback records');
+  return json;
+}
+
+/**
+ * Customer Directory Deletion APIs
+ */
+export async function fetchCustomerDeletionPreview(token, params = {}) {
+  const query = new URLSearchParams(params).toString();
+  const res = await fetch(`${API_BASE}/admin/customers/deletion-preview?${query}`, {
+    headers: adminHeaders(token),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to preview customer deletion');
+  return json;
+}
+
+export async function deleteCustomerApi(token, id) {
+  const res = await fetch(`${API_BASE}/admin/customers/${id}`, {
+    method: 'DELETE',
+    headers: adminHeaders(token),
+  });
+  const json = await res.json();
+  if (!res.ok) {
+    const err = new Error(json.error || 'Failed to delete customer');
+    err.reasons = json.reasons || [];
+    throw err;
+  }
+  return json;
+}
+
+export async function deleteAllCustomersApi(token, data = {}) {
+  const res = await fetch(`${API_BASE}/admin/customers/delete-all`, {
+    method: 'POST',
+    headers: adminHeaders(token),
+    body: JSON.stringify(data),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to delete customers');
+  return json;
+}
+
+/**
+ * Quotation Test Cleanup API (Protected)
+ */
+export async function cleanTestQuotationsApi(token, data = {}) {
+  const res = await fetch(`${API_BASE}/admin/quotations/delete-test`, {
+    method: 'POST',
+    headers: adminHeaders(token),
+    body: JSON.stringify(data),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to clean test quotations');
+  return json;
+}
+
+/**
+ * Coordinator Schedule Request Deletion APIs
+ */
+export async function deleteCoordinatorExtensionRequest(token, id) {
+  const res = await fetch(`${API_BASE}/admin/coordinator/schedule/extensions/${id}`, {
+    method: 'DELETE',
+    headers: adminHeaders(token),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to delete extension request');
+  return json;
+}
+
+export async function deleteAllCoordinatorExtensionRequests(token, data = {}) {
+  const res = await fetch(`${API_BASE}/admin/coordinator/schedule/extensions/delete-all`, {
+    method: 'POST',
+    headers: adminHeaders(token),
+    body: JSON.stringify(data),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to clear extension requests');
+  return json;
+}
+
+export async function deleteCoordinatorRestDayRequest(token, id) {
+  const res = await fetch(`${API_BASE}/admin/coordinator/schedule/rest-days/${id}`, {
+    method: 'DELETE',
+    headers: adminHeaders(token),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to delete rest day request');
+  return json;
+}
+
+export async function deleteAllCoordinatorRestDayRequests(token, data = {}) {
+  const res = await fetch(`${API_BASE}/admin/coordinator/schedule/rest-days/delete-all`, {
+    method: 'POST',
+    headers: adminHeaders(token),
+    body: JSON.stringify(data),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to clear rest day requests');
+  return json;
+}
+
+export async function deleteCoordinatorLeaveRequest(token, id) {
+  const res = await fetch(`${API_BASE}/admin/coordinator/schedule/leaves/${id}`, {
+    method: 'DELETE',
+    headers: adminHeaders(token),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to delete leave request');
+  return json;
+}
+
+export async function deleteAllCoordinatorLeaveRequests(token, data = {}) {
+  const res = await fetch(`${API_BASE}/admin/coordinator/schedule/leaves/delete-all`, {
+    method: 'POST',
+    headers: adminHeaders(token),
+    body: JSON.stringify(data),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to clear leave requests');
+  return json;
+}
+
+export async function deleteCoordinatorNotification(token, id) {
+  const res = await fetch(`${API_BASE}/admin/coordinator/notifications/${id}`, {
+    method: 'DELETE',
+    headers: adminHeaders(token),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to delete notification');
+  return json;
+}
+
+export async function deleteAllCoordinatorNotifications(token) {
+  const res = await fetch(`${API_BASE}/admin/coordinator/notifications/delete-all`, {
+    method: 'POST',
+    headers: adminHeaders(token),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to clear notifications');
+  return json;
+}
+
 
 
 

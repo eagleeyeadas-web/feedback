@@ -437,3 +437,38 @@ export async function getApprovedLeaveForEngineer(engineerIdOrName) {
   const all = await getLeaveRequests({ status: 'APPROVED', engineerId: engId, limit: 100 });
   return all;
 }
+
+/**
+ * 7. Delete an individual leave request
+ */
+export async function deleteLeaveById(id) {
+  try {
+    await supabase.from('leave_requests').delete().eq('id', id);
+  } catch (err) {
+    console.warn('Could not delete leave from Supabase:', err.message);
+  }
+
+  const existed = inMemoryLeaves.has(id);
+  if (existed) {
+    inMemoryLeaves.delete(id);
+    saveStorage();
+  }
+  return { success: true, id };
+}
+
+/**
+ * 8. Bulk delete leave requests
+ */
+export async function clearLeaveRequests({ status = 'ALL', engineerId = null } = {}) {
+  const all = await getLeaveRequests({ status, engineerId, limit: 200 });
+  let deletedCount = 0;
+
+  for (const item of all) {
+    try {
+      await deleteLeaveById(item.id);
+      deletedCount++;
+    } catch { /* continue */ }
+  }
+
+  return { success: true, deletedCount };
+}

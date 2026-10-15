@@ -19,6 +19,9 @@ import {
   exportCSV,
   exportQuotationCSV,
   fetchInstallationStats,
+  fetchFeedbackDeletionPreview,
+  deleteAdminFeedback,
+  deleteAllAdminFeedback,
 } from '../../lib/api';
 import {
   BarChart3,
@@ -46,6 +49,11 @@ import {
   Shield,
   Briefcase,
   Store,
+  Trash2,
+  ShieldCheck,
+  CheckCircle2,
+  Loader2,
+  Check,
 } from 'lucide-react';
 
 import AccessDenied from '../../components/AccessDenied';
@@ -131,7 +139,6 @@ export default function Dashboard() {
   const [selectedFeedback, setSelectedFeedback] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
 
-  // Filter state
   const [filters, setFilters] = useState({
     search: '',
     dateFrom: '',
@@ -143,6 +150,25 @@ export default function Dashboard() {
     page: 1,
     limit: 15,
   });
+
+  // Feedback Deletion States
+  const [deleteSingleModal, setDeleteSingleModal] = useState({ open: false, item: null, submitting: false, error: '' });
+  const [deleteAllModal, setDeleteAllModal] = useState({
+    open: false,
+    scope: 'TEST',
+    preview: null,
+    loading: false,
+    confirmedCountInput: '',
+    submitting: false,
+    error: '',
+    result: null,
+  });
+  const [feedbackToast, setFeedbackToast] = useState('');
+
+  const showFeedbackToast = (msg) => {
+    setFeedbackToast(msg);
+    setTimeout(() => setFeedbackToast(''), 4000);
+  };
 
   const loadData = useCallback(async () => {
     if (!token) return;
@@ -249,6 +275,119 @@ export default function Dashboard() {
       URL.revokeObjectURL(url);
     } catch (err) {
       console.error('PDF download failed:', err);
+    }
+  };
+
+  // Feedback Deletion Handlers
+  const handleOpenDeleteAllFeedback = async (initialScope = 'TEST') => {
+    setDeleteAllModal({
+      open: true,
+      scope: initialScope,
+      preview: null,
+      loading: true,
+      confirmedCountInput: '',
+      submitting: false,
+      error: '',
+      result: null,
+    });
+    try {
+      const preview = await fetchFeedbackDeletionPreview(token, { scope: initialScope, search: filters.search });
+      setDeleteAllModal((prev) => ({
+        ...prev,
+        preview,
+        loading: false,
+      }));
+    } catch (err) {
+      setDeleteAllModal((prev) => ({
+        ...prev,
+        loading: false,
+        error: err.message || 'Failed to evaluate feedback records for deletion',
+      }));
+    }
+  };
+
+  const handleChangeDeleteScope = async (newScope) => {
+    setDeleteAllModal((prev) => ({
+      ...prev,
+      scope: newScope,
+      loading: true,
+      confirmedCountInput: '',
+      error: '',
+    }));
+    try {
+      const preview = await fetchFeedbackDeletionPreview(token, { scope: newScope, search: filters.search });
+      setDeleteAllModal((prev) => ({
+        ...prev,
+        preview,
+        loading: false,
+      }));
+    } catch (err) {
+      setDeleteAllModal((prev) => ({
+        ...prev,
+        loading: false,
+        error: err.message || 'Failed to update deletion preview',
+      }));
+    }
+  };
+
+  const handleConfirmDeleteAllFeedback = async () => {
+    const { scope, preview, confirmedCountInput } = deleteAllModal;
+    const eligibleCount = preview?.eligibleCount || 0;
+
+    if (eligibleCount > 0 && String(confirmedCountInput).trim() !== String(eligibleCount)) {
+      setDeleteAllModal((prev) => ({
+        ...prev,
+        error: `Please enter exact count "${eligibleCount}" in the confirmation box to proceed safely.`,
+      }));
+      return;
+    }
+
+    setDeleteAllModal((prev) => ({ ...prev, submitting: true, error: '' }));
+    try {
+      const res = await deleteAllAdminFeedback(token, {
+        scope,
+        confirmedCount: eligibleCount,
+        search: filters.search,
+      });
+      setDeleteAllModal((prev) => ({
+        ...prev,
+        submitting: false,
+        result: res,
+      }));
+      showFeedbackToast(res.message || `Deleted ${res.deletedCount} feedback records.`);
+      loadData();
+    } catch (err) {
+      setDeleteAllModal((prev) => ({
+        ...prev,
+        submitting: false,
+        error: err.message || 'Failed to execute bulk deletion',
+      }));
+    }
+  };
+
+  const handleDeleteSingleFeedback = (item) => {
+    setDeleteSingleModal({
+      open: true,
+      item,
+      submitting: false,
+      error: '',
+    });
+  };
+
+  const handleConfirmDeleteSingleFeedback = async () => {
+    if (!deleteSingleModal.item) return;
+    setDeleteSingleModal((prev) => ({ ...prev, submitting: true, error: '' }));
+    try {
+      await deleteAdminFeedback(token, deleteSingleModal.item.id);
+      showFeedbackToast(`Feedback ${deleteSingleModal.item.feedback_id} deleted successfully.`);
+      setDeleteSingleModal({ open: false, item: null, submitting: false, error: '' });
+      loadData();
+    } catch (err) {
+      setDeleteSingleModal((prev) => ({
+        ...prev,
+        submitting: false,
+        error: err.message || 'Failed to delete feedback record',
+      }));
     }
   };
 
@@ -792,6 +931,27 @@ export default function Dashboard() {
                 <Filter size={16} />
                 Filters
               </button>
+
+              <button
+                type="button"
+                onClick={handleExportCSV}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer shadow-xs"
+                title="Export customer feedback records to CSV"
+              >
+                <FileDown size={16} />
+                <span>Export CSV</span>
+              </button>
+
+              <button
+                type="button"
+                id="delete-all-feedback-btn"
+                onClick={() => handleOpenDeleteAllFeedback('TEST')}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-bold bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-300 transition-colors cursor-pointer shadow-xs"
+                title="Delete test feedback records or bulk cleanup"
+              >
+                <Trash2 size={16} />
+                <span>Delete All / Clean Test Feedback</span>
+              </button>
             </div>
 
             {/* Expanded Filters */}
@@ -939,6 +1099,13 @@ export default function Dashboard() {
                                 <Download size={16} />
                               </button>
                             )}
+                            <button
+                              onClick={() => handleDeleteSingleFeedback(item)}
+                              className="p-1.5 rounded-lg hover:bg-rose-50 text-gray-400 hover:text-rose-600 transition-colors cursor-pointer"
+                              title="Delete feedback record"
+                            >
+                              <Trash2 size={16} />
+                            </button>
                           </div>
                         </td>
                       </tr>
@@ -979,6 +1146,321 @@ export default function Dashboard() {
       );
     })()}
       </div>
+
+      {/* Toast Notification */}
+      {feedbackToast && (
+        <div className="fixed bottom-6 right-6 z-50 bg-navy text-white px-4 py-3 rounded-xl shadow-xl flex items-center gap-2 text-xs font-semibold animate-in fade-in slide-in-from-bottom-3 duration-200">
+          <CheckCircle2 size={16} className="text-emerald-400" />
+          <span>{feedbackToast}</span>
+        </div>
+      )}
+
+      {/* ---------------------------------------------------- */}
+      {/* Delete Single Feedback Record Modal                  */}
+      {/* ---------------------------------------------------- */}
+      {deleteSingleModal.open && deleteSingleModal.item && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-rose-100 space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-start justify-between pb-3 border-b border-gray-100">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-rose-50 text-rose-600 rounded-xl">
+                  <Trash2 size={22} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-gray-900">Delete Feedback Record</h3>
+                  <p className="text-[11px] text-gray-500">Customer Feedback Management</p>
+                </div>
+              </div>
+              <button
+                disabled={deleteSingleModal.submitting}
+                onClick={() => setDeleteSingleModal({ open: false, item: null, submitting: false, error: '' })}
+                className="p-1 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="p-3 bg-gray-50 rounded-xl border border-gray-200 text-xs space-y-1">
+              <div className="flex justify-between">
+                <span className="text-gray-500">Feedback ID:</span>
+                <span className="font-mono font-bold text-navy">{deleteSingleModal.item.feedback_id}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">Customer Name:</span>
+                <span className="font-bold text-gray-800">{deleteSingleModal.item.customer_name}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">Mobile Number:</span>
+                <span className="font-mono text-gray-700">{deleteSingleModal.item.phone_number}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">Product / Service:</span>
+                <span className="text-gray-700">{deleteSingleModal.item.product_service}</span>
+              </div>
+            </div>
+
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 text-[11px] leading-relaxed">
+              <strong>Confirmation:</strong> This customer submission and its stored PDF/signature files will be permanently deleted from the database.
+            </div>
+
+            {deleteSingleModal.error && (
+              <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-xs">
+                {deleteSingleModal.error}
+              </div>
+            )}
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                disabled={deleteSingleModal.submitting}
+                onClick={() => setDeleteSingleModal({ open: false, item: null, submitting: false, error: '' })}
+                className="px-4 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-100 rounded-xl"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={deleteSingleModal.submitting}
+                onClick={handleConfirmDeleteSingleFeedback}
+                className="px-4 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 disabled:opacity-50 rounded-xl flex items-center gap-1.5 shadow-xs"
+              >
+                {deleteSingleModal.submitting ? (
+                  <>
+                    <Loader2 size={14} className="animate-spin" />
+                    <span>Deleting...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 size={14} />
+                    <span>Confirm Delete</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ---------------------------------------------------- */}
+      {/* Delete All / Bulk Feedback Modal                     */}
+      {/* ---------------------------------------------------- */}
+      {deleteAllModal.open && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl border border-gray-100 space-y-4 max-h-[90vh] overflow-y-auto animate-in fade-in zoom-in-95 duration-150">
+            {/* Header */}
+            <div className="flex items-start justify-between pb-3 border-b border-gray-100">
+              <div className="flex items-center gap-3">
+                <div className="p-3 rounded-xl bg-rose-50 text-rose-600">
+                  <Trash2 size={24} />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-navy flex items-center gap-2">
+                    <span>Clean Feedback Records</span>
+                    <span className="text-[11px] font-semibold bg-rose-100 text-rose-700 px-2.5 py-0.5 rounded-full">
+                      Customer Feedback Management
+                    </span>
+                  </h3>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    Clear test feedback submissions or clean records directly without modifying Supabase tables.
+                  </p>
+                </div>
+              </div>
+              <button
+                disabled={deleteAllModal.submitting}
+                onClick={() => setDeleteAllModal((prev) => ({ ...prev, open: false }))}
+                className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {deleteAllModal.loading ? (
+              <div className="py-12 text-center space-y-2">
+                <Loader2 size={32} className="animate-spin text-blue-600 mx-auto" />
+                <p className="text-xs font-semibold text-gray-700">Evaluating feedback records...</p>
+              </div>
+            ) : deleteAllModal.result ? (
+              /* Results */
+              <div className="space-y-4">
+                <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-900">
+                  <div className="flex items-center gap-2 font-bold text-sm text-emerald-800">
+                    <CheckCircle2 size={18} className="text-emerald-600" />
+                    <span>Feedback Cleanup Completed</span>
+                  </div>
+                  <p className="text-xs text-emerald-700 mt-1">{deleteAllModal.result.message}</p>
+                </div>
+
+                <div className="grid grid-cols-3 gap-3 text-center">
+                  <div className="p-3 bg-emerald-50/70 border border-emerald-200 rounded-xl">
+                    <span className="text-[11px] text-emerald-700 font-semibold uppercase block">Deleted</span>
+                    <span className="text-xl font-bold text-emerald-900">{deleteAllModal.result.deletedCount}</span>
+                  </div>
+                  <div className="p-3 bg-blue-50/70 border border-blue-200 rounded-xl">
+                    <span className="text-[11px] text-blue-700 font-semibold uppercase block">Preserved / Skipped</span>
+                    <span className="text-xl font-bold text-blue-900">{deleteAllModal.result.skippedCount}</span>
+                  </div>
+                  <div className="p-3 bg-gray-50 border border-gray-200 rounded-xl">
+                    <span className="text-[11px] text-gray-500 font-semibold uppercase block">Failed</span>
+                    <span className="text-xl font-bold text-gray-700">{deleteAllModal.result.failedCount}</span>
+                  </div>
+                </div>
+
+                <div className="flex justify-end pt-3">
+                  <button
+                    onClick={() => setDeleteAllModal((prev) => ({ ...prev, open: false }))}
+                    className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl shadow-xs"
+                  >
+                    Done
+                  </button>
+                </div>
+              </div>
+            ) : (
+              /* Scope selection and confirmation */
+              <div className="space-y-4">
+                {/* 3-card stats */}
+                <div className="grid grid-cols-3 gap-3 text-center">
+                  <div className="p-3 bg-gray-50 border border-gray-200 rounded-xl">
+                    <span className="text-[11px] text-gray-500 font-semibold uppercase block">Total Feedback</span>
+                    <span className="text-xl font-bold text-gray-900">{deleteAllModal.preview?.totalCount || 0}</span>
+                  </div>
+                  <div className="p-3 bg-rose-50/70 border border-rose-200 rounded-xl">
+                    <span className="text-[11px] text-rose-700 font-semibold uppercase block">Eligible to Delete</span>
+                    <span className="text-xl font-bold text-rose-900">{deleteAllModal.preview?.eligibleCount || 0}</span>
+                  </div>
+                  <div className="p-3 bg-blue-50/70 border border-blue-200 rounded-xl">
+                    <span className="text-[11px] text-blue-700 font-semibold uppercase block">Preserved / Kept</span>
+                    <span className="text-xl font-bold text-blue-900">{deleteAllModal.preview?.protectedCount || 0}</span>
+                  </div>
+                </div>
+
+                {/* Scope Radio Selection */}
+                <div className="space-y-2 text-xs">
+                  <span className="font-bold text-gray-800 block">Select Deletion Scope:</span>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    <label className={`flex items-start gap-2.5 p-3 rounded-xl border cursor-pointer transition-colors ${
+                      deleteAllModal.scope === 'TEST' ? 'border-rose-400 bg-rose-50/50' : 'border-gray-200 hover:bg-gray-50'
+                    }`}>
+                      <input
+                        type="radio"
+                        name="feedbackScope"
+                        value="TEST"
+                        checked={deleteAllModal.scope === 'TEST'}
+                        onChange={() => handleChangeDeleteScope('TEST')}
+                        className="mt-0.5 text-rose-600 focus:ring-rose-500"
+                      />
+                      <div>
+                        <span className="font-bold text-gray-900 block">Delete Test Feedback Only</span>
+                        <span className="text-[11px] text-gray-500">
+                          Identifies records marked with test keywords (test, demo, sample). Protects real client feedback.
+                        </span>
+                      </div>
+                    </label>
+
+                    <label className={`flex items-start gap-2.5 p-3 rounded-xl border cursor-pointer transition-colors ${
+                      deleteAllModal.scope === 'ALL' ? 'border-rose-400 bg-rose-50/50' : 'border-gray-200 hover:bg-gray-50'
+                    }`}>
+                      <input
+                        type="radio"
+                        name="feedbackScope"
+                        value="ALL"
+                        checked={deleteAllModal.scope === 'ALL'}
+                        onChange={() => handleChangeDeleteScope('ALL')}
+                        className="mt-0.5 text-rose-600 focus:ring-rose-500"
+                      />
+                      <div>
+                        <span className="font-bold text-gray-900 block">Delete All Records</span>
+                        <span className="text-[11px] text-gray-500">
+                          Clears all {deleteAllModal.preview?.totalCount || 0} feedback submissions in this table.
+                        </span>
+                      </div>
+                    </label>
+                  </div>
+                </div>
+
+                {/* Sample records to be deleted */}
+                {deleteAllModal.preview?.eligibleRecords && deleteAllModal.preview.eligibleRecords.length > 0 && (
+                  <div className="text-xs">
+                    <span className="font-bold text-gray-700 block mb-1.5">
+                      Records to be deleted ({deleteAllModal.preview.eligibleCount}):
+                    </span>
+                    <div className="max-h-32 overflow-y-auto p-2.5 bg-gray-50 rounded-xl border border-gray-200 space-y-1 font-mono text-[11px]">
+                      {deleteAllModal.preview.eligibleRecords.slice(0, 10).map((r) => (
+                        <div key={r.id} className="flex justify-between text-gray-700">
+                          <span>{r.feedback_id} — {r.customer_name}</span>
+                          <span className="text-gray-400">{r.phone_number}</span>
+                        </div>
+                      ))}
+                      {deleteAllModal.preview.eligibleCount > 10 && (
+                        <div className="text-gray-400 italic">...and {deleteAllModal.preview.eligibleCount - 10} more records</div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Required confirmation input */}
+                {(deleteAllModal.preview?.eligibleCount || 0) > 0 ? (
+                  <div className="p-3 bg-amber-50/80 border border-amber-200 rounded-xl text-xs space-y-2">
+                    <span className="font-bold text-amber-900 block">
+                      Type <span className="font-mono bg-white px-1.5 py-0.5 rounded border border-amber-300">{deleteAllModal.preview?.eligibleCount}</span> to confirm deletion:
+                    </span>
+                    <input
+                      type="text"
+                      value={deleteAllModal.confirmedCountInput}
+                      onChange={(e) => setDeleteAllModal((prev) => ({ ...prev, confirmedCountInput: e.target.value }))}
+                      placeholder={`Enter ${deleteAllModal.preview?.eligibleCount}`}
+                      className="w-full px-3 py-2 bg-white rounded-lg border border-amber-300 text-xs font-mono font-bold text-gray-800"
+                    />
+                  </div>
+                ) : (
+                  <div className="p-4 bg-gray-50 border border-gray-200 rounded-xl text-center text-xs text-gray-500">
+                    No records match the selected scope for deletion.
+                  </div>
+                )}
+
+                {deleteAllModal.error && (
+                  <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-xs font-semibold">
+                    {deleteAllModal.error}
+                  </div>
+                )}
+
+                {/* Modal Footer */}
+                <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100">
+                  <button
+                    type="button"
+                    disabled={deleteAllModal.submitting}
+                    onClick={() => setDeleteAllModal((prev) => ({ ...prev, open: false }))}
+                    className="px-4 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-100 rounded-xl cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={
+                      deleteAllModal.submitting ||
+                      !deleteAllModal.preview?.eligibleCount ||
+                      String(deleteAllModal.confirmedCountInput).trim() !== String(deleteAllModal.preview?.eligibleCount)
+                    }
+                    onClick={handleConfirmDeleteAllFeedback}
+                    className="px-5 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 disabled:opacity-40 rounded-xl flex items-center gap-1.5 shadow-xs cursor-pointer transition-colors"
+                  >
+                    {deleteAllModal.submitting ? (
+                      <>
+                        <Loader2 size={14} className="animate-spin" />
+                        <span>Deleting Records...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Trash2 size={14} />
+                        <span>Confirm Delete ({deleteAllModal.preview?.eligibleCount || 0})</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Detail Drawer */}
       {selectedFeedback && (

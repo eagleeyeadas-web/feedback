@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../hooks/useAuth';
-import { fetchAdminQuotations, downloadQuotationPDF, deleteQuotation, fetchQuotationDetail, exportQuotationCSV } from '../../lib/api';
-import { Search, Download, Trash2, Eye, FileText, ChevronLeft, ChevronRight, AlertTriangle, X, FileDown, Plus, RotateCcw } from 'lucide-react';
+import { fetchAdminQuotations, downloadQuotationPDF, deleteQuotation, fetchQuotationDetail, exportQuotationCSV, cleanTestQuotationsApi } from '../../lib/api';
+import { Search, Download, Trash2, Eye, FileText, ChevronLeft, ChevronRight, AlertTriangle, X, FileDown, Plus, RotateCcw, Loader2, CheckCircle2 } from 'lucide-react';
 
 export default function QuotationHistory({ onNavigateToGenerator, onBackToChecklists } = {}) {
-  const { session } = useAuth();
+  const { session, user } = useAuth();
   const token = session?.access_token;
+  const isAdmin = Boolean(user && (user.role === 'ADMIN' || user.role === 'SUPER_ADMIN'));
 
   const [quotations, setQuotations] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -21,6 +22,15 @@ export default function QuotationHistory({ onNavigateToGenerator, onBackToCheckl
 
   // Delete Confirmation
   const [deleteTarget, setDeleteTarget] = useState(null);
+
+  // Clean Test Quotations Modal State
+  const [cleanTestModal, setCleanTestModal] = useState({
+    open: false,
+    submitting: false,
+    phraseInput: '',
+    error: '',
+    result: null,
+  });
 
   useEffect(() => {
     loadQuotations();
@@ -185,6 +195,27 @@ export default function QuotationHistory({ onNavigateToGenerator, onBackToCheckl
             <FileDown className="w-4 h-4" />
             <span>Export CSV</span>
           </button>
+
+          {isAdmin && (
+            <button
+              type="button"
+              id="btn-clean-test-quotations"
+              onClick={() => {
+                setCleanTestModal({
+                  open: true,
+                  submitting: false,
+                  phraseInput: '',
+                  error: '',
+                  result: null,
+                });
+              }}
+              className="flex items-center gap-1.5 text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-300 px-3.5 py-2 rounded-lg transition cursor-pointer shadow-xs whitespace-nowrap"
+              title="Delete test and sample quotations while protecting real quotations and sequence integrity"
+            >
+              <Trash2 className="w-4 h-4 text-rose-600" />
+              <span>Clean Test Quotations</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -442,6 +473,148 @@ export default function QuotationHistory({ onNavigateToGenerator, onBackToCheckl
                 Delete Permanently
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* CLEAN TEST QUOTATIONS MODAL */}
+      {cleanTestModal.open && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl animate-in fade-in zoom-in-95 duration-150">
+            {/* Header */}
+            <div className="flex items-center justify-between pb-2 border-b border-gray-100">
+              <div>
+                <span className="text-[10px] font-black uppercase tracking-wider text-rose-700 bg-rose-100 px-2.5 py-0.5 rounded-full border border-rose-200">
+                  Strict Test Data Protection
+                </span>
+                <h3 className="text-base font-bold text-gray-900 mt-1 flex items-center gap-2">
+                  <Trash2 className="w-5 h-5 text-rose-600" />
+                  <span>Clean Test Quotations</span>
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCleanTestModal({ open: false, submitting: false, phraseInput: '', error: '', result: null })}
+                className="p-1 text-gray-400 hover:text-gray-600 rounded-lg cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {cleanTestModal.result ? (
+              <div className="space-y-4">
+                <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl text-center space-y-1">
+                  <CheckCircle2 className="w-8 h-8 text-emerald-600 mx-auto" />
+                  <h4 className="font-bold text-emerald-900 text-sm">Test Quotations Cleaned</h4>
+                  <p className="text-xs text-emerald-700">
+                    Test quotations have been purged. Live customer quotations were preserved.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 text-center">
+                  <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl">
+                    <span className="text-[11px] text-rose-700 font-semibold uppercase block">Deleted Quotations</span>
+                    <span className="text-xl font-bold text-rose-900">{cleanTestModal.result.deletedCount || 0}</span>
+                  </div>
+                  <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl">
+                    <span className="text-[11px] text-blue-700 font-semibold uppercase block">Sequence Status</span>
+                    <span className="text-sm font-bold text-blue-900 mt-1 block">
+                      {cleanTestModal.result.sequenceReclaimed ? 'Reclaimed latest sequence' : 'Sequence preserved'}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex justify-end pt-2">
+                  <button
+                    onClick={() => {
+                      setCleanTestModal({ open: false, submitting: false, phraseInput: '', error: '', result: null });
+                      loadQuotations();
+                    }}
+                    className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl shadow-xs cursor-pointer"
+                  >
+                    Done
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-xl text-xs space-y-2 text-amber-900">
+                  <div className="flex items-center gap-2 font-bold text-amber-950">
+                    <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                    <span>Protected Sequential Numbering Notice</span>
+                  </div>
+                  <p className="text-[11px] leading-relaxed">
+                    This endpoint strictly targets quotations with explicit test markers (e.g. customer name containing &ldquo;test&rdquo;, &ldquo;demo&rdquo;, &ldquo;sample&rdquo;). Real customer quotations and their line items are strictly protected and never touched.
+                  </p>
+                </div>
+
+                <div className="space-y-2 text-xs">
+                  <label className="font-bold text-gray-800 block">
+                    To confirm, please type <span className="font-mono text-rose-700 bg-rose-50 px-2 py-0.5 rounded border border-rose-200 select-all font-black">DELETE TEST QUOTATIONS</span> below:
+                  </label>
+                  <input
+                    type="text"
+                    value={cleanTestModal.phraseInput}
+                    onChange={(e) => setCleanTestModal((prev) => ({ ...prev, phraseInput: e.target.value }))}
+                    placeholder="Type DELETE TEST QUOTATIONS"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-xl text-xs font-mono font-bold focus:outline-none focus:border-rose-500"
+                  />
+                </div>
+
+                {cleanTestModal.error && (
+                  <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-xs font-semibold">
+                    {cleanTestModal.error}
+                  </div>
+                )}
+
+                <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100">
+                  <button
+                    type="button"
+                    disabled={cleanTestModal.submitting}
+                    onClick={() => setCleanTestModal({ open: false, submitting: false, phraseInput: '', error: '', result: null })}
+                    className="px-4 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-100 rounded-xl cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={
+                      cleanTestModal.submitting ||
+                      cleanTestModal.phraseInput.trim() !== 'DELETE TEST QUOTATIONS'
+                    }
+                    onClick={async () => {
+                      setCleanTestModal((prev) => ({ ...prev, submitting: true, error: '' }));
+                      try {
+                        const res = await cleanTestQuotationsApi(token, {
+                          confirmationPhrase: cleanTestModal.phraseInput.trim(),
+                        });
+                        setCleanTestModal((prev) => ({ ...prev, submitting: false, result: res }));
+                        loadQuotations();
+                      } catch (err) {
+                        setCleanTestModal((prev) => ({
+                          ...prev,
+                          submitting: false,
+                          error: err.message || 'Failed to clean test quotations',
+                        }));
+                      }
+                    }}
+                    className="px-5 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 disabled:opacity-40 rounded-xl flex items-center gap-1.5 shadow-xs cursor-pointer transition-colors"
+                  >
+                    {cleanTestModal.submitting ? (
+                      <>
+                        <Loader2 size={14} className="animate-spin" />
+                        <span>Purging Test Quotations...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Trash2 size={14} />
+                        <span>Purge Test Quotations</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

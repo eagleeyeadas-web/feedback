@@ -1,41 +1,4 @@
 {
-  "rest_days": [
-    {
-      "id": "b08fc360-51a3-4067-bc81-2712246caacd",
-      "engineer_id": "e1000000-0000-0000-0000-000000000006",
-      "engineer_name": "Guna",
-      "checklist_id": null,
-      "checklist_number": null,
-      "rest_start_date": "2028-11-10",
-      "rest_end_date": "2028-11-10",
-      "reason": "Compensatory rest day after outstation job.",
-      "notes": null,
-      "status": "APPROVED",
-      "coordinator_decision_notes": "Approved rest day for Guna.",
-      "decided_by": "00000000-0000-0000-0000-000000000004",
-      "decided_at": "2026-10-15T06:53:26.711Z",
-      "created_by": "00000000-0000-0000-0000-000000000002",
-      "created_at": "2026-10-15T06:53:25.516Z",
-      "updated_at": "2026-10-15T06:53:26.711Z"
-    },
-    {
-      "id": "13775806-f259-4c00-95d7-e9af7c4dc560",
-      "engineer_id": "e1000000-0000-0000-0000-000000000006",
-      "engineer_name": "Guna",
-      "checklist_id": null,
-      "checklist_number": null,
-      "rest_start_date": "2029-06-03",
-      "rest_end_date": "2029-06-03",
-      "reason": "Post-job rest",
-      "notes": null,
-      "status": "APPROVED",
-      "coordinator_decision_notes": null,
-      "decided_by": "00000000-0000-0000-0000-000000000004",
-      "decided_at": "2026-10-15T07:52:03.707Z",
-      "created_by": "00000000-0000-0000-0000-000000000002",
-      "created_at": "2026-10-15T07:52:02.392Z",
-      "updated_at": "2026-10-15T07:52:03.707Z"
-    }
-  ],
-  "updated_at": "2026-10-15T07:52:03.876Z"
+  "rest_days": [],
+  "updated_at": "2026-10-15T10:34:59.719Z"
 }
