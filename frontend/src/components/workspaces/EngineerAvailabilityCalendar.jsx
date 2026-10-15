@@ -129,6 +129,13 @@ export default function EngineerAvailabilityCalendar({
           label: 'Available',
           icon: CheckCircle2,
         };
+      case 'COMPLETED':
+        return {
+          bg: 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100',
+          dot: 'bg-emerald-600',
+          label: commitment?.checklist_number ? commitment.checklist_number.replace('EE-INST-', '') : 'Completed',
+          icon: CheckCircle2,
+        };
       case 'ASSIGNED':
         return {
           bg: 'bg-sky-50 text-sky-800 border-sky-300 hover:bg-sky-100',
@@ -410,7 +417,7 @@ export default function EngineerAvailabilityCalendar({
                   </td>
 
                   {/* Day Cells */}
-                  {days.map(({ date, status, status_label, is_available, commitment, commitments }) => {
+                  {days.map(({ date, status, status_label, is_available, commitment, commitments, has_pending_warning, warning }) => {
                     const isToday = date === todayStr;
                     const badge = getStatusBadge(status, commitment);
                     const IconComp = badge.icon;
@@ -438,12 +445,18 @@ export default function EngineerAvailabilityCalendar({
                               onCreateWithEngineer(engineer.name, date);
                             }
                           }}
-                          className={`inline-flex flex-col items-center justify-center w-full py-1.5 px-1 rounded-lg border text-[10px] font-bold transition-all cursor-pointer ${badge.bg}`}
-                          title={`${engineer.name}: ${status_label} (${date})`}
+                          className={`relative inline-flex flex-col items-center justify-center w-full py-1.5 px-1 rounded-lg border text-[10px] font-bold transition-all cursor-pointer ${badge.bg}`}
+                          title={`${engineer.name}: ${status_label} (${date})${has_pending_warning ? ' • ' + (warning?.message || 'Pending Request') : ''}`}
                         >
                           <div className="flex items-center gap-1">
                             <IconComp size={10} className="shrink-0" />
                             <span className="truncate max-w-[55px] font-extrabold">{badge.label}</span>
+                            {has_pending_warning && (
+                              <span
+                                className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse shrink-0 ring-1 ring-white"
+                                title={warning?.message || 'Pending Request Warning'}
+                              />
+                            )}
                           </div>
                         </button>
                       </td>

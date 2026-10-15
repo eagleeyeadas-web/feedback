@@ -490,20 +490,79 @@ export async function getEngineerCommitments(engineerIdOrName) {
     });
   }
 
-  // 6. Apply EARLY COMPLETION rule:
-  // If a job was marked Completed and has actual_completion_datetime, its blocking range
-  // only extends up to the date of actual completion! Dates afterwards are released for new bookings!
+  // 6. Apply Early Completion and Incomplete Assignment rules:
+  // - A completed assignment does not block future dates: its blocking range ends strictly on actual completion!
+  // - Never mark a technician available solely because a date passed if their assignment is still active or incomplete!
+  const todayStr = new Date().toISOString().split('T')[0];
   commitments.forEach((c) => {
-    if (c.type === 'JOB' && c.status === 'COMPLETED' && c.actual_completion_datetime) {
-      const completionDate = c.actual_completion_datetime.split('T')[0];
-      if (completionDate < c.end_date) {
-        c.effective_end_date = completionDate;
-        c.original_scheduled_end_date = c.end_date;
+    if (c.type === 'JOB' && (c.status === 'COMPLETED' || c.status === 'SITE WORK COMPLETED')) {
+      const completionDate = c.actual_completion_datetime ? c.actual_completion_datetime.split('T')[0] : c.start_date;
+      c.effective_end_date = completionDate;
+      c.original_scheduled_end_date = c.end_date;
+    } else if (c.type === 'JOB' && c.status !== 'CANCELLED') {
+      // If assignment is active and incomplete, but its scheduled end date was in the past,
+      // it continues to block today and cannot be marked available solely because the date passed!
+      const scheduledEnd = c.effective_end_date || c.end_date;
+      if (scheduledEnd && scheduledEnd < todayStr) {
+        c.effective_end_date = todayStr;
+        c.original_scheduled_end_date = scheduledEnd;
       }
     }
   });
 
   return commitments;
+}
+
+/**
+ * Fetch all active pending schedule extension requests for an engineer (DB + fallback storage)
+ */
+export async function getPendingExtensionsForEngineer(engineerIdOrName) {
+  const resolved = resolveEngineer(engineerIdOrName);
+  const engId = resolved ? resolved.id : engineerIdOrName;
+  const engName = resolved ? resolved.name : engineerIdOrName;
+
+  const list = [];
+  const seenIds = new Set();
+
+  try {
+    const { data } = await supabase
+      .from('schedule_extension_requests')
+      .select('*')
+      .eq('status', 'PENDING');
+    if (Array.isArray(data)) {
+      data.forEach((e) => {
+        const matches =
+          e.engineer_id === engId ||
+          e.technician_user_id === engId ||
+          (e.engineer_name && e.engineer_name.toLowerCase() === engName.toLowerCase()) ||
+          (e.technician_name && e.technician_name.toLowerCase() === engName.toLowerCase());
+        if (matches) {
+          seenIds.add(e.id);
+          list.push(e);
+        }
+      });
+    }
+  } catch (err) {}
+
+  const extStorage = readJsonFallback('schedule_extensions_storage.json');
+  if (extStorage?.extensions) {
+    extStorage.extensions.forEach((e) => {
+      if (seenIds.has(e.id)) return;
+      if (e.status === 'PENDING') {
+        const matches =
+          e.engineer_id === engId ||
+          e.technician_user_id === engId ||
+          (e.engineer_name && e.engineer_name.toLowerCase() === engName.toLowerCase()) ||
+          (e.technician_name && e.technician_name.toLowerCase() === engName.toLowerCase());
+        if (matches) {
+          seenIds.add(e.id);
+          list.push(e);
+        }
+      }
+    });
+  }
+
+  return list;
 }
 
 /**
@@ -516,23 +575,24 @@ export async function getEngineerPendingWarnings(engineerIdOrName) {
 
   const warnings = [];
 
-  // Pending Extension
-  const extStorage = readJsonFallback('schedule_extensions_storage.json');
-  if (extStorage?.extensions) {
-    extStorage.extensions.forEach((e) => {
-      if (e.status === 'PENDING' && (e.engineer_id === engId || e.engineer_name?.toLowerCase() === engName.toLowerCase())) {
-        warnings.push({
-          type: 'PENDING_EXTENSION',
-          id: e.id,
-          checklist_number: e.checklist_number,
-          requested_date: e.requested_completion_date,
-          message: `Pending extension request for ${e.checklist_number} to ${e.requested_completion_date}`,
-        });
-      }
+  // 1. Pending Extensions (Protected period: current completion -> requested completion)
+  const pendingExts = await getPendingExtensionsForEngineer(engId);
+  pendingExts.forEach((e) => {
+    const start = e.current_completion_date || e.current_dates?.completion_date || e.original_dates?.arrival_date || e.requested_completion_date;
+    const end = e.requested_completion_date;
+    warnings.push({
+      type: 'PENDING_EXTENSION',
+      id: e.id,
+      checklist_id: e.checklist_id,
+      checklist_number: e.checklist_number,
+      start_date: start,
+      end_date: end,
+      requested_date: e.requested_completion_date,
+      message: `Pending availability date request for ${e.checklist_number} to ${e.requested_completion_date}`,
     });
-  }
+  });
 
-  // Pending Rest
+  // 2. Pending Rest Days
   const restStorage = readJsonFallback('rest_days_storage.json');
   if (restStorage?.rest_days) {
     restStorage.rest_days.forEach((r) => {
@@ -540,6 +600,8 @@ export async function getEngineerPendingWarnings(engineerIdOrName) {
         warnings.push({
           type: 'PENDING_REST',
           id: r.id,
+          checklist_id: r.checklist_id,
+          checklist_number: r.checklist_number,
           start_date: r.rest_start_date,
           end_date: r.rest_end_date,
           message: `Pending rest-day request from ${r.rest_start_date} to ${r.rest_end_date}`,
@@ -548,7 +610,7 @@ export async function getEngineerPendingWarnings(engineerIdOrName) {
     });
   }
 
-  // Pending Leave
+  // 3. Pending Leave
   const leaveStorage = readJsonFallback('leave_requests_storage.json');
   if (leaveStorage?.leaves) {
     leaveStorage.leaves.forEach((l) => {
@@ -604,9 +666,9 @@ export async function checkEngineerAvailability({
     if (c.type === 'JOB' && (c.status === 'COMPLETED' || c.status === 'SITE WORK COMPLETED')) {
       const completionDate = (c.actual_completion_datetime || '').split('T')[0];
       if (completionDate) {
-        if (startDate > completionDate) return false;
+        if (startDate >= completionDate) return false;
       } else {
-        if (startDate > c.start_date) return false;
+        if (startDate >= c.start_date) return false;
       }
     }
 
@@ -616,17 +678,58 @@ export async function checkEngineerAvailability({
     return isDateRangeOverlapping(startDate, finalEndDate, effectiveStart, effectiveEnd);
   });
 
-  if (conflicting) {
-    // Generate helpful conflict explanation
+  // 2. Check pending extension requests (Protected Period Rule):
+  // While an availability-date extension is pending Coordinator approval,
+  // new assignments during the period affected by the proposed extension MUST be prevented!
+  let conflictingPending = null;
+  const pendingExtensions = await getPendingExtensionsForEngineer(engId);
+  conflictingPending = pendingExtensions.find((ext) => {
+    if (excludeChecklistId && ext.checklist_id === excludeChecklistId) {
+      return false;
+    }
+    const propStart = ext.current_dates?.arrival_date || ext.original_dates?.arrival_date || ext.current_completion_date;
+    const propEnd = ext.requested_completion_date;
+    if (!propStart || !propEnd) return false;
+    return isDateRangeOverlapping(startDate, finalEndDate, propStart, propEnd);
+  });
+
+  if (conflicting || conflictingPending) {
     let reasonText = '';
-    if (conflicting.type === 'REST_DAY') {
-      reasonText = `Engineer ${engName} has an approved Rest Day from ${conflicting.start_date} to ${conflicting.end_date}.`;
-    } else if (conflicting.type === 'LEAVE') {
-      reasonText = `Engineer ${engName} is on approved Leave (${conflicting.leave_type || 'Casual'}) from ${conflicting.start_date} to ${conflicting.end_date}.`;
-    } else if (conflicting.type === 'TRAVEL') {
-      reasonText = `Engineer ${engName} has a scheduled travel commitment on ${conflicting.start_date} (Destination: ${conflicting.destination || 'Site'}).`;
+    let conflictObj = null;
+
+    if (conflictingPending && !conflicting) {
+      reasonText = `Cannot Assign: Engineer ${engName} has a pending availability date request for ${conflictingPending.checklist_number} through ${conflictingPending.requested_completion_date} awaiting Coordinator approval. New assignments cannot be booked during this protected period.`;
+      conflictObj = {
+        type: 'PENDING_EXTENSION_PROTECTED',
+        checklist_id: conflictingPending.checklist_id || null,
+        checklist_number: conflictingPending.checklist_number || null,
+        client_name: conflictingPending.client_name || null,
+        booking_start_date: conflictingPending.current_dates?.arrival_date || conflictingPending.original_dates?.arrival_date || conflictingPending.current_completion_date,
+        booking_end_date: conflictingPending.requested_completion_date,
+        status: 'PENDING_APPROVAL',
+        reason: reasonText,
+      };
     } else {
-      reasonText = `Engineer ${engName} is booked for ${conflicting.checklist_number || 'an assigned job'} from ${conflicting.start_date} to ${conflicting.end_date}.`;
+      if (conflicting.type === 'REST_DAY') {
+        reasonText = `Engineer ${engName} has an approved Rest Day from ${conflicting.start_date} to ${conflicting.end_date}.`;
+      } else if (conflicting.type === 'LEAVE') {
+        reasonText = `Engineer ${engName} is on approved Leave (${conflicting.leave_type || 'Casual'}) from ${conflicting.start_date} to ${conflicting.end_date}.`;
+      } else if (conflicting.type === 'TRAVEL') {
+        reasonText = `Engineer ${engName} has a scheduled travel commitment on ${conflicting.start_date} (Destination: ${conflicting.destination || 'Site'}).`;
+      } else {
+        reasonText = `Engineer ${engName} is booked for ${conflicting.checklist_number || 'an assigned job'} from ${conflicting.start_date} to ${conflicting.end_date}.`;
+      }
+
+      conflictObj = {
+        type: conflicting.type,
+        checklist_id: conflicting.checklist_id || null,
+        checklist_number: conflicting.checklist_number || null,
+        client_name: conflicting.client_name || null,
+        booking_start_date: conflicting.start_date,
+        booking_end_date: conflicting.effective_end_date || conflicting.end_date,
+        status: conflicting.status,
+        reason: reasonText,
+      };
     }
 
     // Find suggested available alternatives among the other authorized engineers
@@ -639,20 +742,31 @@ export async function checkEngineerAvailability({
       const hasConflict = otherCommitments.some((oc) => {
         if (oc.type === 'JOB' && (oc.status === 'COMPLETED' || oc.status === 'SITE WORK COMPLETED')) {
           const compDate = (oc.actual_completion_datetime || '').split('T')[0];
-          if (compDate && startDate > compDate) return false;
-          if (!compDate && startDate > oc.start_date) return false;
+          if (compDate && startDate >= compDate) return false;
+          if (!compDate && startDate >= oc.start_date) return false;
         }
         const ocEnd = oc.effective_end_date || oc.end_date;
         const ocStart = oc.effective_start_date || oc.start_date;
         if (ocEnd < ocStart) return false;
         return isDateRangeOverlapping(startDate, finalEndDate, ocStart, ocEnd);
       });
+
       if (!hasConflict) {
-        suggestedEngineers.push({
-          id: other.id,
-          name: other.name,
-          phone: other.phone,
+        // Also ensure suggested engineer does not have a conflicting pending extension
+        const otherPendingExts = await getPendingExtensionsForEngineer(other.id);
+        const otherHasPending = otherPendingExts.some((ext) => {
+          const pStart = ext.current_dates?.arrival_date || ext.original_dates?.arrival_date || ext.current_completion_date;
+          const pEnd = ext.requested_completion_date;
+          return pStart && pEnd && isDateRangeOverlapping(startDate, finalEndDate, pStart, pEnd);
         });
+
+        if (!otherHasPending) {
+          suggestedEngineers.push({
+            id: other.id,
+            name: other.name,
+            phone: other.phone,
+          });
+        }
       }
     }
 
@@ -662,16 +776,7 @@ export async function checkEngineerAvailability({
       engineer_name: engName,
       requested_start_date: startDate,
       requested_end_date: finalEndDate,
-      conflict: {
-        type: conflicting.type,
-        checklist_id: conflicting.checklist_id || null,
-        checklist_number: conflicting.checklist_number || null,
-        client_name: conflicting.client_name || null,
-        booking_start_date: conflicting.start_date,
-        booking_end_date: conflicting.effective_end_date || conflicting.end_date,
-        status: conflicting.status,
-        reason: reasonText,
-      },
+      conflict: conflictObj,
       warnings,
       suggested_engineers: suggestedEngineers,
       message: reasonText,
@@ -940,8 +1045,9 @@ function determineEngineerDateStatus(commitments, dateStr) {
   const activeOnDate = commitments.filter((c) => {
     if (c.type === 'JOB' && (c.status === 'COMPLETED' || c.status === 'SITE WORK COMPLETED')) {
       const compDate = (c.actual_completion_datetime || '').split('T')[0];
-      if (compDate && dateStr > compDate) return false;
-      if (!compDate && dateStr > c.start_date) return false;
+      // A completed assignment must NEVER block on or after its actual completion date!
+      if (compDate && dateStr >= compDate) return false;
+      if (!compDate) return false;
     }
     const end = c.effective_end_date || c.end_date;
     const start = c.effective_start_date || c.start_date;
@@ -969,6 +1075,9 @@ function determineEngineerDateStatus(commitments, dateStr) {
     return { status: 'TRAVEL', label: 'Traveling', commitment: primary };
   }
   if (primary.type === 'JOB') {
+    if (primary.status === 'COMPLETED' || primary.status === 'SITE WORK COMPLETED') {
+      return { status: 'COMPLETED', label: 'Completed', commitment: primary };
+    }
     if (primary.status === 'IN_PROGRESS') {
       return { status: 'IN_PROGRESS', label: 'On Installation/Service', commitment: primary };
     }
@@ -1075,6 +1184,11 @@ export async function getAvailabilityCalendar({
 
     const days = dateList.map((dateStr) => {
       const dateStatus = determineEngineerDateStatus(commitments, dateStr);
+      const dayWarning = warnings.find((w) => {
+        const wStart = w.start_date || w.requested_date;
+        const wEnd = w.end_date || w.requested_date;
+        return wStart && wEnd && wStart <= dateStr && wEnd >= dateStr;
+      });
 
       return {
         date: dateStr,
@@ -1083,6 +1197,8 @@ export async function getAvailabilityCalendar({
         is_available: dateStatus.status === 'AVAILABLE',
         commitment: dateStatus.commitment,
         commitments: dateStatus.commitments,
+        has_pending_warning: Boolean(dayWarning),
+        warning: dayWarning || null,
       };
     });
 
@@ -1116,6 +1232,6 @@ export function completeEngineerBookingByChecklistId(checklistId, completionIso 
       b.updated_at = completionIso;
     }
   });
-  saveJsonFallback('engineer_bookings_storage.json', { bookings: Array.from(inMemoryBookings.values()) });
+  saveStorage();
 }
 

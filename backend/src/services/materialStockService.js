@@ -22,6 +22,8 @@ export const STANDARD_MATERIALS = [
   { id: 'mat-009', sku: 'MAT-CBL-15M', material_name: '15-metre Cable', unit: 'Nos.', opening_stock: 50, current_stock: 50, opening_stock_set: true, min_stock_level: 10 },
   { id: 'mat-010', sku: 'MAT-CAM-LOOSE', material_name: 'Camera', unit: 'Nos.', opening_stock: 50, current_stock: 50, opening_stock_set: true, min_stock_level: 10 },
   { id: 'mat-011', sku: 'MAT-DISP-LOOSE', material_name: 'Display', unit: 'Nos.', opening_stock: 50, current_stock: 50, opening_stock_set: true, min_stock_level: 10 },
+  { id: 'mat-012', sku: 'MAT-DISP-LIVE', material_name: 'Live Display', unit: 'Nos.', opening_stock: 0, current_stock: 0, opening_stock_set: false, min_stock_level: 5 },
+  { id: 'mat-013', sku: 'MAT-DISP-REC', material_name: 'Recording Display', unit: 'Nos.', opening_stock: 0, current_stock: 0, opening_stock_set: false, min_stock_level: 5 },
 ];
 
 /**

@@ -13,8 +13,8 @@ export const BOOKING_STATUSES = ['PENDING', 'IN_PROGRESS', 'COMPLETED', 'NOT_REQ
 export const TRAVEL_TYPES = ['Bus', 'Other'];
 
 // In-memory fallback stores
-const inMemoryBookings = new Map(); // key = checklist_id
-const inMemoryAuditLogs = new Map(); // key = checklist_id, value = array of audit objects
+export const inMemoryBookings = new Map(); // key = checklist_id
+export const inMemoryAuditLogs = new Map(); // key = checklist_id, value = array of audit objects
 
 function loadFallbackStorage() {
   try {

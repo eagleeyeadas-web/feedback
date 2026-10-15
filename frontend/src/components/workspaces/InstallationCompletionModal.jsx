@@ -1,28 +1,311 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
+  X,
   Wrench,
   CheckCircle2,
   AlertTriangle,
-  X,
   Loader2,
   ChevronDown,
   ChevronUp,
   FileCheck,
-  ShieldAlert,
-  ArrowRight,
   Package,
   Layers,
-  Sparkles,
   Plus,
   Trash2,
-  Calculator,
-  ArrowDownLeft,
+  Search,
+  Info,
+  ShieldCheck,
+  Truck,
+  User,
+  MapPin,
+  Calendar,
+  Smartphone,
+  ExternalLink,
+  RefreshCw,
 } from 'lucide-react';
 import {
   submitInstallationCompletionReport,
   fetchInstallationCompletionReport,
+  fetchBackupProducts,
   fetchBackupDeclaration,
+  fetchDeviceConfigurations,
+  fetchAdditionalCustomerInstallations,
 } from '../../lib/api';
+
+export const DEFAULT_CONFIGS = [
+  {
+    device_type: '2 Channel Live',
+    components: [
+      { component_name: 'Camera', quantity_required: 2, unit: 'Nos.' },
+      { component_name: 'Live Display', quantity_required: 1, unit: 'Nos.' },
+    ],
+  },
+  {
+    device_type: '2 Channel Recording',
+    components: [
+      { component_name: 'Camera', quantity_required: 2, unit: 'Nos.' },
+      { component_name: 'Recording Display', quantity_required: 1, unit: 'Nos.' },
+    ],
+  },
+  {
+    device_type: '4 Channel Live',
+    components: [
+      { component_name: 'Camera', quantity_required: 4, unit: 'Nos.' },
+      { component_name: 'Live Display', quantity_required: 1, unit: 'Nos.' },
+    ],
+  },
+  {
+    device_type: '4 Channel Recording',
+    components: [
+      { component_name: 'Camera', quantity_required: 4, unit: 'Nos.' },
+      { component_name: 'Recording Display', quantity_required: 1, unit: 'Nos.' },
+    ],
+  },
+  {
+    device_type: '6 Channel Live',
+    components: [
+      { component_name: 'Camera', quantity_required: 6, unit: 'Nos.' },
+      { component_name: 'Live Display', quantity_required: 1, unit: 'Nos.' },
+    ],
+  },
+  {
+    device_type: '6 Channel Recording',
+    components: [
+      { component_name: 'Camera', quantity_required: 6, unit: 'Nos.' },
+      { component_name: 'Recording Display', quantity_required: 1, unit: 'Nos.' },
+    ],
+  },
+  {
+    device_type: '8 Channel Live',
+    components: [
+      { component_name: 'Camera', quantity_required: 8, unit: 'Nos.' },
+      { component_name: 'Live Display', quantity_required: 1, unit: 'Nos.' },
+    ],
+  },
+];
+
+export function getComponentBreakdownForConfig(configName, configsList = DEFAULT_CONFIGS) {
+  if (!configName) return [];
+  const found = (configsList || DEFAULT_CONFIGS).find(
+    (c) => c.device_type.toLowerCase() === configName.toLowerCase()
+  );
+  if (found && Array.isArray(found.components)) {
+    return found.components.map((c) => ({
+      component_name: c.component_name,
+      quantity: c.quantity_required,
+      unit: c.unit || 'Nos.',
+    }));
+  }
+  const match = configName.match(/^(\d+)\s*channel\s*(live|recording)/i);
+  if (match) {
+    const channels = parseInt(match[1], 10);
+    const isLive = match[2].toLowerCase() === 'live';
+    return [
+      { component_name: 'Camera', quantity: channels, unit: 'Nos.' },
+      { component_name: isLive ? 'Live Display' : 'Recording Display', quantity: 1, unit: 'Nos.' },
+    ];
+  }
+  return [
+    { component_name: 'Camera', quantity: 2, unit: 'Nos.' },
+    { component_name: 'Live Display', quantity: 1, unit: 'Nos.' },
+  ];
+}
+
+/**
+ * Searchable Dropdown filtered by Category from existing database catalogue
+ */
+function SearchableProductSelect({
+  value,
+  products = [],
+  onSelect,
+  placeholder = 'Search & select product...',
+  disabled = false,
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const dropdownRef = useRef(null);
+
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    }
+    function handleKeyDown(event) {
+      if (event.key === 'Escape') {
+        setIsOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
+
+  const selectedProduct = products.find(
+    (p) =>
+      (p.item_name || '').toLowerCase() === (value || '').toLowerCase() ||
+      p.id === value ||
+      (p.display_name || '').toLowerCase() === (value || '').toLowerCase()
+  );
+
+  const filtered = products.filter((p) => {
+    if (!searchTerm.trim()) return true;
+    const term = searchTerm.toLowerCase();
+    return (
+      (p.item_name && p.item_name.toLowerCase().includes(term)) ||
+      (p.sku && p.sku.toLowerCase().includes(term)) ||
+      (p.display_name && p.display_name.toLowerCase().includes(term))
+    );
+  });
+
+  if (disabled) {
+    return (
+      <div className="w-full text-left text-xs p-2 rounded-lg border border-gray-200 bg-gray-50 text-gray-800 font-semibold truncate">
+        {selectedProduct ? selectedProduct.item_name : value || placeholder}
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative w-full" ref={dropdownRef}>
+      <button
+        type="button"
+        onClick={() => {
+          setIsOpen(!isOpen);
+          setSearchTerm('');
+        }}
+        className={`w-full text-left text-xs p-2 rounded-lg border flex items-center justify-between transition-all cursor-pointer bg-white ${
+          isOpen
+            ? 'border-purple-500 ring-2 ring-purple-100 shadow-sm'
+            : 'border-gray-200 hover:border-gray-300'
+        }`}
+      >
+        <div className="flex items-center gap-1.5 truncate">
+          {selectedProduct ? (
+            <>
+              <span className="font-semibold text-gray-900 truncate">{selectedProduct.item_name}</span>
+              {selectedProduct.sku && selectedProduct.sku !== 'N/A' && (
+                <span className="text-[10px] text-gray-400 font-mono shrink-0">({selectedProduct.sku})</span>
+              )}
+            </>
+          ) : value ? (
+            <span className="font-semibold text-gray-900 truncate">{value}</span>
+          ) : (
+            <span className="text-gray-400 font-medium truncate">{placeholder}</span>
+          )}
+        </div>
+        <ChevronDown
+          className={`w-3.5 h-3.5 text-gray-400 shrink-0 transition-transform ${
+            isOpen ? 'rotate-180 text-purple-600' : ''
+          }`}
+        />
+      </button>
+
+      {isOpen && (
+        <div className="absolute z-50 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-2xl overflow-hidden max-h-60 flex flex-col text-xs animate-in fade-in zoom-in-95 duration-100 min-w-[240px]">
+          {/* Search Input */}
+          <div className="p-2 border-b border-gray-100 bg-slate-50 flex items-center gap-1.5 sticky top-0 z-10">
+            <Search className="w-3.5 h-3.5 text-gray-400 ml-1 shrink-0" />
+            <input
+              type="text"
+              autoFocus
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Type to filter products..."
+              className="w-full text-xs bg-white border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-purple-500 font-medium text-gray-900"
+            />
+            {searchTerm && (
+              <button
+                type="button"
+                onClick={() => setSearchTerm('')}
+                className="p-1 text-gray-400 hover:text-gray-600 rounded cursor-pointer"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            )}
+          </div>
+
+          {/* Options List */}
+          <div className="overflow-y-auto flex-1 divide-y divide-gray-50 p-1">
+            {filtered.length === 0 ? (
+              <div className="py-5 text-center text-gray-400 text-xs italic">
+                No matching catalogue products found
+              </div>
+            ) : (
+              filtered.map((p) => {
+                const isSelected =
+                  selectedProduct?.id === p.id ||
+                  (selectedProduct?.item_name || '').toLowerCase() === (p.item_name || '').toLowerCase();
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => {
+                      onSelect(p);
+                      setIsOpen(false);
+                      setSearchTerm('');
+                    }}
+                    className={`w-full text-left px-2.5 py-2 rounded-lg flex items-center justify-between transition-colors cursor-pointer ${
+                      isSelected
+                        ? 'bg-purple-50 text-purple-900 font-bold'
+                        : 'hover:bg-slate-50 text-gray-800'
+                    }`}
+                  >
+                    <div className="truncate pr-2">
+                      <div className="font-semibold text-xs flex items-center gap-1.5 truncate">
+                        <span>{p.item_name}</span>
+                        {p.sku && p.sku !== 'N/A' && (
+                          <span className="text-[10px] text-gray-400 font-mono font-normal">({p.sku})</span>
+                        )}
+                      </div>
+                      <span className="text-[10px] text-gray-400 block font-normal">
+                        Category: <strong className="text-gray-600 font-medium">{p.category}</strong>
+                      </span>
+                    </div>
+                    <span className="shrink-0 text-[10px] font-mono font-bold px-2 py-0.5 bg-gray-100 text-gray-700 rounded border border-gray-200">
+                      {p.unit || 'Nos.'}
+                    </span>
+                  </button>
+                );
+              })
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Extracts channel count from device type string (e.g. "4 Channel Live" -> 4)
+ */
+function getChannelCount(deviceType) {
+  if (!deviceType || typeof deviceType !== 'string') return 1;
+  const match = deviceType.match(/(\d+)\s*channel/i);
+  return match ? parseInt(match[1], 10) : 1;
+}
+
+/**
+ * Checks if a product name belongs to the device component category
+ */
+function isDeviceComponent(name) {
+  if (!name) return false;
+  const lower = name.toLowerCase();
+  return (
+    lower.includes('camera') ||
+    lower.includes('display') ||
+    lower.includes('screen') ||
+    lower.includes('cable') ||
+    lower.includes('memory') ||
+    lower.includes('sd card') ||
+    lower.includes('mdvr') ||
+    lower.includes('sensor') ||
+    lower.includes('system')
+  );
+}
 
 export default function InstallationCompletionModal({
   checklist,
@@ -32,214 +315,298 @@ export default function InstallationCompletionModal({
   onSuccess,
 }) {
   const [loading, setLoading] = useState(false);
-  const [fetchingReport, setFetchingReport] = useState(readOnly);
+  const [fetchingData, setFetchingData] = useState(true);
   const [error, setError] = useState('');
   const [completionStatus, setCompletionStatus] = useState('Completed');
   const [generalRemarks, setGeneralRemarks] = useState('');
-  const [items, setItems] = useState([]);
+  const [availableProducts, setAvailableProducts] = useState([]);
+  const [deviceItems, setDeviceItems] = useState([]);
   const [materialItems, setMaterialItems] = useState([]);
-  const [reportSnapshot, setReportSnapshot] = useState(null);
-  const [expandedDamagedMissing, setExpandedDamagedMissing] = useState({});
-  const [activeTab, setActiveTab] = useState('devices'); // 'devices' | 'materials' | 'backup_items' | 'final_bom'
-  const [backupItems, setBackupItems] = useState([]);
-  const [hasBackupDeclaration, setHasBackupDeclaration] = useState(false);
+  const [materialsCollapsed, setMaterialsCollapsed] = useState(false);
+  const [deviceConfigs, setDeviceConfigs] = useState(DEFAULT_CONFIGS);
+  const [extraInstallations, setExtraInstallations] = useState([]);
 
   useEffect(() => {
     let isMounted = true;
 
     async function loadData() {
-      // 1. If in readOnly mode, fetch the submitted completion report
-      if (readOnly && checklist?.id) {
-        try {
-          setFetchingReport(true);
-          const report = await fetchInstallationCompletionReport(token, checklist.id);
-          if (isMounted && report) {
-            setReportSnapshot(report);
-            if (Array.isArray(report.items) && report.items.length > 0) {
-              const formItems = report.items.map((ci) => {
-                const qtyCarried = Math.max(0, parseInt(ci.quantity_carried, 10) || 0);
-                const reqInstalled = Math.max(0, parseInt(ci.quantity_installed_required, 10) || 0);
-                const extInstalled = Math.max(0, parseInt(ci.quantity_installed_extra, 10) || 0);
-                const totalInst = reqInstalled + extInstalled > 0 ? (reqInstalled + extInstalled) : Math.max(0, parseInt(ci.quantity_installed, 10) || 0);
+      try {
+        setFetchingData(true);
+        setError('');
 
-                return {
-                  device_type: ci.device_type,
-                  quantity_carried: qtyCarried,
-                  required_quantity: ci.required_quantity ?? Math.max(0, qtyCarried - extInstalled),
-                  extra_quantity: ci.extra_quantity ?? extInstalled,
-                  quantity_installed_required: reqInstalled || totalInst,
-                  quantity_installed_extra: extInstalled,
-                  quantity_installed: totalInst,
-                  quantity_to_return: Math.max(0, parseInt(ci.quantity_to_return, 10) || 0),
-                  quantity_damaged: Math.max(0, parseInt(ci.quantity_damaged, 10) || 0),
-                  quantity_missing: Math.max(0, parseInt(ci.quantity_missing, 10) || 0),
-                  discrepancy_reason: ci.discrepancy_reason || '',
-                };
-              });
-              setItems(formItems);
-            }
+        // 1. Fetch catalogue products, pre-installation backup declaration, and device configurations
+        const [products, backupDecl, configsData] = await Promise.all([
+          fetchBackupProducts(token).catch(() => []),
+          checklist?.id ? fetchBackupDeclaration(token, checklist.id).catch(() => null) : Promise.resolve(null),
+          fetchDeviceConfigurations(token).catch(() => DEFAULT_CONFIGS),
+        ]);
 
-            if (Array.isArray(report.material_items) && report.material_items.length > 0) {
-              setMaterialItems(report.material_items);
-            }
-
-            if (Array.isArray(report.backup_items) && report.backup_items.length > 0) {
-              setBackupItems(report.backup_items);
-              setHasBackupDeclaration(true);
-            }
-
-            setCompletionStatus(report.completion_status || 'Completed');
-            setGeneralRemarks(report.remarks || '');
-            setFetchingReport(false);
-            return;
-          }
-        } catch (err) {
-          console.warn('Could not fetch completion report for readOnly view:', err.message);
-        } finally {
-          if (isMounted) setFetchingReport(false);
+        if (!isMounted) return;
+        setAvailableProducts(products);
+        if (Array.isArray(configsData) && configsData.length > 0) {
+          setDeviceConfigs(configsData);
         }
-      }
 
-      // 2. Pre-populate items directly from Sales' recorded Devices Carried allocation
-      if (checklist) {
-        let configs = [];
-        if (Array.isArray(checklist.devices_carried) && checklist.devices_carried.length > 0) {
-          configs = checklist.devices_carried;
-        } else {
-          // Combine required and extra device configurations
-          const reqConfigs = Array.isArray(checklist.device_configurations) && checklist.device_configurations.length > 0
-            ? checklist.device_configurations
-            : (checklist.device_type ? [{ device_type: checklist.device_type, number_of_devices: checklist.number_of_devices || 1, quantity_carried: checklist.number_of_devices || 1 }] : []);
-          
-          let extraConfigs = [];
-          if (Array.isArray(checklist.extra_device_configurations) && checklist.extra_device_configurations.length > 0) {
-            extraConfigs = checklist.extra_device_configurations;
-          } else if (checklist.extra_devices && checklist.extra_device_type) {
-            extraConfigs = [{ device_type: checklist.extra_device_type, extra_quantity: checklist.extra_device_count || 1 }];
+        // 2. If in readOnly mode, fetch existing completion report and populate rows
+        if (readOnly && checklist?.id) {
+          try {
+            const [report, addlInst] = await Promise.all([
+              fetchInstallationCompletionReport(token, checklist.id).catch(() => null),
+              fetchAdditionalCustomerInstallations(token, checklist.id).catch(() => []),
+            ]);
+            if (isMounted && report) {
+              setCompletionStatus(report.completion_status || 'Completed');
+              setGeneralRemarks(report.remarks || '');
+
+              if (Array.isArray(report.extra_installations) && report.extra_installations.length > 0) {
+                setExtraInstallations(report.extra_installations);
+              } else if (Array.isArray(addlInst) && addlInst.length > 0) {
+                setExtraInstallations(addlInst);
+              }
+
+              if (Array.isArray(report.items) && report.items.length > 0) {
+                const devRows = report.items.map((it, idx) => {
+                  const carried = Number(it.quantity_carried ?? it.quantity_issued) || 0;
+                  const reqInst = Number(it.quantity_installed_required) || 0;
+                  const extInst = Number(it.quantity_installed_extra) || 0;
+                  const totalInst = reqInst + extInst > 0 ? (reqInst + extInst) : (Number(it.quantity_installed) || 0);
+                  const ret = Number(it.quantity_to_return ?? it.quantity_returned) || 0;
+                  const dam = Number(it.quantity_damaged) || 0;
+                  const mis = Number(it.quantity_missing) || 0;
+                  const matched = products.find(
+                    (p) => (p.item_name || '').toLowerCase() === (it.device_type || '').toLowerCase()
+                  );
+
+                  return {
+                    id: `rep-dev-${idx}`,
+                    product_id: matched?.id || it.product_id || null,
+                    product_name: it.device_type,
+                    sku: matched?.sku || '',
+                    category: 'Device Component',
+                    unit: it.unit || matched?.unit || 'Nos.',
+                    standard_quantity: it.standard_quantity ?? it.required_quantity ?? Math.max(0, carried - extInst),
+                    extra_quantity: it.extra_quantity ?? extInst,
+                    quantity_issued: carried,
+                    quantity_installed: totalInst,
+                    quantity_returned: ret,
+                    quantity_damaged: dam,
+                    quantity_missing: mis,
+                    discrepancy_reason: it.discrepancy_reason || '',
+                    is_custom_added: false,
+                  };
+                });
+                setDeviceItems(devRows);
+              }
+
+              if (Array.isArray(report.material_items) && report.material_items.length > 0) {
+                const matRows = report.material_items.map((m, idx) => {
+                  const issued = Number(m.quantity_issued) || 0;
+                  const used = Number(m.quantity_used) || 0;
+                  const ret = Number(m.quantity_returned) || 0;
+                  const dam = Number(m.quantity_damaged) || 0;
+                  const mis = Number(m.quantity_missing) || 0;
+                  const matched = products.find(
+                    (p) => (p.item_name || '').toLowerCase() === (m.material_name || '').toLowerCase()
+                  );
+
+                  return {
+                    id: `rep-mat-${idx}`,
+                    product_id: matched?.id || m.material_id || null,
+                    product_name: m.material_name,
+                    sku: matched?.sku || '',
+                    category: 'Installation Material',
+                    unit: m.unit || matched?.unit || 'Nos.',
+                    standard_quantity: m.standard_quantity ?? issued,
+                    extra_quantity: m.extra_quantity ?? 0,
+                    quantity_issued: issued,
+                    quantity_installed: used,
+                    quantity_returned: ret,
+                    quantity_damaged: dam,
+                    quantity_missing: mis,
+                    discrepancy_reason: m.remarks || '',
+                    is_custom_added: false,
+                  };
+                });
+                setMaterialItems(matRows);
+              }
+
+              setFetchingData(false);
+              return;
+            }
+          } catch (e) {
+            console.warn('Failed to load read-only completion report:', e.message);
           }
+        }
 
-          const map = new Map();
-          reqConfigs.forEach((c) => {
-            const type = c.device_type;
-            const qty = Number(c.number_of_devices ?? c.quantity_carried) || 0;
-            map.set(type, {
-              device_type: type,
-              required_quantity: qty,
-              extra_quantity: 0,
-              quantity_carried: qty,
+        // 3. For new post-installation entry: consolidate standard issued items + extra backup items
+        // Build map of standard items issued for the job
+        const standardItemMap = new Map();
+
+        // 3A. Calculate standard device components from job specification
+        const configs = Array.isArray(checklist.device_configurations) && checklist.device_configurations.length > 0
+          ? checklist.device_configurations
+          : (checklist.device_type ? [{ device_type: checklist.device_type, number_of_devices: checklist.number_of_devices || 1 }] : []);
+
+        let totalStandardCameras = 0;
+        let totalLiveDisplays = 0;
+        let totalRecordingDisplays = 0;
+
+        configs.forEach((cfg) => {
+          const type = cfg.device_type || '';
+          const count = Number(cfg.number_of_devices ?? cfg.quantity_carried) || 1;
+          const channels = getChannelCount(type);
+          totalStandardCameras += channels * count;
+
+          if (type.toLowerCase().includes('recording')) {
+            totalRecordingDisplays += count;
+          } else {
+            totalLiveDisplays += count;
+          }
+        });
+
+        if (totalStandardCameras > 0) {
+          standardItemMap.set('camera', {
+            product_name: 'Camera',
+            category: 'Device Component',
+            unit: 'Nos.',
+            standard_quantity: totalStandardCameras,
+          });
+        }
+        if (totalLiveDisplays > 0) {
+          standardItemMap.set('live display', {
+            product_name: 'Live Display',
+            category: 'Device Component',
+            unit: 'Nos.',
+            standard_quantity: totalLiveDisplays,
+          });
+        }
+        if (totalRecordingDisplays > 0) {
+          standardItemMap.set('recording display', {
+            product_name: 'Recording Display',
+            category: 'Device Component',
+            unit: 'Nos.',
+            standard_quantity: totalRecordingDisplays,
+          });
+        }
+
+        // 3B. Standard fitting materials from checklist preliminary BOM snapshot
+        const prelimMaterials = checklist.bom_snapshot?.items || [];
+        prelimMaterials.forEach((m) => {
+          const name = (m.material_name || '').trim();
+          if (!name) return;
+          const qty = Number(m.total_quantity !== undefined ? m.total_quantity : m.quantity) || 0;
+          const key = name.toLowerCase();
+
+          if (standardItemMap.has(key)) {
+            const existing = standardItemMap.get(key);
+            existing.standard_quantity += qty;
+          } else {
+            standardItemMap.set(key, {
+              product_name: name,
+              material_id: m.material_id || null,
+              category: isDeviceComponent(name) ? 'Device Component' : 'Installation Material',
+              unit: m.unit || 'Nos.',
+              standard_quantity: qty,
+            });
+          }
+        });
+
+        // 3C. Extra loose backup items from pre-installation declaration
+        const backupItemMap = new Map();
+        if (backupDecl && backupDecl.has_backup_items && Array.isArray(backupDecl.items)) {
+          backupDecl.items.forEach((b) => {
+            const name = (b.item_name || '').trim();
+            if (!name) return;
+            const qty = Number(b.quantity) || 0;
+            const key = name.toLowerCase();
+            backupItemMap.set(key, {
+              product_name: name,
+              material_id: b.material_id || b.item_id || null,
+              unit: b.unit || 'Nos.',
+              extra_quantity: qty,
+              category: isDeviceComponent(name) ? 'Device Component' : 'Installation Material',
             });
           });
-          extraConfigs.forEach((c) => {
-            const type = c.device_type;
-            const extraQty = Number(c.extra_quantity ?? c.quantity_carried ?? c.number_of_devices) || 0;
-            if (map.has(type)) {
-              const ex = map.get(type);
-              ex.extra_quantity = (ex.extra_quantity || 0) + extraQty;
-              ex.quantity_carried = (ex.quantity_carried || 0) + extraQty;
-            } else {
-              map.set(type, {
-                device_type: type,
-                required_quantity: 0,
-                extra_quantity: extraQty,
-                quantity_carried: extraQty,
-              });
-            }
-          });
-          configs = Array.from(map.values());
         }
 
-        if (configs.length === 0) {
-          configs = [
-            {
-              device_type: checklist.device_type || '2 Channel Live',
-              quantity_carried: checklist.number_of_devices || 1,
-              number_of_devices: checklist.number_of_devices || 1,
-              required_quantity: checklist.number_of_devices || 1,
-              extra_quantity: 0,
-            },
-          ];
-        }
+        // 3D. Consolidate into unified loose product rows (distinguishing standard issued vs extra backup)
+        const allKeys = new Set([...standardItemMap.keys(), ...backupItemMap.keys()]);
+        const initialDevRows = [];
+        const initialMatRows = [];
 
-        const formItems = configs.map((c) => {
-          const qtyCarried = Math.max(
-            1,
-            parseInt(c.quantity_carried !== undefined ? c.quantity_carried : (Number(c.required_quantity || 0) + Number(c.extra_quantity || 0) || c.number_of_devices), 10) || 1
+        let rowIdCounter = 1;
+        allKeys.forEach((k) => {
+          const std = standardItemMap.get(k);
+          const ext = backupItemMap.get(k);
+
+          const productName = std?.product_name || ext?.product_name;
+          const matchedProd = products.find(
+            (p) => (p.item_name || '').toLowerCase() === productName.toLowerCase()
           );
-          const reqQty = Math.max(0, parseInt(c.required_quantity !== undefined ? c.required_quantity : c.number_of_devices, 10) || 0);
-          const extraQty = Math.max(0, parseInt(c.extra_quantity !== undefined ? c.extra_quantity : Math.max(0, qtyCarried - reqQty), 10) || 0);
 
-          // Default: required devices installed, extra backup devices returned
-          const defaultReqInstalled = reqQty;
-          const defaultExtraInstalled = 0;
-          const defaultReturn = extraQty;
+          const stdQty = std ? std.standard_quantity : 0;
+          const extQty = ext ? ext.extra_quantity : 0;
+          const totalIssued = stdQty + extQty;
 
-          return {
-            device_type: c.device_type,
-            required_quantity: reqQty,
-            extra_quantity: extraQty,
-            quantity_carried: qtyCarried, // Read-only from Sales checklist
-            quantity_installed_required: defaultReqInstalled,
-            quantity_installed_extra: defaultExtraInstalled,
-            quantity_installed: defaultReqInstalled + defaultExtraInstalled,
-            quantity_to_return: defaultReturn,
+          // By default: standard quantity assumed installed/used, extra backup quantity assumed returned
+          const defaultInstalled = stdQty;
+          const defaultReturned = extQty;
+
+          const isDev = (std?.category === 'Device Component') || (ext?.category === 'Device Component') || isDeviceComponent(productName);
+          const rowObj = {
+            id: `row-${Date.now()}-${rowIdCounter++}`,
+            product_id: matchedProd?.id || std?.material_id || ext?.material_id || null,
+            product_name: productName,
+            sku: matchedProd?.sku || '',
+            category: isDev ? 'Device Component' : 'Installation Material',
+            unit: matchedProd?.unit || std?.unit || ext?.unit || 'Nos.',
+            standard_quantity: stdQty,
+            extra_quantity: extQty,
+            quantity_issued: totalIssued,
+            quantity_installed: defaultInstalled,
+            quantity_returned: defaultReturned,
             quantity_damaged: 0,
             quantity_missing: 0,
             discrepancy_reason: '',
+            is_custom_added: false,
           };
-        });
-        setItems(formItems);
 
-        // Pre-populate material items from checklist preliminary BOM snapshot or template
-        const prelimMaterials = checklist.bom_snapshot?.items || [];
-        if (prelimMaterials.length > 0) {
-          const mItems = prelimMaterials.map((m) => {
-            const issuedQty = Number(m.total_quantity) || 0;
-            return {
-              material_id: m.material_id || null,
-              material_name: m.material_name,
-              unit: m.unit || 'Nos.',
-              quantity_issued: issuedQty,
-              quantity_used: issuedQty, // default assume used unless changed
-              quantity_returned: 0,
-              quantity_damaged: 0,
-              quantity_missing: 0,
-              remarks: '',
-            };
-          });
-          setMaterialItems(mItems);
-        } else {
-          setMaterialItems([]);
-        }
-
-        // Fetch pre-installation loose backup items declaration if present
-        try {
-          const bDecl = await fetchBackupDeclaration(token, checklist.id);
-          if (isMounted && bDecl && bDecl.has_backup_items && Array.isArray(bDecl.items) && bDecl.items.length > 0) {
-            setHasBackupDeclaration(true);
-            setBackupItems(
-              bDecl.items.map((it) => {
-                const qtyCarried = Number(it.quantity) || 0;
-                const qtyUsed = Number(it.quantity_used) || 0;
-                const qtyRet = it.quantity_returned !== undefined && it.quantity_returned !== null
-                  ? Number(it.quantity_returned)
-                  : Math.max(0, qtyCarried - qtyUsed);
-                return {
-                  ...it,
-                  quantity_carried: qtyCarried,
-                  quantity_used: qtyUsed,
-                  quantity_returned: qtyRet,
-                  quantity_damaged: Number(it.quantity_damaged) || 0,
-                  quantity_missing: Number(it.quantity_missing) || 0,
-                  discrepancy_reason: it.discrepancy_reason || '',
-                };
-              })
-            );
+          if (isDev) {
+            initialDevRows.push(rowObj);
+          } else {
+            initialMatRows.push(rowObj);
           }
-        } catch (e) {
-          // Non-blocking
+        });
+
+        // If no device components were generated, provide standard defaults
+        if (initialDevRows.length === 0) {
+          const defaultDev = products.find((p) => p.item_name === 'Camera') || products[0];
+          initialDevRows.push({
+            id: `row-init-dev`,
+            product_id: defaultDev?.id || null,
+            product_name: defaultDev ? defaultDev.item_name : 'Camera',
+            sku: defaultDev?.sku || '',
+            category: 'Device Component',
+            unit: defaultDev?.unit || 'Nos.',
+            standard_quantity: 0,
+            extra_quantity: 0,
+            quantity_issued: 0,
+            quantity_installed: 0,
+            quantity_returned: 0,
+            quantity_damaged: 0,
+            quantity_missing: 0,
+            discrepancy_reason: '',
+            is_custom_added: true,
+          });
         }
 
-        setFetchingReport(false);
+        setDeviceItems(initialDevRows);
+        setMaterialItems(initialMatRows);
+      } catch (err) {
+        console.error('Failed to load completion form data:', err);
+        if (isMounted) setError(err.message || 'Error loading form details');
+      } finally {
+        if (isMounted) setFetchingData(false);
       }
     }
 
@@ -249,121 +616,281 @@ export default function InstallationCompletionModal({
     };
   }, [checklist, readOnly, token]);
 
-  const toggleDamagedMissing = (idx) => {
-    setExpandedDamagedMissing((prev) => ({
-      ...prev,
-      [idx]: !prev[idx],
-    }));
+  // Update item field in deviceItems or materialItems
+  const handleItemFieldChange = (listType, id, field, value) => {
+    const setter = listType === 'device' ? setDeviceItems : setMaterialItems;
+    setter((prev) =>
+      prev.map((row) => {
+        if (row.id !== id) return row;
+        const updated = { ...row, [field]: value };
+        return updated;
+      })
+    );
   };
 
-  const handleDeviceChange = (index, field, value) => {
-    setItems((prev) => {
-      const next = [...prev];
-      const item = { ...next[index], [field]: value };
-      // Keep total installed in sync
-      const reqInst = parseInt(field === 'quantity_installed_required' ? value : item.quantity_installed_required, 10) || 0;
-      const extInst = parseInt(field === 'quantity_installed_extra' ? value : item.quantity_installed_extra, 10) || 0;
-      item.quantity_installed = reqInst + extInst;
-      next[index] = item;
-      return next;
+  // When technician picks a different product from dropdown
+  const handleProductSelect = (listType, id, product) => {
+    const setter = listType === 'device' ? setDeviceItems : setMaterialItems;
+    setter((prev) =>
+      prev.map((row) => {
+        if (row.id !== id) return row;
+        return {
+          ...row,
+          product_id: product.id,
+          product_name: product.item_name,
+          sku: product.sku || '',
+          unit: product.unit || 'Nos.',
+          category: product.category || (listType === 'device' ? 'Device Component' : 'Installation Material'),
+        };
+      })
+    );
+  };
+
+  // Add a new loose product row
+  const handleAddRow = (listType) => {
+    const prodsForCategory = availableProducts.filter((p) =>
+      listType === 'device'
+        ? p.category === 'Device Component' || isDeviceComponent(p.item_name)
+        : p.category === 'Installation Material' || !isDeviceComponent(p.item_name)
+    );
+    const defaultProduct = prodsForCategory[0] || availableProducts[0];
+
+    const newRow = {
+      id: `custom-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+      product_id: defaultProduct ? defaultProduct.id : null,
+      product_name: defaultProduct ? defaultProduct.item_name : '',
+      sku: defaultProduct ? defaultProduct.sku : '',
+      category: listType === 'device' ? 'Device Component' : 'Installation Material',
+      unit: defaultProduct ? defaultProduct.unit : 'Nos.',
+      standard_quantity: 0,
+      extra_quantity: 0,
+      quantity_issued: 0,
+      quantity_installed: 0,
+      quantity_returned: 0,
+      quantity_damaged: 0,
+      quantity_missing: 0,
+      discrepancy_reason: '',
+      is_custom_added: true,
+    };
+
+    if (listType === 'device') {
+      setDeviceItems((prev) => [...prev, newRow]);
+    } else {
+      setMaterialItems((prev) => [...prev, newRow]);
+      setMaterialsCollapsed(false);
+    }
+  };
+
+  // Remove row
+  const handleRemoveRow = (listType, id) => {
+    const setter = listType === 'device' ? setDeviceItems : setMaterialItems;
+    setter((prev) => prev.filter((r) => r.id !== id));
+  };
+
+  // Extra Device Installations Handlers
+  const handleAddExtraInstallation = () => {
+    const defaultConf = deviceConfigs[0]?.device_type || '4 Channel Live';
+    const components = getComponentBreakdownForConfig(defaultConf, deviceConfigs);
+    const newInst = {
+      id: `extra-inst-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+      recipient_customer_type: 'SAME_CUSTOMER',
+      recipient_customer_name: checklist.client_name || '',
+      recipient_mobile: checklist.client_mobile || '',
+      installation_location: checklist.client_location || '',
+      maps_link: '',
+      installation_date: new Date().toISOString().split('T')[0],
+      device_configuration: defaultConf,
+      components_used: components,
+      materials_used: [],
+      notes: '',
+    };
+    setExtraInstallations((prev) => [...prev, newInst]);
+  };
+
+  const handleRemoveExtraInstallation = (id) => {
+    setExtraInstallations((prev) => prev.filter((inst) => inst.id !== id));
+  };
+
+  const handleExtraInstallationChange = (id, field, value) => {
+    setExtraInstallations((prev) =>
+      prev.map((inst) => {
+        if (inst.id !== id) return inst;
+        if (field === 'recipient_customer_type') {
+          if (value === 'SAME_CUSTOMER') {
+            return {
+              ...inst,
+              recipient_customer_type: 'SAME_CUSTOMER',
+              recipient_customer_name: checklist.client_name || '',
+              recipient_mobile: checklist.client_mobile || '',
+              installation_location: checklist.client_location || '',
+            };
+          } else {
+            return {
+              ...inst,
+              recipient_customer_type: 'ANOTHER_CUSTOMER',
+              recipient_customer_name: '',
+              recipient_mobile: '',
+              installation_location: '',
+            };
+          }
+        }
+        if (field === 'device_configuration') {
+          const newComponents = getComponentBreakdownForConfig(value, deviceConfigs);
+          return {
+            ...inst,
+            device_configuration: value,
+            components_used: newComponents,
+          };
+        }
+        return { ...inst, [field]: value };
+      })
+    );
+  };
+
+  const handleExtraInstallationComponentChange = (instId, compIndex, field, value) => {
+    setExtraInstallations((prev) =>
+      prev.map((inst) => {
+        if (inst.id !== instId) return inst;
+        const comps = [...inst.components_used];
+        if (comps[compIndex]) {
+          comps[compIndex] = {
+            ...comps[compIndex],
+            [field]: field === 'quantity' ? Math.max(0, parseFloat(value) || 0) : value,
+          };
+        }
+        return { ...inst, components_used: comps };
+      })
+    );
+  };
+
+  // Sync Extra Component Usage directly into Device Items
+  const handleSyncExtraToReconciliation = () => {
+    const extraCompTotals = new Map();
+    extraInstallations.forEach((inst) => {
+      (inst.components_used || []).forEach((c) => {
+        const key = (c.component_name || '').toLowerCase();
+        const current = extraCompTotals.get(key) || 0;
+        extraCompTotals.set(key, current + (Number(c.quantity) || 0));
+      });
     });
+
+    setDeviceItems((prev) =>
+      prev.map((row) => {
+        const key = (row.product_name || '').toLowerCase();
+        let extraUsed = 0;
+        if (extraCompTotals.has(key)) {
+          extraUsed = extraCompTotals.get(key);
+        } else if (key.includes('camera') && extraCompTotals.has('camera')) {
+          extraUsed = extraCompTotals.get('camera');
+        } else if (key.includes('live') && extraCompTotals.has('live display')) {
+          extraUsed = extraCompTotals.get('live display');
+        } else if (key.includes('recording') && extraCompTotals.has('recording display')) {
+          extraUsed = extraCompTotals.get('recording display');
+        }
+
+        const stdQty = Number(row.standard_quantity) || 0;
+        const newInstalled = stdQty + extraUsed;
+        const issued = Number(row.quantity_issued) || 0;
+        const dam = Number(row.quantity_damaged) || 0;
+        const mis = Number(row.quantity_missing) || 0;
+        const newReturned = Math.max(0, issued - newInstalled - dam - mis);
+
+        return {
+          ...row,
+          quantity_installed: newInstalled,
+          quantity_returned: newReturned,
+        };
+      })
+    );
   };
 
-  const handleMaterialChange = (index, field, value) => {
-    setMaterialItems((prev) => {
-      const next = [...prev];
-      next[index] = { ...next[index], [field]: value };
-      return next;
-    });
+  // Row validation calculation
+  const getRowStats = (row) => {
+    const issued = Number(row.quantity_issued) || 0;
+    const installed = Number(row.quantity_installed) || 0;
+    const returned = Number(row.quantity_returned) || 0;
+    const damaged = Number(row.quantity_damaged) || 0;
+    const missing = Number(row.quantity_missing) || 0;
+
+    const hasNegative = installed < 0 || returned < 0 || damaged < 0 || missing < 0;
+    const totalAccounted = installed + returned + damaged + missing;
+    const isBalanced = !hasNegative && totalAccounted === issued;
+    const isUnissued = issued === 0;
+
+    return {
+      issued,
+      installed,
+      returned,
+      damaged,
+      missing,
+      hasNegative,
+      totalAccounted,
+      isBalanced,
+      isUnissued,
+    };
   };
 
-  const handleBackupItemChange = (index, field, value) => {
-    setBackupItems((prev) => {
-      const next = [...prev];
-      const parsed = field.startsWith('quantity_') ? (value === '' ? '' : parseFloat(value) || 0) : value;
-      next[index] = { ...next[index], [field]: parsed };
-      return next;
-    });
-  };
-
-  const handleAddMaterialRow = () => {
-    setMaterialItems((prev) => [
-      ...prev,
-      {
-        material_id: null,
-        material_name: '',
-        unit: 'Nos.',
-        quantity_issued: 0,
-        quantity_used: 0,
-        quantity_returned: 1,
-        quantity_damaged: 0,
-        quantity_missing: 0,
-        remarks: 'Extra material return',
-      },
-    ]);
-  };
-
-  const handleRemoveMaterialRow = (idx) => {
-    setMaterialItems((prev) => prev.filter((_, i) => i !== idx));
-  };
-
+  // Overall form validation
   const validateForm = () => {
-    if (!items || items.length === 0) {
-      return 'No device allocation found for this installation checklist.';
+    const allRows = [...deviceItems, ...materialItems];
+    if (allRows.length === 0) {
+      return 'Please enter at least one product row.';
     }
 
-    for (let idx = 0; idx < items.length; idx++) {
-      const item = items[idx];
-      const carried = parseInt(item.quantity_carried, 10) || 0;
-      const reqInst = parseInt(item.quantity_installed_required, 10) || 0;
-      const extInst = parseInt(item.quantity_installed_extra, 10) || 0;
-      const installed = reqInst + extInst;
-      const toReturn = parseInt(item.quantity_to_return, 10) || 0;
-      const damaged = parseInt(item.quantity_damaged, 10) || 0;
-      const missing = parseInt(item.quantity_missing, 10) || 0;
-
-      if (reqInst < 0 || extInst < 0 || toReturn < 0 || damaged < 0 || missing < 0) {
-        return `Quantities for "${item.device_type}" cannot be negative numbers.`;
+    // Validate Extra Device Installations if any added
+    for (let i = 0; i < extraInstallations.length; i++) {
+      const inst = extraInstallations[i];
+      if (!inst.recipient_customer_name || !inst.recipient_customer_name.trim()) {
+        return `Extra Installation #${i + 1}: Recipient customer name is required.`;
       }
-
-      const totalAccounted = installed + toReturn + damaged + missing;
-      if (totalAccounted !== carried) {
-        return `Reconciliation mismatch for "${item.device_type}": Quantity carried (${carried}) must equal Installed (${installed} [${reqInst} req + ${extInst} extra]) + Returned (${toReturn}) + Damaged (${damaged}) + Missing (${missing}). Quantities must reconcile before submission.`;
+      if (!inst.installation_date) {
+        return `Extra Installation #${i + 1}: Installation date is required.`;
       }
-
-      if ((damaged > 0 || missing > 0) && (!item.discrepancy_reason || !item.discrepancy_reason.trim())) {
-        return `Explanation remark is required for "${item.device_type}" because damaged (${damaged}) or missing (${missing}) devices were recorded.`;
+      if (!Array.isArray(inst.components_used) || inst.components_used.length === 0) {
+        return `Extra Installation #${i + 1}: At least one component must be recorded as used.`;
+      }
+      for (const comp of inst.components_used) {
+        if (!comp.component_name || !comp.component_name.trim()) {
+          return `Extra Installation #${i + 1}: Component name is required.`;
+        }
+        const q = Number(comp.quantity);
+        if (isNaN(q) || q <= 0) {
+          return `Extra Installation #${i + 1} (${comp.component_name}): Component quantity must be a positive number.`;
+        }
       }
     }
 
-    // Validate loose backup items reconciliation
-    if (hasBackupDeclaration && backupItems.length > 0) {
-      for (let bIdx = 0; bIdx < backupItems.length; bIdx++) {
-        const bi = backupItems[bIdx];
-        const carried = Number(bi.quantity_carried ?? bi.quantity) || 0;
-        const used = Math.max(0, Number(bi.quantity_used) || 0);
-        const ret = Math.max(0, Number(bi.quantity_returned) || 0);
-        const dam = Math.max(0, Number(bi.quantity_damaged) || 0);
-        const mis = Math.max(0, Number(bi.quantity_missing) || 0);
+    for (const row of allRows) {
+      const name = row.product_name || 'Selected product';
+      const stats = getRowStats(row);
 
-        if (used < 0 || ret < 0 || dam < 0 || mis < 0) {
-          return `Quantities for backup item "${bi.item_name}" cannot be negative numbers.`;
-        }
+      if (!row.product_name || !row.product_name.trim()) {
+        return 'All product rows must have a product selected.';
+      }
 
-        const totalAcc = used + ret + dam + mis;
-        if (totalAcc !== carried) {
-          return `Backup item reconciliation mismatch for "${bi.item_name}": Quantity carried (${carried}) must equal Used (${used}) + Returned (${ret}) + Damaged (${dam}) + Missing (${mis}). Currently totals ${totalAcc}.`;
-        }
+      if (stats.hasNegative) {
+        return `Quantities for "${name}" cannot be negative numbers.`;
+      }
 
-        if ((dam > 0 || mis > 0) && (!bi.discrepancy_reason || !bi.discrepancy_reason.trim())) {
-          return `Explanation remark is required for backup item "${bi.item_name}" when damaged (${dam}) or missing (${mis}) items are recorded.`;
-        }
+      if (stats.isUnissued && stats.installed > 0) {
+        return `Cannot report installation of unissued product "${name}" (Quantity issued is 0).`;
+      }
+
+      if (!stats.isBalanced) {
+        return `Reconciliation mismatch for "${name}": Quantity issued (${stats.issued}) must equal Installed/Used (${stats.installed}) + Returned Unused (${stats.returned}) + Damaged (${stats.damaged}) + Missing (${stats.missing}). Currently totals ${stats.totalAccounted}.`;
+      }
+
+      if ((stats.damaged > 0 || stats.missing > 0) && (!row.discrepancy_reason || !row.discrepancy_reason.trim())) {
+        return `Discrepancy explanation remark is required for "${name}" because damaged (${stats.damaged}) or missing (${stats.missing}) items were recorded.`;
       }
     }
 
     return null;
   };
 
+  const isFormBalanced = [...deviceItems, ...materialItems].every((r) => getRowStats(r).isBalanced);
+
+  // Form submission
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
@@ -378,40 +905,64 @@ export default function InstallationCompletionModal({
 
     try {
       const payload = {
-        items: items.map((i) => ({
-          device_type: i.device_type,
-          quantity_carried: parseInt(i.quantity_carried, 10) || 0,
-          quantity_installed_required: parseInt(i.quantity_installed_required, 10) || 0,
-          quantity_installed_extra: parseInt(i.quantity_installed_extra, 10) || 0,
-          quantity_installed: (parseInt(i.quantity_installed_required, 10) || 0) + (parseInt(i.quantity_installed_extra, 10) || 0),
-          quantity_to_return: parseInt(i.quantity_to_return, 10) || 0,
-          quantity_damaged: parseInt(i.quantity_damaged, 10) || 0,
-          quantity_missing: parseInt(i.quantity_missing, 10) || 0,
-          discrepancy_reason: i.discrepancy_reason ? i.discrepancy_reason.trim() : null,
-        })),
-        material_items: materialItems.map((m) => ({
-          material_id: m.material_id,
-          material_name: (m.material_name || '').trim(),
-          unit: m.unit || 'Nos.',
-          quantity_issued: parseFloat(m.quantity_issued) || 0,
-          quantity_used: parseFloat(m.quantity_used) || 0,
-          quantity_returned: parseFloat(m.quantity_returned) || 0,
-          quantity_damaged: parseFloat(m.quantity_damaged) || 0,
-          quantity_missing: parseFloat(m.quantity_missing) || 0,
-          remarks: m.remarks ? m.remarks.trim() : null,
-        })),
-        backup_items: hasBackupDeclaration
-          ? backupItems.map((b) => ({
-              item_name: b.item_name,
+        items: deviceItems.map((d) => {
+          const stats = getRowStats(d);
+          const stdQty = Number(d.standard_quantity) || 0;
+          const reqInst = Math.min(stats.installed, stdQty);
+          const extInst = Math.max(0, stats.installed - stdQty);
+
+          return {
+            product_id: d.product_id,
+            device_type: d.product_name,
+            item_name: d.product_name,
+            unit: d.unit || 'Nos.',
+            category: d.category,
+            standard_quantity: stdQty,
+            extra_quantity: Number(d.extra_quantity) || 0,
+            quantity_carried: stats.issued,
+            quantity_installed_required: reqInst,
+            quantity_installed_extra: extInst,
+            quantity_installed: stats.installed,
+            quantity_to_return: stats.returned,
+            quantity_damaged: stats.damaged,
+            quantity_missing: stats.missing,
+            discrepancy_reason: d.discrepancy_reason ? d.discrepancy_reason.trim() : null,
+          };
+        }),
+        material_items: materialItems.map((m) => {
+          const stats = getRowStats(m);
+          return {
+            material_id: m.product_id,
+            material_name: m.product_name,
+            unit: m.unit || 'Nos.',
+            standard_quantity: Number(m.standard_quantity) || 0,
+            extra_quantity: Number(m.extra_quantity) || 0,
+            quantity_issued: stats.issued,
+            quantity_used: stats.installed,
+            quantity_returned: stats.returned,
+            quantity_damaged: stats.damaged,
+            quantity_missing: stats.missing,
+            remarks: m.discrepancy_reason ? m.discrepancy_reason.trim() : null,
+          };
+        }),
+        backup_items: [...deviceItems, ...materialItems]
+          .filter((it) => (Number(it.extra_quantity) || 0) > 0)
+          .map((b) => {
+            const stats = getRowStats(b);
+            const stdQty = Number(b.standard_quantity) || 0;
+            const extraUsed = Math.max(0, stats.installed - stdQty);
+            return {
+              item_name: b.product_name,
               unit: b.unit || 'Nos.',
-              quantity_carried: Number(b.quantity_carried ?? b.quantity) || 0,
-              quantity_used: Number(b.quantity_used) || 0,
-              quantity_returned: Number(b.quantity_returned) || 0,
-              quantity_damaged: Number(b.quantity_damaged) || 0,
-              quantity_missing: Number(b.quantity_missing) || 0,
+              quantity_carried: Number(b.extra_quantity) || 0,
+              quantity_used: extraUsed,
+              quantity_returned: stats.returned,
+              quantity_damaged: stats.damaged,
+              quantity_missing: stats.missing,
               discrepancy_reason: b.discrepancy_reason ? b.discrepancy_reason.trim() : null,
-            }))
-          : [],
+            };
+          }),
+        extra_installations: extraInstallations,
         completion_status: completionStatus,
         remarks: generalRemarks.trim() || null,
       };
@@ -428,29 +979,190 @@ export default function InstallationCompletionModal({
     }
   };
 
-  const totalCarriedAll = items.reduce((sum, i) => sum + (parseInt(i.quantity_carried, 10) || 0), 0);
-  const totalInstalledAll = items.reduce((sum, i) => sum + ((parseInt(i.quantity_installed_required, 10) || 0) + (parseInt(i.quantity_installed_extra, 10) || 0)), 0);
-  const totalReturnedAll = items.reduce((sum, i) => sum + (parseInt(i.quantity_to_return, 10) || 0), 0);
-  const totalDamagedAll = items.reduce((sum, i) => sum + (parseInt(i.quantity_damaged, 10) || 0), 0);
-  const totalMissingAll = items.reduce((sum, i) => sum + (parseInt(i.quantity_missing, 10) || 0), 0);
-  const totalAccountedAll = totalInstalledAll + totalReturnedAll + totalDamagedAll + totalMissingAll;
-  const isOverallBalanced = totalCarriedAll === totalAccountedAll && items.every((i) => {
-    const c = parseInt(i.quantity_carried, 10) || 0;
-    const a = (parseInt(i.quantity_installed_required, 10) || 0) + (parseInt(i.quantity_installed_extra, 10) || 0) + (parseInt(i.quantity_to_return, 10) || 0) + (parseInt(i.quantity_damaged, 10) || 0) + (parseInt(i.quantity_missing, 10) || 0);
-    return c === a;
-  });
+  // Render a product row (shared layout for devices and materials)
+  const renderProductRow = (row, idx, listType) => {
+    const stats = getRowStats(row);
+    const prodsForCat = availableProducts.filter((p) =>
+      listType === 'device'
+        ? p.category === 'Device Component' || isDeviceComponent(p.item_name)
+        : p.category === 'Installation Material' || !isDeviceComponent(p.item_name)
+    );
 
-  const finalBomSnapshot = reportSnapshot?.final_bom || reportSnapshot?.final_bom_snapshot || checklist?.final_bom_snapshot;
-  const preliminaryBomSnapshot = checklist?.bom_snapshot;
+    return (
+      <div
+        key={row.id}
+        className={`p-3.5 rounded-xl border transition-all ${
+          stats.isBalanced
+            ? 'bg-white border-gray-200 shadow-2xs'
+            : 'bg-rose-50/40 border-rose-200 shadow-xs'
+        } space-y-2.5`}
+      >
+        {/* Row Header & Product Selection */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+          <div className="flex-1 min-w-[200px]">
+            {readOnly ? (
+              <div className="font-bold text-gray-900 text-xs flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-purple-600"></span>
+                <span>{row.product_name}</span>
+                {row.sku && <span className="text-[10px] text-gray-400 font-mono">({row.sku})</span>}
+              </div>
+            ) : (
+              <SearchableProductSelect
+                value={row.product_name}
+                products={prodsForCat}
+                onSelect={(prod) => handleProductSelect(listType, row.id, prod)}
+                placeholder="Search & select catalogue product..."
+                disabled={readOnly}
+              />
+            )}
+          </div>
+
+          {/* Allocation & Reconciliation Status Badges */}
+          <div className="flex items-center flex-wrap gap-2">
+            <span
+              className="px-2 py-0.5 rounded text-[11px] font-mono font-bold bg-slate-100 text-slate-800 border border-slate-200"
+              title={`Standard: ${row.standard_quantity || 0}, Extra Backup: ${row.extra_quantity || 0}`}
+            >
+              Issued: <strong className="text-purple-700">{stats.issued}</strong> {row.unit}
+              {(row.extra_quantity > 0 || row.standard_quantity > 0) && (
+                <span className="text-[10px] text-gray-500 font-normal ml-1">
+                  ({row.standard_quantity || 0} std + {row.extra_quantity || 0} extra)
+                </span>
+              )}
+            </span>
+
+            {stats.isBalanced ? (
+              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1">
+                <CheckCircle2 size={12} className="text-emerald-600" /> Balanced
+              </span>
+            ) : (
+              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-300 flex items-center gap-1">
+                <AlertTriangle size={12} className="text-rose-600" />
+                Unbalanced ({stats.totalAccounted}/{stats.issued})
+              </span>
+            )}
+
+            {!readOnly && (
+              <button
+                type="button"
+                onClick={() => handleRemoveRow(listType, row.id)}
+                className="text-gray-400 hover:text-rose-600 hover:bg-rose-50 p-1.5 rounded-lg transition-colors cursor-pointer"
+                title="Remove row"
+              >
+                <Trash2 size={14} />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Individual Quantities Grid */}
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 pt-1">
+          {/* Installed / Used */}
+          <div>
+            <label className="block text-[10px] font-semibold text-gray-600 mb-0.5 uppercase tracking-wide">
+              Installed / Used <span className="text-rose-500">*</span>
+            </label>
+            <input
+              type="number"
+              min="0"
+              step="any"
+              disabled={readOnly}
+              value={row.quantity_installed}
+              onChange={(e) => handleItemFieldChange(listType, row.id, 'quantity_installed', e.target.value)}
+              className="w-full text-xs p-1.5 border border-gray-300 rounded-lg text-center font-mono font-bold text-emerald-700 bg-white focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none disabled:bg-gray-100"
+              required
+            />
+          </div>
+
+          {/* Returned Unused */}
+          <div>
+            <label className="block text-[10px] font-semibold text-gray-600 mb-0.5 uppercase tracking-wide">
+              Returned Unused <span className="text-rose-500">*</span>
+            </label>
+            <input
+              type="number"
+              min="0"
+              step="any"
+              disabled={readOnly}
+              value={row.quantity_returned}
+              onChange={(e) => handleItemFieldChange(listType, row.id, 'quantity_returned', e.target.value)}
+              className="w-full text-xs p-1.5 border border-blue-300 rounded-lg text-center font-mono font-bold text-blue-700 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none disabled:bg-gray-100"
+              required
+            />
+          </div>
+
+          {/* Damaged */}
+          <div>
+            <label className="block text-[10px] font-semibold text-gray-600 mb-0.5 uppercase tracking-wide">
+              Damaged
+            </label>
+            <input
+              type="number"
+              min="0"
+              step="any"
+              disabled={readOnly}
+              value={row.quantity_damaged}
+              onChange={(e) => handleItemFieldChange(listType, row.id, 'quantity_damaged', e.target.value)}
+              className="w-full text-xs p-1.5 border border-amber-300 rounded-lg text-center font-mono font-bold text-amber-700 bg-white focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none disabled:bg-gray-100"
+            />
+          </div>
+
+          {/* Missing */}
+          <div>
+            <label className="block text-[10px] font-semibold text-gray-600 mb-0.5 uppercase tracking-wide">
+              Missing
+            </label>
+            <input
+              type="number"
+              min="0"
+              step="any"
+              disabled={readOnly}
+              value={row.quantity_missing}
+              onChange={(e) => handleItemFieldChange(listType, row.id, 'quantity_missing', e.target.value)}
+              className="w-full text-xs p-1.5 border border-rose-300 rounded-lg text-center font-mono font-bold text-rose-700 bg-white focus:ring-2 focus:ring-rose-500 focus:border-rose-500 outline-none disabled:bg-gray-100"
+            />
+          </div>
+
+          {/* Unit Badge (Read-only, obtained from product) */}
+          <div className="col-span-2 sm:col-span-1">
+            <label className="block text-[10px] font-semibold text-gray-600 mb-0.5 uppercase tracking-wide">
+              Unit
+            </label>
+            <div className="w-full text-xs p-1.5 border border-gray-200 rounded-lg text-center font-mono font-semibold bg-gray-50 text-gray-700">
+              {row.unit || 'Nos.'}
+            </div>
+          </div>
+        </div>
+
+        {/* Inline Discrepancy Remark if Damaged or Missing > 0 */}
+        {(stats.damaged > 0 || stats.missing > 0) && (
+          <div className="pt-1">
+            <label className="block text-[11px] font-semibold text-rose-800 mb-1">
+              Discrepancy Explanation for {row.product_name} <span className="text-rose-500">*</span>
+            </label>
+            <input
+              type="text"
+              disabled={readOnly}
+              value={row.discrepancy_reason || ''}
+              onChange={(e) => handleItemFieldChange(listType, row.id, 'discrepancy_reason', e.target.value)}
+              placeholder="Explain why units were damaged or missing on site..."
+              className="w-full text-xs px-3 py-1.5 border border-rose-300 rounded-lg focus:ring-2 focus:ring-rose-500 outline-none bg-rose-50/50 text-gray-900"
+              required
+            />
+          </div>
+        )}
+      </div>
+    );
+  };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-      <div className="bg-white rounded-2xl max-w-3xl w-full p-6 shadow-2xl space-y-4 my-8 max-h-[92vh] overflow-y-auto">
+    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+      <div className="bg-white rounded-2xl max-w-4xl w-full p-4 sm:p-6 shadow-2xl space-y-4 my-6 max-h-[92vh] overflow-y-auto">
         {/* Modal Header */}
         <div className="flex items-center justify-between border-b border-gray-100 pb-3">
           <div>
             <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 bg-purple-100 text-purple-800 rounded">
-              {readOnly ? 'View Site Installation Report (Read-Only)' : 'Technical Site Installation & Returns Form'}
+              {readOnly ? 'View Site Installation Report (Read-Only)' : 'Technical Site Completion & Returns Form'}
             </span>
             <h3 className="text-lg font-bold text-gray-900 mt-1 flex items-center gap-2">
               <FileCheck className="w-5 h-5 text-purple-600" />
@@ -466,7 +1178,7 @@ export default function InstallationCompletionModal({
         </div>
 
         {/* Read-Only Job Reference Summary */}
-        <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 text-xs">
+        <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 text-xs">
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div>
               <span className="text-gray-400 block text-[10px] font-semibold uppercase">Checklist No.</span>
@@ -481,620 +1193,461 @@ export default function InstallationCompletionModal({
               <span className="font-semibold text-gray-800 truncate block">{checklist.service_engineer || 'Unassigned'}</span>
             </div>
             <div>
-              <span className="text-gray-400 block text-[10px] font-semibold uppercase">Total Devices Carried</span>
-              <span className="font-mono font-bold text-blue-700 block">{totalCarriedAll} Units (Sales Allocation)</span>
+              <span className="text-gray-400 block text-[10px] font-semibold uppercase">Job Type</span>
+              <span className="font-semibold text-gray-800 block">{checklist.installation_or_service || 'Installation'}</span>
             </div>
           </div>
         </div>
 
-        {/* Modal Section Navigation Tabs */}
-        <div className="flex items-center gap-1.5 p-1 bg-gray-100/80 rounded-xl text-xs font-bold">
-          <button
-            type="button"
-            onClick={() => setActiveTab('devices')}
-            className={`flex-1 py-2 px-3 rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-              activeTab === 'devices'
-                ? 'bg-white text-purple-900 shadow-2xs'
-                : 'text-gray-600 hover:text-gray-900'
-            }`}
-          >
-            <Wrench className="w-3.5 h-3.5 text-purple-600" />
-            <span>Devices Installed & Returned</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab('materials')}
-            className={`flex-1 py-2 px-3 rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-              activeTab === 'materials'
-                ? 'bg-white text-purple-900 shadow-2xs'
-                : 'text-gray-600 hover:text-gray-900'
-            }`}
-          >
-            <Layers className="w-3.5 h-3.5 text-blue-600" />
-            <span>Fitting Materials Usage & Returns</span>
-            {materialItems.length > 0 && (
-              <span className="text-[10px] bg-purple-100 text-purple-800 px-1.5 py-0.2 rounded-full font-mono">
-                {materialItems.length}
-              </span>
-            )}
-          </button>
-
-          {hasBackupDeclaration && (
-            <button
-              type="button"
-              onClick={() => setActiveTab('backup_items')}
-              className={`flex-1 py-2 px-3 rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                activeTab === 'backup_items'
-                  ? 'bg-white text-amber-900 shadow-2xs font-extrabold'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              <Package className="w-3.5 h-3.5 text-amber-600" />
-              <span>Loose Backup Items</span>
-              <span className="text-[10px] bg-amber-100 text-amber-800 px-1.5 py-0.2 rounded-full font-mono">
-                {backupItems.length}
-              </span>
-            </button>
-          )}
-
-          {finalBomSnapshot && (
-            <button
-              type="button"
-              onClick={() => setActiveTab('final_bom')}
-              className={`flex-1 py-2 px-3 rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                activeTab === 'final_bom'
-                  ? 'bg-white text-purple-900 shadow-2xs'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              <Calculator className="w-3.5 h-3.5 text-emerald-600" />
-              <span>Final BOM & Reconciliation</span>
-            </button>
-          )}
-        </div>
-
         {/* Informational Guidance */}
-        {!readOnly && activeTab === 'devices' && (
-          <div className="p-3 bg-purple-50/70 border border-purple-200/80 rounded-xl text-xs text-purple-900 space-y-1">
-            <p className="font-semibold flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5 text-purple-600" />
-              Technician Installation & Reconciliation Rule:
-            </p>
-            <p className="text-[11px] text-purple-800">
-              Record quantity installed from Required allocation and Extra allocation separately. Carried = Installed + Returned + Damaged + Missing. All carried devices must reconcile before submitting.
-            </p>
+        {!readOnly && (
+          <div className="p-3 bg-purple-50/80 border border-purple-200 rounded-xl text-xs text-purple-950 flex items-start gap-2">
+            <Info className="w-4 h-4 text-purple-600 shrink-0 mt-0.5" />
+            <div className="text-[11px] leading-relaxed">
+              <strong>Individual Loose Product Tracking Rule:</strong> Every component (Camera, Live Display, Recording Display, Cables, Wire, Tape, etc.) is tracked individually. For every issued product: <strong>Quantity Issued = Installed/Used + Returned Unused + Damaged + Missing</strong>. All quantities must balance before submitting.
+            </div>
           </div>
         )}
 
         {/* Error Notification */}
         {error && (
-          <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-xl flex items-center gap-2">
+          <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 text-xs rounded-xl flex items-center gap-2">
             <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
             <span>{error}</span>
           </div>
         )}
 
-        {fetchingReport ? (
-          <div className="py-10 text-center text-gray-500 flex flex-col items-center justify-center gap-2">
-            <Loader2 className="w-6 h-6 animate-spin text-purple-600" />
-            <span className="text-xs font-medium">Loading report details...</span>
+        {fetchingData ? (
+          <div className="py-12 text-center text-gray-500 flex flex-col items-center justify-center gap-2">
+            <Loader2 className="w-7 h-7 animate-spin text-purple-600" />
+            <span className="text-xs font-medium">Loading catalogue and checklist components...</span>
           </div>
         ) : (
-          <form onSubmit={handleSubmit} className="space-y-4 text-xs">
+          <form onSubmit={handleSubmit} className="space-y-5 text-xs">
             {/* ============================================================
-                TAB 1: CAMERA DEVICES SECTION
+                SECTION 1: EXTRA DEVICE INSTALLATIONS (ADDITIONAL CUSTOMERS)
                 ============================================================ */}
-            {activeTab === 'devices' && (
-              <div className="space-y-3">
-                {items.map((item, idx) => {
-                  const carried = parseInt(item.quantity_carried, 10) || 0;
-                  const reqInst = parseInt(item.quantity_installed_required, 10) || 0;
-                  const extInst = parseInt(item.quantity_installed_extra, 10) || 0;
-                  const installed = reqInst + extInst;
-                  const toReturn = parseInt(item.quantity_to_return, 10) || 0;
-                  const damaged = parseInt(item.quantity_damaged, 10) || 0;
-                  const missing = parseInt(item.quantity_missing, 10) || 0;
-
-                  const totalAccounted = installed + toReturn + damaged + missing;
-                  const isItemBalanced = carried === totalAccounted;
-                  const isExpanded = !!expandedDamagedMissing[idx] || damaged > 0 || missing > 0;
-
-                  return (
-                    <div key={idx} className="p-4 rounded-xl border border-gray-200 bg-white shadow-xs space-y-3">
-                      {/* Device Header */}
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-gray-100 pb-2.5 gap-2">
-                        <span className="font-bold text-gray-900 text-xs flex items-center gap-1.5">
-                          <Wrench className="w-4 h-4 text-purple-600 shrink-0" /> {item.device_type}
+            <div className="border border-purple-200/80 rounded-2xl overflow-hidden bg-gradient-to-b from-purple-50/40 to-white shadow-2xs">
+              <div className="p-3.5 bg-gradient-to-r from-purple-100/60 to-purple-50/40 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 border-b border-purple-100">
+                <div className="flex items-center gap-2">
+                  <span className="p-1.5 rounded-lg bg-purple-600 text-white shadow-2xs">
+                    <Truck className="w-4 h-4" />
+                  </span>
+                  <div>
+                    <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wider flex items-center gap-1.5">
+                      Extra Device Installations
+                      {extraInstallations.length > 0 && (
+                        <span className="px-2 py-0.5 text-[10px] font-mono font-bold bg-purple-200 text-purple-900 rounded-full">
+                          {extraInstallations.length} recorded
                         </span>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="text-xs font-medium text-gray-700 bg-purple-50 px-2.5 py-0.5 rounded-md border border-purple-200">
-                            Carried: <strong className="text-purple-700 font-mono font-bold">{carried} units</strong>
-                            <span className="ml-1 text-[10px] text-gray-500 font-normal">
-                              ({item.required_quantity || 0} req + {item.extra_quantity || 0} backup)
+                      )}
+                    </h4>
+                    <p className="text-[11px] text-gray-600">
+                      Record any additional device configurations installed using extra loose stock carried (for the original customer or another customer).
+                    </p>
+                  </div>
+                </div>
+
+                {!readOnly && (
+                  <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
+                    {extraInstallations.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={handleSyncExtraToReconciliation}
+                        className="px-2.5 py-1.5 text-xs font-semibold text-purple-700 bg-purple-100/80 hover:bg-purple-200 border border-purple-300 rounded-xl flex items-center gap-1 transition-all cursor-pointer shadow-2xs"
+                        title="Auto-update component usage in the reconciliation table below"
+                      >
+                        <RefreshCw size={12} /> Auto-Sync to Usage Table
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={handleAddExtraInstallation}
+                      className="px-3 py-1.5 text-xs font-bold text-white bg-purple-600 hover:bg-purple-700 rounded-xl flex items-center gap-1 transition-all cursor-pointer shadow-2xs"
+                    >
+                      <Plus size={14} /> Add Extra Installation
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              <div className="p-3.5 space-y-3">
+                {extraInstallations.length === 0 ? (
+                  <div className="p-4 bg-white border border-dashed border-purple-200 rounded-xl text-center text-gray-500 text-xs">
+                    <Package className="w-5 h-5 mx-auto mb-1 text-purple-400 opacity-60" />
+                    <span className="font-semibold text-gray-700 block">No Extra Device Installations Recorded</span>
+                    <span className="text-[11px] text-gray-400 block mt-0.5">
+                      If extra loose stock was used to install cameras/displays for the same customer or another customer, click "+ Add Extra Installation".
+                    </span>
+                  </div>
+                ) : (
+                  extraInstallations.map((inst, idx) => (
+                    <div key={inst.id} className="p-3.5 bg-white border border-purple-200 rounded-xl shadow-2xs space-y-3">
+                      {/* Header */}
+                      <div className="flex items-center justify-between pb-2 border-b border-gray-100">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-bold text-xs text-gray-800 flex items-center gap-1">
+                            <span className="w-5 h-5 rounded-full bg-purple-100 text-purple-800 font-mono text-[11px] flex items-center justify-center font-bold">
+                              {idx + 1}
                             </span>
+                            Extra Installation #{idx + 1}
                           </span>
-                          {isItemBalanced ? (
-                            <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 flex items-center gap-1 border border-emerald-300">
-                              <CheckCircle2 size={12} /> Balanced
-                            </span>
-                          ) : (
-                            <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-rose-100 text-rose-800 flex items-center gap-1 border border-rose-300">
-                              <AlertTriangle size={12} /> Unbalanced ({totalAccounted}/{carried})
+
+                          <span
+                            className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
+                              inst.recipient_customer_type === 'SAME_CUSTOMER'
+                                ? 'bg-purple-100 text-purple-900 border border-purple-200'
+                                : 'bg-indigo-100 text-indigo-900 border border-indigo-200'
+                            }`}
+                          >
+                            {inst.recipient_customer_type === 'SAME_CUSTOMER' ? 'Original Customer' : 'Another Customer'}
+                          </span>
+
+                          {inst.device_configuration && (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-slate-100 text-slate-800 border border-slate-200">
+                              {inst.device_configuration}
                             </span>
                           )}
                         </div>
-                      </div>
 
-                      {/* Installed Required vs Extra Split & Returns */}
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        <div>
-                          <label className="block text-xs font-semibold text-gray-700 mb-1">
-                            Installed (From Required Allocation) <span className="text-rose-500">*</span>
-                          </label>
-                          <input
-                            type="number"
-                            min="0"
-                            max={carried}
-                            disabled={readOnly}
-                            value={item.quantity_installed_required}
-                            onChange={(e) => handleDeviceChange(idx, 'quantity_installed_required', e.target.value)}
-                            className="w-full px-3 py-1.5 border border-gray-300 rounded-lg font-bold font-mono text-emerald-700 focus:ring-2 focus:ring-emerald-500 outline-none disabled:bg-gray-100 disabled:text-gray-800"
-                            required
-                          />
-                          <span className="text-[10px] text-gray-400 mt-0.5 block">Allocated: {item.required_quantity || 0}</span>
-                        </div>
-
-                        <div>
-                          <label className="block text-xs font-semibold text-gray-700 mb-1">
-                            Installed (From Extra Allocation)
-                          </label>
-                          <input
-                            type="number"
-                            min="0"
-                            max={carried}
-                            disabled={readOnly}
-                            value={item.quantity_installed_extra}
-                            onChange={(e) => handleDeviceChange(idx, 'quantity_installed_extra', e.target.value)}
-                            className="w-full px-3 py-1.5 border border-gray-300 rounded-lg font-bold font-mono text-amber-700 focus:ring-2 focus:ring-amber-500 outline-none disabled:bg-gray-100 disabled:text-gray-800"
-                          />
-                          <span className="text-[10px] text-gray-400 mt-0.5 block">Extra carried: {item.extra_quantity || 0}</span>
-                        </div>
-
-                        <div>
-                          <label className="block text-xs font-semibold text-gray-700 mb-1">
-                            Unused Devices Returned <span className="text-rose-500">*</span>
-                          </label>
-                          <input
-                            type="number"
-                            min="0"
-                            max={carried}
-                            disabled={readOnly}
-                            value={item.quantity_to_return}
-                            onChange={(e) => handleDeviceChange(idx, 'quantity_to_return', e.target.value)}
-                            className="w-full px-3 py-1.5 border border-gray-300 rounded-lg font-bold font-mono text-blue-700 focus:ring-2 focus:ring-blue-500 outline-none disabled:bg-gray-100 disabled:text-gray-800"
-                            required
-                          />
-                          <span className="text-[10px] text-gray-400 mt-0.5 block">Total Installed: {installed} units</span>
-                        </div>
-                      </div>
-
-                      {/* Damaged / Missing Section */}
-                      <div>
                         {!readOnly && (
                           <button
                             type="button"
-                            onClick={() => toggleDamagedMissing(idx)}
-                            className="text-[11px] font-semibold text-gray-500 hover:text-purple-600 flex items-center gap-1 focus:outline-none transition-colors cursor-pointer"
+                            onClick={() => handleRemoveExtraInstallation(inst.id)}
+                            className="text-gray-400 hover:text-rose-600 hover:bg-rose-50 p-1.5 rounded-lg transition-colors cursor-pointer"
+                            title="Remove this extra installation"
                           >
-                            {isExpanded ? <ChevronUp className="w-3.5 h-3.5 text-gray-400" /> : <ChevronDown className="w-3.5 h-3.5 text-gray-400" />}
-                            <span>Record damaged or missing units</span>
-                            {(damaged > 0 || missing > 0) && (
-                              <span className="ml-1.5 px-1.5 py-0.2 bg-amber-100 text-amber-800 text-[10px] font-bold rounded">
-                                {damaged > 0 && `${damaged} damaged`}
-                                {damaged > 0 && missing > 0 && ', '}
-                                {missing > 0 && `${missing} missing`}
-                              </span>
-                            )}
+                            <Trash2 size={14} />
                           </button>
-                        )}
-
-                        {(isExpanded || damaged > 0 || missing > 0) && (
-                          <div className="grid grid-cols-2 gap-3 mt-2 p-3 bg-slate-50 rounded-lg border border-slate-200">
-                            <div>
-                              <label className="block text-[10px] font-semibold text-gray-600 mb-1">Quantity Damaged</label>
-                              <input
-                                type="number"
-                                min="0"
-                                max={carried}
-                                disabled={readOnly}
-                                value={item.quantity_damaged}
-                                onChange={(e) => handleDeviceChange(idx, 'quantity_damaged', e.target.value)}
-                                className="w-full px-2.5 py-1 border border-gray-300 rounded text-xs font-bold text-rose-600 focus:ring-2 focus:ring-rose-500 outline-none bg-white disabled:bg-gray-100 disabled:text-gray-800"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-[10px] font-semibold text-gray-600 mb-1">Quantity Missing</label>
-                              <input
-                                type="number"
-                                min="0"
-                                max={carried}
-                                disabled={readOnly}
-                                value={item.quantity_missing}
-                                onChange={(e) => handleDeviceChange(idx, 'quantity_missing', e.target.value)}
-                                className="w-full px-2.5 py-1 border border-gray-300 rounded text-xs font-bold text-amber-600 focus:ring-2 focus:ring-amber-500 outline-none bg-white disabled:bg-gray-100 disabled:text-gray-800"
-                              />
-                            </div>
-                          </div>
                         )}
                       </div>
 
-                      {/* Explanation Remark for Damaged / Missing */}
-                      {(damaged > 0 || missing > 0) && (
+                      {/* Form Fields Grid */}
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                        {/* Recipient Customer Type */}
                         <div>
-                          <label className="block text-xs font-semibold text-rose-800 mb-1">
-                            Discrepancy Explanation <span className="text-rose-500">*</span>
+                          <label className="block text-[10px] font-semibold text-gray-600 mb-0.5 uppercase tracking-wide">
+                            Recipient Customer Type <span className="text-rose-500">*</span>
+                          </label>
+                          <select
+                            disabled={readOnly}
+                            value={inst.recipient_customer_type}
+                            onChange={(e) => handleExtraInstallationChange(inst.id, 'recipient_customer_type', e.target.value)}
+                            className="w-full text-xs p-1.5 border border-gray-300 rounded-lg bg-white font-medium text-gray-900 outline-none focus:ring-2 focus:ring-purple-500 disabled:bg-gray-100"
+                          >
+                            <option value="SAME_CUSTOMER">Same customer as original checklist</option>
+                            <option value="ANOTHER_CUSTOMER">Another customer</option>
+                          </select>
+                        </div>
+
+                        {/* Recipient Customer Name */}
+                        <div>
+                          <label className="block text-[10px] font-semibold text-gray-600 mb-0.5 uppercase tracking-wide">
+                            Recipient Customer Name <span className="text-rose-500">*</span>
                           </label>
                           <input
                             type="text"
                             disabled={readOnly}
-                            value={item.discrepancy_reason || ''}
-                            onChange={(e) => handleDeviceChange(idx, 'discrepancy_reason', e.target.value)}
-                            placeholder="Explain why devices were damaged or missing..."
-                            className="w-full px-3 py-1.5 border border-rose-300 rounded-lg text-xs focus:ring-2 focus:ring-rose-500 outline-none bg-rose-50/50"
+                            value={inst.recipient_customer_name}
+                            onChange={(e) => handleExtraInstallationChange(inst.id, 'recipient_customer_name', e.target.value)}
+                            placeholder="Customer / business name..."
+                            className="w-full text-xs p-1.5 border border-gray-300 rounded-lg bg-white font-medium text-gray-900 outline-none focus:ring-2 focus:ring-purple-500 disabled:bg-gray-100"
                             required
                           />
                         </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
 
-            {/* ============================================================
-                TAB 2: FITTING MATERIALS SECTION
-                ============================================================ */}
-            {activeTab === 'materials' && (
-              <div className="space-y-3">
-                <div className="p-3 bg-blue-50/70 border border-blue-200/80 rounded-xl text-xs text-blue-900 flex items-center justify-between gap-2">
-                  <div>
-                    <span className="font-bold block">Actual Fitting Materials Tracking:</span>
-                    <span className="text-[11px] text-blue-800">
-                      Record actual quantities used and unused quantities returned. Do not assume all calculated materials were consumed.
-                    </span>
-                  </div>
-                  {!readOnly && (
-                    <button
-                      type="button"
-                      onClick={handleAddMaterialRow}
-                      className="px-2.5 py-1 bg-blue-600 text-white rounded-lg font-bold text-[11px] flex items-center gap-1 shrink-0 hover:bg-blue-700 cursor-pointer"
-                    >
-                      <Plus size={12} /> Add Material Line
-                    </button>
-                  )}
-                </div>
+                        {/* Installation Date */}
+                        <div>
+                          <label className="block text-[10px] font-semibold text-gray-600 mb-0.5 uppercase tracking-wide">
+                            Installation Date <span className="text-rose-500">*</span>
+                          </label>
+                          <input
+                            type="date"
+                            disabled={readOnly}
+                            value={inst.installation_date}
+                            onChange={(e) => handleExtraInstallationChange(inst.id, 'installation_date', e.target.value)}
+                            className="w-full text-xs p-1.5 border border-gray-300 rounded-lg bg-white font-medium text-gray-900 outline-none focus:ring-2 focus:ring-purple-500 disabled:bg-gray-100"
+                            required
+                          />
+                        </div>
 
-                {materialItems.length === 0 ? (
-                  <div className="p-6 bg-slate-50 border border-slate-200 rounded-xl text-center text-gray-500 text-xs">
-                    No preliminary fitting materials recorded for this job.
-                    {!readOnly && (
-                      <div className="mt-2">
-                        <button
-                          type="button"
-                          onClick={handleAddMaterialRow}
-                          className="px-3 py-1.5 bg-blue-600 text-white rounded-lg font-bold text-xs"
-                        >
-                          + Add Material Return
-                        </button>
+                        {/* Mobile Number */}
+                        <div>
+                          <label className="block text-[10px] font-semibold text-gray-600 mb-0.5 uppercase tracking-wide">
+                            Customer Mobile <span className="text-gray-400 font-normal">(Optional)</span>
+                          </label>
+                          <input
+                            type="text"
+                            disabled={readOnly}
+                            value={inst.recipient_mobile || ''}
+                            onChange={(e) => handleExtraInstallationChange(inst.id, 'recipient_mobile', e.target.value)}
+                            placeholder="Mobile number..."
+                            className="w-full text-xs p-1.5 border border-gray-300 rounded-lg bg-white font-medium text-gray-900 outline-none focus:ring-2 focus:ring-purple-500 disabled:bg-gray-100"
+                          />
+                        </div>
+
+                        {/* Installation Location */}
+                        <div>
+                          <label className="block text-[10px] font-semibold text-gray-600 mb-0.5 uppercase tracking-wide">
+                            Installation Location <span className="text-gray-400 font-normal">(Optional)</span>
+                          </label>
+                          <input
+                            type="text"
+                            disabled={readOnly}
+                            value={inst.installation_location || ''}
+                            onChange={(e) => handleExtraInstallationChange(inst.id, 'installation_location', e.target.value)}
+                            placeholder="Depot / Site Address..."
+                            className="w-full text-xs p-1.5 border border-gray-300 rounded-lg bg-white font-medium text-gray-900 outline-none focus:ring-2 focus:ring-purple-500 disabled:bg-gray-100"
+                          />
+                        </div>
+
+                        {/* Google Maps Link */}
+                        <div>
+                          <label className="block text-[10px] font-semibold text-gray-600 mb-0.5 uppercase tracking-wide">
+                            Google Maps Link <span className="text-gray-400 font-normal">(Optional)</span>
+                          </label>
+                          <input
+                            type="url"
+                            disabled={readOnly}
+                            value={inst.maps_link || ''}
+                            onChange={(e) => handleExtraInstallationChange(inst.id, 'maps_link', e.target.value)}
+                            placeholder="https://maps.google.com/?q=..."
+                            className="w-full text-xs p-1.5 border border-gray-300 rounded-lg bg-white font-medium text-gray-900 outline-none focus:ring-2 focus:ring-purple-500 disabled:bg-gray-100"
+                          />
+                        </div>
                       </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
-                    <table className="w-full text-left border-collapse text-xs">
-                      <thead>
-                        <tr className="bg-gray-50 border-b border-gray-200 text-[11px] font-bold text-gray-600 uppercase">
-                          <th className="py-2.5 px-3">Material Name</th>
-                          <th className="py-2.5 px-3 text-center">Unit</th>
-                          <th className="py-2.5 px-3 text-center">Issued</th>
-                          <th className="py-2.5 px-3 text-center">Actual Used</th>
-                          <th className="py-2.5 px-3 text-center">Returned Unused</th>
-                          <th className="py-2.5 px-3">Remarks</th>
-                          {!readOnly && <th className="py-2.5 px-2 text-center w-10"></th>}
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-100">
-                        {materialItems.map((mat, mIdx) => (
-                          <tr key={mIdx} className="hover:bg-slate-50">
-                            <td className="py-2 px-3">
-                              {readOnly ? (
-                                <span className="font-semibold text-gray-900">{mat.material_name}</span>
-                              ) : (
-                                <input
-                                  type="text"
-                                  value={mat.material_name}
-                                  onChange={(e) => handleMaterialChange(mIdx, 'material_name', e.target.value)}
-                                  placeholder="Material Name"
-                                  className="w-full p-1 border border-gray-200 rounded text-xs font-semibold"
-                                  required
-                                />
-                              )}
-                            </td>
-                            <td className="py-2 px-3 text-center">
-                              {readOnly ? (
-                                <span className="font-mono text-gray-600">{mat.unit}</span>
-                              ) : (
-                                <input
-                                  type="text"
-                                  value={mat.unit}
-                                  onChange={(e) => handleMaterialChange(mIdx, 'unit', e.target.value)}
-                                  className="w-16 p-1 border border-gray-200 rounded text-xs text-center font-mono"
-                                />
-                              )}
-                            </td>
-                            <td className="py-2 px-3 text-center font-mono font-bold text-gray-700">
-                              {mat.quantity_issued || 0}
-                            </td>
-                            <td className="py-2 px-3 text-center">
+
+                      {/* Device Configuration & Component Breakdown */}
+                      <div className="p-3 bg-slate-50/80 rounded-xl border border-slate-200/80 space-y-2">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <label className="text-[11px] font-bold text-gray-800 uppercase tracking-wide">
+                              Configuration:
+                            </label>
+                            <select
+                              disabled={readOnly}
+                              value={inst.device_configuration || '4 Channel Live'}
+                              onChange={(e) => handleExtraInstallationChange(inst.id, 'device_configuration', e.target.value)}
+                              className="text-xs py-1 px-2.5 border border-purple-300 rounded-lg bg-white font-bold text-purple-900 outline-none focus:ring-2 focus:ring-purple-500 cursor-pointer disabled:bg-gray-100"
+                            >
+                              {deviceConfigs.map((cfg) => (
+                                <option key={cfg.device_type} value={cfg.device_type}>
+                                  {cfg.device_type}
+                                </option>
+                              ))}
+                              <option value="Custom">Custom Component Configuration</option>
+                            </select>
+                          </div>
+
+                          <span className="text-[10px] text-gray-500 italic">
+                            Calculated per configuration rules (2/4/6/8 Channel Live/Recording).
+                          </span>
+                        </div>
+
+                        {/* Breakdown Component Badges / Editable Rows */}
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
+                          {inst.components_used?.map((comp, cIdx) => (
+                            <div
+                              key={cIdx}
+                              className="p-2 bg-white rounded-lg border border-gray-200 flex items-center justify-between shadow-2xs"
+                            >
+                              <div className="truncate pr-1">
+                                <span className="font-semibold text-gray-800 text-xs block truncate">
+                                  {comp.component_name}
+                                </span>
+                                <span className="text-[10px] text-gray-400 font-mono">{comp.unit || 'Nos.'}</span>
+                              </div>
                               <input
                                 type="number"
-                                min="0"
-                                step="any"
+                                min="1"
                                 disabled={readOnly}
-                                value={mat.quantity_used}
-                                onChange={(e) => handleMaterialChange(mIdx, 'quantity_used', e.target.value)}
-                                className="w-16 p-1 border border-gray-300 rounded text-xs text-center font-mono font-bold text-emerald-700 disabled:bg-gray-100"
+                                value={comp.quantity}
+                                onChange={(e) =>
+                                  handleExtraInstallationComponentChange(inst.id, cIdx, 'quantity', e.target.value)
+                                }
+                                className="w-14 text-xs p-1 border border-purple-200 rounded text-center font-mono font-bold text-purple-700 bg-purple-50/50 outline-none focus:ring-2 focus:ring-purple-500 disabled:bg-gray-100"
                               />
-                            </td>
-                            <td className="py-2 px-3 text-center">
-                              <input
-                                type="number"
-                                min="0"
-                                step="any"
-                                disabled={readOnly}
-                                value={mat.quantity_returned}
-                                onChange={(e) => handleMaterialChange(mIdx, 'quantity_returned', e.target.value)}
-                                className="w-16 p-1 border border-blue-300 rounded text-xs text-center font-mono font-bold text-blue-700 disabled:bg-gray-100"
-                              />
-                            </td>
-                            <td className="py-2 px-3">
-                              <input
-                                type="text"
-                                disabled={readOnly}
-                                value={mat.remarks || ''}
-                                onChange={(e) => handleMaterialChange(mIdx, 'remarks', e.target.value)}
-                                placeholder="Return notes"
-                                className="w-full p-1 border border-gray-200 rounded text-[11px] disabled:bg-gray-100"
-                              />
-                            </td>
-                            {!readOnly && (
-                              <td className="py-2 px-2 text-center">
-                                <button
-                                  type="button"
-                                  onClick={() => handleRemoveMaterialRow(mIdx)}
-                                  className="text-gray-400 hover:text-rose-600 p-1"
-                                >
-                                  <Trash2 size={13} />
-                                </button>
-                              </td>
-                            )}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* Optional Notes */}
+                        <div className="pt-1">
+                          <input
+                            type="text"
+                            disabled={readOnly}
+                            value={inst.notes || ''}
+                            onChange={(e) => handleExtraInstallationChange(inst.id, 'notes', e.target.value)}
+                            placeholder="Optional notes for this extra installation (e.g. vehicle number, customer invoice ref)..."
+                            className="w-full text-xs px-2.5 py-1.5 border border-gray-200 rounded-lg bg-white text-gray-700 outline-none focus:ring-2 focus:ring-purple-500 disabled:bg-gray-100"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))
                 )}
-              </div>
-            )}
-
-            {/* ============================================================
-                TAB 2B: EXTRA LOOSE BACKUP ITEMS RECONCILIATION
-                ============================================================ */}
-            {activeTab === 'backup_items' && hasBackupDeclaration && (
-              <div className="space-y-3">
-                <div className="p-3.5 bg-amber-50/80 border border-amber-200/90 rounded-xl text-xs text-amber-950 flex items-start gap-2.5">
-                  <Package className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
-                  <div className="text-[11px] leading-relaxed">
-                    <strong>Pre-Installation Backup Items Reconciliation:</strong> Track actual usage and returns for individual loose components carried to site. Carried must equal Used + Returned + Damaged + Missing. Unused usable items will be verified by the Store Manager before return to stock.
-                  </div>
-                </div>
-
-                <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-2xs">
-                  <table className="w-full text-left border-collapse text-xs">
-                    <thead>
-                      <tr className="bg-slate-50 border-b border-gray-200 text-[10px] font-bold text-gray-600 uppercase tracking-wider">
-                        <th className="py-2.5 px-3">Loose Component</th>
-                        <th className="py-2.5 px-3 text-center">Unit</th>
-                        <th className="py-2.5 px-3 text-center bg-slate-100/70">Carried</th>
-                        <th className="py-2.5 px-3 text-center">Used / Installed</th>
-                        <th className="py-2.5 px-3 text-center bg-blue-50/50">To Return</th>
-                        <th className="py-2.5 px-3 text-center">Damaged</th>
-                        <th className="py-2.5 px-3 text-center">Missing</th>
-                        <th className="py-2.5 px-3 text-center">Balance</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                      {backupItems.map((bi, bIdx) => {
-                        const carried = Number(bi.quantity_carried ?? bi.quantity) || 0;
-                        const used = Number(bi.quantity_used) || 0;
-                        const ret = Number(bi.quantity_returned) || 0;
-                        const dam = Number(bi.quantity_damaged) || 0;
-                        const mis = Number(bi.quantity_missing) || 0;
-                        const totalAcc = used + ret + dam + mis;
-                        const isBalanced = totalAcc === carried;
-
-                        return (
-                          <tr key={bIdx} className="hover:bg-slate-50/70 transition-colors">
-                            <td className="py-2.5 px-3">
-                              <span className="font-bold text-gray-900 block">{bi.item_name}</span>
-                              {(dam > 0 || mis > 0) && (
-                                <input
-                                  type="text"
-                                  disabled={readOnly}
-                                  value={bi.discrepancy_reason || ''}
-                                  onChange={(e) => handleBackupItemChange(bIdx, 'discrepancy_reason', e.target.value)}
-                                  placeholder="Explain damaged/missing reason..."
-                                  className="mt-1 w-full p-1 border border-rose-300 rounded text-[11px] bg-rose-50/40"
-                                  required
-                                />
-                              )}
-                            </td>
-                            <td className="py-2.5 px-3 text-center font-mono text-gray-500">
-                              {bi.unit || 'Nos.'}
-                            </td>
-                            <td className="py-2.5 px-3 text-center font-mono font-bold text-gray-900 bg-slate-50">
-                              {carried}
-                            </td>
-                            <td className="py-2.5 px-3 text-center">
-                              <input
-                                type="number"
-                                min="0"
-                                step="any"
-                                disabled={readOnly}
-                                value={bi.quantity_used}
-                                onChange={(e) => handleBackupItemChange(bIdx, 'quantity_used', e.target.value)}
-                                className="w-16 p-1 border border-gray-300 rounded text-xs text-center font-mono font-semibold"
-                              />
-                            </td>
-                            <td className="py-2.5 px-3 text-center bg-blue-50/30">
-                              <input
-                                type="number"
-                                min="0"
-                                step="any"
-                                disabled={readOnly}
-                                value={bi.quantity_returned}
-                                onChange={(e) => handleBackupItemChange(bIdx, 'quantity_returned', e.target.value)}
-                                className="w-16 p-1 border border-blue-300 rounded text-xs text-center font-mono font-bold text-blue-700"
-                              />
-                            </td>
-                            <td className="py-2.5 px-3 text-center">
-                              <input
-                                type="number"
-                                min="0"
-                                step="any"
-                                disabled={readOnly}
-                                value={bi.quantity_damaged}
-                                onChange={(e) => handleBackupItemChange(bIdx, 'quantity_damaged', e.target.value)}
-                                className="w-16 p-1 border border-amber-300 rounded text-xs text-center font-mono text-amber-700"
-                              />
-                            </td>
-                            <td className="py-2.5 px-3 text-center">
-                              <input
-                                type="number"
-                                min="0"
-                                step="any"
-                                disabled={readOnly}
-                                value={bi.quantity_missing}
-                                onChange={(e) => handleBackupItemChange(bIdx, 'quantity_missing', e.target.value)}
-                                className="w-16 p-1 border border-rose-300 rounded text-xs text-center font-mono text-rose-700"
-                              />
-                            </td>
-                            <td className="py-2.5 px-3 text-center">
-                              <span
-                                className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                                  isBalanced
-                                    ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                                    : 'bg-rose-100 text-rose-800 border border-rose-300'
-                                }`}
-                              >
-                                {isBalanced ? 'Balanced' : `${totalAcc}/${carried}`}
-                              </span>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-
-            {/* ============================================================
-                TAB 3: FINAL BOM & RECONCILIATION SUMMARY
-                ============================================================ */}
-            {activeTab === 'final_bom' && finalBomSnapshot && (
-              <div className="space-y-4">
-                <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-900 space-y-1">
-                  <div className="font-bold flex items-center gap-1.5">
-                    <CheckCircle2 size={15} className="text-emerald-600" />
-                    Final BOM Calculated on All Actually Installed Devices:
-                  </div>
-                  <p className="text-[11px] text-emerald-800">
-                    Formula: Sum of (actual installed quantity for each device type × configured BOM quantity per device type). Includes extra devices installed; excludes unused extra devices.
-                  </p>
-                </div>
-
-                {/* Comparison Table */}
-                {Array.isArray(finalBomSnapshot.comparison) && (
-                  <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
-                    <table className="w-full text-left border-collapse text-xs">
-                      <thead>
-                        <tr className="bg-gray-50 border-b border-gray-200 text-[11px] font-bold text-gray-600 uppercase">
-                          <th className="py-2.5 px-3">Material Item</th>
-                          <th className="py-2.5 px-3 text-center">Preliminary (All Carried)</th>
-                          <th className="py-2.5 px-3 text-center">Final (Actually Installed)</th>
-                          <th className="py-2.5 px-3 text-center">Difference</th>
-                          <th className="py-2.5 px-3 text-center">Unit</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-100">
-                        {finalBomSnapshot.comparison.map((c, cIdx) => (
-                          <tr key={cIdx} className="hover:bg-slate-50">
-                            <td className="py-2 px-3 font-semibold text-gray-900">{c.material_name}</td>
-                            <td className="py-2 px-3 text-center font-mono font-bold text-gray-600">{c.preliminary_quantity}</td>
-                            <td className="py-2 px-3 text-center font-mono font-bold text-emerald-700">{c.final_quantity}</td>
-                            <td className="py-2 px-3 text-center font-mono font-bold">
-                              <span className={`px-2 py-0.5 rounded text-[11px] ${
-                                c.difference < 0 ? 'bg-amber-100 text-amber-800' : c.difference > 0 ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-600'
-                              }`}>
-                                {c.difference > 0 ? `+${c.difference}` : c.difference}
-                              </span>
-                            </td>
-                            <td className="py-2 px-3 text-center text-gray-500">{c.unit}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Reconciliation Totals Banner */}
-            <div className={`p-4 rounded-xl border text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
-              isOverallBalanced ? 'bg-emerald-50/70 border-emerald-200 text-emerald-950' : 'bg-rose-50 border-rose-200 text-rose-950'
-            }`}>
-              <div>
-                <span className="font-bold block flex items-center gap-1.5">
-                  {isOverallBalanced ? <CheckCircle2 className="w-4 h-4 text-emerald-600" /> : <AlertTriangle className="w-4 h-4 text-rose-600" />}
-                  {isOverallBalanced ? 'All Device Quantities Reconciled' : 'Device Allocation Discrepancy Detected'}
-                </span>
-                <span className="text-[11px] opacity-80 block mt-0.5">
-                  Carried: {totalCarriedAll} = Installed ({totalInstalledAll}) + Returned ({totalReturnedAll}) + Damaged ({totalDamagedAll}) + Missing ({totalMissingAll})
-                </span>
-              </div>
-              <div className="font-mono text-xs font-bold shrink-0">
-                Total Accounted: {totalAccountedAll} / {totalCarriedAll}
               </div>
             </div>
 
-            {/* General Completion Remarks */}
+            {/* ============================================================
+                SECTION 2: POST-INSTALLATION RESULTS (DEVICE & COMPONENT TRACKING)
+                ============================================================ */}
+            <div className="space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-100 pb-2">
+                <div>
+                  <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wider flex items-center gap-1.5">
+                    <Package className="w-4 h-4 text-purple-600" />
+                    Device Components Reconciliation & Returns
+                  </h4>
+                  <p className="text-[11px] text-gray-500">
+                    Individual tracking for Camera, Displays, Cables, Memory Cards, and configured device hardware.
+                  </p>
+                </div>
+
+                {!readOnly && (
+                  <button
+                    type="button"
+                    onClick={() => handleAddRow('device')}
+                    className="px-3 py-1.5 text-xs font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-xl flex items-center gap-1 transition-all cursor-pointer self-start sm:self-auto shadow-2xs"
+                  >
+                    <Plus size={14} /> Add Device Component
+                  </button>
+                )}
+              </div>
+
+              {deviceItems.length === 0 ? (
+                <div className="p-6 bg-slate-50 border border-slate-200 rounded-xl text-center text-gray-500 text-xs italic">
+                  No device components recorded. Click "+ Add Device Component" to add one.
+                </div>
+              ) : (
+                <div className="space-y-2.5">
+                  {deviceItems.map((row, idx) => renderProductRow(row, idx, 'device'))}
+                </div>
+              )}
+            </div>
+
+            {/* ============================================================
+                SECTION 2: COLLAPSIBLE INSTALLATION MATERIALS SECTION
+                ============================================================ */}
+            <div className="border border-gray-200 rounded-xl overflow-hidden bg-white shadow-2xs">
+              <div className="p-3 bg-slate-50 flex items-center justify-between border-b border-gray-200">
+                <button
+                  type="button"
+                  onClick={() => setMaterialsCollapsed(!materialsCollapsed)}
+                  className="flex items-center gap-2 text-left cursor-pointer focus:outline-none flex-1"
+                >
+                  <Layers className="w-4 h-4 text-blue-600" />
+                  <div>
+                    <span className="font-bold text-gray-900 text-xs block">
+                      Fitting Materials Usage & Returns
+                    </span>
+                    <span className="text-[11px] text-gray-500">
+                      Tape, cable ties, screws, wire, and other installation materials ({materialItems.length} items)
+                    </span>
+                  </div>
+                  {materialsCollapsed ? (
+                    <ChevronDown className="w-4 h-4 text-gray-400 ml-1" />
+                  ) : (
+                    <ChevronUp className="w-4 h-4 text-gray-400 ml-1" />
+                  )}
+                </button>
+
+                {!readOnly && (
+                  <button
+                    type="button"
+                    onClick={() => handleAddRow('material')}
+                    className="px-2.5 py-1 text-xs font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg flex items-center gap-1 shrink-0 ml-2 cursor-pointer shadow-2xs"
+                  >
+                    <Plus size={13} /> Add Material
+                  </button>
+                )}
+              </div>
+
+              {!materialsCollapsed && (
+                <div className="p-3.5 space-y-2.5 bg-slate-50/50">
+                  {materialItems.length === 0 ? (
+                    <div className="p-4 bg-white border border-dashed border-gray-200 rounded-xl text-center text-gray-400 text-xs italic">
+                      No fitting materials recorded for this job.
+                      {!readOnly && (
+                        <div className="mt-2">
+                          <button
+                            type="button"
+                            onClick={() => handleAddRow('material')}
+                            className="text-xs font-semibold text-blue-600 hover:underline"
+                          >
+                            + Add Material Item
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    materialItems.map((row, idx) => renderProductRow(row, idx, 'material'))
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* ============================================================
+                SECTION 3: RECONCILIATION SUMMARY BANNER
+                ============================================================ */}
+            <div
+              className={`p-3.5 rounded-xl border text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                isFormBalanced
+                  ? 'bg-emerald-50/80 border-emerald-200 text-emerald-950'
+                  : 'bg-rose-50 border-rose-200 text-rose-950'
+              }`}
+            >
+              <div>
+                <span className="font-bold flex items-center gap-1.5">
+                  {isFormBalanced ? (
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                  ) : (
+                    <AlertTriangle className="w-4 h-4 text-rose-600" />
+                  )}
+                  {isFormBalanced ? 'All Loose Products & Materials Reconciled' : 'Reconciliation Discrepancy Detected'}
+                </span>
+                <span className="text-[11px] opacity-80 block mt-0.5">
+                  {isFormBalanced
+                    ? 'All issued quantities equal Installed + Returned + Damaged + Missing. Ready for submission.'
+                    : 'Every product row must balance (Issued = Installed + Returned + Damaged + Missing) before report submission.'}
+                </span>
+              </div>
+
+              <div className="text-[11px] font-mono font-bold shrink-0">
+                {isFormBalanced ? (
+                  <span className="text-emerald-700">100% Balanced</span>
+                ) : (
+                  <span className="text-rose-700">Review Unbalanced Rows</span>
+                )}
+              </div>
+            </div>
+
+            {/* ============================================================
+                SECTION 4: OPTIONAL INSTALLATION NOTES
+                ============================================================ */}
             <div>
               <label className="block text-xs font-semibold text-gray-700 mb-1">
-                Technician General Remarks / Installation Notes
+                Technician Installation Notes / General Remarks <span className="text-gray-400 font-normal">(Optional)</span>
               </label>
               <textarea
                 disabled={readOnly}
                 rows={2}
                 value={generalRemarks}
                 onChange={(e) => setGeneralRemarks(e.target.value)}
-                placeholder="Optional overall installation notes, client signatures, site condition details..."
+                placeholder="Optional notes regarding site conditions, client handover, or physical installation details..."
                 className="w-full px-3 py-2 border border-gray-300 rounded-xl text-xs focus:ring-2 focus:ring-purple-500 outline-none disabled:bg-gray-100"
               />
             </div>
 
-            {/* Action Buttons */}
+            {/* Stock Protection Notice */}
+            <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl flex items-center gap-2 text-[11px] text-gray-500">
+              <ShieldCheck className="w-4 h-4 text-purple-600 shrink-0" />
+              <span>
+                <strong>Stock Protection:</strong> Submitting records technician declaration only. Returned products remain pending until physical verification by the Store Manager.
+              </span>
+            </div>
+
+            {/* Modal Actions */}
             <div className="flex items-center justify-end gap-3 pt-2 border-t border-gray-100">
               <button
                 type="button"
@@ -1107,7 +1660,7 @@ export default function InstallationCompletionModal({
               {!readOnly && (
                 <button
                   type="submit"
-                  disabled={loading || !isOverallBalanced}
+                  disabled={loading || !isFormBalanced}
                   className="px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
                 >
                   {loading && <Loader2 className="w-4 h-4 animate-spin" />}

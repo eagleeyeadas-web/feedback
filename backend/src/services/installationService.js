@@ -17,6 +17,7 @@ import {
 import { syncStoreRequirementForChecklist } from './storeRequirementService.js';
 import { notifyStoreManagerOnInstallationChecklist } from './notificationService.js';
 import { getPendingExtensionForChecklist } from './scheduleExtensionService.js';
+import { logAudit } from './auditService.js';
 
 // In-memory structured extra configurations cache for active runtime sessions
 export const inMemoryChecklistExtraConfigs = new Map();
@@ -795,13 +796,275 @@ export async function updateChecklist(id, data) {
 }
 
 /**
- * Delete an installation checklist by ID
+ * Check if a checklist is eligible for permanent deletion.
+ * Protects operational history, completed jobs, active work, stock ledgers,
+ * reports, expenses, returns, and coordinator bookings.
  */
-export async function deleteChecklist(id) {
-  const existing = await getChecklistById(id);
+export async function checkChecklistDeletionEligibility(checklistIdOrObj) {
+  let checklist = checklistIdOrObj;
+  if (typeof checklistIdOrObj === 'string') {
+    checklist = await getChecklistById(checklistIdOrObj, { enrich: false });
+  }
 
+  if (!checklist || !checklist.id) {
+    const err = new Error('Checklist not found');
+    err.statusCode = 404;
+    throw err;
+  }
+
+  const checklistId = checklist.id;
+  const reasons = [];
+
+  // 1. Status checks: In-Progress, Completed, or Site Work Completed checklists must not be deleted
+  const protectedStatuses = ['In Progress', 'Completed', 'Site Work Completed'];
+  if (protectedStatuses.includes(checklist.installation_status)) {
+    reasons.push(`Job has active operational status '${checklist.installation_status}'`);
+  }
+
+  // 2. Material/Device issuance flag on checklist
+  if (
+    checklist.material_issuance_status === 'ISSUED' ||
+    checklist.devices_issuance_status === 'ISSUED' ||
+    checklist.material_issued_at ||
+    checklist.material_issued_by
+  ) {
+    reasons.push('Devices or installation materials have already been issued for this job');
+  }
+
+  // 3. Technical installation reports check (Site work completion reports)
+  try {
+    const { inMemoryCompletionReports } = await import('./workflowService.js');
+    const inMemReport = inMemoryCompletionReports.get(checklistId);
+    if (inMemReport) {
+      reasons.push('Technical installation / site work completion report exists in system');
+    } else {
+      const { data: dbReports } = await supabase
+        .from('technical_installation_reports')
+        .select('id, completion_status')
+        .eq('checklist_id', checklistId)
+        .limit(1);
+      if (dbReports && dbReports.length > 0) {
+        reasons.push('Technical installation / site work completion report is recorded in database');
+      }
+    }
+  } catch (e) {}
+
+  // 4. Device carry records check
+  try {
+    const { inMemoryCarryRecords } = await import('./workflowService.js');
+    const inMemCarry = inMemoryCarryRecords.get(checklistId);
+    if (inMemCarry && inMemCarry.items && inMemCarry.items.length > 0) {
+      reasons.push('Technician device carry record has been registered for this job');
+    } else {
+      const { data: dbCarry } = await supabase
+        .from('job_device_carry_records')
+        .select('id')
+        .eq('checklist_id', checklistId)
+        .limit(1);
+      if (dbCarry && dbCarry.length > 0) {
+        reasons.push('Technician device carry record exists in database');
+      }
+    }
+  } catch (e) {}
+
+  // 5. Store material requirement & stock issuance check
+  try {
+    const { inMemoryStoreRequirements } = await import('./storeRequirementService.js');
+    const inMemReq = inMemoryStoreRequirements.get(checklistId);
+    if (
+      inMemReq &&
+      (inMemReq.status === 'ISSUED' ||
+        inMemReq.status === 'PARTIALLY_ISSUED' ||
+        inMemReq.material_issuance_status === 'ISSUED' ||
+        inMemReq.devices_issuance_status === 'ISSUED' ||
+        (inMemReq.devices_issued && inMemReq.devices_issued > 0) ||
+        (inMemReq.materials_issued && inMemReq.materials_issued > 0))
+    ) {
+      reasons.push('Store Manager has issued inventory devices/materials for this requirement');
+    } else {
+      const { data: dbReq } = await supabase
+        .from('store_material_requirements')
+        .select('id, status, material_issuance_status')
+        .eq('checklist_id', checklistId)
+        .maybeSingle();
+      if (
+        dbReq &&
+        (dbReq.status === 'ISSUED' ||
+          dbReq.status === 'PARTIALLY_ISSUED' ||
+          dbReq.material_issuance_status === 'ISSUED')
+      ) {
+        reasons.push('Store Manager has issued inventory devices/materials for this requirement');
+      }
+    }
+  } catch (e) {}
+
+  // 6. Stock movements / Inventory transactions check
+  try {
+    const { inMemoryStockMovements } = await import('./stockMovementService.js');
+    const inMemMovements = inMemoryStockMovements.filter((m) => m.checklist_id === checklistId);
+    if (inMemMovements.length > 0) {
+      reasons.push(`${inMemMovements.length} inventory stock movement transaction(s) recorded in stock ledger`);
+    } else {
+      const { data: dbMovements } = await supabase
+        .from('stock_movements')
+        .select('id')
+        .eq('checklist_id', checklistId)
+        .limit(1);
+      if (dbMovements && dbMovements.length > 0) {
+        reasons.push('Inventory stock movement transactions are recorded in stock ledger');
+      }
+    }
+  } catch (e) {}
+
+  // 7. Device & Material Returns check
+  try {
+    const { inMemoryReturns, inMemoryMaterialReturns } = await import('./workflowService.js');
+    const devReturns = Array.from(inMemoryReturns.values()).filter((r) => r.checklist_id === checklistId);
+    const matReturns = Array.from(inMemoryMaterialReturns.values()).filter((r) => r.checklist_id === checklistId);
+    if (devReturns.length > 0 || matReturns.length > 0) {
+      reasons.push('Device or material return / verification records are attached');
+    } else {
+      const { data: dbDevRet } = await supabase
+        .from('store_device_returns')
+        .select('id')
+        .eq('checklist_id', checklistId)
+        .limit(1);
+      if (dbDevRet && dbDevRet.length > 0) {
+        reasons.push('Device return verification records are recorded in database');
+      }
+    }
+  } catch (e) {}
+
+  // 8. Technician job expenses check
+  try {
+    const { inMemoryJobExpenses } = await import('./expenseService.js');
+    const inMemExpenses = Array.from(inMemoryJobExpenses.values()).filter(
+      (e) => e.checklist_id === checklistId && (e.status === 'Recorded' || e.amount > 0)
+    );
+    if (inMemExpenses.length > 0) {
+      reasons.push(`${inMemExpenses.length} technician expense claim(s) recorded`);
+    } else {
+      const { data: dbExpenses } = await supabase
+        .from('job_expenses')
+        .select('id')
+        .eq('checklist_id', checklistId)
+        .limit(1);
+      if (dbExpenses && dbExpenses.length > 0) {
+        reasons.push('Technician job expense claims recorded in database');
+      }
+    }
+  } catch (e) {}
+
+  // 9. Schedule extension & revision requests check
+  try {
+    const { inMemoryExtensions } = await import('./scheduleExtensionService.js');
+    const activeExtensions = Array.from(inMemoryExtensions.values()).filter(
+      (ext) => ext.checklist_id === checklistId && (ext.status === 'APPROVED' || ext.status === 'PENDING')
+    );
+    if (activeExtensions.length > 0) {
+      reasons.push('Active or approved schedule extension request exists');
+    } else {
+      const { data: dbExt } = await supabase
+        .from('schedule_extension_requests')
+        .select('id, status')
+        .eq('checklist_id', checklistId)
+        .in('status', ['APPROVED', 'PENDING'])
+        .limit(1);
+      if (dbExt && dbExt.length > 0) {
+        reasons.push('Active or approved schedule extension request exists in database');
+      }
+    }
+  } catch (e) {}
+
+  // 10. Coordinator bookings check (arranged travel or hotel accommodation)
+  try {
+    const { inMemoryBookings } = await import('./coordinatorBookingService.js');
+    const booking = inMemoryBookings.get(checklistId);
+    if (
+      booking &&
+      (booking.booking_status === 'COMPLETED' ||
+        booking.booking_status === 'IN_PROGRESS' ||
+        (booking.travel_required && (booking.ticket_reference || booking.travel_datetime)) ||
+        (booking.accommodation_required && (booking.hotel_booking_reference || booking.hotel_name)))
+    ) {
+      reasons.push(`Travel or hotel accommodation has been arranged (Booking status: ${booking.booking_status || 'ARRANGED'})`);
+    } else {
+      const { data: dbBooking } = await supabase
+        .from('coordinator_bookings')
+        .select('*')
+        .eq('checklist_id', checklistId)
+        .maybeSingle();
+      if (
+        dbBooking &&
+        (dbBooking.booking_status === 'COMPLETED' ||
+          dbBooking.booking_status === 'IN_PROGRESS' ||
+          (dbBooking.travel_required && (dbBooking.ticket_reference || dbBooking.travel_datetime)) ||
+          (dbBooking.accommodation_required && (dbBooking.hotel_booking_reference || dbBooking.hotel_name)))
+      ) {
+        reasons.push(`Travel or hotel accommodation has been arranged (Booking status: ${dbBooking.booking_status || 'ARRANGED'})`);
+      }
+    }
+  } catch (e) {}
+
+  const isEligible = reasons.length === 0;
+
+  return {
+    checklistId,
+    checklistNumber: checklist.checklist_number,
+    clientName: checklist.client_name,
+    installationStatus: checklist.installation_status,
+    isEligible,
+    canPermanentDelete: isEligible,
+    reasons,
+    canCancel: checklist.installation_status !== 'Cancelled',
+    checklist,
+  };
+}
+
+/**
+ * Safely delete an installation checklist.
+ * Only unprocessed drafts with no dependent records can be deleted.
+ * Rejects with 409 if dependencies or status protect the record.
+ */
+export async function safeDeleteChecklist(id, user = null) {
+  const existing = await getChecklistById(id, { enrich: false });
+  const eligibility = await checkChecklistDeletionEligibility(existing);
+
+  if (!eligibility.isEligible) {
+    const error = new Error(
+      `Cannot permanently delete checklist ${existing.checklist_number}: ${eligibility.reasons.join('; ')}`
+    );
+    error.statusCode = 409;
+    error.reasons = eligibility.reasons;
+    error.canCancel = eligibility.canCancel;
+    error.checklist = {
+      id: existing.id,
+      checklist_number: existing.checklist_number,
+      client_name: existing.client_name,
+      installation_status: existing.installation_status,
+    };
+    throw error;
+  }
+
+  // 1. Release engineer booking if an engineer was reserved for this draft
   await releaseEngineerBooking({ checklistId: existing.id });
 
+  // 2. Safely remove unissued draft store requirement (if any)
+  try {
+    await supabase.from('store_material_requirements').delete().eq('checklist_id', existing.id);
+    const { inMemoryStoreRequirements } = await import('./storeRequirementService.js');
+    inMemoryStoreRequirements.delete(existing.id);
+  } catch (e) {}
+
+  // 3. Safely remove unarranged draft coordinator booking (if any)
+  try {
+    await supabase.from('coordinator_bookings').delete().eq('checklist_id', existing.id);
+    const { inMemoryBookings, inMemoryAuditLogs } = await import('./coordinatorBookingService.js');
+    inMemoryBookings.delete(existing.id);
+    inMemoryAuditLogs.delete(existing.id);
+  } catch (e) {}
+
+  // 4. Delete the checklist record from installation_checklists
   const { error } = await supabase
     .from('installation_checklists')
     .delete()
@@ -809,10 +1072,262 @@ export async function deleteChecklist(id) {
 
   if (error) {
     console.error('Database delete error for checklist:', error);
-    throw new Error(error.message || 'Failed to delete installation checklist');
+    throw new Error(error.message || 'Failed to delete installation checklist from database');
   }
 
-  return { success: true };
+  // 5. Clean runtime in-memory caches
+  inMemoryChecklistExtraConfigs.delete(existing.id);
+  inMemoryChecklistBomSnapshots.delete(existing.id);
+  inMemoryChecklistSchedules.delete(existing.id);
+
+  // 6. Record audit entry
+  try {
+    await logAudit({
+      actor_id: user?.id,
+      actor_email: user?.email,
+      actor_role: user?.role || 'COORDINATOR',
+      action: 'DELETE_CHECKLIST',
+      target_table: 'installation_checklists',
+      target_id: existing.id,
+      details: {
+        checklist_number: existing.checklist_number,
+        client_name: existing.client_name,
+        service_engineer: existing.service_engineer,
+        installation_status: existing.installation_status,
+        safe_delete: true,
+      },
+    });
+  } catch (auditErr) {
+    console.warn('Could not record checklist deletion audit:', auditErr.message);
+  }
+
+  return {
+    success: true,
+    deletedId: existing.id,
+    checklistNumber: existing.checklist_number,
+    message: `Checklist ${existing.checklist_number} (${existing.client_name}) was permanently deleted.`,
+  };
+}
+
+/**
+ * Preview bulk checklist deletion eligibility across records.
+ * Identifies eligible drafts vs protected operational records.
+ */
+export async function previewChecklistsDeletion(params = {}) {
+  const checklistResult = await getChecklists({
+    limit: 1000,
+    search: params.search ? params.search.trim() : '',
+    serviceEngineer: params.engineer && params.engineer !== 'ALL' ? params.engineer : '',
+    status: params.status && params.status !== 'ALL' ? params.status : '',
+  });
+
+  const rawList = checklistResult?.checklists || [];
+
+  const eligibleChecklists = [];
+  const protectedChecklists = [];
+
+  const evaluated = await Promise.all(
+    rawList.map(async (chk) => {
+      try {
+        const el = await checkChecklistDeletionEligibility(chk);
+        return { chk, el };
+      } catch (e) {
+        return {
+          chk,
+          el: {
+            isEligible: false,
+            reasons: [`Error evaluating eligibility: ${e.message}`],
+            canCancel: false,
+          },
+        };
+      }
+    })
+  );
+
+  for (const { chk, el } of evaluated) {
+    if (el.isEligible) {
+      eligibleChecklists.push({
+        id: chk.id,
+        checklist_number: chk.checklist_number,
+        client_name: chk.client_name,
+        installation_status: chk.installation_status,
+        service_engineer: chk.service_engineer,
+        created_at: chk.created_at,
+      });
+    } else {
+      protectedChecklists.push({
+        id: chk.id,
+        checklist_number: chk.checklist_number,
+        client_name: chk.client_name,
+        installation_status: chk.installation_status,
+        service_engineer: chk.service_engineer,
+        reasons: el.reasons,
+        canCancel: el.canCancel,
+      });
+    }
+  }
+
+  return {
+    totalCount: rawList.length,
+    eligibleCount: eligibleChecklists.length,
+    protectedCount: protectedChecklists.length,
+    eligibleChecklists,
+    protectedChecklists,
+    explanation:
+      'Active assignments, completed reports, inventory transactions, and related business records prevent permanent deletion to preserve operational history and stock accountability.',
+  };
+}
+
+/**
+ * Delete all eligible draft checklists safely.
+ * Requires confirmation of the actual eligible count before executing.
+ * Never truncates tables or resets IDs.
+ */
+export async function safeDeleteAllEligibleChecklists({ user, confirmedCount, params = {} }) {
+  const preview = await previewChecklistsDeletion(params);
+
+  if (confirmedCount === undefined || confirmedCount === null) {
+    const err = new Error('Explicit confirmation of the eligible checklist count is required before proceeding.');
+    err.statusCode = 400;
+    err.preview = preview;
+    throw err;
+  }
+
+  const parsedConfirmed = Number(confirmedCount);
+  if (parsedConfirmed !== preview.eligibleCount) {
+    const err = new Error(
+      `Confirmation count mismatch: Confirmed count (${parsedConfirmed}) does not match current eligible count (${preview.eligibleCount}). Checklist records may have changed. Please refresh and review before confirming.`
+    );
+    err.statusCode = 400;
+    err.preview = preview;
+    throw err;
+  }
+
+  if (preview.eligibleCount === 0) {
+    return {
+      success: true,
+      totalProcessed: preview.totalCount,
+      deletedCount: 0,
+      skippedCount: preview.protectedCount,
+      failedCount: 0,
+      deletedChecklists: [],
+      skippedChecklists: preview.protectedChecklists,
+      failures: [],
+      message: 'No eligible draft checklists were found to delete. All checklists are protected.',
+    };
+  }
+
+  const deletedChecklists = [];
+  const failures = [];
+
+  for (const item of preview.eligibleChecklists) {
+    try {
+      await safeDeleteChecklist(item.id, user);
+      deletedChecklists.push({
+        id: item.id,
+        checklist_number: item.checklist_number,
+        client_name: item.client_name,
+      });
+    } catch (err) {
+      console.error(`Failed to delete eligible checklist ${item.checklist_number}:`, err.message);
+      failures.push({
+        id: item.id,
+        checklist_number: item.checklist_number,
+        client_name: item.client_name,
+        error: err.message,
+      });
+    }
+  }
+
+  try {
+    await logAudit({
+      actor_id: user?.id,
+      actor_email: user?.email,
+      actor_role: user?.role || 'COORDINATOR',
+      action: 'BULK_DELETE_CHECKLISTS',
+      target_table: 'installation_checklists',
+      target_id: 'bulk',
+      details: {
+        totalEvaluated: preview.totalCount,
+        eligibleCount: preview.eligibleCount,
+        deletedCount: deletedChecklists.length,
+        skippedProtectedCount: preview.protectedCount,
+        failedCount: failures.length,
+      },
+    });
+  } catch (auditErr) {
+    console.warn('Could not record bulk deletion audit:', auditErr.message);
+  }
+
+  return {
+    success: failures.length === 0,
+    totalProcessed: preview.totalCount,
+    deletedCount: deletedChecklists.length,
+    skippedCount: preview.protectedCount,
+    failedCount: failures.length,
+    deletedChecklists,
+    skippedChecklists: preview.protectedChecklists,
+    failures,
+    message:
+      failures.length === 0
+        ? `Successfully deleted ${deletedChecklists.length} eligible draft checklist(s). ${preview.protectedCount} protected checklist(s) were preserved.`
+        : `Deleted ${deletedChecklists.length} checklist(s). ${failures.length} failed. ${preview.protectedCount} protected checklist(s) were preserved.`,
+  };
+}
+
+/**
+ * Cancel a checklist when permanent deletion is unsafe.
+ * Releases engineer booking while preserving all reports, inventory, expenses, and history.
+ */
+export async function cancelChecklist({ checklistId, user, reason = 'Cancelled by Coordinator' }) {
+  const existing = await getChecklistById(checklistId, { enrich: false });
+
+  if (existing.installation_status === 'Cancelled') {
+    return {
+      success: true,
+      message: `Checklist ${existing.checklist_number} is already cancelled.`,
+      checklist: existing,
+    };
+  }
+
+  const updatedRemarks = existing.remarks
+    ? `${existing.remarks} [CANCELLED: ${reason}]`
+    : `[CANCELLED: ${reason}]`;
+
+  const updated = await updateChecklist(existing.id, {
+    installation_status: 'Cancelled',
+    remarks: updatedRemarks,
+  });
+
+  try {
+    await logAudit({
+      actor_id: user?.id,
+      actor_email: user?.email,
+      actor_role: user?.role || 'COORDINATOR',
+      action: 'CANCEL_CHECKLIST',
+      target_table: 'installation_checklists',
+      target_id: existing.id,
+      details: {
+        checklist_number: existing.checklist_number,
+        client_name: existing.client_name,
+        reason,
+        previous_status: existing.installation_status,
+      },
+    });
+  } catch (e) {}
+
+  return {
+    success: true,
+    message: `Checklist ${existing.checklist_number} has been cancelled. All operational reports, inventory records, and audit history are safely preserved.`,
+    checklist: updated,
+  };
+}
+
+/**
+ * Backward-compatible deleteChecklist that delegates to safeDeleteChecklist
+ */
+export async function deleteChecklist(id, user = null) {
+  return await safeDeleteChecklist(id, user);
 }
 
 /**

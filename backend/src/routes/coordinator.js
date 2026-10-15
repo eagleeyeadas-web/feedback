@@ -33,11 +33,108 @@ import {
   markNotificationRead,
   markAllNotificationsRead,
 } from '../services/appNotificationService.js';
+import {
+  previewChecklistsDeletion,
+  safeDeleteAllEligibleChecklists,
+  checkChecklistDeletionEligibility,
+  safeDeleteChecklist,
+  cancelChecklist,
+} from '../services/installationService.js';
 
 const router = Router();
 
 // Strict least-privilege access: ONLY COORDINATOR and ADMIN can access Coordinator workspace APIs
 router.use(requireRole('COORDINATOR', 'ADMIN'));
+
+/**
+ * GET /api/admin/coordinator/checklists/deletion-preview
+ * Previews eligible vs protected checklists for deletion.
+ */
+router.get('/checklists/deletion-preview', async (req, res) => {
+  try {
+    const preview = await previewChecklistsDeletion(req.query);
+    return res.json(preview);
+  } catch (err) {
+    console.error('Error in GET /coordinator/checklists/deletion-preview:', err);
+    return res.status(500).json({ error: err.message || 'Failed to preview checklists deletion' });
+  }
+});
+
+/**
+ * POST /api/admin/coordinator/checklists/delete-all
+ * Deletes all eligible draft checklists safely after confirming the eligible count.
+ */
+router.post('/checklists/delete-all', async (req, res) => {
+  try {
+    const result = await safeDeleteAllEligibleChecklists({
+      user: req.profile || req.user,
+      confirmedCount: req.body.confirmedCount,
+      params: req.body.params || {},
+    });
+    return res.json(result);
+  } catch (err) {
+    console.error('Error in POST /coordinator/checklists/delete-all:', err);
+    const status = err.statusCode || 500;
+    return res.status(status).json({
+      error: err.message || 'Failed to delete eligible checklists',
+      preview: err.preview || null,
+    });
+  }
+});
+
+/**
+ * GET /api/admin/coordinator/checklists/:id/deletion-check
+ * Evaluates whether a single checklist is eligible for permanent deletion or why it is protected.
+ */
+router.get('/checklists/:id/deletion-check', async (req, res) => {
+  try {
+    const check = await checkChecklistDeletionEligibility(req.params.id);
+    return res.json(check);
+  } catch (err) {
+    console.error('Error in GET /coordinator/checklists/:id/deletion-check:', err);
+    const status = err.statusCode || 500;
+    return res.status(status).json({ error: err.message || 'Failed to check deletion eligibility' });
+  }
+});
+
+/**
+ * DELETE /api/admin/coordinator/checklists/:id
+ * Permanently deletes an eligible draft checklist. Fails with 409 if dependencies exist.
+ */
+router.delete('/checklists/:id', async (req, res) => {
+  try {
+    const result = await safeDeleteChecklist(req.params.id, req.profile || req.user);
+    return res.json(result);
+  } catch (err) {
+    console.error('Error in DELETE /coordinator/checklists/:id:', err);
+    const status = err.statusCode || 500;
+    return res.status(status).json({
+      error: err.message || 'Failed to delete checklist',
+      reasons: err.reasons || [],
+      canCancel: err.canCancel || false,
+      checklist: err.checklist || null,
+    });
+  }
+});
+
+/**
+ * POST /api/admin/coordinator/checklists/:id/cancel
+ * Cancels a checklist when permanent deletion is unsafe, preserving operational history.
+ */
+router.post('/checklists/:id/cancel', async (req, res) => {
+  try {
+    const result = await cancelChecklist({
+      checklistId: req.params.id,
+      user: req.profile || req.user,
+      reason: req.body.reason || 'Cancelled by Coordinator',
+    });
+    return res.json(result);
+  } catch (err) {
+    console.error('Error in POST /coordinator/checklists/:id/cancel:', err);
+    const status = err.statusCode || 500;
+    return res.status(status).json({ error: err.message || 'Failed to cancel checklist' });
+  }
+});
 
 /**
  * GET /api/admin/coordinator/bookings

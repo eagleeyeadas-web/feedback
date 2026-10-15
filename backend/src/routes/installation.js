@@ -7,6 +7,7 @@ import {
   getChecklistById,
   updateChecklist,
   deleteChecklist,
+  safeDeleteChecklist,
   getInstallationStats,
   getServiceEngineers,
 } from '../services/installationService.js';
@@ -30,12 +31,14 @@ import {
   startInstallationJob,
   submitInstallationCompletionReport,
   getInstallationCompletionReport,
+  getAdditionalCustomerInstallations,
   getPendingStoreReturns,
   getPendingStoreMaterialReturns,
   getAllStoreReturns,
   getAllStoreMaterialReturns,
   enrichChecklistsWithWorkflowStatus,
 } from '../services/workflowService.js';
+import { STANDARD_DEVICE_CONFIGURATIONS } from '../services/deviceSetService.js';
 import multer from 'multer';
 import {
   getExpensesForChecklist,
@@ -501,15 +504,21 @@ router.put('/:id', requireRole('SALES', 'ADMIN'), async (req, res) => {
 
 /**
  * DELETE /api/admin/installations/:id
- * Delete an installation checklist (ADMIN only)
+ * Delete an installation checklist (COORDINATOR or ADMIN only)
  */
-router.delete('/:id', requireAdmin, async (req, res) => {
+router.delete('/:id', requireRole('COORDINATOR', 'ADMIN', 'SUPER_ADMIN'), async (req, res) => {
   try {
-    const result = await deleteChecklist(req.params.id);
+    const result = await safeDeleteChecklist(req.params.id, req.profile || req.user);
     return res.json(result);
   } catch (err) {
     console.error('Error in DELETE /installations/:id:', err);
-    return res.status(500).json({ error: err.message || 'Failed to delete installation checklist' });
+    const status = err.statusCode || 500;
+    return res.status(status).json({
+      error: err.message || 'Failed to delete installation checklist',
+      reasons: err.reasons || [],
+      canCancel: err.canCancel || false,
+      checklist: err.checklist || null,
+    });
   }
 });
 
@@ -600,17 +609,58 @@ router.get('/:id/completion-report', requireRole('ADMIN', 'SALES', 'TECHNICAL', 
 });
 
 /**
+ * GET /api/admin/installations/device-configurations
+ * Authoritative component breakdown rules for camera configurations
+ */
+router.get('/device-configurations', requireRole('TECHNICAL', 'COORDINATOR', 'ADMIN', 'SUPER_ADMIN', 'SALES', 'STORE_MANAGER'), async (req, res) => {
+  try {
+    return res.json(STANDARD_DEVICE_CONFIGURATIONS);
+  } catch (err) {
+    console.error('Error fetching device configurations:', err);
+    return res.status(500).json({ error: 'Failed to fetch device configurations' });
+  }
+});
+
+/**
+ * GET /api/admin/installations/:id/additional-installations
+ * Get additional customer installations for a checklist
+ */
+router.get('/:id/additional-installations', requireRole('TECHNICAL', 'COORDINATOR', 'ADMIN', 'SUPER_ADMIN'), async (req, res) => {
+  try {
+    const list = await getAdditionalCustomerInstallations({ checklist_id: req.params.id });
+    return res.json(list);
+  } catch (err) {
+    console.error('Error fetching additional installations:', err);
+    return res.status(500).json({ error: err.message || 'Failed to fetch additional customer installations' });
+  }
+});
+
+/**
  * POST /api/admin/installations/:id/completion-report
  * Submit Post-Installation Completion Form (TECHNICAL, ADMIN)
  */
 router.post('/:id/completion-report', requireRole('TECHNICAL', 'ADMIN'), async (req, res) => {
   try {
-    const { items, device_items, completion_status, remarks, material_items, materials } = req.body;
+    const {
+      items,
+      device_items,
+      completion_status,
+      remarks,
+      material_items,
+      materials,
+      backup_items,
+      backupItems,
+      extra_installations,
+      additional_customer_installations,
+    } = req.body;
+
     const result = await submitInstallationCompletionReport({
       checklist_id: req.params.id,
       user: req.profile,
       items: items || device_items,
       material_items: material_items || materials,
+      backup_items: backup_items || backupItems,
+      extra_installations: extra_installations || additional_customer_installations,
       completion_status,
       remarks,
     });

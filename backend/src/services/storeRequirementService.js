@@ -11,7 +11,7 @@ import { enrichChecklistsWithWorkflowStatus } from './workflowService.js';
 import { getBackupDeclaration, issueBackupItemsForChecklist } from './backupItemService.js';
 
 // In-memory fallback cache
-const inMemoryStoreRequirements = new Map();
+export const inMemoryStoreRequirements = new Map();
 
 /**
  * Automatically create or update the associated Store Manager material-requirement record

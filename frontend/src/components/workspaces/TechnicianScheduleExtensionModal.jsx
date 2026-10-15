@@ -107,18 +107,18 @@ export default function TechnicianScheduleExtensionModal({
     setError('');
 
     if (!requestedCompletionDate) {
-      setError('Please select the new expected completion date.');
+      setError('Please select the new availability date.');
       return;
     }
 
     if (arrivalDate && requestedCompletionDate < arrivalDate) {
-      setError(`New expected completion date cannot be before arrival date (${arrivalDate}).`);
+      setError(`New availability date cannot be before arrival date (${arrivalDate}).`);
       return;
     }
 
     if (currentCompletionDate && requestedCompletionDate <= currentCompletionDate) {
       setError(
-        `New expected completion date must be after current expected completion date (${formatDisplayDate(currentCompletionDate)}).`
+        `New availability date must be after current availability date (${formatDisplayDate(currentCompletionDate)}).`
       );
       return;
     }
@@ -129,7 +129,7 @@ export default function TechnicianScheduleExtensionModal({
         : selectedReason;
 
     if (selectedReason === 'Other' && !customReason.trim()) {
-      setError('Please specify the reason for extension.');
+      setError('Please specify the reason for date change.');
       return;
     }
 
@@ -151,8 +151,8 @@ export default function TechnicianScheduleExtensionModal({
       }
       onClose();
     } catch (err) {
-      console.error('Failed to submit extension request:', err);
-      setError(err.message || 'Failed to submit extension request. Please try again.');
+      console.error('Failed to submit availability date request:', err);
+      setError(err.message || 'Failed to submit availability date request. Please try again.');
     } finally {
       setSubmitting(false);
     }
@@ -164,7 +164,7 @@ export default function TechnicianScheduleExtensionModal({
         {/* Header */}
         <div className="flex items-start justify-between border-b border-gray-100 pb-3">
           <div>
-            <h2 className="text-base font-bold text-gray-900">Request Date Extension</h2>
+            <h2 className="text-base font-bold text-gray-900">Update Availability Date</h2>
             <p className="text-xs text-gray-500 font-mono mt-0.5">
               {checklist?.checklist_number ? `#${checklist.checklist_number}` : 'Checklist'}
             </p>
@@ -194,16 +194,16 @@ export default function TechnicianScheduleExtensionModal({
             <div className="p-3 bg-amber-50 border border-amber-200 text-amber-900 rounded-xl space-y-1">
               <div className="flex items-center gap-1.5 font-bold text-amber-900">
                 <Clock className="w-4 h-4 text-amber-600 shrink-0" />
-                <span>Extension Request Pending Review</span>
+                <span>Availability Date Request Pending Review</span>
               </div>
               <p className="text-[11px] text-amber-700">
-                An extension request has already been submitted for this checklist and is awaiting Coordinator review. Duplicate submissions are not permitted.
+                An availability date update request has already been submitted for this checklist and is awaiting Coordinator review. Duplicate submissions are not permitted.
               </p>
             </div>
 
             <div className="bg-gray-50 border border-gray-200 rounded-xl p-3.5 space-y-2">
               <div className="flex justify-between">
-                <span className="text-gray-500 font-medium">Current Expected Completion:</span>
+                <span className="text-gray-500 font-medium">Current Availability Date:</span>
                 <span className="font-bold text-gray-900 font-mono">
                   {formatDisplayDate(
                     pendingRequest.current_dates?.completion_date ||
@@ -213,13 +213,13 @@ export default function TechnicianScheduleExtensionModal({
                 </span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-500 font-medium">Requested New Completion:</span>
+                <span className="text-gray-500 font-medium">Requested New Availability Date:</span>
                 <span className="font-bold text-amber-700 font-mono">
                   {formatDisplayDate(pendingRequest.requested_completion_date)}
                 </span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-500 font-medium">Reason for Extension:</span>
+                <span className="text-gray-500 font-medium">Reason for Date Change:</span>
                 <span className="font-semibold text-gray-800 text-right max-w-[60%]">
                   {pendingRequest.reason}
                 </span>
@@ -254,18 +254,18 @@ export default function TechnicianScheduleExtensionModal({
         ) : (
           /* Case 2: New Request Form */
           <form onSubmit={handleSubmit} className="space-y-3.5 text-xs">
-            {/* Current Expected Completion Date (Read-Only) */}
+            {/* Current Availability Date (Read-Only) */}
             <div className="bg-gray-50 border border-gray-200/80 rounded-xl px-3.5 py-2.5 flex items-center justify-between text-xs">
-              <span className="text-gray-600 font-medium">Current Expected Completion Date</span>
+              <span className="text-gray-600 font-medium">Current Availability Date</span>
               <span className="font-bold text-gray-900 font-mono">
                 {formatDisplayDate(currentCompletionDate)}
               </span>
             </div>
 
-            {/* New Expected Completion Date (Required Date Picker) */}
+            {/* New Availability Date (Required Date Picker) */}
             <div>
               <label htmlFor="new-completion-date" className="block text-gray-700 font-semibold mb-1">
-                New Expected Completion Date <span className="text-red-500">*</span>
+                New Availability Date <span className="text-red-500">*</span>
               </label>
               <input
                 id="new-completion-date"
@@ -278,10 +278,10 @@ export default function TechnicianScheduleExtensionModal({
               />
             </div>
 
-            {/* Reason for Extension (Required Dropdown) */}
+            {/* Reason for Date Change (Required Dropdown) */}
             <div>
               <label htmlFor="extension-reason" className="block text-gray-700 font-semibold mb-1">
-                Reason for Extension <span className="text-red-500">*</span>
+                Reason for Date Change <span className="text-red-500">*</span>
               </label>
               <select
                 id="extension-reason"
@@ -309,7 +309,7 @@ export default function TechnicianScheduleExtensionModal({
                   type="text"
                   value={customReason}
                   onChange={(e) => setCustomReason(e.target.value)}
-                  placeholder="Specify reason for extension..."
+                  placeholder="Specify reason for date change..."
                   required
                   className="w-full px-3 py-2 bg-white border border-gray-300 rounded-xl font-medium text-gray-900 focus:outline-hidden focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition"
                 />
@@ -374,7 +374,7 @@ export default function TechnicianScheduleExtensionModal({
                     <span>Submitting...</span>
                   </>
                 ) : (
-                  'Submit Extension Request'
+                  'Submit Availability Date Request'
                 )}
               </button>
             </div>

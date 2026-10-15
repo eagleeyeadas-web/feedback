@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../../hooks/useAuth';
 import {
   Package,
@@ -25,8 +25,11 @@ import {
   ChevronRight,
   Calendar,
   User,
-  DollarSign,
   Trash2,
+  ChevronDown,
+  ChevronUp,
+  Lock,
+  Unlock,
 } from 'lucide-react';
 import StoreBomManager from '../../../components/bom/StoreBomManager';
 import StoreInstallationRequirements from '../../../components/bom/StoreInstallationRequirements';
@@ -50,6 +53,10 @@ import {
   clearStockMovementsHistoryApi,
   deleteStoreReturnApi,
   clearStoreReturnsHistoryApi,
+  fetchCalculatedDeviceSets,
+  fetchDeviceAllocationsApi,
+  allocateDeviceSetsApi,
+  releaseDeviceAllocationApi,
 } from '../../../lib/api';
 
 const STANDARD_DEVICE_TYPES = [
@@ -130,6 +137,23 @@ export default function StoreWorkspace({ onSelectChecklist }) {
   const [submittingModal, setSubmittingModal] = useState(false);
   const [modalError, setModalError] = useState('');
 
+  // Dynamic Calculated Device Sets & Allocations
+  const [calculatedSets, setCalculatedSets] = useState({
+    configurations: [],
+    loose_components: [],
+    active_allocations: [],
+  });
+  const [allocations, setAllocations] = useState([]);
+  const [allocatingConfig, setAllocatingConfig] = useState(null);
+  const [allocateSetsQty, setAllocateSetsQty] = useState('1');
+  const [allocateNotes, setAllocateNotes] = useState('');
+  const [allocatingLoading, setAllocatingLoading] = useState(false);
+  const [allocateError, setAllocateError] = useState('');
+  const [releasingAllocation, setReleasingAllocation] = useState(null);
+  const [releaseReason, setReleaseReason] = useState('');
+  const [releasingLoading, setReleasingLoading] = useState(false);
+  const [expandedBreakdowns, setExpandedBreakdowns] = useState({});
+
   // Add New Device Model State
   const [addDeviceModalOpen, setAddDeviceModalOpen] = useState(false);
   const [newDeviceForm, setNewDeviceForm] = useState({
@@ -150,7 +174,7 @@ export default function StoreWorkspace({ onSelectChecklist }) {
     setLoading(true);
 
     try {
-      const [prodData, matData, sumData, movData, returnsData, reqData] = await Promise.all([
+      const [prodData, matData, sumData, movData, returnsData, reqData, calcData, allocData] = await Promise.all([
         fetchInventoryProducts(token).catch(() => []),
         fetchMaterialInventory(token).catch(() => []),
         fetchInventorySummary(token).catch(() => null),
@@ -163,6 +187,8 @@ export default function StoreWorkspace({ onSelectChecklist }) {
         }).catch(() => ({ transactions: [], totalCount: 0, totalPages: 1 })),
         fetchAllStoreReturns(token).catch(() => []),
         fetchStoreMaterialRequirements(token, { limit: 15, issuance_status: 'PENDING' }).catch(() => ({ requirements: [] })),
+        fetchCalculatedDeviceSets(token).catch(() => ({ configurations: [], loose_components: [], active_allocations: [] })),
+        fetchDeviceAllocationsApi(token).catch(() => []),
       ]);
 
       setProducts(prodData || []);
@@ -172,6 +198,8 @@ export default function StoreWorkspace({ onSelectChecklist }) {
       setMovementTotalPages(movData.totalPages || 1);
       setStoreReturns(returnsData || []);
       setPendingRequirements(reqData.requirements || []);
+      setCalculatedSets(calcData || { configurations: [], loose_components: [], active_allocations: [] });
+      setAllocations(allocData || []);
 
       if (sumData) {
         setSummary(sumData);
@@ -600,6 +628,96 @@ export default function StoreWorkspace({ onSelectChecklist }) {
   // Requirements with shortage
   const shortageJobs = pendingRequirements.filter((r) => r.has_shortage);
 
+  // Authoritative Configurations List for UI Display
+  const displayConfigs = (calculatedSets.configurations && calculatedSets.configurations.length > 0)
+    ? calculatedSets.configurations
+    : products.map((p) => ({
+        device_type: p.device_type,
+        max_possible_sets: Number(p.usable_stock) || 0,
+        currently_allocated_sets: Number(p.reserved_stock) || 0,
+        allocation_status: (Number(p.reserved_stock) || 0) > 0 ? 'ALLOCATED' : 'NOT_ALLOCATED',
+        limiting_component: p.limiting_component || null,
+        components_required: p.components_required || [],
+        active_allocations: [],
+      }));
+
+  // Handle Toggle Component Breakdown
+  const toggleBreakdown = (deviceType) => {
+    setExpandedBreakdowns((prev) => ({
+      ...prev,
+      [deviceType]: !prev[deviceType],
+    }));
+  };
+
+  // Handle Open Stock Allocation Modal
+  const handleOpenAllocateModal = (config) => {
+    setAllocatingConfig(config);
+    setAllocateSetsQty('1');
+    setAllocateNotes('');
+    setAllocateError('');
+  };
+
+  // Handle Confirm Stock Allocation
+  const handleConfirmAllocation = async (e) => {
+    e.preventDefault();
+    if (!allocatingConfig || allocatingLoading) return;
+    setAllocateError('');
+
+    const qty = parseInt(allocateSetsQty, 10);
+    if (isNaN(qty) || qty <= 0) {
+      setAllocateError('Please enter a valid whole number of sets (1 or more).');
+      return;
+    }
+
+    if (qty > allocatingConfig.max_possible_sets) {
+      setAllocateError(
+        `Cannot allocate ${qty} sets. Maximum possible based on available unallocated components is currently ${allocatingConfig.max_possible_sets} sets.`
+      );
+      return;
+    }
+
+    setAllocatingLoading(true);
+    try {
+      await allocateDeviceSetsApi(token, {
+        device_type: allocatingConfig.device_type,
+        sets_to_allocate: qty,
+        notes: allocateNotes.trim(),
+      });
+      showToast(`Allocated ${qty} sets of ${allocatingConfig.device_type} successfully! Required components reserved.`);
+      setAllocatingConfig(null);
+      await loadAllData();
+    } catch (err) {
+      console.error('Failed to allocate sets:', err);
+      setAllocateError(err.message || 'Failed to allocate stock. Please verify available loose components.');
+    } finally {
+      setAllocatingLoading(false);
+    }
+  };
+
+  // Handle Open Release Allocation Modal
+  const handleOpenReleaseModal = (allocation) => {
+    setReleasingAllocation(allocation);
+    setReleaseReason('');
+  };
+
+  // Handle Confirm Release Allocation
+  const handleConfirmRelease = async (e) => {
+    e.preventDefault();
+    if (!releasingAllocation || releasingLoading) return;
+    setReleasingLoading(true);
+    try {
+      await releaseDeviceAllocationApi(token, releasingAllocation.id, releaseReason.trim());
+      showToast(`Allocation for ${releasingAllocation.device_type} released! Reserved components returned to unallocated stock.`);
+      setReleasingAllocation(null);
+      await loadAllData();
+    } catch (err) {
+      console.error('Failed to release allocation:', err);
+      showToast(err.message || 'Failed to release allocation');
+    } finally {
+      setReleasingLoading(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Toast Alert */}
@@ -865,18 +983,19 @@ export default function StoreWorkspace({ onSelectChecklist }) {
       )}
 
       {/* ============================================================
-          TAB 2: CAMERA DEVICES
+          TAB 2: CAMERA DEVICES (CALCULATED DEVICE AVAILABILITY)
           ============================================================ */}
       {activeTab === 'devices' && (
         <div className="space-y-4">
+          {/* Header */}
           <div className="bg-white p-4 rounded-2xl border border-gray-200 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
             <div>
               <h2 className="text-sm font-bold text-gray-900 flex items-center gap-2">
                 <HardDrive className="w-4 h-4 text-amber-600" />
-                <span>Camera Device Products ({products.length} Models)</span>
+                <span>Calculated Device Availability ({displayConfigs.length} Configurations)</span>
               </h2>
               <p className="text-gray-500 mt-0.5">
-                Configurable inventory entries for all camera device models, tracked separately from installation materials.
+                Device sets are calculated in real time from available loose components. Never maintained as separate physical balances.
               </p>
             </div>
             <button
@@ -894,10 +1013,94 @@ export default function StoreWorkspace({ onSelectChecklist }) {
               className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-bold text-xs shadow-xs transition-colors cursor-pointer self-start sm:self-auto"
             >
               <Plus className="w-4 h-4" />
-              <span>Add Device</span>
+              <span>Add Device Model</span>
             </button>
           </div>
 
+          {/* Shared-Stock Policy Banner */}
+          <div className="p-3.5 bg-amber-50/80 border border-amber-200 rounded-2xl text-xs space-y-1.5 text-amber-950">
+            <div className="flex items-center gap-1.5 font-bold">
+              <Info className="w-4 h-4 text-amber-700 shrink-0" />
+              <span>Shared-Stock Allocation Notice</span>
+            </div>
+            <p className="text-[11px] text-amber-900 leading-relaxed">
+              <strong>Maximum Possible Sets</strong> are independent estimates assuming the entire unallocated component inventory is allocated to that model. Because configurations share common components (e.g. Cameras), they cannot be claimed simultaneously. Use <strong>Allocate Stock</strong> to reserve components for a specific model, which will immediately update availability for all other configurations.
+            </p>
+          </div>
+
+          {/* Loose Component Stock Overview Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {/* Cameras */}
+            {(() => {
+              const cam = calculatedSets.loose_components?.find((c) => c.name.toLowerCase() === 'camera') || { total_stock: 0, allocated_stock: 0, unallocated_stock: 0 };
+              const camMat = materials.find((m) => m.material_name.toLowerCase() === 'camera') || { material_name: 'Camera', unit: 'Nos.', current_stock: cam.total_stock };
+              return (
+                <div className="bg-white p-3.5 rounded-2xl border border-gray-200 shadow-xs flex items-center justify-between">
+                  <div>
+                    <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">Loose Cameras</span>
+                    <span className="text-xl font-black text-gray-900 mt-0.5 block">{cam.unallocated_stock} Nos. Free</span>
+                    <span className="text-[10px] text-gray-400 block">Total: {cam.total_stock} | Reserved: {cam.allocated_stock}</span>
+                  </div>
+                  <button
+                    onClick={() => openManageStockModal(camMat, 'MATERIAL')}
+                    className="px-2.5 py-1 text-xs font-semibold text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg transition-colors cursor-pointer flex items-center gap-1"
+                    title="Manage Camera Stock"
+                  >
+                    <SlidersHorizontal size={12} className="text-amber-600" />
+                    <span>Manage</span>
+                  </button>
+                </div>
+              );
+            })()}
+
+            {/* Live Displays */}
+            {(() => {
+              const live = calculatedSets.loose_components?.find((c) => c.name.toLowerCase() === 'live display') || { total_stock: 0, allocated_stock: 0, unallocated_stock: 0 };
+              const liveMat = materials.find((m) => m.material_name.toLowerCase() === 'live display') || { material_name: 'Live Display', unit: 'Nos.', current_stock: live.total_stock };
+              return (
+                <div className="bg-white p-3.5 rounded-2xl border border-gray-200 shadow-xs flex items-center justify-between">
+                  <div>
+                    <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">Live Displays</span>
+                    <span className="text-xl font-black text-gray-900 mt-0.5 block">{live.unallocated_stock} Nos. Free</span>
+                    <span className="text-[10px] text-gray-400 block">Total: {live.total_stock} | Reserved: {live.allocated_stock}</span>
+                  </div>
+                  <button
+                    onClick={() => openManageStockModal(liveMat, 'MATERIAL')}
+                    className="px-2.5 py-1 text-xs font-semibold text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg transition-colors cursor-pointer flex items-center gap-1"
+                    title="Manage Live Display Stock"
+                  >
+                    <SlidersHorizontal size={12} className="text-amber-600" />
+                    <span>Manage</span>
+                  </button>
+                </div>
+              );
+            })()}
+
+            {/* Recording Displays */}
+            {(() => {
+              const rec = calculatedSets.loose_components?.find((c) => c.name.toLowerCase() === 'recording display') || { total_stock: 0, allocated_stock: 0, unallocated_stock: 0 };
+              const recMat = materials.find((m) => m.material_name.toLowerCase() === 'recording display') || { material_name: 'Recording Display', unit: 'Nos.', current_stock: rec.total_stock };
+              return (
+                <div className="bg-white p-3.5 rounded-2xl border border-gray-200 shadow-xs flex items-center justify-between">
+                  <div>
+                    <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">Recording Displays</span>
+                    <span className="text-xl font-black text-gray-900 mt-0.5 block">{rec.unallocated_stock} Nos. Free</span>
+                    <span className="text-[10px] text-gray-400 block">Total: {rec.total_stock} | Reserved: {rec.allocated_stock}</span>
+                  </div>
+                  <button
+                    onClick={() => openManageStockModal(recMat, 'MATERIAL')}
+                    className="px-2.5 py-1 text-xs font-semibold text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg transition-colors cursor-pointer flex items-center gap-1"
+                    title="Manage Recording Display Stock"
+                  >
+                    <SlidersHorizontal size={12} className="text-amber-600" />
+                    <span>Manage</span>
+                  </button>
+                </div>
+              );
+            })()}
+          </div>
+
+          {/* Device Configurations Table */}
           <div className="bg-white rounded-2xl border border-gray-200 shadow-xs overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse text-xs">
@@ -909,33 +1112,164 @@ export default function StoreWorkspace({ onSelectChecklist }) {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {products.length === 0 ? (
+                  {displayConfigs.length === 0 ? (
                     <tr>
                       <td colSpan="3" className="py-8 text-center text-gray-400">
-                        No camera devices found.
+                        No camera device configurations found.
                       </td>
                     </tr>
                   ) : (
-                    products.map((p) => {
-                      const usable = Number(p.usable_stock) || 0;
+                    displayConfigs.map((cfg) => {
+                      const isExpanded = !!expandedBreakdowns[cfg.device_type];
+                      const reqText = (cfg.components_required || [])
+                        .map((c) => `${c.quantity_required_per_set} ${c.component_name}s`)
+                        .join(' + ');
+
                       return (
-                        <tr key={p.id || p.device_type} className="hover:bg-amber-50/20 transition-colors">
-                          <td className="py-3.5 px-6 font-bold text-gray-900 text-xs sm:text-sm">
-                            {p.device_type}
-                          </td>
-                          <td className="py-3.5 px-6 text-center font-bold font-mono text-xs sm:text-sm text-gray-900">
-                            {usable} Nos.
-                          </td>
-                          <td className="py-3.5 px-6 text-right">
-                            <button
-                              onClick={() => openManageStockModal(p, 'DEVICE')}
-                              className="px-3.5 py-1.5 text-xs font-semibold text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-xl transition-all shadow-xs cursor-pointer inline-flex items-center gap-1.5"
-                            >
-                              <SlidersHorizontal className="w-3.5 h-3.5 text-amber-600" />
-                              <span>Manage Stock</span>
-                            </button>
-                          </td>
-                        </tr>
+                        <React.Fragment key={cfg.device_type}>
+                          <tr className="hover:bg-amber-50/20 transition-colors">
+                            {/* Item Column */}
+                            <td className="py-3.5 px-6">
+                              <div className="space-y-1">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-bold text-gray-900 text-xs sm:text-sm">
+                                    {cfg.device_type}
+                                  </span>
+                                  {cfg.currently_allocated_sets > 0 ? (
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                                      <Lock size={10} />
+                                      <span>Allocated: {cfg.currently_allocated_sets} Sets</span>
+                                    </span>
+                                  ) : (
+                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-gray-100 text-gray-600">
+                                      Not Allocated
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="text-[11px] text-gray-500 font-medium">
+                                  Requires: {reqText}
+                                </div>
+                              </div>
+                            </td>
+
+                            {/* Stock Remaining Column */}
+                            <td className="py-3.5 px-6 text-center">
+                              <div className="space-y-0.5">
+                                <span className="font-black font-mono text-base text-gray-900 block">
+                                  {cfg.max_possible_sets} Sets
+                                </span>
+                                <span className="text-[10px] uppercase font-bold text-gray-400 tracking-wider block">
+                                  Maximum Possible Sets
+                                </span>
+                                {cfg.max_possible_sets === 0 ? (
+                                  <span className="text-[10px] font-semibold text-rose-600 block">
+                                    Insufficient {cfg.limiting_component || 'Components'}
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] font-semibold text-emerald-600 block">
+                                    Ready to assemble
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+
+                            {/* Actions Column */}
+                            <td className="py-3.5 px-6 text-right">
+                              <div className="flex items-center justify-end gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => toggleBreakdown(cfg.device_type)}
+                                  className="px-2.5 py-1.5 text-xs font-semibold text-gray-700 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-xl transition-all shadow-2xs cursor-pointer inline-flex items-center gap-1"
+                                  title="View required components and stock breakdown"
+                                >
+                                  <span>Components</span>
+                                  {isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                                </button>
+
+                                {cfg.max_possible_sets > 0 ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenAllocateModal(cfg)}
+                                    className="px-3 py-1.5 text-xs font-bold text-amber-900 bg-amber-100 hover:bg-amber-200 border border-amber-300 rounded-xl transition-all shadow-2xs cursor-pointer inline-flex items-center gap-1"
+                                    title={`Allocate stock to ${cfg.device_type}`}
+                                  >
+                                    <Lock size={12} className="text-amber-700" />
+                                    <span>Allocate</span>
+                                  </button>
+                                ) : (
+                                  <span
+                                    className="px-2.5 py-1.5 text-[11px] font-semibold text-gray-400 bg-gray-50 border border-gray-200 rounded-xl cursor-not-allowed inline-flex items-center gap-1"
+                                    title="Insufficient loose components available"
+                                  >
+                                    <Lock size={12} className="text-gray-300" />
+                                    <span>Allocate</span>
+                                  </span>
+                                )}
+
+                                {cfg.currently_allocated_sets > 0 && cfg.active_allocations?.[0] && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenReleaseModal(cfg.active_allocations[0])}
+                                    className="px-2.5 py-1.5 text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-xl transition-all shadow-2xs cursor-pointer inline-flex items-center gap-1"
+                                    title="Release reserved allocation"
+                                  >
+                                    <Unlock size={12} className="text-rose-600" />
+                                    <span>Release</span>
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+
+                          {/* Collapsible Component Breakdown Drawer */}
+                          {isExpanded && (
+                            <tr className="bg-amber-50/40 border-b border-gray-100">
+                              <td colSpan="3" className="py-3 px-6">
+                                <div className="p-3 bg-white rounded-xl border border-amber-200 shadow-2xs space-y-2 text-xs">
+                                  <div className="flex items-center justify-between pb-1.5 border-b border-gray-100">
+                                    <span className="font-bold text-gray-900">
+                                      Component Availability Breakdown for {cfg.device_type}
+                                    </span>
+                                    <span className="text-[11px] text-gray-500">
+                                      Limiting Component:{' '}
+                                      <strong className="text-amber-800">
+                                        {cfg.limiting_component || 'None (Balanced)'}
+                                      </strong>
+                                    </span>
+                                  </div>
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                    {(cfg.components_required || []).map((comp) => (
+                                      <div
+                                        key={comp.component_name}
+                                        className="p-2.5 rounded-lg border border-gray-100 bg-gray-50 flex items-center justify-between"
+                                      >
+                                        <div>
+                                          <span className="font-bold text-gray-900 block">
+                                            {comp.component_name}
+                                          </span>
+                                          <span className="text-[11px] text-gray-500 block">
+                                            Requires {comp.quantity_required_per_set} {comp.unit || 'Nos.'} per set
+                                          </span>
+                                          <span className="text-[10px] text-gray-400 block">
+                                            Total Usable: {comp.total_usable_stock} | Reserved: {comp.allocated_stock}
+                                          </span>
+                                        </div>
+                                        <div className="text-right">
+                                          <span className="font-black font-mono text-sm text-gray-900 block">
+                                            {comp.unallocated_available_stock} {comp.unit || 'Nos.'} free
+                                          </span>
+                                          <span className="text-[10px] text-amber-800 font-bold block">
+                                            Supports {comp.sets_supported} sets
+                                          </span>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
                       );
                     })
                   )}
@@ -2299,6 +2633,195 @@ export default function StoreWorkspace({ onSelectChecklist }) {
                 <span>{deletingReturns ? 'Deleting Records...' : 'Confirm & Delete Records'}</span>
               </button>
             </div>
+          </div>
+        </div>
+      )}
+      {/* 10. Controlled Stock Allocation Modal */}
+      {allocatingConfig && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 border border-amber-200 animate-in fade-in zoom-in-95 duration-150 text-xs">
+            <div className="flex items-center justify-between pb-3 border-b border-gray-100">
+              <div className="flex items-center gap-2 text-amber-700">
+                <div className="p-2 bg-amber-100 rounded-xl">
+                  <Lock className="w-5 h-5 text-amber-600" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-gray-900">Allocate Stock to {allocatingConfig.device_type}</h3>
+                  <p className="text-[11px] text-gray-500">Controlled reservation of loose component inventory</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAllocatingConfig(null)}
+                className="text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-gray-100 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {allocateError && (
+              <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-xs font-semibold flex items-center gap-2">
+                <AlertTriangle size={14} className="shrink-0" />
+                <span>{allocateError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleConfirmAllocation} className="space-y-4">
+              <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 space-y-1 text-amber-950">
+                <span className="font-bold block">Component Requirements per Set:</span>
+                <ul className="text-[11px] list-disc list-inside space-y-0.5 text-amber-900">
+                  {(allocatingConfig.components_required || []).map((comp) => (
+                    <li key={comp.component_name}>
+                      {comp.quantity_required_per_set} {comp.component_name} (Current unallocated: {comp.unallocated_available_stock})
+                    </li>
+                  ))}
+                </ul>
+                <span className="text-[10px] text-amber-700 block pt-1 border-t border-amber-200">
+                  Maximum sets you can allocate right now: <strong>{allocatingConfig.max_possible_sets} Sets</strong>
+                </span>
+              </div>
+
+              <div>
+                <label className="block font-bold text-gray-700 mb-1">
+                  Number of Sets to Allocate <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  max={allocatingConfig.max_possible_sets}
+                  value={allocateSetsQty}
+                  onChange={(e) => setAllocateSetsQty(e.target.value)}
+                  required
+                  className="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-xl font-mono font-bold text-gray-900 focus:outline-hidden focus:border-amber-500 text-sm"
+                />
+              </div>
+
+              {/* Dynamic Preview of Component Reservation */}
+              {(() => {
+                const qty = parseInt(allocateSetsQty, 10) || 0;
+                if (qty <= 0) return null;
+                return (
+                  <div className="p-2.5 bg-gray-50 rounded-xl border border-gray-200 text-[11px] space-y-1">
+                    <span className="font-bold text-gray-700 block">Components to be reserved:</span>
+                    {(allocatingConfig.components_required || []).map((comp) => {
+                      const totalToReserve = comp.quantity_required_per_set * qty;
+                      const remaining = Math.max(0, comp.unallocated_available_stock - totalToReserve);
+                      return (
+                        <div key={comp.component_name} className="flex justify-between text-gray-600">
+                          <span>{comp.component_name}:</span>
+                          <span className="font-mono font-semibold text-gray-900">
+                            {totalToReserve} Nos. (Remaining free: {remaining})
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+
+              <div>
+                <label className="block font-bold text-gray-700 mb-1">
+                  Allocation Notes / Reference (Optional)
+                </label>
+                <textarea
+                  rows="2"
+                  value={allocateNotes}
+                  onChange={(e) => setAllocateNotes(e.target.value)}
+                  placeholder="e.g. Reserved for high-priority dispatch or batch allocation"
+                  className="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-xl text-xs text-gray-900 focus:outline-hidden focus:border-amber-500 resize-none"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100">
+                <button
+                  type="button"
+                  disabled={allocatingLoading}
+                  onClick={() => setAllocatingConfig(null)}
+                  className="px-4 py-2 font-semibold text-gray-600 hover:bg-gray-100 rounded-xl text-xs cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={allocatingLoading}
+                  className="px-5 py-2 font-bold text-white bg-amber-600 hover:bg-amber-700 disabled:opacity-50 rounded-xl text-xs flex items-center gap-1.5 cursor-pointer shadow-xs transition-colors"
+                >
+                  <Lock className="w-3.5 h-3.5" />
+                  <span>{allocatingLoading ? 'Allocating...' : 'Confirm Allocation'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 11. Release Stock Allocation Confirmation Modal */}
+      {releasingAllocation && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 border border-rose-100 animate-in fade-in zoom-in-95 duration-150 text-xs">
+            <div className="flex items-center justify-between pb-3 border-b border-gray-100">
+              <div className="flex items-center gap-2 text-rose-700">
+                <div className="p-2 bg-rose-100 rounded-xl">
+                  <Unlock className="w-5 h-5 text-rose-600" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-gray-900">Release Stock Allocation</h3>
+                  <p className="text-[11px] text-gray-500">{releasingAllocation.device_type} ({releasingAllocation.allocated_sets} Sets)</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setReleasingAllocation(null)}
+                className="text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-gray-100 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleConfirmRelease} className="space-y-4">
+              <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-xs space-y-1 text-amber-900">
+                <span className="font-bold block">Components to be returned to unallocated stock:</span>
+                <ul className="text-[11px] list-disc list-inside space-y-0.5 text-amber-800">
+                  {(releasingAllocation.components_reserved || []).map((comp) => (
+                    <li key={comp.component_name}>
+                      {comp.quantity} {comp.component_name}s
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              <div>
+                <label className="block font-bold text-gray-700 mb-1">
+                  Reason for Releasing Allocation (Optional)
+                </label>
+                <textarea
+                  rows="2"
+                  value={releaseReason}
+                  onChange={(e) => setReleaseReason(e.target.value)}
+                  placeholder="e.g. Job cancelled or re-allocating to different model"
+                  className="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-xl text-xs text-gray-900 focus:outline-hidden focus:border-amber-500 resize-none"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100">
+                <button
+                  type="button"
+                  disabled={releasingLoading}
+                  onClick={() => setReleasingAllocation(null)}
+                  className="px-4 py-2 font-semibold text-gray-600 hover:bg-gray-100 rounded-xl text-xs cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={releasingLoading}
+                  className="px-5 py-2 font-bold text-white bg-rose-600 hover:bg-rose-700 disabled:opacity-50 rounded-xl text-xs flex items-center gap-1.5 cursor-pointer shadow-xs transition-colors"
+                >
+                  <Unlock className="w-3.5 h-3.5" />
+                  <span>{releasingLoading ? 'Releasing...' : 'Confirm & Release Stock'}</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

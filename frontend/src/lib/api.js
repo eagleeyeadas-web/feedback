@@ -349,6 +349,22 @@ export async function submitInstallationCompletionReport(token, checklistId, dat
   return json;
 }
 
+export async function fetchDeviceConfigurations(token) {
+  const res = await fetch(`${API_BASE}/admin/installations/device-configurations`, {
+    headers: adminHeaders(token),
+  });
+  if (!res.ok) throw new Error('Failed to fetch device configurations');
+  return res.json();
+}
+
+export async function fetchAdditionalCustomerInstallations(token, checklistId) {
+  const res = await fetch(`${API_BASE}/admin/installations/${checklistId}/additional-installations`, {
+    headers: adminHeaders(token),
+  });
+  if (!res.ok) throw new Error('Failed to fetch additional customer installations');
+  return res.json();
+}
+
 export async function fetchPendingStoreReturns(token) {
   const res = await fetch(`${API_BASE}/admin/installations/pending-returns`, {
     headers: adminHeaders(token),
@@ -1002,6 +1018,72 @@ export async function fetchCoordinatorBookingHistory(token, checklistId) {
 }
 
 /**
+ * Coordinator Safe Checklist Deletion APIs
+ */
+export async function fetchChecklistDeletionPreviewApi(token, params = {}) {
+  const query = new URLSearchParams(params).toString();
+  const res = await fetch(`${API_BASE}/admin/coordinator/checklists/deletion-preview?${query}`, {
+    headers: adminHeaders(token),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to preview checklists deletion');
+  return json;
+}
+
+export async function deleteAllEligibleChecklistsApi(token, confirmedCount, params = {}) {
+  const res = await fetch(`${API_BASE}/admin/coordinator/checklists/delete-all`, {
+    method: 'POST',
+    headers: adminHeaders(token),
+    body: JSON.stringify({ confirmedCount, params }),
+  });
+  const json = await res.json();
+  if (!res.ok) {
+    const err = new Error(json.error || 'Failed to delete eligible checklists');
+    err.preview = json.preview;
+    err.status = res.status;
+    throw err;
+  }
+  return json;
+}
+
+export async function checkChecklistDeletionEligibilityApi(token, checklistId) {
+  const res = await fetch(`${API_BASE}/admin/coordinator/checklists/${checklistId}/deletion-check`, {
+    headers: adminHeaders(token),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to check deletion eligibility');
+  return json;
+}
+
+export async function deleteChecklistApi(token, checklistId) {
+  const res = await fetch(`${API_BASE}/admin/coordinator/checklists/${checklistId}`, {
+    method: 'DELETE',
+    headers: adminHeaders(token),
+  });
+  const json = await res.json();
+  if (!res.ok) {
+    const err = new Error(json.error || 'Failed to delete checklist');
+    err.reasons = json.reasons || [];
+    err.canCancel = json.canCancel;
+    err.checklist = json.checklist;
+    err.status = res.status;
+    throw err;
+  }
+  return json;
+}
+
+export async function cancelChecklistApi(token, checklistId, reason = '') {
+  const res = await fetch(`${API_BASE}/admin/coordinator/checklists/${checklistId}/cancel`, {
+    method: 'POST',
+    headers: adminHeaders(token),
+    body: JSON.stringify({ reason }),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to cancel checklist');
+  return json;
+}
+
+/**
  * Coordinator Schedule & Availability Management APIs
  */
 export async function fetchCoordinatorExtensionRequests(token, params = {}) {
@@ -1262,6 +1344,50 @@ export async function verifyStoreBackupReturns(token, checklistId, data) {
   if (!res.ok) throw new Error(json.error || 'Failed to verify backup returns');
   return json;
 }
+
+/**
+ * Calculated Camera Set Availability and Allocations API Helpers
+ */
+export async function fetchCalculatedDeviceSets(token) {
+  const res = await fetch(`${API_BASE}/admin/inventory/calculated-sets`, {
+    headers: adminHeaders(token),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to fetch calculated device sets');
+  return json;
+}
+
+export async function fetchDeviceAllocationsApi(token) {
+  const res = await fetch(`${API_BASE}/admin/inventory/allocations`, {
+    headers: adminHeaders(token),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to fetch device allocations');
+  return json;
+}
+
+export async function allocateDeviceSetsApi(token, data) {
+  const res = await fetch(`${API_BASE}/admin/inventory/allocations`, {
+    method: 'POST',
+    headers: adminHeaders(token),
+    body: JSON.stringify(data),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to allocate device sets');
+  return json;
+}
+
+export async function releaseDeviceAllocationApi(token, allocationId, reason = '') {
+  const res = await fetch(`${API_BASE}/admin/inventory/allocations/${allocationId}/release`, {
+    method: 'POST',
+    headers: adminHeaders(token),
+    body: JSON.stringify({ reason }),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to release allocation');
+  return json;
+}
+
 
 
 

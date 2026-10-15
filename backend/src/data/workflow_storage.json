@@ -9573,6 +9573,897 @@
         }
       ],
       "reconciliation_status": "PENDING_STORE_VERIFICATION"
+    },
+    "533ffc18-87e1-49b2-b6d5-619ac4cf726d": {
+      "checklist_id": "533ffc18-87e1-49b2-b6d5-619ac4cf726d",
+      "technician_id": "e1000000-0000-0000-0000-000000000001",
+      "devices_carried_qty": 8,
+      "devices_installed_qty": 6,
+      "devices_installed_required_qty": 5,
+      "devices_installed_extra_qty": 1,
+      "devices_unused_qty": 1,
+      "devices_damaged_qty": 1,
+      "devices_missing_qty": 0,
+      "material_items": [
+        {
+          "material_id": null,
+          "material_name": "5-metre Cable",
+          "unit": "Nos.",
+          "quantity_issued": 4,
+          "quantity_used": 3,
+          "quantity_returned": 1,
+          "quantity_damaged": 0,
+          "quantity_missing": 0,
+          "remarks": null
+        },
+        {
+          "material_id": null,
+          "material_name": "Insulation Tape",
+          "unit": "Nos.",
+          "quantity_issued": 3,
+          "quantity_used": 2,
+          "quantity_returned": 1,
+          "quantity_damaged": 0,
+          "quantity_missing": 0,
+          "remarks": null
+        },
+        {
+          "material_id": null,
+          "material_name": "0.5 mm Wire",
+          "unit": "Nos.",
+          "quantity_issued": 20,
+          "quantity_used": 15.5,
+          "quantity_returned": 4.5,
+          "quantity_damaged": 0,
+          "quantity_missing": 0,
+          "remarks": null
+        }
+      ],
+      "backup_items": [],
+      "extra_installations": [
+        {
+          "id": "3873665b-9e7a-4967-a90a-ef601847d562",
+          "checklist_id": "533ffc18-87e1-49b2-b6d5-619ac4cf726d",
+          "checklist_number": "EE-ACCP-1792051764261-98",
+          "original_customer_name": "Main Alpha Fleet",
+          "recipient_customer_type": "SAME_CUSTOMER",
+          "recipient_customer_name": "Main Alpha Fleet",
+          "recipient_mobile": "9876543210",
+          "installation_location": "Central Depot Bay 4",
+          "maps_link": null,
+          "installation_date": "2026-10-25",
+          "device_configuration": "2 Channel Live",
+          "components_used": [
+            {
+              "component_name": "Camera",
+              "quantity": 2,
+              "unit": "Nos."
+            },
+            {
+              "component_name": "Live Display",
+              "quantity": 1,
+              "unit": "Nos."
+            }
+          ],
+          "materials_used": [],
+          "technician_id": "e1000000-0000-0000-0000-000000000001",
+          "technician_name": "Mathi",
+          "notes": "Extra backup set installed on second vehicle of same fleet",
+          "created_at": "2026-10-15T08:09:32.622Z",
+          "updated_at": "2026-10-15T08:09:32.622Z"
+        },
+        {
+          "id": "c733a24b-49fc-4131-8d03-eb8eb46fcc23",
+          "checklist_id": "533ffc18-87e1-49b2-b6d5-619ac4cf726d",
+          "checklist_number": "EE-ACCP-1792051764261-98",
+          "original_customer_name": "Main Alpha Fleet",
+          "recipient_customer_type": "ANOTHER_CUSTOMER",
+          "recipient_customer_name": "Gamma Transport Services",
+          "recipient_mobile": "9123456780",
+          "installation_location": "Highway Plaza Dock 2",
+          "maps_link": "https://maps.google.com/?q=13.0827,80.2707",
+          "installation_date": "2026-10-25",
+          "device_configuration": "2 Channel Live",
+          "components_used": [
+            {
+              "component_name": "Camera",
+              "quantity": 2,
+              "unit": "Nos."
+            },
+            {
+              "component_name": "Live Display",
+              "quantity": 1,
+              "unit": "Nos."
+            }
+          ],
+          "materials_used": [],
+          "technician_id": "e1000000-0000-0000-0000-000000000001",
+          "technician_name": "Mathi",
+          "notes": "Opportunity install for adjacent transport fleet",
+          "created_at": "2026-10-15T08:09:32.622Z",
+          "updated_at": "2026-10-15T08:09:32.622Z"
+        },
+        {
+          "id": "5cdc5795-dede-41a6-a6cf-4cff5a2daaa6",
+          "checklist_id": "533ffc18-87e1-49b2-b6d5-619ac4cf726d",
+          "checklist_number": "EE-ACCP-1792051764261-98",
+          "original_customer_name": "Main Alpha Fleet",
+          "recipient_customer_type": "SAME_CUSTOMER",
+          "recipient_customer_name": "Main Alpha Fleet",
+          "recipient_mobile": "9876543210",
+          "installation_location": "Central Depot Bay 4",
+          "maps_link": null,
+          "installation_date": "2026-10-25",
+          "device_configuration": "2 Channel Live",
+          "components_used": [
+            {
+              "component_name": "Camera",
+              "quantity": 2,
+              "unit": "Nos."
+            },
+            {
+              "component_name": "Live Display",
+              "quantity": 1,
+              "unit": "Nos."
+            }
+          ],
+          "materials_used": [],
+          "technician_id": "e1000000-0000-0000-0000-000000000001",
+          "technician_name": "Mathi",
+          "notes": "Extra backup set installed on second vehicle of same fleet",
+          "created_at": "2026-10-15T08:09:33.632Z",
+          "updated_at": "2026-10-15T08:09:33.632Z"
+        },
+        {
+          "id": "bbfb4d50-ce64-4372-bf63-aebffd22f343",
+          "checklist_id": "533ffc18-87e1-49b2-b6d5-619ac4cf726d",
+          "checklist_number": "EE-ACCP-1792051764261-98",
+          "original_customer_name": "Main Alpha Fleet",
+          "recipient_customer_type": "ANOTHER_CUSTOMER",
+          "recipient_customer_name": "Gamma Transport Services",
+          "recipient_mobile": "9123456780",
+          "installation_location": "Highway Plaza Dock 2",
+          "maps_link": "https://maps.google.com/?q=13.0827,80.2707",
+          "installation_date": "2026-10-25",
+          "device_configuration": "2 Channel Live",
+          "components_used": [
+            {
+              "component_name": "Camera",
+              "quantity": 2,
+              "unit": "Nos."
+            },
+            {
+              "component_name": "Live Display",
+              "quantity": 1,
+              "unit": "Nos."
+            }
+          ],
+          "materials_used": [],
+          "technician_id": "e1000000-0000-0000-0000-000000000001",
+          "technician_name": "Mathi",
+          "notes": "Opportunity install for adjacent transport fleet",
+          "created_at": "2026-10-15T08:09:33.632Z",
+          "updated_at": "2026-10-15T08:09:33.632Z"
+        }
+      ],
+      "final_bom": {
+        "configured": false,
+        "installed_device_configurations": [
+          {
+            "device_type": "Camera",
+            "quantity_carried": 5,
+            "number_of_devices": 5,
+            "number_of_vehicles": 5
+          },
+          {
+            "device_type": "Live Display",
+            "quantity_carried": 1,
+            "number_of_devices": 1,
+            "number_of_vehicles": 1
+          }
+        ],
+        "total_devices_installed": 6,
+        "final_bom": {
+          "configured": false,
+          "warning": "No Bill of Materials (BOM) is configured for \"Camera\", \"Live Display\". Material requirements cannot be displayed as final until all selected device types have configured BOMs.",
+          "unconfigured_device_types": [
+            "Camera",
+            "Live Display"
+          ],
+          "device_configurations": [
+            {
+              "device_type": "Camera",
+              "number_of_devices": 5,
+              "number_of_vehicles": 5,
+              "bom_version": null,
+              "configured": false,
+              "items": []
+            },
+            {
+              "device_type": "Live Display",
+              "number_of_devices": 1,
+              "number_of_vehicles": 1,
+              "bom_version": null,
+              "configured": false,
+              "items": []
+            }
+          ],
+          "total_devices": 6,
+          "total_vehicles": 6,
+          "items": []
+        },
+        "items": [],
+        "comparison": [
+          {
+            "material_id": null,
+            "material_sku": null,
+            "material_name": "5-metre Cable",
+            "unit": "Nos.",
+            "preliminary_quantity": 3,
+            "final_quantity": 0,
+            "difference": -3,
+            "actual_issued": 4,
+            "actual_used": 3,
+            "actual_returned": 1,
+            "status": "MATCHED",
+            "variance_label": "-3"
+          },
+          {
+            "material_id": null,
+            "material_sku": null,
+            "material_name": "Insulation Tape",
+            "unit": "Nos.",
+            "preliminary_quantity": 2,
+            "final_quantity": 0,
+            "difference": -2,
+            "actual_issued": 3,
+            "actual_used": 2,
+            "actual_returned": 1,
+            "status": "MATCHED",
+            "variance_label": "-2"
+          },
+          {
+            "material_id": null,
+            "material_sku": null,
+            "material_name": "0.5 mm Wire",
+            "unit": "Metres",
+            "preliminary_quantity": 20,
+            "final_quantity": 0,
+            "difference": -20,
+            "actual_issued": 20,
+            "actual_used": 15.5,
+            "actual_returned": 4.5,
+            "status": "MATCHED",
+            "variance_label": "-20"
+          }
+        ],
+        "calculated_at": "2026-10-15T08:09:34.528Z"
+      },
+      "completion_status": "Completed",
+      "remarks": "Installation successful for Alpha Fleet, plus extra setup for Gamma Transport.",
+      "submitted_at": "2026-10-15T08:09:34.528Z",
+      "id": "report-533ffc18-87e1-49b2-b6d5-619ac4cf726d-1792051774952",
+      "items": [
+        {
+          "checklist_id": "533ffc18-87e1-49b2-b6d5-619ac4cf726d",
+          "device_type": "Camera",
+          "quantity_carried": 6,
+          "quantity_installed": 5,
+          "quantity_installed_required": 4,
+          "quantity_installed_extra": 1,
+          "quantity_to_return": 0,
+          "quantity_damaged": 1,
+          "quantity_missing": 0,
+          "discrepancy_reason": "Lens cracked on rough road transit"
+        },
+        {
+          "checklist_id": "533ffc18-87e1-49b2-b6d5-619ac4cf726d",
+          "device_type": "Live Display",
+          "quantity_carried": 2,
+          "quantity_installed": 1,
+          "quantity_installed_required": 1,
+          "quantity_installed_extra": 0,
+          "quantity_to_return": 1,
+          "quantity_damaged": 0,
+          "quantity_missing": 0,
+          "discrepancy_reason": null
+        }
+      ],
+      "reconciliation_status": "DISCREPANCY_OPEN"
+    },
+    "4415d285-c00b-46b2-b0fa-84d3c392edee": {
+      "checklist_id": "4415d285-c00b-46b2-b0fa-84d3c392edee",
+      "technician_id": "e1000000-0000-0000-0000-000000000001",
+      "devices_carried_qty": 8,
+      "devices_installed_qty": 6,
+      "devices_installed_required_qty": 5,
+      "devices_installed_extra_qty": 1,
+      "devices_unused_qty": 1,
+      "devices_damaged_qty": 1,
+      "devices_missing_qty": 0,
+      "material_items": [
+        {
+          "material_id": null,
+          "material_name": "5-metre Cable",
+          "unit": "Nos.",
+          "quantity_issued": 4,
+          "quantity_used": 3,
+          "quantity_returned": 1,
+          "quantity_damaged": 0,
+          "quantity_missing": 0,
+          "remarks": null
+        },
+        {
+          "material_id": null,
+          "material_name": "Insulation Tape",
+          "unit": "Nos.",
+          "quantity_issued": 3,
+          "quantity_used": 2,
+          "quantity_returned": 1,
+          "quantity_damaged": 0,
+          "quantity_missing": 0,
+          "remarks": null
+        },
+        {
+          "material_id": null,
+          "material_name": "0.5 mm Wire",
+          "unit": "Nos.",
+          "quantity_issued": 20,
+          "quantity_used": 15.5,
+          "quantity_returned": 4.5,
+          "quantity_damaged": 0,
+          "quantity_missing": 0,
+          "remarks": null
+        }
+      ],
+      "backup_items": [],
+      "extra_installations": [
+        {
+          "id": "9362f691-1fce-45b4-8c26-bcae3a5a297a",
+          "checklist_id": "4415d285-c00b-46b2-b0fa-84d3c392edee",
+          "checklist_number": "EE-ACCP-1792052160846-54",
+          "original_customer_name": "Main Alpha Fleet",
+          "recipient_customer_type": "SAME_CUSTOMER",
+          "recipient_customer_name": "Main Alpha Fleet",
+          "recipient_mobile": "9876543210",
+          "installation_location": "Central Depot Bay 4",
+          "maps_link": null,
+          "installation_date": "2026-10-25",
+          "device_configuration": "2 Channel Live",
+          "components_used": [
+            {
+              "component_name": "Camera",
+              "quantity": 2,
+              "unit": "Nos."
+            },
+            {
+              "component_name": "Live Display",
+              "quantity": 1,
+              "unit": "Nos."
+            }
+          ],
+          "materials_used": [],
+          "technician_id": "e1000000-0000-0000-0000-000000000001",
+          "technician_name": "Mathi",
+          "notes": "Extra backup set installed on second vehicle of same fleet",
+          "created_at": "2026-10-15T08:16:08.091Z",
+          "updated_at": "2026-10-15T08:16:08.091Z"
+        },
+        {
+          "id": "6ed4d9d6-dc94-4633-926e-7949b65a0235",
+          "checklist_id": "4415d285-c00b-46b2-b0fa-84d3c392edee",
+          "checklist_number": "EE-ACCP-1792052160846-54",
+          "original_customer_name": "Main Alpha Fleet",
+          "recipient_customer_type": "ANOTHER_CUSTOMER",
+          "recipient_customer_name": "Gamma Transport Services",
+          "recipient_mobile": "9123456780",
+          "installation_location": "Highway Plaza Dock 2",
+          "maps_link": "https://maps.google.com/?q=13.0827,80.2707",
+          "installation_date": "2026-10-25",
+          "device_configuration": "2 Channel Live",
+          "components_used": [
+            {
+              "component_name": "Camera",
+              "quantity": 2,
+              "unit": "Nos."
+            },
+            {
+              "component_name": "Live Display",
+              "quantity": 1,
+              "unit": "Nos."
+            }
+          ],
+          "materials_used": [],
+          "technician_id": "e1000000-0000-0000-0000-000000000001",
+          "technician_name": "Mathi",
+          "notes": "Opportunity install for adjacent transport fleet",
+          "created_at": "2026-10-15T08:16:08.091Z",
+          "updated_at": "2026-10-15T08:16:08.091Z"
+        },
+        {
+          "id": "620abe52-d944-4ad8-8ac4-b6a2715c0e4c",
+          "checklist_id": "4415d285-c00b-46b2-b0fa-84d3c392edee",
+          "checklist_number": "EE-ACCP-1792052160846-54",
+          "original_customer_name": "Main Alpha Fleet",
+          "recipient_customer_type": "SAME_CUSTOMER",
+          "recipient_customer_name": "Main Alpha Fleet",
+          "recipient_mobile": "9876543210",
+          "installation_location": "Central Depot Bay 4",
+          "maps_link": null,
+          "installation_date": "2026-10-25",
+          "device_configuration": "2 Channel Live",
+          "components_used": [
+            {
+              "component_name": "Camera",
+              "quantity": 2,
+              "unit": "Nos."
+            },
+            {
+              "component_name": "Live Display",
+              "quantity": 1,
+              "unit": "Nos."
+            }
+          ],
+          "materials_used": [],
+          "technician_id": "e1000000-0000-0000-0000-000000000001",
+          "technician_name": "Mathi",
+          "notes": "Extra backup set installed on second vehicle of same fleet",
+          "created_at": "2026-10-15T08:16:09.124Z",
+          "updated_at": "2026-10-15T08:16:09.124Z"
+        },
+        {
+          "id": "2f7a38d7-aae8-4ad5-a154-bd60dbd85581",
+          "checklist_id": "4415d285-c00b-46b2-b0fa-84d3c392edee",
+          "checklist_number": "EE-ACCP-1792052160846-54",
+          "original_customer_name": "Main Alpha Fleet",
+          "recipient_customer_type": "ANOTHER_CUSTOMER",
+          "recipient_customer_name": "Gamma Transport Services",
+          "recipient_mobile": "9123456780",
+          "installation_location": "Highway Plaza Dock 2",
+          "maps_link": "https://maps.google.com/?q=13.0827,80.2707",
+          "installation_date": "2026-10-25",
+          "device_configuration": "2 Channel Live",
+          "components_used": [
+            {
+              "component_name": "Camera",
+              "quantity": 2,
+              "unit": "Nos."
+            },
+            {
+              "component_name": "Live Display",
+              "quantity": 1,
+              "unit": "Nos."
+            }
+          ],
+          "materials_used": [],
+          "technician_id": "e1000000-0000-0000-0000-000000000001",
+          "technician_name": "Mathi",
+          "notes": "Opportunity install for adjacent transport fleet",
+          "created_at": "2026-10-15T08:16:09.124Z",
+          "updated_at": "2026-10-15T08:16:09.124Z"
+        }
+      ],
+      "final_bom": {
+        "configured": false,
+        "installed_device_configurations": [
+          {
+            "device_type": "Camera",
+            "quantity_carried": 5,
+            "number_of_devices": 5,
+            "number_of_vehicles": 5
+          },
+          {
+            "device_type": "Live Display",
+            "quantity_carried": 1,
+            "number_of_devices": 1,
+            "number_of_vehicles": 1
+          }
+        ],
+        "total_devices_installed": 6,
+        "final_bom": {
+          "configured": false,
+          "warning": "No Bill of Materials (BOM) is configured for \"Camera\", \"Live Display\". Material requirements cannot be displayed as final until all selected device types have configured BOMs.",
+          "unconfigured_device_types": [
+            "Camera",
+            "Live Display"
+          ],
+          "device_configurations": [
+            {
+              "device_type": "Camera",
+              "number_of_devices": 5,
+              "number_of_vehicles": 5,
+              "bom_version": null,
+              "configured": false,
+              "items": []
+            },
+            {
+              "device_type": "Live Display",
+              "number_of_devices": 1,
+              "number_of_vehicles": 1,
+              "bom_version": null,
+              "configured": false,
+              "items": []
+            }
+          ],
+          "total_devices": 6,
+          "total_vehicles": 6,
+          "items": []
+        },
+        "items": [],
+        "comparison": [
+          {
+            "material_id": null,
+            "material_sku": null,
+            "material_name": "5-metre Cable",
+            "unit": "Nos.",
+            "preliminary_quantity": 3,
+            "final_quantity": 0,
+            "difference": -3,
+            "actual_issued": 4,
+            "actual_used": 3,
+            "actual_returned": 1,
+            "status": "MATCHED",
+            "variance_label": "-3"
+          },
+          {
+            "material_id": null,
+            "material_sku": null,
+            "material_name": "Insulation Tape",
+            "unit": "Nos.",
+            "preliminary_quantity": 2,
+            "final_quantity": 0,
+            "difference": -2,
+            "actual_issued": 3,
+            "actual_used": 2,
+            "actual_returned": 1,
+            "status": "MATCHED",
+            "variance_label": "-2"
+          },
+          {
+            "material_id": null,
+            "material_sku": null,
+            "material_name": "0.5 mm Wire",
+            "unit": "Metres",
+            "preliminary_quantity": 20,
+            "final_quantity": 0,
+            "difference": -20,
+            "actual_issued": 20,
+            "actual_used": 15.5,
+            "actual_returned": 4.5,
+            "status": "MATCHED",
+            "variance_label": "-20"
+          }
+        ],
+        "calculated_at": "2026-10-15T08:16:10.157Z"
+      },
+      "completion_status": "Completed",
+      "remarks": "Installation successful for Alpha Fleet, plus extra setup for Gamma Transport.",
+      "submitted_at": "2026-10-15T08:16:10.157Z",
+      "id": "report-4415d285-c00b-46b2-b0fa-84d3c392edee-1792052170558",
+      "items": [
+        {
+          "checklist_id": "4415d285-c00b-46b2-b0fa-84d3c392edee",
+          "device_type": "Camera",
+          "quantity_carried": 6,
+          "quantity_installed": 5,
+          "quantity_installed_required": 4,
+          "quantity_installed_extra": 1,
+          "quantity_to_return": 0,
+          "quantity_damaged": 1,
+          "quantity_missing": 0,
+          "discrepancy_reason": "Lens cracked on rough road transit"
+        },
+        {
+          "checklist_id": "4415d285-c00b-46b2-b0fa-84d3c392edee",
+          "device_type": "Live Display",
+          "quantity_carried": 2,
+          "quantity_installed": 1,
+          "quantity_installed_required": 1,
+          "quantity_installed_extra": 0,
+          "quantity_to_return": 1,
+          "quantity_damaged": 0,
+          "quantity_missing": 0,
+          "discrepancy_reason": null
+        }
+      ],
+      "reconciliation_status": "DISCREPANCY_OPEN"
+    },
+    "c4fd6cbf-0f81-43e9-b72f-dfc57b181076": {
+      "checklist_id": "c4fd6cbf-0f81-43e9-b72f-dfc57b181076",
+      "technician_id": "e1000000-0000-0000-0000-000000000001",
+      "devices_carried_qty": 8,
+      "devices_installed_qty": 6,
+      "devices_installed_required_qty": 5,
+      "devices_installed_extra_qty": 1,
+      "devices_unused_qty": 1,
+      "devices_damaged_qty": 1,
+      "devices_missing_qty": 0,
+      "material_items": [
+        {
+          "material_id": null,
+          "material_name": "5-metre Cable",
+          "unit": "Nos.",
+          "quantity_issued": 4,
+          "quantity_used": 3,
+          "quantity_returned": 1,
+          "quantity_damaged": 0,
+          "quantity_missing": 0,
+          "remarks": null
+        },
+        {
+          "material_id": null,
+          "material_name": "Insulation Tape",
+          "unit": "Nos.",
+          "quantity_issued": 3,
+          "quantity_used": 2,
+          "quantity_returned": 1,
+          "quantity_damaged": 0,
+          "quantity_missing": 0,
+          "remarks": null
+        },
+        {
+          "material_id": null,
+          "material_name": "0.5 mm Wire",
+          "unit": "Nos.",
+          "quantity_issued": 20,
+          "quantity_used": 15.5,
+          "quantity_returned": 4.5,
+          "quantity_damaged": 0,
+          "quantity_missing": 0,
+          "remarks": null
+        }
+      ],
+      "backup_items": [],
+      "extra_installations": [
+        {
+          "id": "17374f24-f8f8-4684-bd20-a43fdb94312e",
+          "checklist_id": "c4fd6cbf-0f81-43e9-b72f-dfc57b181076",
+          "checklist_number": "EE-ACCP-1792052215751-42",
+          "original_customer_name": "Main Alpha Fleet",
+          "recipient_customer_type": "SAME_CUSTOMER",
+          "recipient_customer_name": "Main Alpha Fleet",
+          "recipient_mobile": "9876543210",
+          "installation_location": "Central Depot Bay 4",
+          "maps_link": null,
+          "installation_date": "2026-10-25",
+          "device_configuration": "2 Channel Live",
+          "components_used": [
+            {
+              "component_name": "Camera",
+              "quantity": 2,
+              "unit": "Nos."
+            },
+            {
+              "component_name": "Live Display",
+              "quantity": 1,
+              "unit": "Nos."
+            }
+          ],
+          "materials_used": [],
+          "technician_id": "e1000000-0000-0000-0000-000000000001",
+          "technician_name": "Mathi",
+          "notes": "Extra backup set installed on second vehicle of same fleet",
+          "created_at": "2026-10-15T08:17:01.887Z",
+          "updated_at": "2026-10-15T08:17:01.887Z"
+        },
+        {
+          "id": "4283ea1a-7503-4c94-9e82-4263e76ba6a1",
+          "checklist_id": "c4fd6cbf-0f81-43e9-b72f-dfc57b181076",
+          "checklist_number": "EE-ACCP-1792052215751-42",
+          "original_customer_name": "Main Alpha Fleet",
+          "recipient_customer_type": "ANOTHER_CUSTOMER",
+          "recipient_customer_name": "Gamma Transport Services",
+          "recipient_mobile": "9123456780",
+          "installation_location": "Highway Plaza Dock 2",
+          "maps_link": "https://maps.google.com/?q=13.0827,80.2707",
+          "installation_date": "2026-10-25",
+          "device_configuration": "2 Channel Live",
+          "components_used": [
+            {
+              "component_name": "Camera",
+              "quantity": 2,
+              "unit": "Nos."
+            },
+            {
+              "component_name": "Live Display",
+              "quantity": 1,
+              "unit": "Nos."
+            }
+          ],
+          "materials_used": [],
+          "technician_id": "e1000000-0000-0000-0000-000000000001",
+          "technician_name": "Mathi",
+          "notes": "Opportunity install for adjacent transport fleet",
+          "created_at": "2026-10-15T08:17:01.887Z",
+          "updated_at": "2026-10-15T08:17:01.887Z"
+        },
+        {
+          "id": "b83f89d0-9096-424d-8f19-b840cdd2926f",
+          "checklist_id": "c4fd6cbf-0f81-43e9-b72f-dfc57b181076",
+          "checklist_number": "EE-ACCP-1792052215751-42",
+          "original_customer_name": "Main Alpha Fleet",
+          "recipient_customer_type": "SAME_CUSTOMER",
+          "recipient_customer_name": "Main Alpha Fleet",
+          "recipient_mobile": "9876543210",
+          "installation_location": "Central Depot Bay 4",
+          "maps_link": null,
+          "installation_date": "2026-10-25",
+          "device_configuration": "2 Channel Live",
+          "components_used": [
+            {
+              "component_name": "Camera",
+              "quantity": 2,
+              "unit": "Nos."
+            },
+            {
+              "component_name": "Live Display",
+              "quantity": 1,
+              "unit": "Nos."
+            }
+          ],
+          "materials_used": [],
+          "technician_id": "e1000000-0000-0000-0000-000000000001",
+          "technician_name": "Mathi",
+          "notes": "Extra backup set installed on second vehicle of same fleet",
+          "created_at": "2026-10-15T08:17:02.840Z",
+          "updated_at": "2026-10-15T08:17:02.840Z"
+        },
+        {
+          "id": "e119979b-419e-44a8-9c5d-4ddcbed13fb0",
+          "checklist_id": "c4fd6cbf-0f81-43e9-b72f-dfc57b181076",
+          "checklist_number": "EE-ACCP-1792052215751-42",
+          "original_customer_name": "Main Alpha Fleet",
+          "recipient_customer_type": "ANOTHER_CUSTOMER",
+          "recipient_customer_name": "Gamma Transport Services",
+          "recipient_mobile": "9123456780",
+          "installation_location": "Highway Plaza Dock 2",
+          "maps_link": "https://maps.google.com/?q=13.0827,80.2707",
+          "installation_date": "2026-10-25",
+          "device_configuration": "2 Channel Live",
+          "components_used": [
+            {
+              "component_name": "Camera",
+              "quantity": 2,
+              "unit": "Nos."
+            },
+            {
+              "component_name": "Live Display",
+              "quantity": 1,
+              "unit": "Nos."
+            }
+          ],
+          "materials_used": [],
+          "technician_id": "e1000000-0000-0000-0000-000000000001",
+          "technician_name": "Mathi",
+          "notes": "Opportunity install for adjacent transport fleet",
+          "created_at": "2026-10-15T08:17:02.840Z",
+          "updated_at": "2026-10-15T08:17:02.840Z"
+        }
+      ],
+      "final_bom": {
+        "configured": false,
+        "installed_device_configurations": [
+          {
+            "device_type": "Camera",
+            "quantity_carried": 5,
+            "number_of_devices": 5,
+            "number_of_vehicles": 5
+          },
+          {
+            "device_type": "Live Display",
+            "quantity_carried": 1,
+            "number_of_devices": 1,
+            "number_of_vehicles": 1
+          }
+        ],
+        "total_devices_installed": 6,
+        "final_bom": {
+          "configured": false,
+          "warning": "No Bill of Materials (BOM) is configured for \"Camera\", \"Live Display\". Material requirements cannot be displayed as final until all selected device types have configured BOMs.",
+          "unconfigured_device_types": [
+            "Camera",
+            "Live Display"
+          ],
+          "device_configurations": [
+            {
+              "device_type": "Camera",
+              "number_of_devices": 5,
+              "number_of_vehicles": 5,
+              "bom_version": null,
+              "configured": false,
+              "items": []
+            },
+            {
+              "device_type": "Live Display",
+              "number_of_devices": 1,
+              "number_of_vehicles": 1,
+              "bom_version": null,
+              "configured": false,
+              "items": []
+            }
+          ],
+          "total_devices": 6,
+          "total_vehicles": 6,
+          "items": []
+        },
+        "items": [],
+        "comparison": [
+          {
+            "material_id": null,
+            "material_sku": null,
+            "material_name": "5-metre Cable",
+            "unit": "Nos.",
+            "preliminary_quantity": 3,
+            "final_quantity": 0,
+            "difference": -3,
+            "actual_issued": 4,
+            "actual_used": 3,
+            "actual_returned": 1,
+            "status": "MATCHED",
+            "variance_label": "-3"
+          },
+          {
+            "material_id": null,
+            "material_sku": null,
+            "material_name": "Insulation Tape",
+            "unit": "Nos.",
+            "preliminary_quantity": 2,
+            "final_quantity": 0,
+            "difference": -2,
+            "actual_issued": 3,
+            "actual_used": 2,
+            "actual_returned": 1,
+            "status": "MATCHED",
+            "variance_label": "-2"
+          },
+          {
+            "material_id": null,
+            "material_sku": null,
+            "material_name": "0.5 mm Wire",
+            "unit": "Metres",
+            "preliminary_quantity": 20,
+            "final_quantity": 0,
+            "difference": -20,
+            "actual_issued": 20,
+            "actual_used": 15.5,
+            "actual_returned": 4.5,
+            "status": "MATCHED",
+            "variance_label": "-20"
+          }
+        ],
+        "calculated_at": "2026-10-15T08:17:03.828Z"
+      },
+      "completion_status": "Completed",
+      "remarks": "Installation successful for Alpha Fleet, plus extra setup for Gamma Transport.",
+      "submitted_at": "2026-10-15T08:17:03.828Z",
+      "id": "report-c4fd6cbf-0f81-43e9-b72f-dfc57b181076-1792052224330",
+      "items": [
+        {
+          "checklist_id": "c4fd6cbf-0f81-43e9-b72f-dfc57b181076",
+          "device_type": "Camera",
+          "quantity_carried": 6,
+          "quantity_installed": 5,
+          "quantity_installed_required": 4,
+          "quantity_installed_extra": 1,
+          "quantity_to_return": 0,
+          "quantity_damaged": 1,
+          "quantity_missing": 0,
+          "discrepancy_reason": "Lens cracked on rough road transit"
+        },
+        {
+          "checklist_id": "c4fd6cbf-0f81-43e9-b72f-dfc57b181076",
+          "device_type": "Live Display",
+          "quantity_carried": 2,
+          "quantity_installed": 1,
+          "quantity_installed_required": 1,
+          "quantity_installed_extra": 0,
+          "quantity_to_return": 1,
+          "quantity_damaged": 0,
+          "quantity_missing": 0,
+          "discrepancy_reason": null
+        }
+      ],
+      "reconciliation_status": "DISCREPANCY_OPEN"
     }
   },
   "returns": {
@@ -10054,6 +10945,140 @@
       "declared_at": "2026-10-14T12:08:20.770Z",
       "status": "PENDING_STORE_VERIFICATION",
       "verification_remarks": "Completion report return declaration: 1 unit installed, 1 unit returning to store"
+    },
+    "return-73e1cccb-1a94-422e-aa11-18643c949966-1792042354724-nutx": {
+      "id": "return-73e1cccb-1a94-422e-aa11-18643c949966-1792042354724-nutx",
+      "checklist_id": "73e1cccb-1a94-422e-aa11-18643c949966",
+      "device_type": "5-metre Cable",
+      "declared_return_qty": 1,
+      "declared_by": "e1000000-0000-0000-0000-000000000001",
+      "declared_at": "2026-10-15T05:32:34.724Z",
+      "status": "PENDING_STORE_VERIFICATION",
+      "verification_remarks": "Completion report return declaration: 4 cameras successfully mounted on prime mover, display integrated with ignition line."
+    },
+    "return-4472a9ad-02e7-4bbe-b36e-306bc017cc15-1792046814713-8o9l": {
+      "id": "return-4472a9ad-02e7-4bbe-b36e-306bc017cc15-1792046814713-8o9l",
+      "checklist_id": "4472a9ad-02e7-4bbe-b36e-306bc017cc15",
+      "device_type": "SafDrive Model X",
+      "declared_return_qty": 1,
+      "declared_by": "00000000-0000-0000-0000-000000000002",
+      "declared_at": "2026-10-15T06:46:54.713Z",
+      "status": "PENDING_STORE_VERIFICATION",
+      "verification_remarks": "Completion report return declaration: Early completion done on day 2"
+    },
+    "return-0996b6d8-357c-414a-9c50-1dd3d2b2abf7-1792047086601-g7ub": {
+      "id": "return-0996b6d8-357c-414a-9c50-1dd3d2b2abf7-1792047086601-g7ub",
+      "checklist_id": "0996b6d8-357c-414a-9c50-1dd3d2b2abf7",
+      "device_type": "SafDrive Model X",
+      "declared_return_qty": 1,
+      "declared_by": "00000000-0000-0000-0000-000000000002",
+      "declared_at": "2026-10-15T06:51:26.601Z",
+      "status": "PENDING_STORE_VERIFICATION",
+      "verification_remarks": "Completion report return declaration: Early completion done on day 2"
+    },
+    "return-64df5507-196e-4fc8-9b40-88254d67bfc7-1792047160634-vcl8": {
+      "id": "return-64df5507-196e-4fc8-9b40-88254d67bfc7-1792047160634-vcl8",
+      "checklist_id": "64df5507-196e-4fc8-9b40-88254d67bfc7",
+      "device_type": "SafDrive Model X",
+      "declared_return_qty": 2,
+      "declared_by": "00000000-0000-0000-0000-000000000002",
+      "declared_at": "2026-10-15T06:52:40.634Z",
+      "status": "PENDING_STORE_VERIFICATION",
+      "verification_remarks": "Completion report return declaration: Installation done, returning 2 devices to store"
+    },
+    "return-da516f74-b3e4-45bb-87f4-93ffdf9d0520-1792048667647-y7p4": {
+      "id": "return-da516f74-b3e4-45bb-87f4-93ffdf9d0520-1792048667647-y7p4",
+      "checklist_id": "da516f74-b3e4-45bb-87f4-93ffdf9d0520",
+      "device_type": "SafDrive Model X",
+      "declared_return_qty": 1,
+      "declared_by": "00000000-0000-0000-0000-000000000002",
+      "declared_at": "2026-10-15T07:17:47.647Z",
+      "status": "PENDING_STORE_VERIFICATION",
+      "verification_remarks": "Completion report return declaration: Early completion done on day 2"
+    },
+    "return-58de5ec1-4cd8-4a8c-95bd-c99c20663f17-1792048778076-l2z7": {
+      "id": "return-58de5ec1-4cd8-4a8c-95bd-c99c20663f17-1792048778076-l2z7",
+      "checklist_id": "58de5ec1-4cd8-4a8c-95bd-c99c20663f17",
+      "device_type": "SafDrive Model X",
+      "declared_return_qty": 2,
+      "declared_by": "00000000-0000-0000-0000-000000000002",
+      "declared_at": "2026-10-15T07:19:38.076Z",
+      "status": "PENDING_STORE_VERIFICATION",
+      "verification_remarks": "Completion report return declaration: Installation done, returning 2 devices to store"
+    },
+    "return-87bdef9b-e8e7-48c6-8ef9-45d4ea7322ef-1792050556290-gmtq": {
+      "id": "return-87bdef9b-e8e7-48c6-8ef9-45d4ea7322ef-1792050556290-gmtq",
+      "checklist_id": "87bdef9b-e8e7-48c6-8ef9-45d4ea7322ef",
+      "device_type": "5-metre Cable",
+      "declared_return_qty": 1,
+      "declared_by": "e1000000-0000-0000-0000-000000000001",
+      "declared_at": "2026-10-15T07:49:16.290Z",
+      "status": "PENDING_STORE_VERIFICATION",
+      "verification_remarks": "Completion report return declaration: 4 cameras successfully mounted on prime mover, display integrated with ignition line."
+    },
+    "return-ff13fab9-f344-4ed4-b3ca-931a91c31488-1792050633136-t9h9": {
+      "id": "return-ff13fab9-f344-4ed4-b3ca-931a91c31488-1792050633136-t9h9",
+      "checklist_id": "ff13fab9-f344-4ed4-b3ca-931a91c31488",
+      "device_type": "SafDrive Model X",
+      "declared_return_qty": 1,
+      "declared_by": "00000000-0000-0000-0000-000000000002",
+      "declared_at": "2026-10-15T07:50:33.136Z",
+      "status": "PENDING_STORE_VERIFICATION",
+      "verification_remarks": "Completion report return declaration: Early completion done on day 2"
+    },
+    "return-7284a61a-e5e5-4f56-8126-1c24cc4a1b1c-1792050740914-6f70": {
+      "id": "return-7284a61a-e5e5-4f56-8126-1c24cc4a1b1c-1792050740914-6f70",
+      "checklist_id": "7284a61a-e5e5-4f56-8126-1c24cc4a1b1c",
+      "device_type": "SafDrive Model X",
+      "declared_return_qty": 2,
+      "declared_by": "00000000-0000-0000-0000-000000000002",
+      "declared_at": "2026-10-15T07:52:20.914Z",
+      "status": "PENDING_STORE_VERIFICATION",
+      "verification_remarks": "Completion report return declaration: Installation done, returning 2 devices to store"
+    },
+    "return-533ffc18-87e1-49b2-b6d5-619ac4cf726d-1792051774961-02d8": {
+      "id": "return-533ffc18-87e1-49b2-b6d5-619ac4cf726d-1792051774961-02d8",
+      "checklist_id": "533ffc18-87e1-49b2-b6d5-619ac4cf726d",
+      "device_type": "Live Display",
+      "declared_return_qty": 1,
+      "declared_by": "e1000000-0000-0000-0000-000000000001",
+      "declared_at": "2026-10-15T08:09:34.961Z",
+      "status": "PENDING_STORE_VERIFICATION",
+      "verification_remarks": "Completion report return declaration: Installation successful for Alpha Fleet, plus extra setup for Gamma Transport."
+    },
+    "return-4415d285-c00b-46b2-b0fa-84d3c392edee-1792052170580-4k6r": {
+      "id": "return-4415d285-c00b-46b2-b0fa-84d3c392edee-1792052170580-4k6r",
+      "checklist_id": "4415d285-c00b-46b2-b0fa-84d3c392edee",
+      "device_type": "Live Display",
+      "declared_return_qty": 1,
+      "declared_by": "e1000000-0000-0000-0000-000000000001",
+      "declared_at": "2026-10-15T08:16:10.580Z",
+      "status": "VERIFIED_AND_RECONCILED",
+      "verification_remarks": "Physical inspection completed; 1 Live Display accepted back to bin A-3",
+      "actual_received_qty": 1,
+      "accepted_usable_qty": 1,
+      "damaged_qty": 0,
+      "missing_qty": 0,
+      "verified_by": "store-001",
+      "verified_at": "2026-10-15T08:16:14.313Z",
+      "updated_at": "2026-10-15T08:16:14.313Z"
+    },
+    "return-c4fd6cbf-0f81-43e9-b72f-dfc57b181076-1792052224355-h73d": {
+      "id": "return-c4fd6cbf-0f81-43e9-b72f-dfc57b181076-1792052224355-h73d",
+      "checklist_id": "c4fd6cbf-0f81-43e9-b72f-dfc57b181076",
+      "device_type": "Live Display",
+      "declared_return_qty": 1,
+      "declared_by": "e1000000-0000-0000-0000-000000000001",
+      "declared_at": "2026-10-15T08:17:04.355Z",
+      "status": "VERIFIED_AND_RECONCILED",
+      "verification_remarks": "Physical inspection completed; 1 Live Display accepted back to bin A-3",
+      "actual_received_qty": 1,
+      "accepted_usable_qty": 1,
+      "damaged_qty": 0,
+      "missing_qty": 0,
+      "verified_by": "store-001",
+      "verified_at": "2026-10-15T08:17:07.875Z",
+      "updated_at": "2026-10-15T08:17:07.875Z"
     }
   },
   "materialReturns": {
@@ -10252,6 +11277,253 @@
       "verification_remarks": "Installation successful: 1 device installed, 1 device returned to store.",
       "created_at": "2026-10-14T11:45:38.327Z",
       "updated_at": "2026-10-14T11:45:38.327Z"
+    },
+    "b0083813-a0fb-4980-b64e-37efb1cb6bda": {
+      "id": "b0083813-a0fb-4980-b64e-37efb1cb6bda",
+      "checklist_id": "73e1cccb-1a94-422e-aa11-18643c949966",
+      "material_id": null,
+      "material_name": "Insulation Tape",
+      "unit": "Nos.",
+      "quantity_issued": 3,
+      "quantity_used": 2,
+      "declared_return_qty": 1,
+      "accepted_usable_qty": 0,
+      "damaged_qty": 0,
+      "missing_qty": 0,
+      "status": "PENDING_STORE_VERIFICATION",
+      "declared_by": "e1000000-0000-0000-0000-000000000001",
+      "declared_at": "2026-10-15T05:32:35.309Z",
+      "verification_remarks": "4 cameras successfully mounted on prime mover, display integrated with ignition line.",
+      "created_at": "2026-10-15T05:32:35.309Z",
+      "updated_at": "2026-10-15T05:32:35.309Z"
+    },
+    "a075529e-c75b-47dd-85cb-8172aae53246": {
+      "id": "a075529e-c75b-47dd-85cb-8172aae53246",
+      "checklist_id": "73e1cccb-1a94-422e-aa11-18643c949966",
+      "material_id": null,
+      "material_name": "0.5 mm Wire",
+      "unit": "Nos.",
+      "quantity_issued": 20,
+      "quantity_used": 15,
+      "declared_return_qty": 5,
+      "accepted_usable_qty": 0,
+      "damaged_qty": 0,
+      "missing_qty": 0,
+      "status": "PENDING_STORE_VERIFICATION",
+      "declared_by": "e1000000-0000-0000-0000-000000000001",
+      "declared_at": "2026-10-15T05:32:35.495Z",
+      "verification_remarks": "4 cameras successfully mounted on prime mover, display integrated with ignition line.",
+      "created_at": "2026-10-15T05:32:35.495Z",
+      "updated_at": "2026-10-15T05:32:35.495Z"
+    },
+    "a8bd6e5d-37e3-4d7c-99c0-0772d31b3fe8": {
+      "id": "a8bd6e5d-37e3-4d7c-99c0-0772d31b3fe8",
+      "checklist_id": "87bdef9b-e8e7-48c6-8ef9-45d4ea7322ef",
+      "material_id": null,
+      "material_name": "Insulation Tape",
+      "unit": "Nos.",
+      "quantity_issued": 3,
+      "quantity_used": 2,
+      "declared_return_qty": 1,
+      "accepted_usable_qty": 0,
+      "damaged_qty": 0,
+      "missing_qty": 0,
+      "status": "PENDING_STORE_VERIFICATION",
+      "declared_by": "e1000000-0000-0000-0000-000000000001",
+      "declared_at": "2026-10-15T07:49:16.955Z",
+      "verification_remarks": "4 cameras successfully mounted on prime mover, display integrated with ignition line.",
+      "created_at": "2026-10-15T07:49:16.955Z",
+      "updated_at": "2026-10-15T07:49:16.955Z"
+    },
+    "fc633961-0792-4955-b991-5c7cebed3560": {
+      "id": "fc633961-0792-4955-b991-5c7cebed3560",
+      "checklist_id": "87bdef9b-e8e7-48c6-8ef9-45d4ea7322ef",
+      "material_id": null,
+      "material_name": "0.5 mm Wire",
+      "unit": "Nos.",
+      "quantity_issued": 20,
+      "quantity_used": 15,
+      "declared_return_qty": 5,
+      "accepted_usable_qty": 0,
+      "damaged_qty": 0,
+      "missing_qty": 0,
+      "status": "PENDING_STORE_VERIFICATION",
+      "declared_by": "e1000000-0000-0000-0000-000000000001",
+      "declared_at": "2026-10-15T07:49:17.159Z",
+      "verification_remarks": "4 cameras successfully mounted on prime mover, display integrated with ignition line.",
+      "created_at": "2026-10-15T07:49:17.159Z",
+      "updated_at": "2026-10-15T07:49:17.159Z"
+    },
+    "bb82c10a-842f-4b66-ac0f-9afbf7a4d2f9": {
+      "id": "bb82c10a-842f-4b66-ac0f-9afbf7a4d2f9",
+      "checklist_id": "533ffc18-87e1-49b2-b6d5-619ac4cf726d",
+      "material_id": null,
+      "material_name": "5-metre Cable",
+      "unit": "Nos.",
+      "quantity_issued": 4,
+      "quantity_used": 3,
+      "declared_return_qty": 1,
+      "accepted_usable_qty": 0,
+      "damaged_qty": 0,
+      "missing_qty": 0,
+      "status": "PENDING_STORE_VERIFICATION",
+      "declared_by": "e1000000-0000-0000-0000-000000000001",
+      "declared_at": "2026-10-15T08:09:35.546Z",
+      "verification_remarks": "Installation successful for Alpha Fleet, plus extra setup for Gamma Transport.",
+      "created_at": "2026-10-15T08:09:35.546Z",
+      "updated_at": "2026-10-15T08:09:35.546Z"
+    },
+    "6ccf0f88-727e-4b6d-9b9e-a85baa277815": {
+      "id": "6ccf0f88-727e-4b6d-9b9e-a85baa277815",
+      "checklist_id": "533ffc18-87e1-49b2-b6d5-619ac4cf726d",
+      "material_id": null,
+      "material_name": "Insulation Tape",
+      "unit": "Nos.",
+      "quantity_issued": 3,
+      "quantity_used": 2,
+      "declared_return_qty": 1,
+      "accepted_usable_qty": 0,
+      "damaged_qty": 0,
+      "missing_qty": 0,
+      "status": "PENDING_STORE_VERIFICATION",
+      "declared_by": "e1000000-0000-0000-0000-000000000001",
+      "declared_at": "2026-10-15T08:09:35.754Z",
+      "verification_remarks": "Installation successful for Alpha Fleet, plus extra setup for Gamma Transport.",
+      "created_at": "2026-10-15T08:09:35.754Z",
+      "updated_at": "2026-10-15T08:09:35.754Z"
+    },
+    "b66d418f-825e-4e59-a133-b6cc3764a915": {
+      "id": "b66d418f-825e-4e59-a133-b6cc3764a915",
+      "checklist_id": "533ffc18-87e1-49b2-b6d5-619ac4cf726d",
+      "material_id": null,
+      "material_name": "0.5 mm Wire",
+      "unit": "Nos.",
+      "quantity_issued": 20,
+      "quantity_used": 15.5,
+      "declared_return_qty": 4.5,
+      "accepted_usable_qty": 0,
+      "damaged_qty": 0,
+      "missing_qty": 0,
+      "status": "PENDING_STORE_VERIFICATION",
+      "declared_by": "e1000000-0000-0000-0000-000000000001",
+      "declared_at": "2026-10-15T08:09:35.973Z",
+      "verification_remarks": "Installation successful for Alpha Fleet, plus extra setup for Gamma Transport.",
+      "created_at": "2026-10-15T08:09:35.973Z",
+      "updated_at": "2026-10-15T08:09:35.973Z"
+    },
+    "3175a649-f6d1-42ad-9d9e-dfbf80d58e0d": {
+      "id": "3175a649-f6d1-42ad-9d9e-dfbf80d58e0d",
+      "checklist_id": "4415d285-c00b-46b2-b0fa-84d3c392edee",
+      "material_id": null,
+      "material_name": "5-metre Cable",
+      "unit": "Nos.",
+      "quantity_issued": 4,
+      "quantity_used": 3,
+      "declared_return_qty": 1,
+      "accepted_usable_qty": 0,
+      "damaged_qty": 0,
+      "missing_qty": 0,
+      "status": "PENDING_STORE_VERIFICATION",
+      "declared_by": "e1000000-0000-0000-0000-000000000001",
+      "declared_at": "2026-10-15T08:16:11.178Z",
+      "verification_remarks": "Installation successful for Alpha Fleet, plus extra setup for Gamma Transport.",
+      "created_at": "2026-10-15T08:16:11.178Z",
+      "updated_at": "2026-10-15T08:16:11.178Z"
+    },
+    "92c3c6d6-d76c-4e40-94dd-aa81bcbe71ec": {
+      "id": "92c3c6d6-d76c-4e40-94dd-aa81bcbe71ec",
+      "checklist_id": "4415d285-c00b-46b2-b0fa-84d3c392edee",
+      "material_id": null,
+      "material_name": "Insulation Tape",
+      "unit": "Nos.",
+      "quantity_issued": 3,
+      "quantity_used": 2,
+      "declared_return_qty": 1,
+      "accepted_usable_qty": 0,
+      "damaged_qty": 0,
+      "missing_qty": 0,
+      "status": "PENDING_STORE_VERIFICATION",
+      "declared_by": "e1000000-0000-0000-0000-000000000001",
+      "declared_at": "2026-10-15T08:16:11.364Z",
+      "verification_remarks": "Installation successful for Alpha Fleet, plus extra setup for Gamma Transport.",
+      "created_at": "2026-10-15T08:16:11.364Z",
+      "updated_at": "2026-10-15T08:16:11.364Z"
+    },
+    "7005f16d-af2e-43ec-9a99-e8d80e63e558": {
+      "id": "7005f16d-af2e-43ec-9a99-e8d80e63e558",
+      "checklist_id": "4415d285-c00b-46b2-b0fa-84d3c392edee",
+      "material_id": null,
+      "material_name": "0.5 mm Wire",
+      "unit": "Nos.",
+      "quantity_issued": 20,
+      "quantity_used": 15.5,
+      "declared_return_qty": 4.5,
+      "accepted_usable_qty": 0,
+      "damaged_qty": 0,
+      "missing_qty": 0,
+      "status": "PENDING_STORE_VERIFICATION",
+      "declared_by": "e1000000-0000-0000-0000-000000000001",
+      "declared_at": "2026-10-15T08:16:11.584Z",
+      "verification_remarks": "Installation successful for Alpha Fleet, plus extra setup for Gamma Transport.",
+      "created_at": "2026-10-15T08:16:11.584Z",
+      "updated_at": "2026-10-15T08:16:11.584Z"
+    },
+    "dbb833e1-c07f-46ad-ad3e-b2e420254c20": {
+      "id": "dbb833e1-c07f-46ad-ad3e-b2e420254c20",
+      "checklist_id": "c4fd6cbf-0f81-43e9-b72f-dfc57b181076",
+      "material_id": null,
+      "material_name": "5-metre Cable",
+      "unit": "Nos.",
+      "quantity_issued": 4,
+      "quantity_used": 3,
+      "declared_return_qty": 1,
+      "accepted_usable_qty": 0,
+      "damaged_qty": 0,
+      "missing_qty": 0,
+      "status": "PENDING_STORE_VERIFICATION",
+      "declared_by": "e1000000-0000-0000-0000-000000000001",
+      "declared_at": "2026-10-15T08:17:04.916Z",
+      "verification_remarks": "Installation successful for Alpha Fleet, plus extra setup for Gamma Transport.",
+      "created_at": "2026-10-15T08:17:04.916Z",
+      "updated_at": "2026-10-15T08:17:04.916Z"
+    },
+    "f9b65afc-224c-434a-97d1-2d5c12a755a7": {
+      "id": "f9b65afc-224c-434a-97d1-2d5c12a755a7",
+      "checklist_id": "c4fd6cbf-0f81-43e9-b72f-dfc57b181076",
+      "material_id": null,
+      "material_name": "Insulation Tape",
+      "unit": "Nos.",
+      "quantity_issued": 3,
+      "quantity_used": 2,
+      "declared_return_qty": 1,
+      "accepted_usable_qty": 0,
+      "damaged_qty": 0,
+      "missing_qty": 0,
+      "status": "PENDING_STORE_VERIFICATION",
+      "declared_by": "e1000000-0000-0000-0000-000000000001",
+      "declared_at": "2026-10-15T08:17:05.136Z",
+      "verification_remarks": "Installation successful for Alpha Fleet, plus extra setup for Gamma Transport.",
+      "created_at": "2026-10-15T08:17:05.136Z",
+      "updated_at": "2026-10-15T08:17:05.136Z"
+    },
+    "732577c8-f536-4d97-aec9-29d320cc915b": {
+      "id": "732577c8-f536-4d97-aec9-29d320cc915b",
+      "checklist_id": "c4fd6cbf-0f81-43e9-b72f-dfc57b181076",
+      "material_id": null,
+      "material_name": "0.5 mm Wire",
+      "unit": "Nos.",
+      "quantity_issued": 20,
+      "quantity_used": 15.5,
+      "declared_return_qty": 4.5,
+      "accepted_usable_qty": 0,
+      "damaged_qty": 0,
+      "missing_qty": 0,
+      "status": "PENDING_STORE_VERIFICATION",
+      "declared_by": "e1000000-0000-0000-0000-000000000001",
+      "declared_at": "2026-10-15T08:17:05.336Z",
+      "verification_remarks": "Installation successful for Alpha Fleet, plus extra setup for Gamma Transport.",
+      "created_at": "2026-10-15T08:17:05.336Z",
+      "updated_at": "2026-10-15T08:17:05.336Z"
     }
   },
   "finalBoms": {
@@ -29744,6 +31016,1935 @@
         }
       ],
       "calculated_at": "2026-10-15T04:42:11.023Z"
+    },
+    "73e1cccb-1a94-422e-aa11-18643c949966": {
+      "configured": false,
+      "installed_device_configurations": [
+        {
+          "device_type": "Camera",
+          "quantity_carried": 5,
+          "number_of_devices": 5,
+          "number_of_vehicles": 5
+        },
+        {
+          "device_type": "Live Display",
+          "quantity_carried": 1,
+          "number_of_devices": 1,
+          "number_of_vehicles": 1
+        },
+        {
+          "device_type": "5-metre Cable",
+          "quantity_carried": 3,
+          "number_of_devices": 3,
+          "number_of_vehicles": 3
+        }
+      ],
+      "total_devices_installed": 9,
+      "final_bom": {
+        "configured": false,
+        "warning": "No Bill of Materials (BOM) is configured for \"Camera\", \"Live Display\", \"5-metre Cable\". Material requirements cannot be displayed as final until all selected device types have configured BOMs.",
+        "unconfigured_device_types": [
+          "Camera",
+          "Live Display",
+          "5-metre Cable"
+        ],
+        "device_configurations": [
+          {
+            "device_type": "Camera",
+            "number_of_devices": 5,
+            "number_of_vehicles": 5,
+            "bom_version": null,
+            "configured": false,
+            "items": []
+          },
+          {
+            "device_type": "Live Display",
+            "number_of_devices": 1,
+            "number_of_vehicles": 1,
+            "bom_version": null,
+            "configured": false,
+            "items": []
+          },
+          {
+            "device_type": "5-metre Cable",
+            "number_of_devices": 3,
+            "number_of_vehicles": 3,
+            "bom_version": null,
+            "configured": false,
+            "items": []
+          }
+        ],
+        "total_devices": 9,
+        "total_vehicles": 9,
+        "items": []
+      },
+      "items": [],
+      "comparison": [
+        {
+          "material_id": null,
+          "material_sku": null,
+          "material_name": "5-metre Cable",
+          "unit": "Nos.",
+          "preliminary_quantity": 3,
+          "final_quantity": 0,
+          "difference": -3,
+          "actual_issued": 0,
+          "actual_used": 0,
+          "actual_returned": 0,
+          "status": "MATCHED",
+          "variance_label": "-3"
+        },
+        {
+          "material_id": null,
+          "material_sku": null,
+          "material_name": "Insulation Tape",
+          "unit": "Nos.",
+          "preliminary_quantity": 2,
+          "final_quantity": 0,
+          "difference": -2,
+          "actual_issued": 3,
+          "actual_used": 2,
+          "actual_returned": 1,
+          "status": "MATCHED",
+          "variance_label": "-2"
+        },
+        {
+          "material_id": null,
+          "material_sku": null,
+          "material_name": "0.5 mm Wire",
+          "unit": "Metres",
+          "preliminary_quantity": 20,
+          "final_quantity": 0,
+          "difference": -20,
+          "actual_issued": 20,
+          "actual_used": 15,
+          "actual_returned": 5,
+          "status": "MATCHED",
+          "variance_label": "-20"
+        }
+      ],
+      "calculated_at": "2026-10-15T05:32:34.177Z"
+    },
+    "a621acdb-0628-4b04-8560-bc92ffa2cb65": {
+      "configured": true,
+      "installed_device_configurations": [
+        {
+          "device_type": "4 Channel Live",
+          "quantity_carried": 2,
+          "number_of_devices": 2,
+          "number_of_vehicles": 2
+        }
+      ],
+      "total_devices_installed": 2,
+      "final_bom": {
+        "configured": true,
+        "device_type": "4 Channel Live",
+        "bom_version": 1,
+        "number_of_devices": 2,
+        "total_devices": 2,
+        "total_vehicles": 2,
+        "device_configurations": [
+          {
+            "bom_id": "091f053b-71b1-43ed-8c64-bae9b9a84fea",
+            "device_type": "4 Channel Live",
+            "number_of_devices": 2,
+            "number_of_vehicles": 2,
+            "bom_version": 1,
+            "configured": true,
+            "items": [
+              {
+                "id": "9cbcac70-fba4-44c7-8808-18ae31fb8b87",
+                "material_id": "c99c1b8d-fa0b-4e65-8d9e-96549a591865",
+                "material_sku": "MAT-INSU-TAPE",
+                "material_name": "Insulation Tape",
+                "quantity_per_device": 2,
+                "number_of_devices": 2,
+                "total_quantity": 4,
+                "unit": "Nos.",
+                "inventory_unit": "Nos.",
+                "sort_order": 1
+              },
+              {
+                "id": "3555aa92-2f01-497d-91ce-54a00515f541",
+                "material_id": "bd1ed5a4-94c0-4f38-aabc-f6a46b0b0159",
+                "material_sku": "MAT-CT-200MM",
+                "material_name": "Cable Tie – 200 mm",
+                "quantity_per_device": 1,
+                "number_of_devices": 2,
+                "total_quantity": 2,
+                "unit": "Packets",
+                "inventory_unit": "Packets",
+                "sort_order": 2
+              },
+              {
+                "id": "7ba0b794-37d4-475e-94a9-bbb8aa8cc532",
+                "material_id": "893d903a-4d30-4fc2-96c2-fc7a2b872ed2",
+                "material_sku": "MAT-CT-300MM",
+                "material_name": "Cable Tie – 300 mm",
+                "quantity_per_device": 1,
+                "number_of_devices": 2,
+                "total_quantity": 2,
+                "unit": "Packets",
+                "inventory_unit": "Packets",
+                "sort_order": 3
+              },
+              {
+                "id": "1ebc3f19-8a0e-466d-b534-f5efb034264f",
+                "material_id": "943eb9be-f4bb-4300-90e9-6ce23cc90549",
+                "material_sku": "MAT-SCREW-LONG",
+                "material_name": "Long Screw",
+                "quantity_per_device": 12,
+                "number_of_devices": 2,
+                "total_quantity": 24,
+                "unit": "Nos.",
+                "inventory_unit": "Nos.",
+                "sort_order": 4
+              },
+              {
+                "id": "e7b91079-a982-4984-b864-2ff700afe541",
+                "material_id": "bd02bad8-3b6f-45b9-bbc7-c5c79ecb86bd",
+                "material_sku": "MAT-SCREW-SMALL",
+                "material_name": "Small Screw",
+                "quantity_per_device": 12,
+                "number_of_devices": 2,
+                "total_quantity": 24,
+                "unit": "Nos.",
+                "inventory_unit": "Nos.",
+                "sort_order": 5
+              },
+              {
+                "id": "0b36ce85-4589-4d1d-b823-cfe13bde2ba0",
+                "material_id": "9f46d34e-91a4-4f31-a8c5-b5541cc8b32d",
+                "material_sku": "MAT-MEM-CARD",
+                "material_name": "Memory Card",
+                "quantity_per_device": 1,
+                "number_of_devices": 2,
+                "total_quantity": 2,
+                "unit": "Nos.",
+                "inventory_unit": "Nos.",
+                "sort_order": 6
+              },
+              {
+                "id": "97aac822-5016-4126-b94d-9696201dbb04",
+                "material_id": "fcc5f452-6ae7-4097-bd5a-0ca9f29421e3",
+                "material_sku": "MAT-WIRE-0.5MM",
+                "material_name": "0.5 mm Wire",
+                "quantity_per_device": 20,
+                "number_of_devices": 2,
+                "total_quantity": 40,
+                "unit": "Metres",
+                "inventory_unit": "Metres",
+                "sort_order": 7
+              },
+              {
+                "id": "e946dd25-9dfc-4026-9583-51bea05ca9c4",
+                "material_id": "d9583db5-eb4c-4059-b86c-f9548c99ac85",
+                "material_sku": "MAT-CBL-5M",
+                "material_name": "5-metre Cable",
+                "quantity_per_device": 3,
+                "number_of_devices": 2,
+                "total_quantity": 6,
+                "unit": "Nos.",
+                "inventory_unit": "Nos.",
+                "sort_order": 8
+              },
+              {
+                "id": "c09acbf1-f2d1-49a6-8a55-507e34c71743",
+                "material_id": "ffb14238-0b26-4bd5-ba71-d362cb6861dc",
+                "material_sku": "MAT-CBL-15M",
+                "material_name": "15-metre Cable",
+                "quantity_per_device": 1,
+                "number_of_devices": 2,
+                "total_quantity": 2,
+                "unit": "Nos.",
+                "inventory_unit": "Nos.",
+                "sort_order": 9
+              }
+            ]
+          }
+        ],
+        "total_materials_count": 9,
+        "calculated_at": "2026-10-15T05:43:34.878Z",
+        "items": [
+          {
+            "material_id": "c99c1b8d-fa0b-4e65-8d9e-96549a591865",
+            "material_sku": "MAT-INSU-TAPE",
+            "material_name": "Insulation Tape",
+            "unit": "Nos.",
+            "quantity_per_device": 2,
+            "total_quantity": 4,
+            "sort_order": 1,
+            "breakdown": [
+              {
+                "device_type": "4 Channel Live",
+                "quantity_per_device": 2,
+                "number_of_devices": 2,
+                "subtotal": 4
+              }
+            ],
+            "number_of_devices": 2
+          },
+          {
+            "material_id": "bd1ed5a4-94c0-4f38-aabc-f6a46b0b0159",
+            "material_sku": "MAT-CT-200MM",
+            "material_name": "Cable Tie – 200 mm",
+            "unit": "Packets",
+            "quantity_per_device": 1,
+            "total_quantity": 2,
+            "sort_order": 2,
+            "breakdown": [
+              {
+                "device_type": "4 Channel Live",
+                "quantity_per_device": 1,
+                "number_of_devices": 2,
+                "subtotal": 2
+              }
+            ],
+            "number_of_devices": 2
+          },
+          {
+            "material_id": "893d903a-4d30-4fc2-96c2-fc7a2b872ed2",
+            "material_sku": "MAT-CT-300MM",
+            "material_name": "Cable Tie – 300 mm",
+            "unit": "Packets",
+            "quantity_per_device": 1,
+            "total_quantity": 2,
+            "sort_order": 3,
+            "breakdown": [
+              {
+                "device_type": "4 Channel Live",
+                "quantity_per_device": 1,
+                "number_of_devices": 2,
+                "subtotal": 2
+              }
+            ],
+            "number_of_devices": 2
+          },
+          {
+            "material_id": "943eb9be-f4bb-4300-90e9-6ce23cc90549",
+            "material_sku": "MAT-SCREW-LONG",
+            "material_name": "Long Screw",
+            "unit": "Nos.",
+            "quantity_per_device": 12,
+            "total_quantity": 24,
+            "sort_order": 4,
+            "breakdown": [
+              {
+                "device_type": "4 Channel Live",
+                "quantity_per_device": 12,
+                "number_of_devices": 2,
+                "subtotal": 24
+              }
+            ],
+            "number_of_devices": 2
+          },
+          {
+            "material_id": "bd02bad8-3b6f-45b9-bbc7-c5c79ecb86bd",
+            "material_sku": "MAT-SCREW-SMALL",
+            "material_name": "Small Screw",
+            "unit": "Nos.",
+            "quantity_per_device": 12,
+            "total_quantity": 24,
+            "sort_order": 5,
+            "breakdown": [
+              {
+                "device_type": "4 Channel Live",
+                "quantity_per_device": 12,
+                "number_of_devices": 2,
+                "subtotal": 24
+              }
+            ],
+            "number_of_devices": 2
+          },
+          {
+            "material_id": "9f46d34e-91a4-4f31-a8c5-b5541cc8b32d",
+            "material_sku": "MAT-MEM-CARD",
+            "material_name": "Memory Card",
+            "unit": "Nos.",
+            "quantity_per_device": 1,
+            "total_quantity": 2,
+            "sort_order": 6,
+            "breakdown": [
+              {
+                "device_type": "4 Channel Live",
+                "quantity_per_device": 1,
+                "number_of_devices": 2,
+                "subtotal": 2
+              }
+            ],
+            "number_of_devices": 2
+          },
+          {
+            "material_id": "fcc5f452-6ae7-4097-bd5a-0ca9f29421e3",
+            "material_sku": "MAT-WIRE-0.5MM",
+            "material_name": "0.5 mm Wire",
+            "unit": "Metres",
+            "quantity_per_device": 20,
+            "total_quantity": 40,
+            "sort_order": 7,
+            "breakdown": [
+              {
+                "device_type": "4 Channel Live",
+                "quantity_per_device": 20,
+                "number_of_devices": 2,
+                "subtotal": 40
+              }
+            ],
+            "number_of_devices": 2
+          },
+          {
+            "material_id": "d9583db5-eb4c-4059-b86c-f9548c99ac85",
+            "material_sku": "MAT-CBL-5M",
+            "material_name": "5-metre Cable",
+            "unit": "Nos.",
+            "quantity_per_device": 3,
+            "total_quantity": 6,
+            "sort_order": 8,
+            "breakdown": [
+              {
+                "device_type": "4 Channel Live",
+                "quantity_per_device": 3,
+                "number_of_devices": 2,
+                "subtotal": 6
+              }
+            ],
+            "number_of_devices": 2
+          },
+          {
+            "material_id": "ffb14238-0b26-4bd5-ba71-d362cb6861dc",
+            "material_sku": "MAT-CBL-15M",
+            "material_name": "15-metre Cable",
+            "unit": "Nos.",
+            "quantity_per_device": 1,
+            "total_quantity": 2,
+            "sort_order": 9,
+            "breakdown": [
+              {
+                "device_type": "4 Channel Live",
+                "quantity_per_device": 1,
+                "number_of_devices": 2,
+                "subtotal": 2
+              }
+            ],
+            "number_of_devices": 2
+          }
+        ]
+      },
+      "items": [
+        {
+          "material_id": "c99c1b8d-fa0b-4e65-8d9e-96549a591865",
+          "material_sku": "MAT-INSU-TAPE",
+          "material_name": "Insulation Tape",
+          "unit": "Nos.",
+          "quantity_per_device": 2,
+          "total_quantity": 4,
+          "sort_order": 1,
+          "breakdown": [
+            {
+              "device_type": "4 Channel Live",
+              "quantity_per_device": 2,
+              "number_of_devices": 2,
+              "subtotal": 4
+            }
+          ],
+          "number_of_devices": 2
+        },
+        {
+          "material_id": "bd1ed5a4-94c0-4f38-aabc-f6a46b0b0159",
+          "material_sku": "MAT-CT-200MM",
+          "material_name": "Cable Tie – 200 mm",
+          "unit": "Packets",
+          "quantity_per_device": 1,
+          "total_quantity": 2,
+          "sort_order": 2,
+          "breakdown": [
+            {
+              "device_type": "4 Channel Live",
+              "quantity_per_device": 1,
+              "number_of_devices": 2,
+              "subtotal": 2
+            }
+          ],
+          "number_of_devices": 2
+        },
+        {
+          "material_id": "893d903a-4d30-4fc2-96c2-fc7a2b872ed2",
+          "material_sku": "MAT-CT-300MM",
+          "material_name": "Cable Tie – 300 mm",
+          "unit": "Packets",
+          "quantity_per_device": 1,
+          "total_quantity": 2,
+          "sort_order": 3,
+          "breakdown": [
+            {
+              "device_type": "4 Channel Live",
+              "quantity_per_device": 1,
+              "number_of_devices": 2,
+              "subtotal": 2
+            }
+          ],
+          "number_of_devices": 2
+        },
+        {
+          "material_id": "943eb9be-f4bb-4300-90e9-6ce23cc90549",
+          "material_sku": "MAT-SCREW-LONG",
+          "material_name": "Long Screw",
+          "unit": "Nos.",
+          "quantity_per_device": 12,
+          "total_quantity": 24,
+          "sort_order": 4,
+          "breakdown": [
+            {
+              "device_type": "4 Channel Live",
+              "quantity_per_device": 12,
+              "number_of_devices": 2,
+              "subtotal": 24
+            }
+          ],
+          "number_of_devices": 2
+        },
+        {
+          "material_id": "bd02bad8-3b6f-45b9-bbc7-c5c79ecb86bd",
+          "material_sku": "MAT-SCREW-SMALL",
+          "material_name": "Small Screw",
+          "unit": "Nos.",
+          "quantity_per_device": 12,
+          "total_quantity": 24,
+          "sort_order": 5,
+          "breakdown": [
+            {
+              "device_type": "4 Channel Live",
+              "quantity_per_device": 12,
+              "number_of_devices": 2,
+              "subtotal": 24
+            }
+          ],
+          "number_of_devices": 2
+        },
+        {
+          "material_id": "9f46d34e-91a4-4f31-a8c5-b5541cc8b32d",
+          "material_sku": "MAT-MEM-CARD",
+          "material_name": "Memory Card",
+          "unit": "Nos.",
+          "quantity_per_device": 1,
+          "total_quantity": 2,
+          "sort_order": 6,
+          "breakdown": [
+            {
+              "device_type": "4 Channel Live",
+              "quantity_per_device": 1,
+              "number_of_devices": 2,
+              "subtotal": 2
+            }
+          ],
+          "number_of_devices": 2
+        },
+        {
+          "material_id": "fcc5f452-6ae7-4097-bd5a-0ca9f29421e3",
+          "material_sku": "MAT-WIRE-0.5MM",
+          "material_name": "0.5 mm Wire",
+          "unit": "Metres",
+          "quantity_per_device": 20,
+          "total_quantity": 40,
+          "sort_order": 7,
+          "breakdown": [
+            {
+              "device_type": "4 Channel Live",
+              "quantity_per_device": 20,
+              "number_of_devices": 2,
+              "subtotal": 40
+            }
+          ],
+          "number_of_devices": 2
+        },
+        {
+          "material_id": "d9583db5-eb4c-4059-b86c-f9548c99ac85",
+          "material_sku": "MAT-CBL-5M",
+          "material_name": "5-metre Cable",
+          "unit": "Nos.",
+          "quantity_per_device": 3,
+          "total_quantity": 6,
+          "sort_order": 8,
+          "breakdown": [
+            {
+              "device_type": "4 Channel Live",
+              "quantity_per_device": 3,
+              "number_of_devices": 2,
+              "subtotal": 6
+            }
+          ],
+          "number_of_devices": 2
+        },
+        {
+          "material_id": "ffb14238-0b26-4bd5-ba71-d362cb6861dc",
+          "material_sku": "MAT-CBL-15M",
+          "material_name": "15-metre Cable",
+          "unit": "Nos.",
+          "quantity_per_device": 1,
+          "total_quantity": 2,
+          "sort_order": 9,
+          "breakdown": [
+            {
+              "device_type": "4 Channel Live",
+              "quantity_per_device": 1,
+              "number_of_devices": 2,
+              "subtotal": 2
+            }
+          ],
+          "number_of_devices": 2
+        }
+      ],
+      "comparison": [
+        {
+          "material_id": "c99c1b8d-fa0b-4e65-8d9e-96549a591865",
+          "material_sku": "MAT-INSU-TAPE",
+          "material_name": "Insulation Tape",
+          "unit": "Nos.",
+          "preliminary_quantity": 4,
+          "final_quantity": 4,
+          "difference": 0,
+          "actual_issued": 0,
+          "actual_used": 0,
+          "actual_returned": 0,
+          "status": "MATCHED",
+          "variance_label": "Equal"
+        },
+        {
+          "material_id": "bd1ed5a4-94c0-4f38-aabc-f6a46b0b0159",
+          "material_sku": "MAT-CT-200MM",
+          "material_name": "Cable Tie – 200 mm",
+          "unit": "Packets",
+          "preliminary_quantity": 2,
+          "final_quantity": 2,
+          "difference": 0,
+          "actual_issued": 0,
+          "actual_used": 0,
+          "actual_returned": 0,
+          "status": "MATCHED",
+          "variance_label": "Equal"
+        },
+        {
+          "material_id": "893d903a-4d30-4fc2-96c2-fc7a2b872ed2",
+          "material_sku": "MAT-CT-300MM",
+          "material_name": "Cable Tie – 300 mm",
+          "unit": "Packets",
+          "preliminary_quantity": 2,
+          "final_quantity": 2,
+          "difference": 0,
+          "actual_issued": 0,
+          "actual_used": 0,
+          "actual_returned": 0,
+          "status": "MATCHED",
+          "variance_label": "Equal"
+        },
+        {
+          "material_id": "943eb9be-f4bb-4300-90e9-6ce23cc90549",
+          "material_sku": "MAT-SCREW-LONG",
+          "material_name": "Long Screw",
+          "unit": "Nos.",
+          "preliminary_quantity": 24,
+          "final_quantity": 24,
+          "difference": 0,
+          "actual_issued": 0,
+          "actual_used": 0,
+          "actual_returned": 0,
+          "status": "MATCHED",
+          "variance_label": "Equal"
+        },
+        {
+          "material_id": "bd02bad8-3b6f-45b9-bbc7-c5c79ecb86bd",
+          "material_sku": "MAT-SCREW-SMALL",
+          "material_name": "Small Screw",
+          "unit": "Nos.",
+          "preliminary_quantity": 24,
+          "final_quantity": 24,
+          "difference": 0,
+          "actual_issued": 0,
+          "actual_used": 0,
+          "actual_returned": 0,
+          "status": "MATCHED",
+          "variance_label": "Equal"
+        },
+        {
+          "material_id": "9f46d34e-91a4-4f31-a8c5-b5541cc8b32d",
+          "material_sku": "MAT-MEM-CARD",
+          "material_name": "Memory Card",
+          "unit": "Nos.",
+          "preliminary_quantity": 2,
+          "final_quantity": 2,
+          "difference": 0,
+          "actual_issued": 0,
+          "actual_used": 0,
+          "actual_returned": 0,
+          "status": "MATCHED",
+          "variance_label": "Equal"
+        },
+        {
+          "material_id": "fcc5f452-6ae7-4097-bd5a-0ca9f29421e3",
+          "material_sku": "MAT-WIRE-0.5MM",
+          "material_name": "0.5 mm Wire",
+          "unit": "Metres",
+          "preliminary_quantity": 40,
+          "final_quantity": 40,
+          "difference": 0,
+          "actual_issued": 0,
+          "actual_used": 0,
+          "actual_returned": 0,
+          "status": "MATCHED",
+          "variance_label": "Equal"
+        },
+        {
+          "material_id": "d9583db5-eb4c-4059-b86c-f9548c99ac85",
+          "material_sku": "MAT-CBL-5M",
+          "material_name": "5-metre Cable",
+          "unit": "Nos.",
+          "preliminary_quantity": 6,
+          "final_quantity": 6,
+          "difference": 0,
+          "actual_issued": 0,
+          "actual_used": 0,
+          "actual_returned": 0,
+          "status": "MATCHED",
+          "variance_label": "Equal"
+        },
+        {
+          "material_id": "ffb14238-0b26-4bd5-ba71-d362cb6861dc",
+          "material_sku": "MAT-CBL-15M",
+          "material_name": "15-metre Cable",
+          "unit": "Nos.",
+          "preliminary_quantity": 2,
+          "final_quantity": 2,
+          "difference": 0,
+          "actual_issued": 0,
+          "actual_used": 0,
+          "actual_returned": 0,
+          "status": "MATCHED",
+          "variance_label": "Equal"
+        }
+      ],
+      "calculated_at": "2026-10-15T05:43:34.879Z"
+    },
+    "a7030c8a-748e-455b-b625-b708f98c5c67": {
+      "configured": false,
+      "installed_device_configurations": [
+        {
+          "device_type": "SafDrive Model X",
+          "quantity_carried": 1,
+          "number_of_devices": 1,
+          "number_of_vehicles": 1
+        }
+      ],
+      "total_devices_installed": 1,
+      "final_bom": {
+        "configured": false,
+        "warning": "No Bill of Materials (BOM) is configured for \"SafDrive Model X\". Material requirements cannot be displayed as final until all selected device types have configured BOMs.",
+        "unconfigured_device_types": [
+          "SafDrive Model X"
+        ],
+        "device_configurations": [
+          {
+            "device_type": "SafDrive Model X",
+            "number_of_devices": 1,
+            "number_of_vehicles": 1,
+            "bom_version": null,
+            "configured": false,
+            "items": []
+          }
+        ],
+        "total_devices": 1,
+        "total_vehicles": 1,
+        "items": []
+      },
+      "items": [],
+      "comparison": [],
+      "calculated_at": "2026-10-15T06:37:32.623Z"
+    },
+    "4472a9ad-02e7-4bbe-b36e-306bc017cc15": {
+      "configured": false,
+      "installed_device_configurations": [
+        {
+          "device_type": "SafDrive Model X",
+          "quantity_carried": 1,
+          "number_of_devices": 1,
+          "number_of_vehicles": 1
+        }
+      ],
+      "total_devices_installed": 1,
+      "final_bom": {
+        "configured": false,
+        "warning": "No Bill of Materials (BOM) is configured for \"SafDrive Model X\". Material requirements cannot be displayed as final until all selected device types have configured BOMs.",
+        "unconfigured_device_types": [
+          "SafDrive Model X"
+        ],
+        "device_configurations": [
+          {
+            "device_type": "SafDrive Model X",
+            "number_of_devices": 1,
+            "number_of_vehicles": 1,
+            "bom_version": null,
+            "configured": false,
+            "items": []
+          }
+        ],
+        "total_devices": 1,
+        "total_vehicles": 1,
+        "items": []
+      },
+      "items": [],
+      "comparison": [],
+      "calculated_at": "2026-10-15T06:46:54.119Z"
+    },
+    "37713bdb-26bc-45d3-b458-0846844cf8c0": {
+      "configured": false,
+      "installed_device_configurations": [
+        {
+          "device_type": "SafDrive Model X",
+          "quantity_carried": 1,
+          "number_of_devices": 1,
+          "number_of_vehicles": 1
+        }
+      ],
+      "total_devices_installed": 1,
+      "final_bom": {
+        "configured": false,
+        "warning": "No Bill of Materials (BOM) is configured for \"SafDrive Model X\". Material requirements cannot be displayed as final until all selected device types have configured BOMs.",
+        "unconfigured_device_types": [
+          "SafDrive Model X"
+        ],
+        "device_configurations": [
+          {
+            "device_type": "SafDrive Model X",
+            "number_of_devices": 1,
+            "number_of_vehicles": 1,
+            "bom_version": null,
+            "configured": false,
+            "items": []
+          }
+        ],
+        "total_devices": 1,
+        "total_vehicles": 1,
+        "items": []
+      },
+      "items": [],
+      "comparison": [],
+      "calculated_at": "2026-10-15T06:47:32.578Z"
+    },
+    "0996b6d8-357c-414a-9c50-1dd3d2b2abf7": {
+      "configured": false,
+      "installed_device_configurations": [
+        {
+          "device_type": "SafDrive Model X",
+          "quantity_carried": 1,
+          "number_of_devices": 1,
+          "number_of_vehicles": 1
+        }
+      ],
+      "total_devices_installed": 1,
+      "final_bom": {
+        "configured": false,
+        "warning": "No Bill of Materials (BOM) is configured for \"SafDrive Model X\". Material requirements cannot be displayed as final until all selected device types have configured BOMs.",
+        "unconfigured_device_types": [
+          "SafDrive Model X"
+        ],
+        "device_configurations": [
+          {
+            "device_type": "SafDrive Model X",
+            "number_of_devices": 1,
+            "number_of_vehicles": 1,
+            "bom_version": null,
+            "configured": false,
+            "items": []
+          }
+        ],
+        "total_devices": 1,
+        "total_vehicles": 1,
+        "items": []
+      },
+      "items": [],
+      "comparison": [],
+      "calculated_at": "2026-10-15T06:51:25.944Z"
+    },
+    "518a5778-1ce5-4855-956d-bdbd7f5335b4": {
+      "configured": false,
+      "installed_device_configurations": [
+        {
+          "device_type": "SafDrive Model X",
+          "quantity_carried": 1,
+          "number_of_devices": 1,
+          "number_of_vehicles": 1
+        }
+      ],
+      "total_devices_installed": 1,
+      "final_bom": {
+        "configured": false,
+        "warning": "No Bill of Materials (BOM) is configured for \"SafDrive Model X\". Material requirements cannot be displayed as final until all selected device types have configured BOMs.",
+        "unconfigured_device_types": [
+          "SafDrive Model X"
+        ],
+        "device_configurations": [
+          {
+            "device_type": "SafDrive Model X",
+            "number_of_devices": 1,
+            "number_of_vehicles": 1,
+            "bom_version": null,
+            "configured": false,
+            "items": []
+          }
+        ],
+        "total_devices": 1,
+        "total_vehicles": 1,
+        "items": []
+      },
+      "items": [],
+      "comparison": [],
+      "calculated_at": "2026-10-15T06:52:05.532Z"
+    },
+    "64df5507-196e-4fc8-9b40-88254d67bfc7": {
+      "configured": false,
+      "installed_device_configurations": [
+        {
+          "device_type": "SafDrive Model X",
+          "quantity_carried": 1,
+          "number_of_devices": 1,
+          "number_of_vehicles": 1
+        }
+      ],
+      "total_devices_installed": 1,
+      "final_bom": {
+        "configured": false,
+        "warning": "No Bill of Materials (BOM) is configured for \"SafDrive Model X\". Material requirements cannot be displayed as final until all selected device types have configured BOMs.",
+        "unconfigured_device_types": [
+          "SafDrive Model X"
+        ],
+        "device_configurations": [
+          {
+            "device_type": "SafDrive Model X",
+            "number_of_devices": 1,
+            "number_of_vehicles": 1,
+            "bom_version": null,
+            "configured": false,
+            "items": []
+          }
+        ],
+        "total_devices": 1,
+        "total_vehicles": 1,
+        "items": []
+      },
+      "items": [],
+      "comparison": [],
+      "calculated_at": "2026-10-15T06:52:39.922Z"
+    },
+    "8567dd4b-6b6f-4080-a747-42b7557ed79e": {
+      "configured": false,
+      "installed_device_configurations": [
+        {
+          "device_type": "SafDrive Model X",
+          "quantity_carried": 1,
+          "number_of_devices": 1,
+          "number_of_vehicles": 1
+        }
+      ],
+      "total_devices_installed": 1,
+      "final_bom": {
+        "configured": false,
+        "warning": "No Bill of Materials (BOM) is configured for \"SafDrive Model X\". Material requirements cannot be displayed as final until all selected device types have configured BOMs.",
+        "unconfigured_device_types": [
+          "SafDrive Model X"
+        ],
+        "device_configurations": [
+          {
+            "device_type": "SafDrive Model X",
+            "number_of_devices": 1,
+            "number_of_vehicles": 1,
+            "bom_version": null,
+            "configured": false,
+            "items": []
+          }
+        ],
+        "total_devices": 1,
+        "total_vehicles": 1,
+        "items": []
+      },
+      "items": [],
+      "comparison": [],
+      "calculated_at": "2026-10-15T06:53:49.475Z"
+    },
+    "da516f74-b3e4-45bb-87f4-93ffdf9d0520": {
+      "configured": false,
+      "installed_device_configurations": [
+        {
+          "device_type": "SafDrive Model X",
+          "quantity_carried": 1,
+          "number_of_devices": 1,
+          "number_of_vehicles": 1
+        }
+      ],
+      "total_devices_installed": 1,
+      "final_bom": {
+        "configured": false,
+        "warning": "No Bill of Materials (BOM) is configured for \"SafDrive Model X\". Material requirements cannot be displayed as final until all selected device types have configured BOMs.",
+        "unconfigured_device_types": [
+          "SafDrive Model X"
+        ],
+        "device_configurations": [
+          {
+            "device_type": "SafDrive Model X",
+            "number_of_devices": 1,
+            "number_of_vehicles": 1,
+            "bom_version": null,
+            "configured": false,
+            "items": []
+          }
+        ],
+        "total_devices": 1,
+        "total_vehicles": 1,
+        "items": []
+      },
+      "items": [],
+      "comparison": [],
+      "calculated_at": "2026-10-15T07:17:47.037Z"
+    },
+    "e05480fd-4bde-45c3-bf02-783a007435ac": {
+      "configured": false,
+      "installed_device_configurations": [
+        {
+          "device_type": "SafDrive Model X",
+          "quantity_carried": 1,
+          "number_of_devices": 1,
+          "number_of_vehicles": 1
+        }
+      ],
+      "total_devices_installed": 1,
+      "final_bom": {
+        "configured": false,
+        "warning": "No Bill of Materials (BOM) is configured for \"SafDrive Model X\". Material requirements cannot be displayed as final until all selected device types have configured BOMs.",
+        "unconfigured_device_types": [
+          "SafDrive Model X"
+        ],
+        "device_configurations": [
+          {
+            "device_type": "SafDrive Model X",
+            "number_of_devices": 1,
+            "number_of_vehicles": 1,
+            "bom_version": null,
+            "configured": false,
+            "items": []
+          }
+        ],
+        "total_devices": 1,
+        "total_vehicles": 1,
+        "items": []
+      },
+      "items": [],
+      "comparison": [],
+      "calculated_at": "2026-10-15T07:18:26.878Z"
+    },
+    "58de5ec1-4cd8-4a8c-95bd-c99c20663f17": {
+      "configured": false,
+      "installed_device_configurations": [
+        {
+          "device_type": "SafDrive Model X",
+          "quantity_carried": 1,
+          "number_of_devices": 1,
+          "number_of_vehicles": 1
+        }
+      ],
+      "total_devices_installed": 1,
+      "final_bom": {
+        "configured": false,
+        "warning": "No Bill of Materials (BOM) is configured for \"SafDrive Model X\". Material requirements cannot be displayed as final until all selected device types have configured BOMs.",
+        "unconfigured_device_types": [
+          "SafDrive Model X"
+        ],
+        "device_configurations": [
+          {
+            "device_type": "SafDrive Model X",
+            "number_of_devices": 1,
+            "number_of_vehicles": 1,
+            "bom_version": null,
+            "configured": false,
+            "items": []
+          }
+        ],
+        "total_devices": 1,
+        "total_vehicles": 1,
+        "items": []
+      },
+      "items": [],
+      "comparison": [],
+      "calculated_at": "2026-10-15T07:19:37.553Z"
+    },
+    "87bdef9b-e8e7-48c6-8ef9-45d4ea7322ef": {
+      "configured": false,
+      "installed_device_configurations": [
+        {
+          "device_type": "Camera",
+          "quantity_carried": 5,
+          "number_of_devices": 5,
+          "number_of_vehicles": 5
+        },
+        {
+          "device_type": "Live Display",
+          "quantity_carried": 1,
+          "number_of_devices": 1,
+          "number_of_vehicles": 1
+        },
+        {
+          "device_type": "5-metre Cable",
+          "quantity_carried": 3,
+          "number_of_devices": 3,
+          "number_of_vehicles": 3
+        }
+      ],
+      "total_devices_installed": 9,
+      "final_bom": {
+        "configured": false,
+        "warning": "No Bill of Materials (BOM) is configured for \"Camera\", \"Live Display\", \"5-metre Cable\". Material requirements cannot be displayed as final until all selected device types have configured BOMs.",
+        "unconfigured_device_types": [
+          "Camera",
+          "Live Display",
+          "5-metre Cable"
+        ],
+        "device_configurations": [
+          {
+            "device_type": "Camera",
+            "number_of_devices": 5,
+            "number_of_vehicles": 5,
+            "bom_version": null,
+            "configured": false,
+            "items": []
+          },
+          {
+            "device_type": "Live Display",
+            "number_of_devices": 1,
+            "number_of_vehicles": 1,
+            "bom_version": null,
+            "configured": false,
+            "items": []
+          },
+          {
+            "device_type": "5-metre Cable",
+            "number_of_devices": 3,
+            "number_of_vehicles": 3,
+            "bom_version": null,
+            "configured": false,
+            "items": []
+          }
+        ],
+        "total_devices": 9,
+        "total_vehicles": 9,
+        "items": []
+      },
+      "items": [],
+      "comparison": [
+        {
+          "material_id": null,
+          "material_sku": null,
+          "material_name": "5-metre Cable",
+          "unit": "Nos.",
+          "preliminary_quantity": 3,
+          "final_quantity": 0,
+          "difference": -3,
+          "actual_issued": 0,
+          "actual_used": 0,
+          "actual_returned": 0,
+          "status": "MATCHED",
+          "variance_label": "-3"
+        },
+        {
+          "material_id": null,
+          "material_sku": null,
+          "material_name": "Insulation Tape",
+          "unit": "Nos.",
+          "preliminary_quantity": 2,
+          "final_quantity": 0,
+          "difference": -2,
+          "actual_issued": 3,
+          "actual_used": 2,
+          "actual_returned": 1,
+          "status": "MATCHED",
+          "variance_label": "-2"
+        },
+        {
+          "material_id": null,
+          "material_sku": null,
+          "material_name": "0.5 mm Wire",
+          "unit": "Metres",
+          "preliminary_quantity": 20,
+          "final_quantity": 0,
+          "difference": -20,
+          "actual_issued": 20,
+          "actual_used": 15,
+          "actual_returned": 5,
+          "status": "MATCHED",
+          "variance_label": "-20"
+        }
+      ],
+      "calculated_at": "2026-10-15T07:49:15.657Z"
+    },
+    "ff13fab9-f344-4ed4-b3ca-931a91c31488": {
+      "configured": false,
+      "installed_device_configurations": [
+        {
+          "device_type": "SafDrive Model X",
+          "quantity_carried": 1,
+          "number_of_devices": 1,
+          "number_of_vehicles": 1
+        }
+      ],
+      "total_devices_installed": 1,
+      "final_bom": {
+        "configured": false,
+        "warning": "No Bill of Materials (BOM) is configured for \"SafDrive Model X\". Material requirements cannot be displayed as final until all selected device types have configured BOMs.",
+        "unconfigured_device_types": [
+          "SafDrive Model X"
+        ],
+        "device_configurations": [
+          {
+            "device_type": "SafDrive Model X",
+            "number_of_devices": 1,
+            "number_of_vehicles": 1,
+            "bom_version": null,
+            "configured": false,
+            "items": []
+          }
+        ],
+        "total_devices": 1,
+        "total_vehicles": 1,
+        "items": []
+      },
+      "items": [],
+      "comparison": [],
+      "calculated_at": "2026-10-15T07:50:32.323Z"
+    },
+    "3df4828d-c084-4e1e-8a64-e473d436dff9": {
+      "configured": false,
+      "installed_device_configurations": [
+        {
+          "device_type": "SafDrive Model X",
+          "quantity_carried": 1,
+          "number_of_devices": 1,
+          "number_of_vehicles": 1
+        }
+      ],
+      "total_devices_installed": 1,
+      "final_bom": {
+        "configured": false,
+        "warning": "No Bill of Materials (BOM) is configured for \"SafDrive Model X\". Material requirements cannot be displayed as final until all selected device types have configured BOMs.",
+        "unconfigured_device_types": [
+          "SafDrive Model X"
+        ],
+        "device_configurations": [
+          {
+            "device_type": "SafDrive Model X",
+            "number_of_devices": 1,
+            "number_of_vehicles": 1,
+            "bom_version": null,
+            "configured": false,
+            "items": []
+          }
+        ],
+        "total_devices": 1,
+        "total_vehicles": 1,
+        "items": []
+      },
+      "items": [],
+      "comparison": [],
+      "calculated_at": "2026-10-15T07:51:42.002Z"
+    },
+    "7284a61a-e5e5-4f56-8126-1c24cc4a1b1c": {
+      "configured": false,
+      "installed_device_configurations": [
+        {
+          "device_type": "SafDrive Model X",
+          "quantity_carried": 1,
+          "number_of_devices": 1,
+          "number_of_vehicles": 1
+        }
+      ],
+      "total_devices_installed": 1,
+      "final_bom": {
+        "configured": false,
+        "warning": "No Bill of Materials (BOM) is configured for \"SafDrive Model X\". Material requirements cannot be displayed as final until all selected device types have configured BOMs.",
+        "unconfigured_device_types": [
+          "SafDrive Model X"
+        ],
+        "device_configurations": [
+          {
+            "device_type": "SafDrive Model X",
+            "number_of_devices": 1,
+            "number_of_vehicles": 1,
+            "bom_version": null,
+            "configured": false,
+            "items": []
+          }
+        ],
+        "total_devices": 1,
+        "total_vehicles": 1,
+        "items": []
+      },
+      "items": [],
+      "comparison": [],
+      "calculated_at": "2026-10-15T07:52:20.029Z"
+    },
+    "533ffc18-87e1-49b2-b6d5-619ac4cf726d": {
+      "configured": false,
+      "installed_device_configurations": [
+        {
+          "device_type": "Camera",
+          "quantity_carried": 5,
+          "number_of_devices": 5,
+          "number_of_vehicles": 5
+        },
+        {
+          "device_type": "Live Display",
+          "quantity_carried": 1,
+          "number_of_devices": 1,
+          "number_of_vehicles": 1
+        }
+      ],
+      "total_devices_installed": 6,
+      "final_bom": {
+        "configured": false,
+        "warning": "No Bill of Materials (BOM) is configured for \"Camera\", \"Live Display\". Material requirements cannot be displayed as final until all selected device types have configured BOMs.",
+        "unconfigured_device_types": [
+          "Camera",
+          "Live Display"
+        ],
+        "device_configurations": [
+          {
+            "device_type": "Camera",
+            "number_of_devices": 5,
+            "number_of_vehicles": 5,
+            "bom_version": null,
+            "configured": false,
+            "items": []
+          },
+          {
+            "device_type": "Live Display",
+            "number_of_devices": 1,
+            "number_of_vehicles": 1,
+            "bom_version": null,
+            "configured": false,
+            "items": []
+          }
+        ],
+        "total_devices": 6,
+        "total_vehicles": 6,
+        "items": []
+      },
+      "items": [],
+      "comparison": [
+        {
+          "material_id": null,
+          "material_sku": null,
+          "material_name": "5-metre Cable",
+          "unit": "Nos.",
+          "preliminary_quantity": 3,
+          "final_quantity": 0,
+          "difference": -3,
+          "actual_issued": 4,
+          "actual_used": 3,
+          "actual_returned": 1,
+          "status": "MATCHED",
+          "variance_label": "-3"
+        },
+        {
+          "material_id": null,
+          "material_sku": null,
+          "material_name": "Insulation Tape",
+          "unit": "Nos.",
+          "preliminary_quantity": 2,
+          "final_quantity": 0,
+          "difference": -2,
+          "actual_issued": 3,
+          "actual_used": 2,
+          "actual_returned": 1,
+          "status": "MATCHED",
+          "variance_label": "-2"
+        },
+        {
+          "material_id": null,
+          "material_sku": null,
+          "material_name": "0.5 mm Wire",
+          "unit": "Metres",
+          "preliminary_quantity": 20,
+          "final_quantity": 0,
+          "difference": -20,
+          "actual_issued": 20,
+          "actual_used": 15.5,
+          "actual_returned": 4.5,
+          "status": "MATCHED",
+          "variance_label": "-20"
+        }
+      ],
+      "calculated_at": "2026-10-15T08:09:34.528Z"
+    },
+    "4415d285-c00b-46b2-b0fa-84d3c392edee": {
+      "configured": false,
+      "installed_device_configurations": [
+        {
+          "device_type": "Camera",
+          "quantity_carried": 5,
+          "number_of_devices": 5,
+          "number_of_vehicles": 5
+        },
+        {
+          "device_type": "Live Display",
+          "quantity_carried": 1,
+          "number_of_devices": 1,
+          "number_of_vehicles": 1
+        }
+      ],
+      "total_devices_installed": 6,
+      "final_bom": {
+        "configured": false,
+        "warning": "No Bill of Materials (BOM) is configured for \"Camera\", \"Live Display\". Material requirements cannot be displayed as final until all selected device types have configured BOMs.",
+        "unconfigured_device_types": [
+          "Camera",
+          "Live Display"
+        ],
+        "device_configurations": [
+          {
+            "device_type": "Camera",
+            "number_of_devices": 5,
+            "number_of_vehicles": 5,
+            "bom_version": null,
+            "configured": false,
+            "items": []
+          },
+          {
+            "device_type": "Live Display",
+            "number_of_devices": 1,
+            "number_of_vehicles": 1,
+            "bom_version": null,
+            "configured": false,
+            "items": []
+          }
+        ],
+        "total_devices": 6,
+        "total_vehicles": 6,
+        "items": []
+      },
+      "items": [],
+      "comparison": [
+        {
+          "material_id": null,
+          "material_sku": null,
+          "material_name": "5-metre Cable",
+          "unit": "Nos.",
+          "preliminary_quantity": 3,
+          "final_quantity": 0,
+          "difference": -3,
+          "actual_issued": 4,
+          "actual_used": 3,
+          "actual_returned": 1,
+          "status": "MATCHED",
+          "variance_label": "-3"
+        },
+        {
+          "material_id": null,
+          "material_sku": null,
+          "material_name": "Insulation Tape",
+          "unit": "Nos.",
+          "preliminary_quantity": 2,
+          "final_quantity": 0,
+          "difference": -2,
+          "actual_issued": 3,
+          "actual_used": 2,
+          "actual_returned": 1,
+          "status": "MATCHED",
+          "variance_label": "-2"
+        },
+        {
+          "material_id": null,
+          "material_sku": null,
+          "material_name": "0.5 mm Wire",
+          "unit": "Metres",
+          "preliminary_quantity": 20,
+          "final_quantity": 0,
+          "difference": -20,
+          "actual_issued": 20,
+          "actual_used": 15.5,
+          "actual_returned": 4.5,
+          "status": "MATCHED",
+          "variance_label": "-20"
+        }
+      ],
+      "calculated_at": "2026-10-15T08:16:10.157Z"
+    },
+    "c4fd6cbf-0f81-43e9-b72f-dfc57b181076": {
+      "configured": false,
+      "installed_device_configurations": [
+        {
+          "device_type": "Camera",
+          "quantity_carried": 5,
+          "number_of_devices": 5,
+          "number_of_vehicles": 5
+        },
+        {
+          "device_type": "Live Display",
+          "quantity_carried": 1,
+          "number_of_devices": 1,
+          "number_of_vehicles": 1
+        }
+      ],
+      "total_devices_installed": 6,
+      "final_bom": {
+        "configured": false,
+        "warning": "No Bill of Materials (BOM) is configured for \"Camera\", \"Live Display\". Material requirements cannot be displayed as final until all selected device types have configured BOMs.",
+        "unconfigured_device_types": [
+          "Camera",
+          "Live Display"
+        ],
+        "device_configurations": [
+          {
+            "device_type": "Camera",
+            "number_of_devices": 5,
+            "number_of_vehicles": 5,
+            "bom_version": null,
+            "configured": false,
+            "items": []
+          },
+          {
+            "device_type": "Live Display",
+            "number_of_devices": 1,
+            "number_of_vehicles": 1,
+            "bom_version": null,
+            "configured": false,
+            "items": []
+          }
+        ],
+        "total_devices": 6,
+        "total_vehicles": 6,
+        "items": []
+      },
+      "items": [],
+      "comparison": [
+        {
+          "material_id": null,
+          "material_sku": null,
+          "material_name": "5-metre Cable",
+          "unit": "Nos.",
+          "preliminary_quantity": 3,
+          "final_quantity": 0,
+          "difference": -3,
+          "actual_issued": 4,
+          "actual_used": 3,
+          "actual_returned": 1,
+          "status": "MATCHED",
+          "variance_label": "-3"
+        },
+        {
+          "material_id": null,
+          "material_sku": null,
+          "material_name": "Insulation Tape",
+          "unit": "Nos.",
+          "preliminary_quantity": 2,
+          "final_quantity": 0,
+          "difference": -2,
+          "actual_issued": 3,
+          "actual_used": 2,
+          "actual_returned": 1,
+          "status": "MATCHED",
+          "variance_label": "-2"
+        },
+        {
+          "material_id": null,
+          "material_sku": null,
+          "material_name": "0.5 mm Wire",
+          "unit": "Metres",
+          "preliminary_quantity": 20,
+          "final_quantity": 0,
+          "difference": -20,
+          "actual_issued": 20,
+          "actual_used": 15.5,
+          "actual_returned": 4.5,
+          "status": "MATCHED",
+          "variance_label": "-20"
+        }
+      ],
+      "calculated_at": "2026-10-15T08:17:03.828Z"
     }
+  },
+  "additionalInstallations": {
+    "533ffc18-87e1-49b2-b6d5-619ac4cf726d": [
+      {
+        "id": "3873665b-9e7a-4967-a90a-ef601847d562",
+        "checklist_id": "533ffc18-87e1-49b2-b6d5-619ac4cf726d",
+        "checklist_number": "EE-ACCP-1792051764261-98",
+        "original_customer_name": "Main Alpha Fleet",
+        "recipient_customer_type": "SAME_CUSTOMER",
+        "recipient_customer_name": "Main Alpha Fleet",
+        "recipient_mobile": "9876543210",
+        "installation_location": "Central Depot Bay 4",
+        "maps_link": null,
+        "installation_date": "2026-10-25",
+        "device_configuration": "2 Channel Live",
+        "components_used": [
+          {
+            "component_name": "Camera",
+            "quantity": 2,
+            "unit": "Nos."
+          },
+          {
+            "component_name": "Live Display",
+            "quantity": 1,
+            "unit": "Nos."
+          }
+        ],
+        "materials_used": [],
+        "technician_id": "e1000000-0000-0000-0000-000000000001",
+        "technician_name": "Mathi",
+        "notes": "Extra backup set installed on second vehicle of same fleet",
+        "created_at": "2026-10-15T08:09:32.622Z",
+        "updated_at": "2026-10-15T08:09:32.622Z"
+      },
+      {
+        "id": "c733a24b-49fc-4131-8d03-eb8eb46fcc23",
+        "checklist_id": "533ffc18-87e1-49b2-b6d5-619ac4cf726d",
+        "checklist_number": "EE-ACCP-1792051764261-98",
+        "original_customer_name": "Main Alpha Fleet",
+        "recipient_customer_type": "ANOTHER_CUSTOMER",
+        "recipient_customer_name": "Gamma Transport Services",
+        "recipient_mobile": "9123456780",
+        "installation_location": "Highway Plaza Dock 2",
+        "maps_link": "https://maps.google.com/?q=13.0827,80.2707",
+        "installation_date": "2026-10-25",
+        "device_configuration": "2 Channel Live",
+        "components_used": [
+          {
+            "component_name": "Camera",
+            "quantity": 2,
+            "unit": "Nos."
+          },
+          {
+            "component_name": "Live Display",
+            "quantity": 1,
+            "unit": "Nos."
+          }
+        ],
+        "materials_used": [],
+        "technician_id": "e1000000-0000-0000-0000-000000000001",
+        "technician_name": "Mathi",
+        "notes": "Opportunity install for adjacent transport fleet",
+        "created_at": "2026-10-15T08:09:32.622Z",
+        "updated_at": "2026-10-15T08:09:32.622Z"
+      },
+      {
+        "id": "5cdc5795-dede-41a6-a6cf-4cff5a2daaa6",
+        "checklist_id": "533ffc18-87e1-49b2-b6d5-619ac4cf726d",
+        "checklist_number": "EE-ACCP-1792051764261-98",
+        "original_customer_name": "Main Alpha Fleet",
+        "recipient_customer_type": "SAME_CUSTOMER",
+        "recipient_customer_name": "Main Alpha Fleet",
+        "recipient_mobile": "9876543210",
+        "installation_location": "Central Depot Bay 4",
+        "maps_link": null,
+        "installation_date": "2026-10-25",
+        "device_configuration": "2 Channel Live",
+        "components_used": [
+          {
+            "component_name": "Camera",
+            "quantity": 2,
+            "unit": "Nos."
+          },
+          {
+            "component_name": "Live Display",
+            "quantity": 1,
+            "unit": "Nos."
+          }
+        ],
+        "materials_used": [],
+        "technician_id": "e1000000-0000-0000-0000-000000000001",
+        "technician_name": "Mathi",
+        "notes": "Extra backup set installed on second vehicle of same fleet",
+        "created_at": "2026-10-15T08:09:33.632Z",
+        "updated_at": "2026-10-15T08:09:33.632Z"
+      },
+      {
+        "id": "bbfb4d50-ce64-4372-bf63-aebffd22f343",
+        "checklist_id": "533ffc18-87e1-49b2-b6d5-619ac4cf726d",
+        "checklist_number": "EE-ACCP-1792051764261-98",
+        "original_customer_name": "Main Alpha Fleet",
+        "recipient_customer_type": "ANOTHER_CUSTOMER",
+        "recipient_customer_name": "Gamma Transport Services",
+        "recipient_mobile": "9123456780",
+        "installation_location": "Highway Plaza Dock 2",
+        "maps_link": "https://maps.google.com/?q=13.0827,80.2707",
+        "installation_date": "2026-10-25",
+        "device_configuration": "2 Channel Live",
+        "components_used": [
+          {
+            "component_name": "Camera",
+            "quantity": 2,
+            "unit": "Nos."
+          },
+          {
+            "component_name": "Live Display",
+            "quantity": 1,
+            "unit": "Nos."
+          }
+        ],
+        "materials_used": [],
+        "technician_id": "e1000000-0000-0000-0000-000000000001",
+        "technician_name": "Mathi",
+        "notes": "Opportunity install for adjacent transport fleet",
+        "created_at": "2026-10-15T08:09:33.632Z",
+        "updated_at": "2026-10-15T08:09:33.632Z"
+      }
+    ],
+    "4415d285-c00b-46b2-b0fa-84d3c392edee": [
+      {
+        "id": "9362f691-1fce-45b4-8c26-bcae3a5a297a",
+        "checklist_id": "4415d285-c00b-46b2-b0fa-84d3c392edee",
+        "checklist_number": "EE-ACCP-1792052160846-54",
+        "original_customer_name": "Main Alpha Fleet",
+        "recipient_customer_type": "SAME_CUSTOMER",
+        "recipient_customer_name": "Main Alpha Fleet",
+        "recipient_mobile": "9876543210",
+        "installation_location": "Central Depot Bay 4",
+        "maps_link": null,
+        "installation_date": "2026-10-25",
+        "device_configuration": "2 Channel Live",
+        "components_used": [
+          {
+            "component_name": "Camera",
+            "quantity": 2,
+            "unit": "Nos."
+          },
+          {
+            "component_name": "Live Display",
+            "quantity": 1,
+            "unit": "Nos."
+          }
+        ],
+        "materials_used": [],
+        "technician_id": "e1000000-0000-0000-0000-000000000001",
+        "technician_name": "Mathi",
+        "notes": "Extra backup set installed on second vehicle of same fleet",
+        "created_at": "2026-10-15T08:16:08.091Z",
+        "updated_at": "2026-10-15T08:16:08.091Z"
+      },
+      {
+        "id": "6ed4d9d6-dc94-4633-926e-7949b65a0235",
+        "checklist_id": "4415d285-c00b-46b2-b0fa-84d3c392edee",
+        "checklist_number": "EE-ACCP-1792052160846-54",
+        "original_customer_name": "Main Alpha Fleet",
+        "recipient_customer_type": "ANOTHER_CUSTOMER",
+        "recipient_customer_name": "Gamma Transport Services",
+        "recipient_mobile": "9123456780",
+        "installation_location": "Highway Plaza Dock 2",
+        "maps_link": "https://maps.google.com/?q=13.0827,80.2707",
+        "installation_date": "2026-10-25",
+        "device_configuration": "2 Channel Live",
+        "components_used": [
+          {
+            "component_name": "Camera",
+            "quantity": 2,
+            "unit": "Nos."
+          },
+          {
+            "component_name": "Live Display",
+            "quantity": 1,
+            "unit": "Nos."
+          }
+        ],
+        "materials_used": [],
+        "technician_id": "e1000000-0000-0000-0000-000000000001",
+        "technician_name": "Mathi",
+        "notes": "Opportunity install for adjacent transport fleet",
+        "created_at": "2026-10-15T08:16:08.091Z",
+        "updated_at": "2026-10-15T08:16:08.091Z"
+      },
+      {
+        "id": "620abe52-d944-4ad8-8ac4-b6a2715c0e4c",
+        "checklist_id": "4415d285-c00b-46b2-b0fa-84d3c392edee",
+        "checklist_number": "EE-ACCP-1792052160846-54",
+        "original_customer_name": "Main Alpha Fleet",
+        "recipient_customer_type": "SAME_CUSTOMER",
+        "recipient_customer_name": "Main Alpha Fleet",
+        "recipient_mobile": "9876543210",
+        "installation_location": "Central Depot Bay 4",
+        "maps_link": null,
+        "installation_date": "2026-10-25",
+        "device_configuration": "2 Channel Live",
+        "components_used": [
+          {
+            "component_name": "Camera",
+            "quantity": 2,
+            "unit": "Nos."
+          },
+          {
+            "component_name": "Live Display",
+            "quantity": 1,
+            "unit": "Nos."
+          }
+        ],
+        "materials_used": [],
+        "technician_id": "e1000000-0000-0000-0000-000000000001",
+        "technician_name": "Mathi",
+        "notes": "Extra backup set installed on second vehicle of same fleet",
+        "created_at": "2026-10-15T08:16:09.124Z",
+        "updated_at": "2026-10-15T08:16:09.124Z"
+      },
+      {
+        "id": "2f7a38d7-aae8-4ad5-a154-bd60dbd85581",
+        "checklist_id": "4415d285-c00b-46b2-b0fa-84d3c392edee",
+        "checklist_number": "EE-ACCP-1792052160846-54",
+        "original_customer_name": "Main Alpha Fleet",
+        "recipient_customer_type": "ANOTHER_CUSTOMER",
+        "recipient_customer_name": "Gamma Transport Services",
+        "recipient_mobile": "9123456780",
+        "installation_location": "Highway Plaza Dock 2",
+        "maps_link": "https://maps.google.com/?q=13.0827,80.2707",
+        "installation_date": "2026-10-25",
+        "device_configuration": "2 Channel Live",
+        "components_used": [
+          {
+            "component_name": "Camera",
+            "quantity": 2,
+            "unit": "Nos."
+          },
+          {
+            "component_name": "Live Display",
+            "quantity": 1,
+            "unit": "Nos."
+          }
+        ],
+        "materials_used": [],
+        "technician_id": "e1000000-0000-0000-0000-000000000001",
+        "technician_name": "Mathi",
+        "notes": "Opportunity install for adjacent transport fleet",
+        "created_at": "2026-10-15T08:16:09.124Z",
+        "updated_at": "2026-10-15T08:16:09.124Z"
+      }
+    ],
+    "c4fd6cbf-0f81-43e9-b72f-dfc57b181076": [
+      {
+        "id": "17374f24-f8f8-4684-bd20-a43fdb94312e",
+        "checklist_id": "c4fd6cbf-0f81-43e9-b72f-dfc57b181076",
+        "checklist_number": "EE-ACCP-1792052215751-42",
+        "original_customer_name": "Main Alpha Fleet",
+        "recipient_customer_type": "SAME_CUSTOMER",
+        "recipient_customer_name": "Main Alpha Fleet",
+        "recipient_mobile": "9876543210",
+        "installation_location": "Central Depot Bay 4",
+        "maps_link": null,
+        "installation_date": "2026-10-25",
+        "device_configuration": "2 Channel Live",
+        "components_used": [
+          {
+            "component_name": "Camera",
+            "quantity": 2,
+            "unit": "Nos."
+          },
+          {
+            "component_name": "Live Display",
+            "quantity": 1,
+            "unit": "Nos."
+          }
+        ],
+        "materials_used": [],
+        "technician_id": "e1000000-0000-0000-0000-000000000001",
+        "technician_name": "Mathi",
+        "notes": "Extra backup set installed on second vehicle of same fleet",
+        "created_at": "2026-10-15T08:17:01.887Z",
+        "updated_at": "2026-10-15T08:17:01.887Z"
+      },
+      {
+        "id": "4283ea1a-7503-4c94-9e82-4263e76ba6a1",
+        "checklist_id": "c4fd6cbf-0f81-43e9-b72f-dfc57b181076",
+        "checklist_number": "EE-ACCP-1792052215751-42",
+        "original_customer_name": "Main Alpha Fleet",
+        "recipient_customer_type": "ANOTHER_CUSTOMER",
+        "recipient_customer_name": "Gamma Transport Services",
+        "recipient_mobile": "9123456780",
+        "installation_location": "Highway Plaza Dock 2",
+        "maps_link": "https://maps.google.com/?q=13.0827,80.2707",
+        "installation_date": "2026-10-25",
+        "device_configuration": "2 Channel Live",
+        "components_used": [
+          {
+            "component_name": "Camera",
+            "quantity": 2,
+            "unit": "Nos."
+          },
+          {
+            "component_name": "Live Display",
+            "quantity": 1,
+            "unit": "Nos."
+          }
+        ],
+        "materials_used": [],
+        "technician_id": "e1000000-0000-0000-0000-000000000001",
+        "technician_name": "Mathi",
+        "notes": "Opportunity install for adjacent transport fleet",
+        "created_at": "2026-10-15T08:17:01.887Z",
+        "updated_at": "2026-10-15T08:17:01.887Z"
+      },
+      {
+        "id": "b83f89d0-9096-424d-8f19-b840cdd2926f",
+        "checklist_id": "c4fd6cbf-0f81-43e9-b72f-dfc57b181076",
+        "checklist_number": "EE-ACCP-1792052215751-42",
+        "original_customer_name": "Main Alpha Fleet",
+        "recipient_customer_type": "SAME_CUSTOMER",
+        "recipient_customer_name": "Main Alpha Fleet",
+        "recipient_mobile": "9876543210",
+        "installation_location": "Central Depot Bay 4",
+        "maps_link": null,
+        "installation_date": "2026-10-25",
+        "device_configuration": "2 Channel Live",
+        "components_used": [
+          {
+            "component_name": "Camera",
+            "quantity": 2,
+            "unit": "Nos."
+          },
+          {
+            "component_name": "Live Display",
+            "quantity": 1,
+            "unit": "Nos."
+          }
+        ],
+        "materials_used": [],
+        "technician_id": "e1000000-0000-0000-0000-000000000001",
+        "technician_name": "Mathi",
+        "notes": "Extra backup set installed on second vehicle of same fleet",
+        "created_at": "2026-10-15T08:17:02.840Z",
+        "updated_at": "2026-10-15T08:17:02.840Z"
+      },
+      {
+        "id": "e119979b-419e-44a8-9c5d-4ddcbed13fb0",
+        "checklist_id": "c4fd6cbf-0f81-43e9-b72f-dfc57b181076",
+        "checklist_number": "EE-ACCP-1792052215751-42",
+        "original_customer_name": "Main Alpha Fleet",
+        "recipient_customer_type": "ANOTHER_CUSTOMER",
+        "recipient_customer_name": "Gamma Transport Services",
+        "recipient_mobile": "9123456780",
+        "installation_location": "Highway Plaza Dock 2",
+        "maps_link": "https://maps.google.com/?q=13.0827,80.2707",
+        "installation_date": "2026-10-25",
+        "device_configuration": "2 Channel Live",
+        "components_used": [
+          {
+            "component_name": "Camera",
+            "quantity": 2,
+            "unit": "Nos."
+          },
+          {
+            "component_name": "Live Display",
+            "quantity": 1,
+            "unit": "Nos."
+          }
+        ],
+        "materials_used": [],
+        "technician_id": "e1000000-0000-0000-0000-000000000001",
+        "technician_name": "Mathi",
+        "notes": "Opportunity install for adjacent transport fleet",
+        "created_at": "2026-10-15T08:17:02.840Z",
+        "updated_at": "2026-10-15T08:17:02.840Z"
+      }
+    ]
   }
 }

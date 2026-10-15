@@ -1,23 +1,6 @@
 {
   "leaves": [
     {
-      "id": "b15fd52e-89ab-43bc-9c09-184ad67e9afa",
-      "engineer_id": "e1000000-0000-0000-0000-000000000004",
-      "engineer_name": "Sakthivel",
-      "leave_start_date": "2028-11-15",
-      "leave_end_date": "2028-11-16",
-      "leave_type": "Casual",
-      "reason": "Family function in hometown.",
-      "notes": null,
-      "status": "APPROVED",
-      "coordinator_decision_notes": "Approved 2 days casual leave.",
-      "decided_by": "00000000-0000-0000-0000-000000000004",
-      "decided_at": "2026-10-15T04:16:32.743Z",
-      "created_by": "00000000-0000-0000-0000-000000000002",
-      "created_at": "2026-10-15T04:16:31.927Z",
-      "updated_at": "2026-10-15T04:16:32.743Z"
-    },
-    {
       "id": "8750da05-214b-4edd-bf67-ec7ff44be076",
       "engineer_id": "e1000000-0000-0000-0000-000000000002",
       "engineer_name": "Kamalesh",
@@ -84,7 +67,41 @@
       "created_by": "783e70f0-4598-415c-9400-ae184b06cb65",
       "created_at": "2026-10-15T04:40:41.004Z",
       "updated_at": "2026-10-15T04:40:41.783Z"
+    },
+    {
+      "id": "c648beaa-20f0-4817-a511-02dff563d2a2",
+      "engineer_id": "e1000000-0000-0000-0000-000000000004",
+      "engineer_name": "Sakthivel",
+      "leave_start_date": "2028-11-15",
+      "leave_end_date": "2028-11-16",
+      "leave_type": "Casual",
+      "reason": "Family function in hometown.",
+      "notes": null,
+      "status": "APPROVED",
+      "coordinator_decision_notes": "Approved 2 days casual leave.",
+      "decided_by": "00000000-0000-0000-0000-000000000004",
+      "decided_at": "2026-10-15T06:53:30.557Z",
+      "created_by": "00000000-0000-0000-0000-000000000002",
+      "created_at": "2026-10-15T06:53:29.360Z",
+      "updated_at": "2026-10-15T06:53:30.557Z"
+    },
+    {
+      "id": "d3b84cc4-5d90-4c84-8e4c-27e1d49acca6",
+      "engineer_id": "e1000000-0000-0000-0000-000000000006",
+      "engineer_name": "Guna",
+      "leave_start_date": "2029-06-01",
+      "leave_end_date": "2029-06-02",
+      "leave_type": "Medical",
+      "reason": "Medical appointment",
+      "notes": null,
+      "status": "APPROVED",
+      "coordinator_decision_notes": null,
+      "decided_by": "00000000-0000-0000-0000-000000000004",
+      "decided_at": "2026-10-15T07:51:59.747Z",
+      "created_by": "00000000-0000-0000-0000-000000000002",
+      "created_at": "2026-10-15T07:51:58.490Z",
+      "updated_at": "2026-10-15T07:51:59.747Z"
     }
   ],
-  "updated_at": "2026-10-15T04:42:14.973Z"
+  "updated_at": "2026-10-15T07:51:59.914Z"
 }

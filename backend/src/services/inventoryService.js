@@ -4,6 +4,28 @@ import { fileURLToPath } from 'url';
 import supabase from './supabase.js';
 import { logAudit } from './auditService.js';
 import { recordStockMovement } from './stockMovementService.js';
+import { adjustMaterialStock } from './materialStockService.js';
+import {
+  getCalculatedDeviceAvailability,
+  allocateDeviceSets,
+  releaseDeviceAllocation,
+  fulfillDeviceAllocation,
+  getDeviceStockAllocations,
+  getActiveDeviceAllocations,
+  getComponentRequirementsForDevice,
+  STANDARD_DEVICE_CONFIGURATIONS,
+} from './deviceSetService.js';
+
+export {
+  getCalculatedDeviceAvailability,
+  allocateDeviceSets,
+  releaseDeviceAllocation,
+  fulfillDeviceAllocation,
+  getDeviceStockAllocations,
+  getActiveDeviceAllocations,
+  getComponentRequirementsForDevice,
+  STANDARD_DEVICE_CONFIGURATIONS,
+};
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -151,10 +173,12 @@ async function ensureDbDevicesSeeded() {
 
 /**
  * Get all inventory products and current stock balances
+ * Enriched with dynamic loose-stock set calculations
  */
 export async function getInventoryProducts() {
   await ensureDbDevicesSeeded();
 
+  let prods = [];
   try {
     const { data, error } = await supabase
       .from('inventory_products')
@@ -166,13 +190,42 @@ export async function getInventoryProducts() {
         inMemoryProducts.set(p.device_type, { ...p });
       });
       saveInventoryStorage();
-      return data;
+      prods = data;
     }
   } catch (err) {
     console.warn('DB inventory_products table not available, using in-memory store:', err.message);
   }
 
-  return Array.from(inMemoryProducts.values()).sort((a, b) => a.device_type.localeCompare(b.device_type));
+  if (prods.length === 0) {
+    prods = Array.from(inMemoryProducts.values()).sort((a, b) => a.device_type.localeCompare(b.device_type));
+  }
+
+  // Calculate real-time available sets from loose components
+  try {
+    const availability = await getCalculatedDeviceAvailability();
+    const configMap = new Map(
+      (availability?.configurations || []).map((c) => [c.device_type.toLowerCase(), c])
+    );
+
+    return prods.map((p) => {
+      const calc = configMap.get((p.device_type || '').toLowerCase());
+      if (calc) {
+        return {
+          ...p,
+          usable_stock: calc.max_possible_sets,
+          reserved_stock: calc.currently_allocated_sets,
+          allocation_status: calc.allocation_status,
+          limiting_component: calc.limiting_component,
+          components_required: calc.components_required,
+          is_calculated: true,
+        };
+      }
+      return p;
+    });
+  } catch (calcErr) {
+    console.warn('Notice: Could not calculate dynamic set availability for products:', calcErr.message);
+    return prods;
+  }
 }
 
 /**
@@ -920,6 +973,23 @@ export async function issueDevicesForChecklist({
       prod.updated_at = new Date().toISOString();
     }
 
+    // Deduct underlying loose components from material_inventory
+    try {
+      const compReqs = getComponentRequirementsForDevice(devType);
+      for (const req of compReqs) {
+        const deductQty = req.quantity_required * qty;
+        await adjustMaterialStock({
+          material_name: req.component_name,
+          action: 'REMOVE',
+          quantity: deductQty,
+          reason: `Issued for checklist ${checklist_id} (${qty} sets of ${devType})`,
+          user,
+        }).catch((err) => console.warn(`Component deduction notice for ${req.component_name}:`, err.message));
+      }
+    } catch (compErr) {
+      console.warn('Error during loose components deduction:', compErr.message);
+    }
+
     const idempotencyKey = `DEV-ISSUE-${checklist_id}-${devType}`;
     const txRecord = {
       id: `tx-dev-issue-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
@@ -1151,27 +1221,66 @@ export async function creditStockForVerifiedReturn({
   const totalReceived = usableQty + dmgQty;
 
   const prod = inMemoryProducts.get(device_type);
-  let productId = prod?.id || `prod-${Date.now()}`;
-  const previousUsable = Number(prod?.usable_stock) || 0;
-  let newUsable = previousUsable + usableQty;
-  let newReturnedUsable = (Number(prod?.returned_usable_stock) || 0) + usableQty;
-  let newDamaged = (Number(prod?.damaged_stock) || 0) + dmgQty;
-  let newIssued = Math.max(0, (Number(prod?.issued_stock) || 0) - totalReceived);
-
+  let dbProd = null;
   try {
-    const { data: dbProd } = await supabase
+    const { data } = await supabase
       .from('inventory_products')
       .select('*')
       .eq('device_type', device_type)
       .maybeSingle();
+    dbProd = data;
+  } catch (e) {
+    // ignore
+  }
 
-    if (dbProd) {
-      productId = dbProd.id;
-      newUsable = Number(dbProd.usable_stock) + usableQty;
-      newReturnedUsable = (Number(dbProd.returned_usable_stock) || 0) + usableQty;
-      newDamaged = (Number(dbProd.damaged_stock) || 0) + dmgQty;
-      newIssued = Math.max(0, (Number(dbProd.issued_stock) || 0) - totalReceived);
+  // Loose device component or installation material (e.g. Camera, Live Display, Recording Display)
+  if (!prod && !dbProd) {
+    let adjRes = null;
+    if (usableQty > 0) {
+      adjRes = await adjustMaterialStock({
+        material_name: device_type,
+        action: 'ADD',
+        quantity: usableQty,
+        reason: remarks || `Physical return verified usable for ${device_type} (+${usableQty} Nos.)`,
+        user,
+      });
+    }
 
+    if (dmgQty > 0) {
+      await recordStockMovement({
+        item_id: adjRes?.transaction?.material_id || `mat-${Date.now()}`,
+        item_name: device_type,
+        category: 'Installation Material',
+        movement_type: 'DAMAGED_STOCK_RECEIVED',
+        quantity: dmgQty,
+        unit: 'Nos.',
+        checklist_id,
+        reference_transaction_id: return_id,
+        performed_by: user?.id,
+        performer_name: user?.full_name || user?.email || 'Store Manager',
+        performer_email: user?.email,
+        reason_or_remarks: remarks || `Damaged return recorded for ${device_type} (+${dmgQty} Nos.)`,
+      }).catch(() => null);
+    }
+
+    return {
+      success: true,
+      device_type,
+      usableQty,
+      dmgQty,
+      material_adjusted: true,
+    };
+  }
+
+  let productId = prod?.id || dbProd?.id || `prod-${Date.now()}`;
+  const previousUsable = Number(dbProd?.usable_stock ?? prod?.usable_stock) || 0;
+  let newUsable = previousUsable + usableQty;
+  let newReturnedUsable = (Number(dbProd?.returned_usable_stock ?? prod?.returned_usable_stock) || 0) + usableQty;
+  let newDamaged = (Number(dbProd?.damaged_stock ?? prod?.damaged_stock) || 0) + dmgQty;
+  let newIssued = Math.max(0, (Number(dbProd?.issued_stock ?? prod?.issued_stock) || 0) - totalReceived);
+
+  if (dbProd) {
+    try {
       await supabase
         .from('inventory_products')
         .update({
@@ -1182,9 +1291,9 @@ export async function creditStockForVerifiedReturn({
           updated_at: new Date().toISOString(),
         })
         .eq('id', dbProd.id);
+    } catch (e) {
+      console.warn(`DB return credit error for ${device_type}:`, e.message);
     }
-  } catch (e) {
-    console.warn(`DB return credit error for ${device_type}:`, e.message);
   }
 
   if (prod) {

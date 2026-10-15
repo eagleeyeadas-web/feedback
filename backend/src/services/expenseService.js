@@ -30,7 +30,7 @@ export const PAYMENT_METHODS = [
 ];
 
 // Fallback in-memory map: key = id, value = expense object
-const inMemoryJobExpenses = new Map();
+export const inMemoryJobExpenses = new Map();
 
 function loadFallbackStorage() {
   try {

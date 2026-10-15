@@ -9,6 +9,10 @@ import {
   setDeviceOpeningStock,
   issueDevicesForChecklist,
   addNewDeviceProduct,
+  getCalculatedDeviceAvailability,
+  allocateDeviceSets,
+  releaseDeviceAllocation,
+  getDeviceStockAllocations,
 } from '../services/inventoryService.js';
 import {
   getMaterialTransactions,
@@ -46,6 +50,78 @@ router.get('/', requireRole('STORE_MANAGER', 'ADMIN'), async (req, res) => {
   } catch (err) {
     console.error('Error in GET /inventory:', err);
     return res.status(500).json({ error: err.message || 'Failed to fetch inventory' });
+  }
+});
+
+/**
+ * GET /api/admin/inventory/calculated-sets
+ * Real-time camera set availability derived dynamically from loose stock components
+ * Accessible to STORE_MANAGER, ADMIN
+ */
+router.get('/calculated-sets', requireRole('STORE_MANAGER', 'ADMIN'), async (req, res) => {
+  try {
+    const availability = await getCalculatedDeviceAvailability();
+    return res.json(availability);
+  } catch (err) {
+    console.error('Error in GET /inventory/calculated-sets:', err);
+    return res.status(500).json({ error: err.message || 'Failed to calculate device set availability' });
+  }
+});
+
+/**
+ * GET /api/admin/inventory/allocations
+ * List active and historical stock allocations for camera device configurations
+ * Accessible to STORE_MANAGER, ADMIN
+ */
+router.get('/allocations', requireRole('STORE_MANAGER', 'ADMIN'), async (req, res) => {
+  try {
+    const allocations = await getDeviceStockAllocations();
+    return res.json(allocations);
+  } catch (err) {
+    console.error('Error in GET /inventory/allocations:', err);
+    return res.status(500).json({ error: err.message || 'Failed to fetch allocations' });
+  }
+});
+
+/**
+ * POST /api/admin/inventory/allocations
+ * Controlled allocation: Reserves loose stock components for N complete sets of a configuration
+ * Accessible to STORE_MANAGER, ADMIN
+ */
+router.post('/allocations', requireRole('STORE_MANAGER', 'ADMIN'), async (req, res) => {
+  try {
+    const { device_type, sets_to_allocate, notes, checklist_id } = req.body;
+    const result = await allocateDeviceSets({
+      device_type,
+      sets_to_allocate,
+      notes,
+      checklist_id,
+      user: req.profile,
+    });
+    return res.status(201).json(result);
+  } catch (err) {
+    console.error('Error in POST /inventory/allocations:', err);
+    return res.status(400).json({ error: err.message || 'Failed to allocate stock' });
+  }
+});
+
+/**
+ * POST /api/admin/inventory/allocations/:id/release
+ * Release an active allocation: Cancels reservation and returns components to unallocated pool
+ * Accessible to STORE_MANAGER, ADMIN
+ */
+router.post('/allocations/:id/release', requireRole('STORE_MANAGER', 'ADMIN'), async (req, res) => {
+  try {
+    const { reason } = req.body;
+    const result = await releaseDeviceAllocation({
+      allocation_id: req.params.id,
+      reason,
+      user: req.profile,
+    });
+    return res.json(result);
+  } catch (err) {
+    console.error('Error in POST /inventory/allocations/:id/release:', err);
+    return res.status(400).json({ error: err.message || 'Failed to release allocation' });
   }
 });
 

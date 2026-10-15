@@ -20,8 +20,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const STORAGE_FILE = path.join(__dirname, '../data/schedule_extensions_storage.json');
 
-const inMemoryExtensions = new Map();
-const inMemoryRevisions = new Map();
+export const inMemoryExtensions = new Map();
+export const inMemoryRevisions = new Map();
 
 /**
  * Helper to get currently active pending extension request for a checklist
@@ -337,8 +337,30 @@ export async function approveScheduleExtension({ extensionId, user, decisionNote
 
   // SERIALIZED ATOMIC APPROVAL: Lock on the engineer
   return await acquireEngineerLock(engId, async () => {
+    // Re-verify status under mutex lock from both memory and DB to prevent concurrent decision race conditions
+    const currentMemoryExt = inMemoryExtensions.get(extensionId);
+    if (currentMemoryExt && currentMemoryExt.status !== 'PENDING') {
+      const err = new Error(`Cannot approve extension request: current status is already ${currentMemoryExt.status}.`);
+      err.statusCode = 400;
+      throw err;
+    }
+
+    try {
+      const { data: dbLatest } = await supabase
+        .from('schedule_extension_requests')
+        .select('status')
+        .eq('id', extensionId)
+        .single();
+      if (dbLatest && dbLatest.status !== 'PENDING') {
+        const err = new Error(`Cannot approve extension request: current status is already ${dbLatest.status}.`);
+        err.statusCode = 400;
+        throw err;
+      }
+    } catch (e) {}
+
+    const currentExt = currentMemoryExt || ext;
     const startDate = checklist.current_expected_arrival_date || checklist.expected_arrival_date;
-    const newEndDate = ext.requested_completion_date;
+    const newEndDate = currentExt.requested_completion_date;
 
     // 1. Re-validate schedule conflicts against latest database state
     const availCheck = await checkEngineerAvailability({
@@ -485,26 +507,26 @@ export async function approveScheduleExtension({ extensionId, user, decisionNote
     inMemoryRevisions.set(revId, revisionRecord);
 
     // 8. Update extension request status
-    ext.status = 'APPROVED';
-    ext.coordinator_decision_notes = decisionNotes ? decisionNotes.trim() : null;
-    ext.decided_by = user.id;
-    ext.decided_at = nowIso;
-    ext.updated_at = nowIso;
+    currentExt.status = 'APPROVED';
+    currentExt.coordinator_decision_notes = decisionNotes ? decisionNotes.trim() : null;
+    currentExt.decided_by = user.id;
+    currentExt.decided_at = nowIso;
+    currentExt.updated_at = nowIso;
 
     try {
       await supabase
         .from('schedule_extension_requests')
         .update({
           status: 'APPROVED',
-          coordinator_decision_notes: ext.coordinator_decision_notes,
+          coordinator_decision_notes: currentExt.coordinator_decision_notes,
           decided_by: user.id,
           decided_at: nowIso,
           updated_at: nowIso,
         })
-        .eq('id', ext.id);
+        .eq('id', currentExt.id);
     } catch (e) {}
 
-    inMemoryExtensions.set(ext.id, ext);
+    inMemoryExtensions.set(currentExt.id, currentExt);
     saveStorage();
 
     // 9. Notify technician of decision
@@ -581,60 +603,88 @@ export async function rejectScheduleExtension({ extensionId, user, decisionNotes
   }
 
   const checklist = await getChecklist(ext.checklist_id);
-  const nowIso = new Date().toISOString();
+  const engineerName = checklist?.service_engineer || ext.engineer_name;
+  const resolvedEng = resolveEngineer(engineerName);
+  const engId = resolvedEng ? resolvedEng.id : (ext.engineer_id || checklist?.service_engineer_id || 'eng-lock');
 
-  // Official schedule remains completely unchanged!
-  ext.status = 'REJECTED';
-  ext.coordinator_decision_notes = decisionNotes ? decisionNotes.trim() : 'Schedule extension request declined by Coordinator';
-  ext.decided_by = user.id;
-  ext.decided_at = nowIso;
-  ext.updated_at = nowIso;
+  return await acquireEngineerLock(engId, async () => {
+    // Re-verify status under mutex lock from both memory and DB to prevent concurrent decision race conditions
+    const currentMemoryExt = inMemoryExtensions.get(extensionId);
+    if (currentMemoryExt && currentMemoryExt.status !== 'PENDING') {
+      const err = new Error(`Cannot reject extension request: current status is already ${currentMemoryExt.status}.`);
+      err.statusCode = 400;
+      throw err;
+    }
 
-  try {
-    await supabase
-      .from('schedule_extension_requests')
-      .update({
-        status: 'REJECTED',
-        coordinator_decision_notes: ext.coordinator_decision_notes,
-        decided_by: user.id,
-        decided_at: nowIso,
-        updated_at: nowIso,
-      })
-      .eq('id', ext.id);
-  } catch (e) {}
+    try {
+      const { data: dbLatest } = await supabase
+        .from('schedule_extension_requests')
+        .select('status')
+        .eq('id', extensionId)
+        .single();
+      if (dbLatest && dbLatest.status !== 'PENDING') {
+        const err = new Error(`Cannot reject extension request: current status is already ${dbLatest.status}.`);
+        err.statusCode = 400;
+        throw err;
+      }
+    } catch (e) {}
 
-  inMemoryExtensions.set(ext.id, ext);
-  saveStorage();
+    const currentExt = currentMemoryExt || ext;
+    const nowIso = new Date().toISOString();
 
-  // Notify technician of rejection
-  await createNotification({
-    targetRole: 'TECHNICAL',
-    targetUserId: ext.technician_user_id,
-    title: `Extension Request Declined: ${checklist?.checklist_number || 'Job'}`,
-    message: `Your schedule extension request was not approved.${decisionNotes ? ' Reason: ' + decisionNotes : ''}`,
-    type: 'EXTENSION_REJECTED',
-    checklistId: ext.checklist_id,
-    checklistNumber: checklist?.checklist_number,
-    metadata: {
-      extension_id: ext.id,
-      decision_notes: decisionNotes,
-    },
+    // Official schedule remains completely unchanged!
+    currentExt.status = 'REJECTED';
+    currentExt.coordinator_decision_notes = decisionNotes ? decisionNotes.trim() : 'Availability date request declined by Coordinator';
+    currentExt.decided_by = user.id;
+    currentExt.decided_at = nowIso;
+    currentExt.updated_at = nowIso;
+
+    try {
+      await supabase
+        .from('schedule_extension_requests')
+        .update({
+          status: 'REJECTED',
+          coordinator_decision_notes: currentExt.coordinator_decision_notes,
+          decided_by: user.id,
+          decided_at: nowIso,
+          updated_at: nowIso,
+        })
+        .eq('id', currentExt.id);
+    } catch (e) {}
+
+    inMemoryExtensions.set(currentExt.id, currentExt);
+    saveStorage();
+
+    // Notify technician of rejection
+    await createNotification({
+      targetRole: 'TECHNICAL',
+      targetUserId: ext.technician_user_id,
+      title: `Availability Date Request Declined: ${checklist?.checklist_number || 'Job'}`,
+      message: `Your availability date request was not approved.${decisionNotes ? ' Reason: ' + decisionNotes : ''}`,
+      type: 'EXTENSION_REJECTED',
+      checklistId: ext.checklist_id,
+      checklistNumber: checklist?.checklist_number,
+      metadata: {
+        extension_id: ext.id,
+        decision_notes: decisionNotes,
+      },
+    });
+
+    await logAudit({
+      actor_id: user.id,
+      actor_email: user.email,
+      actor_role: user.role,
+      action: 'REJECT_SCHEDULE_EXTENSION',
+      target_table: 'schedule_extension_requests',
+      target_id: ext.id,
+      details: {
+        checklist_id: ext.checklist_id,
+        decision_notes: decisionNotes,
+      },
+    });
+
+    return { success: true, extension: ext };
   });
-
-  await logAudit({
-    actor_id: user.id,
-    actor_email: user.email,
-    actor_role: user.role,
-    action: 'REJECT_SCHEDULE_EXTENSION',
-    target_table: 'schedule_extension_requests',
-    target_id: ext.id,
-    details: {
-      checklist_id: ext.checklist_id,
-      decision_notes: decisionNotes,
-    },
-  });
-
-  return { success: true, extension: ext };
 }
 
 /**

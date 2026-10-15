@@ -10,7 +10,7 @@ const STORAGE_FILE = path.join(__dirname, '../data/inventory_storage.json');
 /**
  * Resilient in-memory fallback list for stock movements
  */
-const inMemoryStockMovements = [];
+export const inMemoryStockMovements = [];
 
 /**
  * Load fallback movements from JSON storage

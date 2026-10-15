@@ -567,12 +567,12 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
                               </div>
                             )}
 
-                            {/* Pending Extension Request Indicator */}
+                            {/* Pending Availability Date Request Indicator */}
                             {item.pending_extension && (
                               <div className="pt-1 border-t border-amber-200">
                                 <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1 w-fit">
                                   <Clock className="w-2.5 h-2.5 text-amber-600" />
-                                  <span>Pending Ext: {item.pending_extension.requested_completion_date}</span>
+                                  <span>Pending Avail: {item.pending_extension.requested_completion_date}</span>
                                 </span>
                               </div>
                             )}
@@ -627,17 +627,17 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
                                   }`}
                                   title={
                                     item.pending_extension
-                                      ? `Extension to ${item.pending_extension.requested_completion_date} pending review`
-                                      : 'Request schedule extension'
+                                      ? `Availability date update to ${item.pending_extension.requested_completion_date} pending review`
+                                      : 'Update availability date'
                                   }
                                 >
                                   {item.pending_extension ? (
                                     <>
-                                      <Clock className="w-3.5 h-3.5 text-amber-700" /> Extension Pending
+                                      <Clock className="w-3.5 h-3.5 text-amber-700" /> Availability Update Pending
                                     </>
                                   ) : (
                                     <>
-                                      <CalendarPlus className="w-3.5 h-3.5 text-amber-600" /> Request Extension
+                                      <CalendarPlus className="w-3.5 h-3.5 text-amber-600" /> Update Availability Date
                                     </>
                                   )}
                                 </button>
@@ -1052,14 +1052,14 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
         />
       )}
 
-      {/* SCHEDULE EXTENSION REQUEST MODAL */}
+      {/* AVAILABILITY DATE REQUEST MODAL */}
       {extensionModalJob && (
         <TechnicianScheduleExtensionModal
           checklist={extensionModalJob}
           token={token}
           onClose={() => setExtensionModalJob(null)}
           onSuccess={() => {
-            showToast(`Extension request submitted for ${extensionModalJob.checklist_number}! Coordinator will review.`);
+            showToast(`Availability date request submitted for ${extensionModalJob.checklist_number}! Coordinator will review.`);
             loadData();
           }}
         />

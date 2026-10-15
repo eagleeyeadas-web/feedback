@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 import supabase from './supabase.js';
 import { logAudit } from './auditService.js';
@@ -21,11 +22,12 @@ const STORAGE_FILE = path.resolve(__dirname, '../data/workflow_storage.json');
 /**
  * In-memory fallback stores for workflow records if Supabase tables are not yet migrated
  */
-const inMemoryCarryRecords = new Map();
-const inMemoryCompletionReports = new Map();
-const inMemoryReturns = new Map();
-const inMemoryMaterialReturns = new Map();
+export const inMemoryCarryRecords = new Map();
+export const inMemoryCompletionReports = new Map();
+export const inMemoryReturns = new Map();
+export const inMemoryMaterialReturns = new Map();
 export const inMemoryChecklistFinalBoms = new Map();
+export const inMemoryAdditionalInstallations = new Map(); // checklist_id -> array of additional customer installation records
 
 function loadFallbackStorage() {
   try {
@@ -47,6 +49,9 @@ function loadFallbackStorage() {
       if (data.finalBoms && typeof data.finalBoms === 'object') {
         Object.entries(data.finalBoms).forEach(([k, v]) => inMemoryChecklistFinalBoms.set(k, v));
       }
+      if (data.additionalInstallations && typeof data.additionalInstallations === 'object') {
+        Object.entries(data.additionalInstallations).forEach(([k, v]) => inMemoryAdditionalInstallations.set(k, v));
+      }
     }
   } catch (err) {
     console.warn('Could not load workflow fallback storage:', err.message);
@@ -65,6 +70,7 @@ function saveFallbackStorage() {
       returns: Object.fromEntries(inMemoryReturns),
       materialReturns: Object.fromEntries(inMemoryMaterialReturns),
       finalBoms: Object.fromEntries(inMemoryChecklistFinalBoms),
+      additionalInstallations: Object.fromEntries(inMemoryAdditionalInstallations),
     };
     fs.writeFileSync(STORAGE_FILE, JSON.stringify(data, null, 2), 'utf-8');
   } catch (err) {
@@ -384,12 +390,175 @@ export async function startInstallationJob({ checklist_id, user }) {
 }
 
 /**
+ * Record Additional Customer Installations using extra loose components & materials
+ */
+export async function recordAdditionalCustomerInstallations({
+  checklist_id,
+  user,
+  installations = [],
+  checklist = null,
+}) {
+  if (!checklist_id) {
+    throw new Error('Checklist ID is required to record additional customer installations.');
+  }
+
+  if (!Array.isArray(installations) || installations.length === 0) {
+    return [];
+  }
+
+  let chk = checklist;
+  if (!chk) {
+    const { data } = await supabase
+      .from('installation_checklists')
+      .select('id, checklist_number, client_name, client_mobile, client_location, service_engineer, service_engineer_id')
+      .eq('id', checklist_id)
+      .maybeSingle();
+    chk = data || {};
+  }
+
+  const originalCustomerName = chk.client_name || 'Original Customer';
+  const checklistNumber = chk.checklist_number || null;
+  const techId = user?.id || chk.service_engineer_id || null;
+  const techName = user?.name || user?.email || chk.service_engineer || 'Technician';
+
+  const validatedRecords = installations.map((inst, idx) => {
+    const rawType = (inst.recipient_customer_type || 'SAME_CUSTOMER').toUpperCase();
+    const recipientType = rawType === 'ANOTHER_CUSTOMER' ? 'ANOTHER_CUSTOMER' : 'SAME_CUSTOMER';
+
+    const recipientName = (inst.recipient_customer_name || (recipientType === 'SAME_CUSTOMER' ? originalCustomerName : '')).trim();
+    if (!recipientName) {
+      throw new Error(`Installation #${idx + 1}: Recipient customer name is required.`);
+    }
+
+    const instDate = inst.installation_date || new Date().toISOString().split('T')[0];
+
+    const componentsUsed = Array.isArray(inst.components_used)
+      ? inst.components_used.map((c) => ({
+          component_name: (c.component_name || c.name || c.item_name || '').trim(),
+          quantity: Math.max(0, Number(c.quantity) || 0),
+          unit: c.unit || 'Nos.',
+        })).filter((c) => c.component_name && c.quantity > 0)
+      : [];
+
+    const materialsUsed = Array.isArray(inst.materials_used)
+      ? inst.materials_used.map((m) => ({
+          material_name: (m.material_name || m.name || m.item_name || '').trim(),
+          quantity: Math.max(0, Number(m.quantity) || 0),
+          unit: m.unit || 'Nos.',
+        })).filter((m) => m.material_name && m.quantity > 0)
+      : [];
+
+    return {
+      id: inst.id && typeof inst.id === 'string' && inst.id.length > 20 ? inst.id : crypto.randomUUID(),
+      checklist_id,
+      checklist_number: checklistNumber,
+      original_customer_name: originalCustomerName,
+      recipient_customer_type: recipientType,
+      recipient_customer_name: recipientName,
+      recipient_mobile: (inst.recipient_mobile || (recipientType === 'SAME_CUSTOMER' ? chk.client_mobile : '') || '').trim() || null,
+      installation_location: (inst.installation_location || (recipientType === 'SAME_CUSTOMER' ? chk.client_location : '') || '').trim() || null,
+      maps_link: (inst.maps_link || '').trim() || null,
+      installation_date: instDate,
+      device_configuration: (inst.device_configuration || '').trim() || null,
+      components_used: componentsUsed,
+      materials_used: materialsUsed,
+      technician_id: techId,
+      technician_name: techName,
+      notes: (inst.notes || '').trim() || null,
+      created_at: inst.created_at || new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+  });
+
+  // Try DB persistence
+  try {
+    const { data: inserted, error: insErr } = await supabase
+      .from('additional_customer_installations')
+      .upsert(validatedRecords, { onConflict: 'id' })
+      .select();
+
+    if (insErr) {
+      console.warn('Could not upsert into additional_customer_installations table:', insErr.message);
+    }
+  } catch (err) {
+    console.warn('DB additional_customer_installations error, fallback to memory:', err.message);
+  }
+
+  // Update in-memory fallback
+  const existingList = inMemoryAdditionalInstallations.get(checklist_id) || [];
+  const recordMap = new Map();
+  existingList.forEach((r) => recordMap.set(r.id, r));
+  validatedRecords.forEach((r) => recordMap.set(r.id, r));
+  const merged = Array.from(recordMap.values());
+  inMemoryAdditionalInstallations.set(checklist_id, merged);
+  saveFallbackStorage();
+
+  // Audit
+  try {
+    await logAudit({
+      user,
+      action: 'RECORD_ADDITIONAL_CUSTOMER_INSTALLATIONS',
+      entity: 'installation_checklists',
+      entity_id: checklist_id,
+      details: {
+        count: validatedRecords.length,
+        installations: validatedRecords.map((r) => ({
+          id: r.id,
+          recipient: r.recipient_customer_name,
+          type: r.recipient_customer_type,
+          configuration: r.device_configuration,
+          components_count: r.components_used.length,
+        })),
+      },
+    });
+  } catch (auditErr) {
+    // non-blocking
+  }
+
+  return merged;
+}
+
+/**
+ * Get Additional Customer Installations by checklist or technician
+ */
+export async function getAdditionalCustomerInstallations({ checklist_id, technician_id } = {}) {
+  try {
+    let query = supabase.from('additional_customer_installations').select('*').order('created_at', { ascending: false });
+    if (checklist_id) {
+      query = query.eq('checklist_id', checklist_id);
+    }
+    if (technician_id) {
+      query = query.eq('technician_id', technician_id);
+    }
+    const { data, error } = await query;
+    if (!error && Array.isArray(data) && data.length > 0) {
+      return data;
+    }
+  } catch (err) {
+    console.warn('Could not query additional_customer_installations from DB:', err.message);
+  }
+
+  // Fallback to inMemory
+  if (checklist_id) {
+    return inMemoryAdditionalInstallations.get(checklist_id) || [];
+  }
+  const all = [];
+  for (const list of inMemoryAdditionalInstallations.values()) {
+    if (Array.isArray(list)) all.push(...list);
+  }
+  if (technician_id) {
+    return all.filter((r) => r.technician_id === technician_id);
+  }
+  return all;
+}
+
+/**
  * Stage 3: Technical submits Post-Installation Completion Form
  */
 export async function submitInstallationCompletionReport(param1, param2) {
   let opts = {};
   if (param2 && typeof param2 === 'object') {
-    const userObj = typeof param1 === 'object' ? param1 : { id: param1, email: 'tech@eagleeye.com', role: 'TECHNICAL' };
+    const userObj = param2.user || (typeof param1 === 'object' ? param1 : { id: param1, email: 'tech@eagleeye.com', role: 'TECHNICAL' });
     opts = { ...param2, user: userObj };
     if (!opts.checklist_id && typeof param1 === 'string') {
       opts.checklist_id = param1;
@@ -444,6 +613,28 @@ export async function submitInstallationCompletionReport(param1, param2) {
     const qtyDamaged = Math.max(0, parseInt(item.quantity_damaged, 10) || 0);
     const qtyMissing = Math.max(0, parseInt(item.quantity_missing, 10) || 0);
 
+    const rawReq = parseInt(item.quantity_installed_required, 10);
+    const rawExt = parseInt(item.quantity_installed_extra, 10);
+    const rawInst = parseInt(item.quantity_installed, 10);
+    const rawRet = parseInt(item.quantity_to_return ?? item.quantity_returned, 10);
+    const rawDam = parseInt(item.quantity_damaged, 10);
+    const rawMis = parseInt(item.quantity_missing, 10);
+
+    if (
+      (!isNaN(rawReq) && rawReq < 0) ||
+      (!isNaN(rawExt) && rawExt < 0) ||
+      (!isNaN(rawInst) && rawInst < 0) ||
+      (!isNaN(rawRet) && rawRet < 0) ||
+      (!isNaN(rawDam) && rawDam < 0) ||
+      (!isNaN(rawMis) && rawMis < 0)
+    ) {
+      throw new Error(`Quantities for "${item.device_type || item.item_name}" cannot be negative numbers.`);
+    }
+
+    if (qtyCarried === 0 && qtyInstalled > 0) {
+      throw new Error(`Cannot report installation of unissued product "${item.device_type || item.item_name}" (issued quantity is 0).`);
+    }
+
     if (qtyUnused > qtyCarried) {
       throw new Error(`Unused quantity to return (${qtyUnused}) cannot exceed quantity carried (${qtyCarried}) for ${item.device_type}`);
     }
@@ -477,7 +668,7 @@ export async function submitInstallationCompletionReport(param1, param2) {
 
     return {
       checklist_id,
-      device_type: item.device_type,
+      device_type: item.device_type || item.item_name,
       quantity_carried: qtyCarried,
       quantity_installed: qtyInstalled,
       quantity_installed_required: safeInstalledReq,
@@ -498,6 +689,27 @@ export async function submitInstallationCompletionReport(param1, param2) {
     const rawDamaged = parseFloat(m.quantity_damaged ?? m.damaged_qty) || 0;
     const rawMissing = parseFloat(m.quantity_missing ?? m.missing_qty) || 0;
 
+    if (rawIssued < 0 || rawUsed < 0 || rawReturned < 0 || rawDamaged < 0 || rawMissing < 0) {
+      throw new Error(`Quantities for material "${m.material_name || m.item_name}" cannot be negative numbers.`);
+    }
+
+    if (rawIssued === 0 && rawUsed > 0) {
+      throw new Error(`Cannot report usage of unissued material "${m.material_name || m.item_name}" (issued quantity is 0).`);
+    }
+
+    const totalMatAccounted = rawUsed + rawReturned + rawDamaged + rawMissing;
+    if (rawIssued > 0 && Math.abs(totalMatAccounted - rawIssued) > 0.001) {
+      throw new Error(
+        `Reconciliation mismatch for material "${m.material_name || m.item_name}": Quantity issued (${rawIssued}) must equal Used (${rawUsed}) + Returned (${rawReturned}) + Damaged (${rawDamaged}) + Missing (${rawMissing}). Total accounted is ${totalMatAccounted}.`
+      );
+    }
+
+    if ((rawDamaged > 0 || rawMissing > 0) && (!m.remarks || !m.remarks.trim())) {
+      throw new Error(
+        `Explanation remark is required for material "${m.material_name || m.item_name}" when reporting damaged (${rawDamaged}) or missing (${rawMissing}) materials.`
+      );
+    }
+
     if (rawDamaged > 0 || rawMissing > 0) {
       hasDiscrepancy = true;
     }
@@ -507,7 +719,7 @@ export async function submitInstallationCompletionReport(param1, param2) {
 
     return {
       material_id: m.material_id || null,
-      material_name: (m.material_name || '').trim(),
+      material_name: (m.material_name || m.item_name || '').trim(),
       unit: m.unit || 'Nos.',
       quantity_issued: rawIssued,
       quantity_used: rawUsed,
@@ -532,6 +744,18 @@ export async function submitInstallationCompletionReport(param1, param2) {
     if (processedBackupItems.some((b) => (Number(b.quantity_damaged) > 0 || Number(b.quantity_missing) > 0))) {
       hasDiscrepancy = true;
     }
+  }
+
+  // Process additional customer installations (if provided)
+  const rawExtraInstallations = opts.extra_installations || opts.additional_customer_installations || [];
+  let processedExtraInstallations = [];
+  if (Array.isArray(rawExtraInstallations) && rawExtraInstallations.length > 0) {
+    processedExtraInstallations = await recordAdditionalCustomerInstallations({
+      checklist_id,
+      user,
+      installations: rawExtraInstallations,
+      checklist,
+    });
   }
 
   // 3. Calculate Final BOM based on ALL devices actually installed (including extra devices installed)
@@ -569,6 +793,7 @@ export async function submitInstallationCompletionReport(param1, param2) {
     devices_missing_qty: totalMissing,
     material_items: processedMaterialItems,
     backup_items: processedBackupItems,
+    extra_installations: processedExtraInstallations,
     final_bom: finalBomSnapshot,
     completion_status: completion_status === 'Completed' ? 'Completed' : 'Site Work Completed',
     remarks: remarks ? remarks.trim() : null,
@@ -578,16 +803,31 @@ export async function submitInstallationCompletionReport(param1, param2) {
   let reportId = null;
 
   try {
+    const dbPayload = { ...reportData };
     let { data: created, error } = await supabase
       .from('technical_installation_reports')
-      .upsert([reportData], { onConflict: 'checklist_id' })
+      .upsert([dbPayload], { onConflict: 'checklist_id' })
       .select()
       .single();
 
-    if (error && error.message?.includes('violates foreign key constraint') && reportData.technician_id) {
+    if (error && error.message?.includes('extra_installations')) {
+      delete dbPayload.extra_installations;
       const retryResult = await supabase
         .from('technical_installation_reports')
-        .upsert([{ ...reportData, technician_id: null }], { onConflict: 'checklist_id' })
+        .upsert([dbPayload], { onConflict: 'checklist_id' })
+        .select()
+        .single();
+      if (!retryResult.error) {
+        created = retryResult.data;
+        error = null;
+      }
+    }
+
+    if (error && error.message?.includes('violates foreign key constraint') && dbPayload.technician_id) {
+      delete dbPayload.extra_installations;
+      const retryResult = await supabase
+        .from('technical_installation_reports')
+        .upsert([{ ...dbPayload, technician_id: null }], { onConflict: 'checklist_id' })
         .select()
         .single();
       if (!retryResult.error && retryResult.data) {
@@ -605,7 +845,7 @@ export async function submitInstallationCompletionReport(param1, param2) {
   } catch (dbErr) {
     console.warn('DB technical_installation_reports not available, using in-memory store:', dbErr.message);
     reportId = `report-${checklist_id}-${Date.now()}`;
-    const savedReport = { ...reportData, id: reportId, items: processedItems };
+    const savedReport = { ...reportData, id: reportId, items: processedItems, extra_installations: processedExtraInstallations };
     inMemoryCompletionReports.set(checklist_id, savedReport);
     saveFallbackStorage();
   }
@@ -773,18 +1013,31 @@ export async function getInstallationCompletionReport(checklist_id) {
       .maybeSingle();
 
     if (!repErr && report) {
-      const { data: items } = await supabase
-        .from('technical_installation_report_items')
-        .select('*')
-        .eq('report_id', report.id);
+      const [{ data: items }, extraInstallations] = await Promise.all([
+        supabase.from('technical_installation_report_items').select('*').eq('report_id', report.id),
+        getAdditionalCustomerInstallations({ checklist_id }),
+      ]);
 
-      return { ...report, items: items || [] };
+      return {
+        ...report,
+        items: items || [],
+        extra_installations: extraInstallations || report.extra_installations || [],
+      };
     }
   } catch (err) {
     console.warn('Error fetching completion report from DB, checking in-memory store:', err.message);
   }
 
-  return inMemoryCompletionReports.get(checklist_id) || null;
+  const cached = inMemoryCompletionReports.get(checklist_id);
+  if (cached) {
+    const extraInstallations = await getAdditionalCustomerInstallations({ checklist_id });
+    return {
+      ...cached,
+      extra_installations: extraInstallations || cached.extra_installations || [],
+    };
+  }
+
+  return null;
 }
 
 /**

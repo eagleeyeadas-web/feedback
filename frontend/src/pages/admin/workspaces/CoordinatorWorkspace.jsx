@@ -15,6 +15,11 @@ import {
   rejectCoordinatorLeave,
   fetchCoordinatorScheduleConflicts,
   fetchCoordinatorAffectedBookings,
+  fetchChecklistDeletionPreviewApi,
+  deleteAllEligibleChecklistsApi,
+  checkChecklistDeletionEligibilityApi,
+  deleteChecklistApi,
+  cancelChecklistApi,
 } from '../../../lib/api';
 import EngineerAvailabilityCalendar from '../../../components/workspaces/EngineerAvailabilityCalendar';
 import {
@@ -48,6 +53,9 @@ import {
   ArrowRight,
   CheckSquare,
   XCircle,
+  Trash2,
+  Trash,
+  Ban,
 } from 'lucide-react';
 
 const SERVICE_ENGINEER_OPTIONS = ['Mathi', 'Guna', 'Sakthivel', 'Kamalesh'];
@@ -92,6 +100,15 @@ export default function CoordinatorWorkspace() {
   const [auditHistory, setAuditHistory] = useState([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [showHistorySection, setShowHistorySection] = useState(false);
+
+  // Safe Checklist Deletion States
+  const [deleteSingleModal, setDeleteSingleModal] = useState(null); // { checklist, checking, eligibility, error, submitting }
+  const [deleteAllModal, setDeleteAllModal] = useState(null); // { loading, preview, confirmedCountInput, error, submitting, result }
+  const [cancelChecklistModal, setCancelChecklistModal] = useState(null); // { checklist, reason, submitting, error }
+
+  const isAuthorizedCoordinator = Boolean(
+    user && (user.role === 'COORDINATOR' || user.role === 'ADMIN' || user.role === 'SUPER_ADMIN')
+  );
 
   // Booking Form State
   const [formData, setFormData] = useState({
@@ -284,10 +301,10 @@ export default function CoordinatorWorkspace() {
       if (type === 'EXTENSION') {
         if (action === 'APPROVE') {
           await approveCoordinatorExtensionRequest(token, item.id, decisionNotes);
-          showToast(`Extension for ${item.checklist_number} approved! Current schedule updated.`);
+          showToast(`Availability date update for ${item.checklist_number} approved! Current schedule and engineer availability updated.`);
         } else {
           await rejectCoordinatorExtensionRequest(token, item.id, decisionNotes);
-          showToast(`Extension for ${item.checklist_number} rejected.`);
+          showToast(`Availability date update for ${item.checklist_number} rejected.`);
         }
       } else if (type === 'REST') {
         if (action === 'APPROVE') {
@@ -316,6 +333,118 @@ export default function CoordinatorWorkspace() {
       setDecisionError(err.message || 'Failed to execute decision');
     } finally {
       setSubmittingDecision(false);
+    }
+  };
+
+  // Safe Deletion Handlers
+  const openDeleteSingleModal = async (chk) => {
+    setDeleteSingleModal({
+      checklist: chk,
+      checking: true,
+      eligibility: null,
+      error: '',
+      submitting: false,
+    });
+
+    try {
+      const eligibility = await checkChecklistDeletionEligibilityApi(token, chk.id);
+      setDeleteSingleModal((prev) => (prev ? { ...prev, checking: false, eligibility } : null));
+    } catch (err) {
+      setDeleteSingleModal((prev) => (prev ? { ...prev, checking: false, error: err.message || 'Failed to check eligibility' } : null));
+    }
+  };
+
+  const handleConfirmDeleteSingle = async () => {
+    if (!deleteSingleModal || !deleteSingleModal.checklist) return;
+    setDeleteSingleModal((prev) => ({ ...prev, submitting: true, error: '' }));
+
+    try {
+      const res = await deleteChecklistApi(token, deleteSingleModal.checklist.id);
+      showToast(res.message || `Checklist ${deleteSingleModal.checklist.checklist_number} successfully deleted.`);
+      setDeleteSingleModal(null);
+      await loadBookings(true);
+    } catch (err) {
+      setDeleteSingleModal((prev) => ({
+        ...prev,
+        submitting: false,
+        error: err.message || 'Failed to delete checklist',
+        eligibility: err.reasons ? { ...prev.eligibility, reasons: err.reasons, canCancel: err.canCancel } : prev.eligibility,
+      }));
+    }
+  };
+
+  const openDeleteAllModal = async () => {
+    setDeleteAllModal({
+      loading: true,
+      preview: null,
+      confirmedCountInput: '',
+      error: '',
+      submitting: false,
+      result: null,
+    });
+
+    try {
+      const preview = await fetchChecklistDeletionPreviewApi(token);
+      setDeleteAllModal((prev) => (prev ? { ...prev, loading: false, preview } : null));
+    } catch (err) {
+      setDeleteAllModal((prev) => (prev ? { ...prev, loading: false, error: err.message || 'Failed to load deletion preview' } : null));
+    }
+  };
+
+  const handleConfirmDeleteAll = async () => {
+    if (!deleteAllModal || !deleteAllModal.preview) return;
+    const { preview, confirmedCountInput } = deleteAllModal;
+
+    if (Number(confirmedCountInput) !== preview.eligibleCount) {
+      setDeleteAllModal((prev) => ({
+        ...prev,
+        error: `Please enter the exact count of eligible checklists (${preview.eligibleCount}) to confirm.`,
+      }));
+      return;
+    }
+
+    setDeleteAllModal((prev) => ({ ...prev, submitting: true, error: '' }));
+
+    try {
+      const res = await deleteAllEligibleChecklistsApi(token, preview.eligibleCount);
+      setDeleteAllModal((prev) => ({ ...prev, submitting: false, result: res }));
+      showToast(res.message || 'Batch deletion completed successfully.');
+      await loadBookings(true);
+    } catch (err) {
+      setDeleteAllModal((prev) => ({
+        ...prev,
+        submitting: false,
+        error: err.message || 'Failed to delete eligible checklists',
+        preview: err.preview || prev.preview,
+      }));
+    }
+  };
+
+  const openCancelModal = (chk) => {
+    setCancelChecklistModal({
+      checklist: chk,
+      reason: 'Cancelled by Coordinator',
+      submitting: false,
+      error: '',
+    });
+  };
+
+  const handleConfirmCancelChecklist = async () => {
+    if (!cancelChecklistModal || !cancelChecklistModal.checklist) return;
+    setCancelChecklistModal((prev) => ({ ...prev, submitting: true, error: '' }));
+
+    try {
+      const res = await cancelChecklistApi(token, cancelChecklistModal.checklist.id, cancelChecklistModal.reason);
+      showToast(res.message || `Checklist ${cancelChecklistModal.checklist.checklist_number} cancelled.`);
+      setCancelChecklistModal(null);
+      if (deleteSingleModal) setDeleteSingleModal(null);
+      await loadBookings(true);
+    } catch (err) {
+      setCancelChecklistModal((prev) => ({
+        ...prev,
+        submitting: false,
+        error: err.message || 'Failed to cancel checklist',
+      }));
     }
   };
 
@@ -475,6 +604,39 @@ export default function CoordinatorWorkspace() {
           ============================================================ */}
       {(activeTab === 'pending' || activeTab === 'completed') && (
         <div className="space-y-4">
+          {/* Sales Initiated Installation Checklists Section Header */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-gray-200 shadow-xs">
+            <div>
+              <div className="flex items-center gap-2">
+                <FileText className="text-indigo-600 shrink-0" size={18} />
+                <h3 className="text-sm sm:text-base font-bold text-gray-900">
+                  Sales Initiated Installation Checklists
+                </h3>
+                <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 font-mono">
+                  {stats.total || checklists.length} Jobs
+                </span>
+              </div>
+              <p className="text-xs text-gray-500 mt-0.5">
+                Review sales-created installation checklists, coordinate travel logistics, or manage checklist records.
+              </p>
+            </div>
+
+            {isAuthorizedCoordinator && (
+              <div className="flex items-center gap-2 self-start sm:self-auto">
+                <button
+                  type="button"
+                  id="btn-delete-all-checklists"
+                  onClick={openDeleteAllModal}
+                  disabled={loading || refreshing}
+                  className="px-3.5 py-2 text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 active:bg-rose-200 border border-rose-300 rounded-xl transition flex items-center gap-1.5 shadow-xs cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Trash2 size={14} className="text-rose-600" />
+                  <span>Delete All Checklists</span>
+                </button>
+              </div>
+            )}
+          </div>
+
           {/* Filter and Search Bar */}
           <div className="bg-white p-3.5 rounded-2xl border border-gray-200 shadow-xs grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 text-xs">
             <div className="relative">
@@ -666,12 +828,24 @@ export default function CoordinatorWorkspace() {
                       </div>
                     </div>
 
-                    {/* Action Button */}
-                    <div className="flex justify-end pt-1">
+                    {/* Action Buttons */}
+                    <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+                      {isAuthorizedCoordinator && (
+                        <button
+                          type="button"
+                          id={`btn-delete-checklist-${chk.id}`}
+                          onClick={() => openDeleteSingleModal(chk)}
+                          className="px-3 py-1.5 text-xs font-bold text-rose-600 hover:text-rose-700 hover:bg-rose-50 border border-transparent hover:border-rose-200 rounded-xl transition flex items-center gap-1.5 cursor-pointer"
+                          title="Delete checklist safely"
+                        >
+                          <Trash2 size={13} />
+                          <span>Delete</span>
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => openManageModal(chk)}
-                        className="px-4 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+                        className="ml-auto px-4 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer"
                       >
                         <CalendarCheck size={14} />
                         <span>Manage Logistics</span>
@@ -753,16 +927,16 @@ export default function CoordinatorWorkspace() {
           {/* SUB-SECTION 1: PENDING APPROVALS */}
           {scheduleSubTab === 'approvals' && (
             <div className="space-y-6">
-              {/* 1A. Extension Requests */}
+              {/* 1A. Availability Date Requests */}
               <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-xs space-y-4">
                 <div className="flex items-center justify-between">
                   <div>
                     <h3 className="text-sm font-black text-gray-900 flex items-center gap-2">
                       <Clock className="w-4 h-4 text-amber-600" />
-                      <span>Pending Installation Extensions ({pendingExtensions.length})</span>
+                      <span>Pending Availability Date Requests ({pendingExtensions.length})</span>
                     </h3>
                     <p className="text-xs text-gray-500 mt-0.5">
-                      Technicians requested extra installation working days, return travel revision, or post-job rest.
+                      Technicians requested revised availability dates for ongoing installations.
                     </p>
                   </div>
                 </div>
@@ -770,7 +944,7 @@ export default function CoordinatorWorkspace() {
                 {pendingExtensions.length === 0 ? (
                   <div className="p-8 text-center bg-gray-50 rounded-xl text-xs text-gray-500">
                     <CheckCircle2 className="w-8 h-8 text-emerald-500 mx-auto mb-1.5" />
-                    <span>No pending schedule extensions requiring approval.</span>
+                    <span>No pending availability date requests requiring approval.</span>
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -797,17 +971,17 @@ export default function CoordinatorWorkspace() {
                             <span className="font-bold text-gray-900">{ext.engineer_name || ext.technician_name}</span>
                           </div>
                           <div className="flex justify-between">
-                            <span className="text-gray-500 font-medium">Current Expected Completion:</span>
+                            <span className="text-gray-500 font-medium">Current Availability Date:</span>
                             <span className="font-semibold text-gray-700 font-mono">
                               {ext.current_dates?.completion_date || ext.current_completion_date || 'N/A'}
                             </span>
                           </div>
                           <div className="flex justify-between text-amber-900 font-bold">
-                            <span>Requested New Completion:</span>
+                            <span>Requested New Availability Date:</span>
                             <span className="font-mono text-amber-700">{ext.requested_completion_date}</span>
                           </div>
                           <div className="pt-1.5 border-t border-gray-100 text-gray-700">
-                            <span className="font-bold text-gray-800">Reason:</span> {ext.reason}
+                            <span className="font-bold text-gray-800">Reason for Date Change:</span> {ext.reason}
                           </div>
                           {ext.notes && (
                             <div className="text-gray-600 bg-gray-50 p-2 rounded-lg border border-gray-100">
@@ -1092,7 +1266,7 @@ export default function CoordinatorWorkspace() {
                     decisionModal.action === 'APPROVE' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
                   }`}
                 >
-                  {decisionModal.action} {decisionModal.type}
+                  {decisionModal.action} {decisionModal.type === 'EXTENSION' ? 'AVAILABILITY DATE UPDATE' : decisionModal.type}
                 </span>
                 <h4 className="text-base font-black text-gray-900 mt-1">
                   Confirm {decisionModal.action === 'APPROVE' ? 'Approval' : 'Rejection'}
@@ -1115,7 +1289,7 @@ export default function CoordinatorWorkspace() {
             )}
 
             <p className="text-gray-600">
-              Are you sure you want to {decisionModal.action.toLowerCase()} this {decisionModal.type.toLowerCase()} request?
+              Are you sure you want to {decisionModal.action.toLowerCase()} this {decisionModal.type === 'EXTENSION' ? 'availability date update' : decisionModal.type.toLowerCase()} request?
               {decisionModal.action === 'APPROVE' && ' Availability and current expected schedules will be updated atomically.'}
             </p>
 
@@ -1428,6 +1602,440 @@ export default function CoordinatorWorkspace() {
                   <span>Confirm &amp; Complete</span>
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================
+          MODAL 1: SAFE INDIVIDUAL CHECKLIST DELETION CONFIRMATION
+          ============================================================ */}
+      {deleteSingleModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-lg w-full border border-gray-200 shadow-2xl p-6 space-y-5 animate-in fade-in zoom-in-95">
+            {/* Modal Header */}
+            <div className="flex items-start justify-between gap-3 border-b border-gray-100 pb-4">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
+                  <Trash2 size={20} />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-gray-900">Confirm Checklist Deletion</h3>
+                  <p className="text-xs text-gray-500">Safeguards protect operational history and stock records</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDeleteSingleModal(null)}
+                disabled={deleteSingleModal.submitting}
+                className="text-gray-400 hover:text-gray-600 p-1 rounded-lg cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Checklist Identification */}
+            <div className="bg-gray-50 p-4 rounded-2xl border border-gray-200 text-xs space-y-2">
+              <div className="flex justify-between items-center">
+                <span className="text-gray-500 font-medium">Checklist Number:</span>
+                <span className="font-mono font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
+                  {deleteSingleModal.checklist.checklist_number}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-500 font-medium">Client Name:</span>
+                <span className="font-bold text-gray-900">{deleteSingleModal.checklist.client_name}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-500 font-medium">Current Status:</span>
+                <span className="font-bold text-gray-800">{deleteSingleModal.checklist.installation_status || 'Assigned'}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-500 font-medium">Assigned Engineer:</span>
+                <span className="font-semibold text-gray-700">{deleteSingleModal.checklist.service_engineer || 'Unassigned'}</span>
+              </div>
+            </div>
+
+            {/* Eligibility Checking Spinner */}
+            {deleteSingleModal.checking ? (
+              <div className="p-6 bg-gray-50 rounded-2xl text-center space-y-2 border border-gray-200">
+                <div className="w-7 h-7 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto" />
+                <p className="text-xs font-semibold text-gray-700">Validating operational dependencies...</p>
+                <p className="text-[11px] text-gray-500">Checking completion reports, stock ledger, expenses, and travel bookings</p>
+              </div>
+            ) : deleteSingleModal.eligibility?.isEligible ? (
+              /* Case A: Record is safe unprocessed draft */
+              <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-200 space-y-2">
+                <div className="flex items-center gap-2 text-emerald-800 font-bold text-xs">
+                  <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
+                  <span>Eligible for Permanent Deletion</span>
+                </div>
+                <p className="text-xs text-emerald-700">
+                  This checklist is an unprocessed draft with no completion reports, stock movements, technician expenses, or arranged travel.
+                  Any engineer reservation will be released immediately.
+                </p>
+              </div>
+            ) : (
+              /* Case B: Record has dependencies and is protected */
+              <div className="p-4 bg-amber-50 rounded-2xl border border-amber-300 space-y-3">
+                <div className="flex items-center gap-2 text-amber-900 font-bold text-xs">
+                  <AlertTriangle size={16} className="text-amber-600 shrink-0" />
+                  <span>Permanent Deletion Blocked</span>
+                </div>
+                <p className="text-xs text-amber-800">
+                  This checklist cannot be permanently deleted because it has active business records:
+                </p>
+                <ul className="list-disc list-inside text-xs text-amber-900 space-y-1 font-medium bg-amber-100/60 p-2.5 rounded-xl border border-amber-200">
+                  {(deleteSingleModal.eligibility?.reasons || []).map((r, i) => (
+                    <li key={i}>{r}</li>
+                  ))}
+                </ul>
+                <p className="text-xs text-amber-700">
+                  Completed business records and inventory accountability must be preserved.
+                  You may <strong>Cancel the Checklist</strong> instead to release the engineer.
+                </p>
+              </div>
+            )}
+
+            {/* Error Message */}
+            {deleteSingleModal.error && (
+              <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 flex items-start gap-2">
+                <AlertCircle size={15} className="shrink-0 mt-0.5" />
+                <span>{deleteSingleModal.error}</span>
+              </div>
+            )}
+
+            {/* Action Buttons */}
+            <div className="flex items-center justify-between gap-3 pt-2 border-t border-gray-100">
+              <button
+                type="button"
+                disabled={deleteSingleModal.submitting}
+                onClick={() => setDeleteSingleModal(null)}
+                className="px-4 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-100 rounded-xl cursor-pointer transition"
+              >
+                Close
+              </button>
+
+              <div className="flex items-center gap-2">
+                {/* Cancellation Fallback Button if Protected */}
+                {!deleteSingleModal.checking && !deleteSingleModal.eligibility?.isEligible && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const chk = deleteSingleModal.checklist;
+                      setDeleteSingleModal(null);
+                      openCancelModal(chk);
+                    }}
+                    className="px-4 py-2 text-xs font-bold text-amber-800 bg-amber-100 hover:bg-amber-200 border border-amber-300 rounded-xl transition cursor-pointer flex items-center gap-1.5"
+                  >
+                    <Ban size={14} />
+                    <span>Cancel Assignment Instead</span>
+                  </button>
+                )}
+
+                {/* Permanent Delete Button if Eligible */}
+                {!deleteSingleModal.checking && deleteSingleModal.eligibility?.isEligible && (
+                  <button
+                    type="button"
+                    id="btn-confirm-delete-single"
+                    disabled={deleteSingleModal.submitting}
+                    onClick={handleConfirmDeleteSingle}
+                    className="px-5 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 active:bg-rose-800 rounded-xl shadow-xs transition cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+                  >
+                    {deleteSingleModal.submitting ? (
+                      <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <Trash2 size={14} />
+                    )}
+                    <span>Confirm Permanent Deletion</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================
+          MODAL 2: SAFE DELETE ALL CHECKLISTS CONFIRMATION
+          ============================================================ */}
+      {deleteAllModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-xl w-full border border-gray-200 shadow-2xl p-6 space-y-5 animate-in fade-in zoom-in-95">
+            {/* Modal Header */}
+            <div className="flex items-start justify-between gap-3 border-b border-gray-100 pb-4">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
+                  <Trash2 size={20} />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-gray-900">Delete All Checklists</h3>
+                  <p className="text-xs text-gray-500">Safe batch deletion with dependency validation</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDeleteAllModal(null)}
+                disabled={deleteAllModal.submitting}
+                className="text-gray-400 hover:text-gray-600 p-1 rounded-lg cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Loading Preview */}
+            {deleteAllModal.loading ? (
+              <div className="p-8 text-center space-y-3">
+                <div className="w-8 h-8 border-3 border-rose-600 border-t-transparent rounded-full animate-spin mx-auto" />
+                <p className="text-xs font-bold text-gray-800">Evaluating database dependencies...</p>
+                <p className="text-[11px] text-gray-500">
+                  Analyzing all checklists for completion reports, stock ledger movements, and active bookings
+                </p>
+              </div>
+            ) : deleteAllModal.result ? (
+              /* Success / Result View */
+              <div className="space-y-4">
+                <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-200 space-y-2">
+                  <div className="flex items-center gap-2 text-emerald-900 font-bold text-xs">
+                    <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
+                    <span>Batch Deletion Complete</span>
+                  </div>
+                  <p className="text-xs text-emerald-800">{deleteAllModal.result.message}</p>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2.5 text-center text-xs">
+                  <div className="p-3 bg-gray-50 rounded-xl border border-gray-200">
+                    <div className="font-bold text-gray-500 text-[10px] uppercase">Evaluated</div>
+                    <div className="text-lg font-black text-gray-900 mt-0.5">{deleteAllModal.result.totalProcessed}</div>
+                  </div>
+                  <div className="p-3 bg-rose-50 rounded-xl border border-rose-200">
+                    <div className="font-bold text-rose-700 text-[10px] uppercase">Deleted</div>
+                    <div className="text-lg font-black text-rose-700 mt-0.5">{deleteAllModal.result.deletedCount}</div>
+                  </div>
+                  <div className="p-3 bg-amber-50 rounded-xl border border-amber-200">
+                    <div className="font-bold text-amber-800 text-[10px] uppercase">Protected</div>
+                    <div className="text-lg font-black text-amber-800 mt-0.5">{deleteAllModal.result.skippedCount}</div>
+                  </div>
+                </div>
+
+                <div className="flex justify-end pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setDeleteAllModal(null)}
+                    className="px-5 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-xs transition cursor-pointer"
+                  >
+                    Done
+                  </button>
+                </div>
+              </div>
+            ) : (
+              /* Confirmation & Breakdown View */
+              <div className="space-y-4">
+                {/* Metric Badges Breakdown */}
+                <div className="grid grid-cols-3 gap-2.5 text-center text-xs">
+                  <div className="p-3 bg-gray-50 rounded-2xl border border-gray-200">
+                    <div className="font-bold text-gray-500 text-[10px] uppercase">Total Checklists</div>
+                    <div className="text-lg font-black text-gray-900 mt-0.5">{deleteAllModal.preview?.totalCount || 0}</div>
+                  </div>
+                  <div className="p-3 bg-rose-50 rounded-2xl border border-rose-200">
+                    <div className="font-bold text-rose-700 text-[10px] uppercase">Eligible Drafts</div>
+                    <div className="text-lg font-black text-rose-700 mt-0.5">{deleteAllModal.preview?.eligibleCount || 0}</div>
+                  </div>
+                  <div className="p-3 bg-amber-50 rounded-2xl border border-amber-200">
+                    <div className="font-bold text-amber-800 text-[10px] uppercase">Protected Records</div>
+                    <div className="text-lg font-black text-amber-800 mt-0.5">{deleteAllModal.preview?.protectedCount || 0}</div>
+                  </div>
+                </div>
+
+                {/* Explanation Banner */}
+                <div className="p-3.5 bg-gray-50 rounded-2xl border border-gray-200 text-xs text-gray-600 space-y-1">
+                  <div className="flex items-center gap-1.5 font-bold text-gray-800">
+                    <Info size={14} className="text-indigo-600 shrink-0" />
+                    <span>Safeguards & Protection Policy</span>
+                  </div>
+                  <p className="text-[11px] text-gray-500 leading-relaxed">
+                    Active assignments, completed reports, inventory stock ledger transactions, expenses, and travel bookings
+                    prevent permanent deletion to preserve operational history and stock accountability.
+                    Only safe, unprocessed drafts will be deleted.
+                  </p>
+                </div>
+
+                {/* Eligible vs Protected Details */}
+                {deleteAllModal.preview?.eligibleCount > 0 ? (
+                  <div className="space-y-3">
+                    <div className="p-3 bg-rose-50/70 border border-rose-200 rounded-2xl space-y-2">
+                      <div className="flex items-center justify-between text-xs font-bold text-rose-900">
+                        <span>Checklists to be Permanently Deleted ({deleteAllModal.preview.eligibleCount}):</span>
+                      </div>
+                      <div className="max-h-28 overflow-y-auto space-y-1 text-xs">
+                        {deleteAllModal.preview.eligibleChecklists.map((c) => (
+                          <div key={c.id} className="flex justify-between items-center bg-white p-1.5 px-2.5 rounded-lg border border-rose-100">
+                            <span className="font-mono font-bold text-rose-700">{c.checklist_number}</span>
+                            <span className="text-gray-700 truncate max-w-xs">{c.client_name}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Explicit Count Confirmation Input */}
+                    <div className="p-3.5 bg-gray-50 rounded-2xl border border-gray-200 space-y-2 text-xs">
+                      <label className="font-bold text-gray-800 block">
+                        Confirm Eligible Count:
+                        <span className="text-gray-500 font-normal ml-1">
+                          Type <strong className="text-rose-700 font-mono font-black">{deleteAllModal.preview.eligibleCount}</strong> below to confirm deletion.
+                        </span>
+                      </label>
+                      <input
+                        type="text"
+                        id="input-confirm-count"
+                        value={deleteAllModal.confirmedCountInput}
+                        onChange={(e) =>
+                          setDeleteAllModal((prev) => ({
+                            ...prev,
+                            confirmedCountInput: e.target.value.trim(),
+                            error: '',
+                          }))
+                        }
+                        placeholder={`Type ${deleteAllModal.preview.eligibleCount} to confirm`}
+                        className="w-full p-2.5 border border-gray-300 rounded-xl focus:border-rose-500 focus:outline-hidden font-mono font-bold text-center text-sm"
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-4 bg-amber-50 rounded-2xl border border-amber-300 text-center space-y-1">
+                    <AlertTriangle size={20} className="text-amber-600 mx-auto" />
+                    <h4 className="text-xs font-bold text-amber-900">No Eligible Draft Checklists</h4>
+                    <p className="text-[11px] text-amber-700">
+                      All {deleteAllModal.preview?.totalCount || 0} checklist(s) are protected by operational history, stock records, or active assignments.
+                    </p>
+                  </div>
+                )}
+
+                {/* Error Banner */}
+                {deleteAllModal.error && (
+                  <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 flex items-start gap-2">
+                    <AlertCircle size={15} className="shrink-0 mt-0.5" />
+                    <span>{deleteAllModal.error}</span>
+                  </div>
+                )}
+
+                {/* Footer Buttons */}
+                <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+                  <button
+                    type="button"
+                    disabled={deleteAllModal.submitting}
+                    onClick={() => setDeleteAllModal(null)}
+                    className="px-4 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-100 rounded-xl cursor-pointer transition"
+                  >
+                    Cancel
+                  </button>
+
+                  {deleteAllModal.preview?.eligibleCount > 0 && (
+                    <button
+                      type="button"
+                      id="btn-confirm-delete-all"
+                      disabled={
+                        deleteAllModal.submitting ||
+                        Number(deleteAllModal.confirmedCountInput) !== deleteAllModal.preview?.eligibleCount
+                      }
+                      onClick={handleConfirmDeleteAll}
+                      className="px-5 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 active:bg-rose-800 rounded-xl shadow-xs transition cursor-pointer flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      {deleteAllModal.submitting ? (
+                        <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      ) : (
+                        <Trash2 size={14} />
+                      )}
+                      <span>Delete {deleteAllModal.preview?.eligibleCount} Eligible Checklists</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================
+          MODAL 3: CANCEL CHECKLIST WORKFLOW FALLBACK
+          ============================================================ */}
+      {cancelChecklistModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-md w-full border border-gray-200 shadow-2xl p-6 space-y-5 animate-in fade-in zoom-in-95">
+            <div className="flex items-start justify-between gap-3 border-b border-gray-100 pb-4">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                  <Ban size={20} />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-gray-900">Cancel Checklist</h3>
+                  <p className="text-xs text-gray-500">Releases engineer while preserving operational records</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCancelChecklistModal(null)}
+                disabled={cancelChecklistModal.submitting}
+                className="text-gray-400 hover:text-gray-600 p-1 rounded-lg cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="bg-gray-50 p-3.5 rounded-2xl border border-gray-200 text-xs space-y-1.5">
+              <div className="flex justify-between">
+                <span className="text-gray-500">Checklist:</span>
+                <span className="font-mono font-bold text-indigo-700">{cancelChecklistModal.checklist.checklist_number}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">Client:</span>
+                <span className="font-bold text-gray-900">{cancelChecklistModal.checklist.client_name}</span>
+              </div>
+            </div>
+
+            <div className="space-y-1.5 text-xs">
+              <label className="font-bold text-gray-700 block">Cancellation Reason:</label>
+              <textarea
+                rows={2}
+                value={cancelChecklistModal.reason}
+                onChange={(e) =>
+                  setCancelChecklistModal((prev) => ({ ...prev, reason: e.target.value }))
+                }
+                placeholder="Reason for cancelling this checklist..."
+                className="w-full p-2.5 border border-gray-300 rounded-xl focus:border-indigo-500 focus:outline-hidden"
+              />
+            </div>
+
+            {cancelChecklistModal.error && (
+              <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 flex items-start gap-2">
+                <AlertCircle size={15} className="shrink-0 mt-0.5" />
+                <span>{cancelChecklistModal.error}</span>
+              </div>
+            )}
+
+            <div className="flex items-center justify-between gap-3 pt-2 border-t border-gray-100">
+              <button
+                type="button"
+                disabled={cancelChecklistModal.submitting}
+                onClick={() => setCancelChecklistModal(null)}
+                className="px-4 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-100 rounded-xl cursor-pointer transition"
+              >
+                Back
+              </button>
+              <button
+                type="button"
+                id="btn-confirm-cancel-checklist"
+                disabled={cancelChecklistModal.submitting}
+                onClick={handleConfirmCancelChecklist}
+                className="px-5 py-2 text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 active:bg-amber-800 rounded-xl shadow-xs transition cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+              >
+                {cancelChecklistModal.submitting ? (
+                  <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <Ban size={14} />
+                )}
+                <span>Confirm Cancellation</span>
+              </button>
             </div>
           </div>
         </div>
