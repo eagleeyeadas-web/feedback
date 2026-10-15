@@ -1,0 +1,47 @@
+[
+  {
+    "id": "centralized_20day_cleanup",
+    "last_successful_run_at": "2026-10-15T05:43:30.774311+00:00",
+    "last_run_started_at": "2026-10-15T05:43:30.363568+00:00",
+    "last_run_status": "COMPLETED",
+    "last_run_summary": {
+      "policy": "20-Day Centralized Automatic Retention",
+      "modules": {
+        "quotations": {
+          "failed": 0,
+          "processed": 0,
+          "timestamp": "2026-10-15T05:43:30.442Z",
+          "deletedFiles": 0,
+          "dbRecordsPreserved": true
+        },
+        "customerFeedback": {
+          "failed": 0,
+          "processed": 0,
+          "timestamp": "2026-10-15T05:43:30.576Z",
+          "deletedPdfs": 0,
+          "deletedSignatures": 0,
+          "dbRecordsPreserved": true
+        }
+      },
+      "success": true,
+      "timestamp": "2026-10-15T05:43:30.719Z",
+      "retentionDays": 20,
+      "excludedModules": [
+        "inventory_products (Stock balances & definitions)",
+        "inventory_transactions (Stock movements & transaction history)",
+        "store_device_returns (Store returns & verification records)",
+        "installation_checklists (Installation jobs & customer requirements)",
+        "job_device_carry_records (Technician carry audit trails)",
+        "technical_installation_reports (Site work completion reports)",
+        "customers (Customer directory)",
+        "admin_users & audit_logs (Security & audit trails)",
+        "assets/logo.png (Branding & letterhead assets)"
+      ]
+    },
+    "last_error": null,
+    "locked_until": null,
+    "triggered_by_user_id": null,
+    "created_at": "2026-10-10T10:37:57.10181+00:00",
+    "updated_at": "2026-10-15T05:43:30.774311+00:00"
+  }
+]

@@ -1,0 +1,56 @@
+[
+  {
+    "id": "f3a5e467-a1bf-40ef-8878-ec64b29bbfd5",
+    "email": "admin@eagleeyesafdrive.com",
+    "full_name": "System Admin",
+    "role": "admin",
+    "is_active": true,
+    "created_at": "2026-09-28T06:27:31.915826+00:00",
+    "updated_at": "2026-09-28T06:27:31.915826+00:00"
+  },
+  {
+    "id": "b30a116d-5d3d-499e-a581-8d02599cc724",
+    "email": "eagleeye@gmail.com",
+    "full_name": "Eagle Eye Admin",
+    "role": "super_admin",
+    "is_active": true,
+    "created_at": "2026-09-28T09:50:53.616892+00:00",
+    "updated_at": "2026-09-28T09:50:58.428+00:00"
+  },
+  {
+    "id": "abaff860-05b2-44fa-9139-b14d92e3fa19",
+    "email": "tech@gmail.com",
+    "full_name": "Service Engineer",
+    "role": "admin",
+    "is_active": true,
+    "created_at": "2026-10-12T04:45:32.383+00:00",
+    "updated_at": "2026-10-12T04:45:32.384+00:00"
+  },
+  {
+    "id": "be8232f9-674a-4b93-bbde-826b784c29a3",
+    "email": "store@gmail.com",
+    "full_name": "Store Manager",
+    "role": "admin",
+    "is_active": true,
+    "created_at": "2026-10-12T04:45:33.653+00:00",
+    "updated_at": "2026-10-12T04:45:33.653+00:00"
+  },
+  {
+    "id": "739898ba-6b66-4b8f-b2b8-c158d55450cc",
+    "email": "sales@gmail.com",
+    "full_name": "Sales Executive",
+    "role": "admin",
+    "is_active": true,
+    "created_at": "2026-10-12T04:44:43.120916+00:00",
+    "updated_at": "2026-10-12T06:23:03.378376+00:00"
+  },
+  {
+    "id": "6532b157-cfa2-4c71-9e23-b8b0d81bf60d",
+    "email": "coordinator@gmail.com",
+    "full_name": "Travel & Accommodation Coordinator",
+    "role": "COORDINATOR",
+    "is_active": true,
+    "created_at": "2026-10-14T04:46:18.987+00:00",
+    "updated_at": "2026-10-14T10:44:27.302209+00:00"
+  }
+]

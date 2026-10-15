@@ -1,0 +1,211 @@
+[
+  {
+    "id": "50e1c7ce-ccc5-495b-b056-968814b75d0b",
+    "run_at": "2026-10-14T10:17:36.691538+00:00",
+    "cutoff_timestamp": "2026-09-24T10:17:36.691538+00:00",
+    "movements_deleted": 0,
+    "device_returns_deleted": 0,
+    "material_returns_deleted": 0,
+    "status": "SUCCESS",
+    "error_message": null,
+    "executed_by": "TEST_CHECK",
+    "details": {
+      "cutoff": "2026-09-24T10:17:36.691538+00:00",
+      "server_time": "2026-10-14T10:17:36.691538+00:00",
+      "movements_deleted": 0,
+      "device_returns_deleted": 0,
+      "material_returns_deleted": 0
+    },
+    "created_at": "2026-10-14T10:17:36.691538+00:00"
+  },
+  {
+    "id": "ac6abec7-2ac1-42f1-b667-663e05400cb6",
+    "run_at": "2026-10-14T10:32:31.52515+00:00",
+    "cutoff_timestamp": "2026-09-24T10:32:31.52515+00:00",
+    "movements_deleted": 1,
+    "device_returns_deleted": 0,
+    "material_returns_deleted": 0,
+    "status": "SUCCESS",
+    "error_message": null,
+    "executed_by": "ACCEPTANCE_TEST",
+    "details": {
+      "cutoff": "2026-09-24T10:32:31.52515+00:00",
+      "server_time": "2026-10-14T10:32:31.52515+00:00",
+      "movements_deleted": 1,
+      "device_returns_deleted": 0,
+      "material_returns_deleted": 0
+    },
+    "created_at": "2026-10-14T10:32:31.52515+00:00"
+  },
+  {
+    "id": "2990253f-7a90-4a26-92e6-e4a317c3b703",
+    "run_at": "2026-10-14T10:35:08.397488+00:00",
+    "cutoff_timestamp": "2026-09-24T10:35:08.397488+00:00",
+    "movements_deleted": 2,
+    "device_returns_deleted": 0,
+    "material_returns_deleted": 0,
+    "status": "SUCCESS",
+    "error_message": null,
+    "executed_by": "ACCEPTANCE_TEST",
+    "details": {
+      "cutoff": "2026-09-24T10:35:08.397488+00:00",
+      "server_time": "2026-10-14T10:35:08.397488+00:00",
+      "movements_deleted": 2,
+      "device_returns_deleted": 0,
+      "material_returns_deleted": 0
+    },
+    "created_at": "2026-10-14T10:35:08.397488+00:00"
+  },
+  {
+    "id": "9d736f2d-cc12-4820-b96a-95756385e54d",
+    "run_at": "2026-10-14T10:37:00.712741+00:00",
+    "cutoff_timestamp": "2026-09-24T10:37:00.712741+00:00",
+    "movements_deleted": 1,
+    "device_returns_deleted": 1,
+    "material_returns_deleted": 0,
+    "status": "SUCCESS",
+    "error_message": null,
+    "executed_by": "ACCEPTANCE_TEST",
+    "details": {
+      "cutoff": "2026-09-24T10:37:00.712741+00:00",
+      "server_time": "2026-10-14T10:37:00.712741+00:00",
+      "movements_deleted": 1,
+      "device_returns_deleted": 1,
+      "material_returns_deleted": 0
+    },
+    "created_at": "2026-10-14T10:37:00.712741+00:00"
+  },
+  {
+    "id": "0f10644f-8869-4aa4-ad5d-6ca5f27df23d",
+    "run_at": "2026-10-14T12:00:11.744947+00:00",
+    "cutoff_timestamp": "2026-09-24T12:00:11.744947+00:00",
+    "movements_deleted": 3,
+    "device_returns_deleted": 1,
+    "material_returns_deleted": 0,
+    "status": "SUCCESS",
+    "error_message": null,
+    "executed_by": "ACCEPTANCE_TEST",
+    "details": {
+      "cutoff": "2026-09-24T12:00:11.744947+00:00",
+      "server_time": "2026-10-14T12:00:11.744947+00:00",
+      "movements_deleted": 3,
+      "device_returns_deleted": 1,
+      "material_returns_deleted": 0
+    },
+    "created_at": "2026-10-14T12:00:11.744947+00:00"
+  },
+  {
+    "id": "f1aa7d20-8fb0-4217-b096-2d1c30c3d90d",
+    "run_at": "2026-10-14T12:26:12.500016+00:00",
+    "cutoff_timestamp": "2026-09-24T12:26:12.500016+00:00",
+    "movements_deleted": 0,
+    "device_returns_deleted": 0,
+    "material_returns_deleted": 0,
+    "status": "SUCCESS",
+    "error_message": null,
+    "executed_by": "store@gmail.com",
+    "details": {
+      "cutoff": "2026-09-24T12:26:12.500016+00:00",
+      "server_time": "2026-10-14T12:26:12.500016+00:00",
+      "movements_deleted": 0,
+      "device_returns_deleted": 0,
+      "material_returns_deleted": 0
+    },
+    "created_at": "2026-10-14T12:26:12.500016+00:00"
+  },
+  {
+    "id": "dc688f6b-8cfb-4540-bac7-ee10f9d700bb",
+    "run_at": "2026-10-14T12:26:27.662097+00:00",
+    "cutoff_timestamp": "2026-09-24T12:26:27.662097+00:00",
+    "movements_deleted": 0,
+    "device_returns_deleted": 0,
+    "material_returns_deleted": 0,
+    "status": "SUCCESS",
+    "error_message": null,
+    "executed_by": "store@gmail.com",
+    "details": {
+      "cutoff": "2026-09-24T12:26:27.662097+00:00",
+      "server_time": "2026-10-14T12:26:27.662097+00:00",
+      "movements_deleted": 0,
+      "device_returns_deleted": 0,
+      "material_returns_deleted": 0
+    },
+    "created_at": "2026-10-14T12:26:27.662097+00:00"
+  },
+  {
+    "id": "d60ccb30-9534-429b-97ca-e73fd13de233",
+    "run_at": "2026-10-14T12:26:44.489316+00:00",
+    "cutoff_timestamp": "2026-09-24T12:26:44.489316+00:00",
+    "movements_deleted": 0,
+    "device_returns_deleted": 0,
+    "material_returns_deleted": 0,
+    "status": "SUCCESS",
+    "error_message": null,
+    "executed_by": "store@gmail.com",
+    "details": {
+      "cutoff": "2026-09-24T12:26:44.489316+00:00",
+      "server_time": "2026-10-14T12:26:44.489316+00:00",
+      "movements_deleted": 0,
+      "device_returns_deleted": 0,
+      "material_returns_deleted": 0
+    },
+    "created_at": "2026-10-14T12:26:44.489316+00:00"
+  },
+  {
+    "id": "5da1dd5b-9438-4de2-b76a-ffae2d264642",
+    "run_at": "2026-10-14T12:27:00.656378+00:00",
+    "cutoff_timestamp": "2026-09-24T12:27:00.656378+00:00",
+    "movements_deleted": 0,
+    "device_returns_deleted": 0,
+    "material_returns_deleted": 0,
+    "status": "SUCCESS",
+    "error_message": null,
+    "executed_by": "store@gmail.com",
+    "details": {
+      "cutoff": "2026-09-24T12:27:00.656378+00:00",
+      "server_time": "2026-10-14T12:27:00.656378+00:00",
+      "movements_deleted": 0,
+      "device_returns_deleted": 0,
+      "material_returns_deleted": 0
+    },
+    "created_at": "2026-10-14T12:27:00.656378+00:00"
+  },
+  {
+    "id": "6c7ef0cc-0d94-4ee2-b726-e1b9a23993fe",
+    "run_at": "2026-10-14T12:27:06.27733+00:00",
+    "cutoff_timestamp": "2026-09-24T12:27:06.27733+00:00",
+    "movements_deleted": 0,
+    "device_returns_deleted": 0,
+    "material_returns_deleted": 0,
+    "status": "SUCCESS",
+    "error_message": null,
+    "executed_by": "store@gmail.com",
+    "details": {
+      "cutoff": "2026-09-24T12:27:06.27733+00:00",
+      "server_time": "2026-10-14T12:27:06.27733+00:00",
+      "movements_deleted": 0,
+      "device_returns_deleted": 0,
+      "material_returns_deleted": 0
+    },
+    "created_at": "2026-10-14T12:27:06.27733+00:00"
+  },
+  {
+    "id": "c2ea08fb-2402-41b2-bfc5-dbd849bb281d",
+    "run_at": "2026-10-15T05:16:25.929229+00:00",
+    "cutoff_timestamp": "2026-09-25T05:16:25.929229+00:00",
+    "movements_deleted": 0,
+    "device_returns_deleted": 0,
+    "material_returns_deleted": 0,
+    "status": "SUCCESS",
+    "error_message": null,
+    "executed_by": "store@gmail.com",
+    "details": {
+      "cutoff": "2026-09-25T05:16:25.929229+00:00",
+      "server_time": "2026-10-15T05:16:25.929229+00:00",
+      "movements_deleted": 0,
+      "device_returns_deleted": 0,
+      "material_returns_deleted": 0
+    },
+    "created_at": "2026-10-15T05:16:25.929229+00:00"
+  }
+]

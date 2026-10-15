@@ -30,7 +30,7 @@ router.get('/', requireRole('SALES'), async (req, res) => {
       console.warn('Customers table not available, falling back to installation_checklists:', error.message);
       const { data: checklists } = await supabase
         .from('installation_checklists')
-        .select('id, client_name, client_mobile, client_location, company_name, created_at')
+        .select('id, client_name, client_mobile, client_location, created_at')
         .order('created_at', { ascending: false });
 
       const map = new Map();

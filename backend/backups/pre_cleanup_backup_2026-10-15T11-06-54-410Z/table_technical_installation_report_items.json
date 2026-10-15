@@ -1,0 +1,80 @@
+[
+  {
+    "id": "56bf38c2-bbba-441f-b5f0-03694e085406",
+    "report_id": "97b64145-08dd-40cc-b506-c3c58e5c8e13",
+    "checklist_id": "5fd6cf2b-877f-4a8c-ac97-bab438b77aab",
+    "device_type": "Camera",
+    "quantity_carried": 6,
+    "quantity_installed": 5,
+    "quantity_to_return": 0,
+    "quantity_damaged": 1,
+    "quantity_missing": 0,
+    "discrepancy_reason": "Lens cracked on rough road transit",
+    "created_at": "2026-10-15T08:54:13.609238+00:00"
+  },
+  {
+    "id": "a2980e67-e403-4dfc-9e2b-f053710396ab",
+    "report_id": "97b64145-08dd-40cc-b506-c3c58e5c8e13",
+    "checklist_id": "5fd6cf2b-877f-4a8c-ac97-bab438b77aab",
+    "device_type": "Live Display",
+    "quantity_carried": 2,
+    "quantity_installed": 1,
+    "quantity_to_return": 1,
+    "quantity_damaged": 0,
+    "quantity_missing": 0,
+    "discrepancy_reason": null,
+    "created_at": "2026-10-15T08:54:13.609238+00:00"
+  },
+  {
+    "id": "356f2e44-f35e-4ec0-ba05-10c27c96b88d",
+    "report_id": "56fcfeaa-eac8-47b7-904e-8b8eb89c4a87",
+    "checklist_id": "53c4d91e-fb25-47a1-b574-de6b81a3a058",
+    "device_type": "SafDrive Model X",
+    "quantity_carried": 2,
+    "quantity_installed": 1,
+    "quantity_to_return": 1,
+    "quantity_damaged": 0,
+    "quantity_missing": 0,
+    "discrepancy_reason": null,
+    "created_at": "2026-10-15T08:55:40.358368+00:00"
+  },
+  {
+    "id": "92c168b9-4b1e-483a-aae7-d77c635df1c0",
+    "report_id": "c3b492da-b3f2-4cee-a1ce-052d8372c1c6",
+    "checklist_id": "55a11e6c-e7ba-4597-bba7-5b3d359559f5",
+    "device_type": "SafDrive Model X",
+    "quantity_carried": 1,
+    "quantity_installed": 1,
+    "quantity_to_return": 0,
+    "quantity_damaged": 0,
+    "quantity_missing": 0,
+    "discrepancy_reason": null,
+    "created_at": "2026-10-15T08:56:25.142738+00:00"
+  },
+  {
+    "id": "197ece3d-401c-4b3f-a56d-bb94e20dd3d2",
+    "report_id": "93135218-62e2-48f4-883d-6062566dccd0",
+    "checklist_id": "c58d61a1-a433-414c-bf26-6827c98a3f9f",
+    "device_type": "SafDrive Model X",
+    "quantity_carried": 3,
+    "quantity_installed": 1,
+    "quantity_to_return": 2,
+    "quantity_damaged": 0,
+    "quantity_missing": 0,
+    "discrepancy_reason": null,
+    "created_at": "2026-10-15T08:56:58.049171+00:00"
+  },
+  {
+    "id": "9c9c7e61-fa39-4b0a-81a7-6846f54801f8",
+    "report_id": "3b4d3cbd-9503-4d92-aa46-0d80ce8db8b5",
+    "checklist_id": "ed4e608d-7085-452c-b506-3a7617f78c81",
+    "device_type": "4 Channel Live",
+    "quantity_carried": 2,
+    "quantity_installed": 1,
+    "quantity_to_return": 1,
+    "quantity_damaged": 0,
+    "quantity_missing": 0,
+    "discrepancy_reason": null,
+    "created_at": "2026-10-15T08:59:58.99118+00:00"
+  }
+]

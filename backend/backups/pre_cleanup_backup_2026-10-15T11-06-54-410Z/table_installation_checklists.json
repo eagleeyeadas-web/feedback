@@ -1,0 +1,2478 @@
+[
+  {
+    "id": "62918991-3871-42c7-9c98-a49bcec5d5bb",
+    "checklist_number": "EE-ACCP-1792054249446-537",
+    "created_by": "11111111-1111-4111-a111-111111111111",
+    "client_name": "Main Alpha Fleet",
+    "client_mobile": "9876543210",
+    "client_location": "Central Distribution Hub, Chennai",
+    "google_maps_location": null,
+    "device_type": "4 Channel Live",
+    "number_of_devices": 1,
+    "number_of_vehicles": 1,
+    "extra_devices": false,
+    "extra_device_type": null,
+    "extra_device_count": null,
+    "confirmed_price": 25000,
+    "payment_method": "NEFT",
+    "advance_received": false,
+    "advance_amount": 0,
+    "pending_payment": false,
+    "pending_amount": 0,
+    "installation_duration": "1 Day",
+    "vehicle_type": "Trailer",
+    "expected_arrival_date": "2026-10-25",
+    "expected_arrival_time": "09:00:00",
+    "installation_or_service": "Installation",
+    "service_engineer": "Mathi",
+    "service_assistant": "",
+    "installation_status": "Completed",
+    "payment_status": "Pending",
+    "remarks": null,
+    "client_confirmation": "Confirmed",
+    "created_at": "2026-10-15T08:50:47.288916+00:00",
+    "updated_at": "2026-10-15T08:51:02.520496+00:00",
+    "carry_extra_backup_items": true,
+    "service_engineer_id": "e1000000-0000-0000-0000-000000000001",
+    "booking_end_date": null,
+    "original_expected_arrival_date": null,
+    "original_expected_arrival_time": null,
+    "original_installation_duration": null,
+    "original_booking_end_date": null,
+    "current_expected_arrival_date": null,
+    "current_expected_arrival_time": null,
+    "current_installation_duration": null,
+    "current_booking_end_date": null,
+    "schedule_revision_number": 0,
+    "schedule_last_updated_at": null,
+    "actual_start_datetime": null,
+    "actual_completion_datetime": "2026-10-15T08:51:02.831+00:00",
+    "device_configurations": [
+      {
+        "device_type": "4 Channel Live",
+        "quantity_carried": 1,
+        "number_of_devices": 1
+      }
+    ],
+    "bom_snapshot": {
+      "items": [
+        {
+          "unit": "Nos.",
+          "material_name": "5-metre Cable",
+          "total_quantity": 3
+        },
+        {
+          "unit": "Nos.",
+          "material_name": "Insulation Tape",
+          "total_quantity": 2
+        },
+        {
+          "unit": "Metres",
+          "material_name": "0.5 mm Wire",
+          "total_quantity": 20
+        }
+      ],
+      "configured": true
+    },
+    "material_issuance_status": "PENDING",
+    "material_issued_at": null,
+    "material_issued_by": null,
+    "salesperson_name": null,
+    "final_bom_snapshot": {
+      "items": [],
+      "final_bom": {
+        "items": [],
+        "warning": "No Bill of Materials (BOM) is configured for \"Camera\", \"Live Display\". Material requirements cannot be displayed as final until all selected device types have configured BOMs.",
+        "configured": false,
+        "total_devices": 6,
+        "total_vehicles": 6,
+        "device_configurations": [
+          {
+            "items": [],
+            "configured": false,
+            "bom_version": null,
+            "device_type": "Camera",
+            "number_of_devices": 5,
+            "number_of_vehicles": 5
+          },
+          {
+            "items": [],
+            "configured": false,
+            "bom_version": null,
+            "device_type": "Live Display",
+            "number_of_devices": 1,
+            "number_of_vehicles": 1
+          }
+        ],
+        "unconfigured_device_types": [
+          "Camera",
+          "Live Display"
+        ]
+      },
+      "comparison": [
+        {
+          "unit": "Nos.",
+          "status": "MATCHED",
+          "difference": -3,
+          "actual_used": 3,
+          "material_id": null,
+          "material_sku": null,
+          "actual_issued": 4,
+          "material_name": "5-metre Cable",
+          "final_quantity": 0,
+          "variance_label": "-3",
+          "actual_returned": 1,
+          "preliminary_quantity": 3
+        },
+        {
+          "unit": "Nos.",
+          "status": "MATCHED",
+          "difference": -2,
+          "actual_used": 2,
+          "material_id": null,
+          "material_sku": null,
+          "actual_issued": 3,
+          "material_name": "Insulation Tape",
+          "final_quantity": 0,
+          "variance_label": "-2",
+          "actual_returned": 1,
+          "preliminary_quantity": 2
+        },
+        {
+          "unit": "Metres",
+          "status": "MATCHED",
+          "difference": -20,
+          "actual_used": 15.5,
+          "material_id": null,
+          "material_sku": null,
+          "actual_issued": 20,
+          "material_name": "0.5 mm Wire",
+          "final_quantity": 0,
+          "variance_label": "-20",
+          "actual_returned": 4.5,
+          "preliminary_quantity": 20
+        }
+      ],
+      "configured": false,
+      "calculated_at": "2026-10-15T08:51:00.108Z",
+      "total_devices_installed": 6,
+      "installed_device_configurations": [
+        {
+          "device_type": "Camera",
+          "quantity_carried": 5,
+          "number_of_devices": 5,
+          "number_of_vehicles": 5
+        },
+        {
+          "device_type": "Live Display",
+          "quantity_carried": 1,
+          "number_of_devices": 1,
+          "number_of_vehicles": 1
+        }
+      ]
+    },
+    "actual_materials_used": [
+      {
+        "unit": "Nos.",
+        "remarks": null,
+        "material_id": null,
+        "material_name": "5-metre Cable",
+        "quantity_used": 3,
+        "quantity_issued": 4,
+        "quantity_damaged": 0,
+        "quantity_missing": 0,
+        "quantity_returned": 1
+      },
+      {
+        "unit": "Nos.",
+        "remarks": null,
+        "material_id": null,
+        "material_name": "Insulation Tape",
+        "quantity_used": 2,
+        "quantity_issued": 3,
+        "quantity_damaged": 0,
+        "quantity_missing": 0,
+        "quantity_returned": 1
+      },
+      {
+        "unit": "Nos.",
+        "remarks": null,
+        "material_id": null,
+        "material_name": "0.5 mm Wire",
+        "quantity_used": 15.5,
+        "quantity_issued": 20,
+        "quantity_damaged": 0,
+        "quantity_missing": 0,
+        "quantity_returned": 4.5
+      }
+    ],
+    "actual_materials_returned": [
+      {
+        "unit": "Nos.",
+        "remarks": null,
+        "material_id": null,
+        "material_name": "5-metre Cable",
+        "quantity_used": 3,
+        "quantity_issued": 4,
+        "quantity_damaged": 0,
+        "quantity_missing": 0,
+        "quantity_returned": 1
+      },
+      {
+        "unit": "Nos.",
+        "remarks": null,
+        "material_id": null,
+        "material_name": "Insulation Tape",
+        "quantity_used": 2,
+        "quantity_issued": 3,
+        "quantity_damaged": 0,
+        "quantity_missing": 0,
+        "quantity_returned": 1
+      },
+      {
+        "unit": "Nos.",
+        "remarks": null,
+        "material_id": null,
+        "material_name": "0.5 mm Wire",
+        "quantity_used": 15.5,
+        "quantity_issued": 20,
+        "quantity_damaged": 0,
+        "quantity_missing": 0,
+        "quantity_returned": 4.5
+      }
+    ],
+    "material_return_status": "PENDING_STORE_VERIFICATION",
+    "reconciliation_status": "FULLY_RECONCILED",
+    "carry_status": "NOT_RECORDED"
+  },
+  {
+    "id": "45da1aca-7697-4d59-97b4-72ae5a3135e8",
+    "checklist_number": "EE-INST-20261015-0031",
+    "created_by": "00000000-0000-0000-0000-000000000001",
+    "client_name": "Gamma InProgress Freight",
+    "client_mobile": "9888833333",
+    "client_location": "Central Depot",
+    "google_maps_location": null,
+    "device_type": "2 Channel Recording",
+    "number_of_devices": 1,
+    "number_of_vehicles": 1,
+    "extra_devices": false,
+    "extra_device_type": null,
+    "extra_device_count": null,
+    "confirmed_price": 0,
+    "payment_method": "UPI",
+    "advance_received": false,
+    "advance_amount": 0,
+    "pending_payment": false,
+    "pending_amount": 0,
+    "installation_duration": "1 Day",
+    "vehicle_type": "Truck",
+    "expected_arrival_date": "2029-09-25",
+    "expected_arrival_time": "10:00:00",
+    "installation_or_service": "Installation",
+    "service_engineer": "Sakthivel",
+    "service_assistant": "",
+    "installation_status": "Cancelled",
+    "payment_status": "Pending",
+    "remarks": "[CANCELLED: Cancelled by Coordinator]",
+    "client_confirmation": "Confirmed",
+    "created_at": "2026-10-15T08:57:52.901+00:00",
+    "updated_at": "2026-10-15T10:59:15.028787+00:00",
+    "carry_extra_backup_items": false,
+    "service_engineer_id": "e1000000-0000-0000-0000-000000000004",
+    "booking_end_date": "2029-09-25",
+    "original_expected_arrival_date": null,
+    "original_expected_arrival_time": null,
+    "original_installation_duration": null,
+    "original_booking_end_date": null,
+    "current_expected_arrival_date": null,
+    "current_expected_arrival_time": null,
+    "current_installation_duration": null,
+    "current_booking_end_date": "2029-09-25",
+    "schedule_revision_number": 0,
+    "schedule_last_updated_at": null,
+    "actual_start_datetime": null,
+    "actual_completion_datetime": null,
+    "device_configurations": null,
+    "bom_snapshot": null,
+    "material_issuance_status": "PENDING",
+    "material_issued_at": null,
+    "material_issued_by": null,
+    "salesperson_name": null,
+    "final_bom_snapshot": null,
+    "actual_materials_used": null,
+    "actual_materials_returned": null,
+    "material_return_status": "NOT_APPLICABLE",
+    "reconciliation_status": "SALES_CREATED",
+    "carry_status": "NOT_RECORDED"
+  },
+  {
+    "id": "5fd6cf2b-877f-4a8c-ac97-bab438b77aab",
+    "checklist_number": "EE-ACCP-1792054445348-710",
+    "created_by": "11111111-1111-4111-a111-111111111111",
+    "client_name": "Main Alpha Fleet",
+    "client_mobile": "9876543210",
+    "client_location": "Central Distribution Hub, Chennai",
+    "google_maps_location": null,
+    "device_type": "4 Channel Live",
+    "number_of_devices": 1,
+    "number_of_vehicles": 1,
+    "extra_devices": false,
+    "extra_device_type": null,
+    "extra_device_count": null,
+    "confirmed_price": 25000,
+    "payment_method": "NEFT",
+    "advance_received": false,
+    "advance_amount": 0,
+    "pending_payment": false,
+    "pending_amount": 0,
+    "installation_duration": "1 Day",
+    "vehicle_type": "Trailer",
+    "expected_arrival_date": "2026-10-25",
+    "expected_arrival_time": "09:00:00",
+    "installation_or_service": "Installation",
+    "service_engineer": "Mathi",
+    "service_assistant": "",
+    "installation_status": "Completed",
+    "payment_status": "Pending",
+    "remarks": null,
+    "client_confirmation": "Confirmed",
+    "created_at": "2026-10-15T08:54:03.266505+00:00",
+    "updated_at": "2026-10-15T08:54:18.59718+00:00",
+    "carry_extra_backup_items": true,
+    "service_engineer_id": "e1000000-0000-0000-0000-000000000001",
+    "booking_end_date": null,
+    "original_expected_arrival_date": null,
+    "original_expected_arrival_time": null,
+    "original_installation_duration": null,
+    "original_booking_end_date": null,
+    "current_expected_arrival_date": null,
+    "current_expected_arrival_time": null,
+    "current_installation_duration": null,
+    "current_booking_end_date": null,
+    "schedule_revision_number": 0,
+    "schedule_last_updated_at": null,
+    "actual_start_datetime": null,
+    "actual_completion_datetime": "2026-10-15T08:54:18.545+00:00",
+    "device_configurations": [
+      {
+        "device_type": "4 Channel Live",
+        "quantity_carried": 1,
+        "number_of_devices": 1
+      }
+    ],
+    "bom_snapshot": {
+      "items": [
+        {
+          "unit": "Nos.",
+          "material_name": "5-metre Cable",
+          "total_quantity": 3
+        },
+        {
+          "unit": "Nos.",
+          "material_name": "Insulation Tape",
+          "total_quantity": 2
+        },
+        {
+          "unit": "Metres",
+          "material_name": "0.5 mm Wire",
+          "total_quantity": 20
+        }
+      ],
+      "configured": true
+    },
+    "material_issuance_status": "PENDING",
+    "material_issued_at": null,
+    "material_issued_by": null,
+    "salesperson_name": null,
+    "final_bom_snapshot": {
+      "items": [],
+      "final_bom": {
+        "items": [],
+        "warning": "No Bill of Materials (BOM) is configured for \"Camera\", \"Live Display\". Material requirements cannot be displayed as final until all selected device types have configured BOMs.",
+        "configured": false,
+        "total_devices": 6,
+        "total_vehicles": 6,
+        "device_configurations": [
+          {
+            "items": [],
+            "configured": false,
+            "bom_version": null,
+            "device_type": "Camera",
+            "number_of_devices": 5,
+            "number_of_vehicles": 5
+          },
+          {
+            "items": [],
+            "configured": false,
+            "bom_version": null,
+            "device_type": "Live Display",
+            "number_of_devices": 1,
+            "number_of_vehicles": 1
+          }
+        ],
+        "unconfigured_device_types": [
+          "Camera",
+          "Live Display"
+        ]
+      },
+      "comparison": [
+        {
+          "unit": "Nos.",
+          "status": "MATCHED",
+          "difference": -3,
+          "actual_used": 3,
+          "material_id": null,
+          "material_sku": null,
+          "actual_issued": 4,
+          "material_name": "5-metre Cable",
+          "final_quantity": 0,
+          "variance_label": "-3",
+          "actual_returned": 1,
+          "preliminary_quantity": 3
+        },
+        {
+          "unit": "Nos.",
+          "status": "MATCHED",
+          "difference": -2,
+          "actual_used": 2,
+          "material_id": null,
+          "material_sku": null,
+          "actual_issued": 3,
+          "material_name": "Insulation Tape",
+          "final_quantity": 0,
+          "variance_label": "-2",
+          "actual_returned": 1,
+          "preliminary_quantity": 2
+        },
+        {
+          "unit": "Metres",
+          "status": "MATCHED",
+          "difference": -20,
+          "actual_used": 15.5,
+          "material_id": null,
+          "material_sku": null,
+          "actual_issued": 20,
+          "material_name": "0.5 mm Wire",
+          "final_quantity": 0,
+          "variance_label": "-20",
+          "actual_returned": 4.5,
+          "preliminary_quantity": 20
+        }
+      ],
+      "configured": false,
+      "calculated_at": "2026-10-15T08:54:15.600Z",
+      "total_devices_installed": 6,
+      "installed_device_configurations": [
+        {
+          "device_type": "Camera",
+          "quantity_carried": 5,
+          "number_of_devices": 5,
+          "number_of_vehicles": 5
+        },
+        {
+          "device_type": "Live Display",
+          "quantity_carried": 1,
+          "number_of_devices": 1,
+          "number_of_vehicles": 1
+        }
+      ]
+    },
+    "actual_materials_used": [
+      {
+        "unit": "Nos.",
+        "remarks": null,
+        "material_id": null,
+        "material_name": "5-metre Cable",
+        "quantity_used": 3,
+        "quantity_issued": 4,
+        "quantity_damaged": 0,
+        "quantity_missing": 0,
+        "quantity_returned": 1
+      },
+      {
+        "unit": "Nos.",
+        "remarks": null,
+        "material_id": null,
+        "material_name": "Insulation Tape",
+        "quantity_used": 2,
+        "quantity_issued": 3,
+        "quantity_damaged": 0,
+        "quantity_missing": 0,
+        "quantity_returned": 1
+      },
+      {
+        "unit": "Nos.",
+        "remarks": null,
+        "material_id": null,
+        "material_name": "0.5 mm Wire",
+        "quantity_used": 15.5,
+        "quantity_issued": 20,
+        "quantity_damaged": 0,
+        "quantity_missing": 0,
+        "quantity_returned": 4.5
+      }
+    ],
+    "actual_materials_returned": [
+      {
+        "unit": "Nos.",
+        "remarks": null,
+        "material_id": null,
+        "material_name": "5-metre Cable",
+        "quantity_used": 3,
+        "quantity_issued": 4,
+        "quantity_damaged": 0,
+        "quantity_missing": 0,
+        "quantity_returned": 1
+      },
+      {
+        "unit": "Nos.",
+        "remarks": null,
+        "material_id": null,
+        "material_name": "Insulation Tape",
+        "quantity_used": 2,
+        "quantity_issued": 3,
+        "quantity_damaged": 0,
+        "quantity_missing": 0,
+        "quantity_returned": 1
+      },
+      {
+        "unit": "Nos.",
+        "remarks": null,
+        "material_id": null,
+        "material_name": "0.5 mm Wire",
+        "quantity_used": 15.5,
+        "quantity_issued": 20,
+        "quantity_damaged": 0,
+        "quantity_missing": 0,
+        "quantity_returned": 4.5
+      }
+    ],
+    "material_return_status": "PENDING_STORE_VERIFICATION",
+    "reconciliation_status": "FULLY_RECONCILED",
+    "carry_status": "NOT_RECORDED"
+  },
+  {
+    "id": "851e3105-c2f9-418c-b3ac-d2fe2dfecce1",
+    "checklist_number": "EE-INST-20261015-0011",
+    "created_by": "00000000-0000-0000-0000-000000000001",
+    "client_name": "Beta Completed Transport",
+    "client_mobile": "9888822222",
+    "client_location": "Harbor Gate 4",
+    "google_maps_location": null,
+    "device_type": "4 Channel Live",
+    "number_of_devices": 2,
+    "number_of_vehicles": 2,
+    "extra_devices": false,
+    "extra_device_type": null,
+    "extra_device_count": null,
+    "confirmed_price": 45000,
+    "payment_method": "UPI",
+    "advance_received": false,
+    "advance_amount": 0,
+    "pending_payment": false,
+    "pending_amount": 0,
+    "installation_duration": "1 Day",
+    "vehicle_type": "Truck",
+    "expected_arrival_date": "2029-01-09",
+    "expected_arrival_time": "10:00:00",
+    "installation_or_service": "Installation",
+    "service_engineer": "Guna",
+    "service_assistant": "",
+    "installation_status": "Completed",
+    "payment_status": "Pending",
+    "remarks": null,
+    "client_confirmation": "Confirmed",
+    "created_at": "2026-10-15T08:39:41.17+00:00",
+    "updated_at": "2026-10-15T08:39:40.104607+00:00",
+    "carry_extra_backup_items": false,
+    "service_engineer_id": "e1000000-0000-0000-0000-000000000006",
+    "booking_end_date": "2029-01-09",
+    "original_expected_arrival_date": null,
+    "original_expected_arrival_time": null,
+    "original_installation_duration": null,
+    "original_booking_end_date": null,
+    "current_expected_arrival_date": null,
+    "current_expected_arrival_time": null,
+    "current_installation_duration": null,
+    "current_booking_end_date": "2029-01-09",
+    "schedule_revision_number": 0,
+    "schedule_last_updated_at": null,
+    "actual_start_datetime": null,
+    "actual_completion_datetime": null,
+    "device_configurations": null,
+    "bom_snapshot": null,
+    "material_issuance_status": "PENDING",
+    "material_issued_at": null,
+    "material_issued_by": null,
+    "salesperson_name": null,
+    "final_bom_snapshot": null,
+    "actual_materials_used": null,
+    "actual_materials_returned": null,
+    "material_return_status": "NOT_APPLICABLE",
+    "reconciliation_status": "SALES_CREATED",
+    "carry_status": "NOT_RECORDED"
+  },
+  {
+    "id": "53c4d91e-fb25-47a1-b574-de6b81a3a058",
+    "checklist_number": "EE-INST-20261015-0020",
+    "created_by": "00000000-0000-0000-0000-000000000001",
+    "client_name": "TechAvail Test 1 1792054532189",
+    "client_mobile": "9876543210",
+    "client_location": "Chennai Central",
+    "google_maps_location": null,
+    "device_type": "SafDrive Model X",
+    "number_of_devices": 1,
+    "number_of_vehicles": 1,
+    "extra_devices": false,
+    "extra_device_type": null,
+    "extra_device_count": null,
+    "confirmed_price": 0,
+    "payment_method": "UPI",
+    "advance_received": false,
+    "advance_amount": 0,
+    "pending_payment": false,
+    "pending_amount": 0,
+    "installation_duration": "3 Days",
+    "vehicle_type": "Truck",
+    "expected_arrival_date": "2029-05-01",
+    "expected_arrival_time": "09:00:00",
+    "installation_or_service": "Installation",
+    "service_engineer": "Mathi",
+    "service_assistant": "",
+    "installation_status": "Completed",
+    "payment_status": "Pending",
+    "remarks": null,
+    "client_confirmation": "Confirmed",
+    "created_at": "2026-10-15T08:55:35.583+00:00",
+    "updated_at": "2026-10-15T08:55:41.414471+00:00",
+    "carry_extra_backup_items": false,
+    "service_engineer_id": "e1000000-0000-0000-0000-000000000001",
+    "booking_end_date": "2029-05-03",
+    "original_expected_arrival_date": null,
+    "original_expected_arrival_time": null,
+    "original_installation_duration": null,
+    "original_booking_end_date": null,
+    "current_expected_arrival_date": null,
+    "current_expected_arrival_time": null,
+    "current_installation_duration": null,
+    "current_booking_end_date": "2029-05-03",
+    "schedule_revision_number": 0,
+    "schedule_last_updated_at": null,
+    "actual_start_datetime": null,
+    "actual_completion_datetime": "2029-05-02T16:00:00+00:00",
+    "device_configurations": null,
+    "bom_snapshot": null,
+    "material_issuance_status": "PENDING",
+    "material_issued_at": null,
+    "material_issued_by": null,
+    "salesperson_name": null,
+    "final_bom_snapshot": {
+      "items": [],
+      "final_bom": {
+        "items": [],
+        "warning": "No Bill of Materials (BOM) is configured for \"SafDrive Model X\". Material requirements cannot be displayed as final until all selected device types have configured BOMs.",
+        "configured": false,
+        "total_devices": 1,
+        "total_vehicles": 1,
+        "device_configurations": [
+          {
+            "items": [],
+            "configured": false,
+            "bom_version": null,
+            "device_type": "SafDrive Model X",
+            "number_of_devices": 1,
+            "number_of_vehicles": 1
+          }
+        ],
+        "unconfigured_device_types": [
+          "SafDrive Model X"
+        ]
+      },
+      "comparison": [],
+      "configured": false,
+      "calculated_at": "2026-10-15T08:55:42.446Z",
+      "total_devices_installed": 1,
+      "installed_device_configurations": [
+        {
+          "device_type": "SafDrive Model X",
+          "quantity_carried": 1,
+          "number_of_devices": 1,
+          "number_of_vehicles": 1
+        }
+      ]
+    },
+    "actual_materials_used": [],
+    "actual_materials_returned": [],
+    "material_return_status": "NOT_APPLICABLE",
+    "reconciliation_status": "PENDING_STORE_VERIFICATION",
+    "carry_status": "NOT_RECORDED"
+  },
+  {
+    "id": "724e0432-5e17-4722-a344-aad620f1df53",
+    "checklist_number": "EE-INST-20261015-0012",
+    "created_by": "00000000-0000-0000-0000-000000000001",
+    "client_name": "Gamma InProgress Freight",
+    "client_mobile": "9888833333",
+    "client_location": "Central Depot",
+    "google_maps_location": null,
+    "device_type": "2 Channel Recording",
+    "number_of_devices": 1,
+    "number_of_vehicles": 1,
+    "extra_devices": false,
+    "extra_device_type": null,
+    "extra_device_count": null,
+    "confirmed_price": 20000,
+    "payment_method": "UPI",
+    "advance_received": false,
+    "advance_amount": 0,
+    "pending_payment": false,
+    "pending_amount": 0,
+    "installation_duration": "1 Day",
+    "vehicle_type": "Truck",
+    "expected_arrival_date": "2029-01-11",
+    "expected_arrival_time": "10:00:00",
+    "installation_or_service": "Installation",
+    "service_engineer": "Sakthivel",
+    "service_assistant": "",
+    "installation_status": "In Progress",
+    "payment_status": "Pending",
+    "remarks": null,
+    "client_confirmation": "Confirmed",
+    "created_at": "2026-10-15T08:39:46.698+00:00",
+    "updated_at": "2026-10-15T08:39:45.110003+00:00",
+    "carry_extra_backup_items": false,
+    "service_engineer_id": "e1000000-0000-0000-0000-000000000004",
+    "booking_end_date": "2029-01-11",
+    "original_expected_arrival_date": null,
+    "original_expected_arrival_time": null,
+    "original_installation_duration": null,
+    "original_booking_end_date": null,
+    "current_expected_arrival_date": null,
+    "current_expected_arrival_time": null,
+    "current_installation_duration": null,
+    "current_booking_end_date": "2029-01-11",
+    "schedule_revision_number": 0,
+    "schedule_last_updated_at": null,
+    "actual_start_datetime": null,
+    "actual_completion_datetime": null,
+    "device_configurations": null,
+    "bom_snapshot": null,
+    "material_issuance_status": "PENDING",
+    "material_issued_at": null,
+    "material_issued_by": null,
+    "salesperson_name": null,
+    "final_bom_snapshot": null,
+    "actual_materials_used": null,
+    "actual_materials_returned": null,
+    "material_return_status": "NOT_APPLICABLE",
+    "reconciliation_status": "SALES_CREATED",
+    "carry_status": "NOT_RECORDED"
+  },
+  {
+    "id": "c58d61a1-a433-414c-bf26-6827c98a3f9f",
+    "checklist_number": "EE-INST-20261015-0026",
+    "created_by": "00000000-0000-0000-0000-000000000001",
+    "client_name": "TechAvail Test 10 1792054532189",
+    "client_mobile": "9876543216",
+    "client_location": "Tirunelveli",
+    "google_maps_location": null,
+    "device_type": "SafDrive Model X",
+    "number_of_devices": 1,
+    "number_of_vehicles": 1,
+    "extra_devices": false,
+    "extra_device_type": null,
+    "extra_device_count": null,
+    "confirmed_price": 0,
+    "payment_method": "UPI",
+    "advance_received": false,
+    "advance_amount": 0,
+    "pending_payment": false,
+    "pending_amount": 0,
+    "installation_duration": "2 Days",
+    "vehicle_type": "Truck",
+    "expected_arrival_date": "2029-06-15",
+    "expected_arrival_time": "09:00:00",
+    "installation_or_service": "Installation",
+    "service_engineer": "Kamalesh",
+    "service_assistant": "",
+    "installation_status": "Completed",
+    "payment_status": "Pending",
+    "remarks": null,
+    "client_confirmation": "Confirmed",
+    "created_at": "2026-10-15T08:56:56.201+00:00",
+    "updated_at": "2026-10-15T08:56:59.11766+00:00",
+    "carry_extra_backup_items": false,
+    "service_engineer_id": "e1000000-0000-0000-0000-000000000002",
+    "booking_end_date": "2029-06-16",
+    "original_expected_arrival_date": null,
+    "original_expected_arrival_time": null,
+    "original_installation_duration": null,
+    "original_booking_end_date": null,
+    "current_expected_arrival_date": null,
+    "current_expected_arrival_time": null,
+    "current_installation_duration": null,
+    "current_booking_end_date": "2029-06-16",
+    "schedule_revision_number": 0,
+    "schedule_last_updated_at": null,
+    "actual_start_datetime": null,
+    "actual_completion_datetime": "2029-06-15T15:00:00+00:00",
+    "device_configurations": null,
+    "bom_snapshot": null,
+    "material_issuance_status": "PENDING",
+    "material_issued_at": null,
+    "material_issued_by": null,
+    "salesperson_name": null,
+    "final_bom_snapshot": {
+      "items": [],
+      "final_bom": {
+        "items": [],
+        "warning": "No Bill of Materials (BOM) is configured for \"SafDrive Model X\". Material requirements cannot be displayed as final until all selected device types have configured BOMs.",
+        "configured": false,
+        "total_devices": 1,
+        "total_vehicles": 1,
+        "device_configurations": [
+          {
+            "items": [],
+            "configured": false,
+            "bom_version": null,
+            "device_type": "SafDrive Model X",
+            "number_of_devices": 1,
+            "number_of_vehicles": 1
+          }
+        ],
+        "unconfigured_device_types": [
+          "SafDrive Model X"
+        ]
+      },
+      "comparison": [],
+      "configured": false,
+      "calculated_at": "2026-10-15T08:57:00.106Z",
+      "total_devices_installed": 1,
+      "installed_device_configurations": [
+        {
+          "device_type": "SafDrive Model X",
+          "quantity_carried": 1,
+          "number_of_devices": 1,
+          "number_of_vehicles": 1
+        }
+      ]
+    },
+    "actual_materials_used": [],
+    "actual_materials_returned": [],
+    "material_return_status": "NOT_APPLICABLE",
+    "reconciliation_status": "PENDING_STORE_VERIFICATION",
+    "carry_status": "NOT_RECORDED"
+  },
+  {
+    "id": "55a11e6c-e7ba-4597-bba7-5b3d359559f5",
+    "checklist_number": "EE-INST-20261015-0023",
+    "created_by": "00000000-0000-0000-0000-000000000001",
+    "client_name": "TechAvail Test 5 1792054532189",
+    "client_mobile": "9876543213",
+    "client_location": "Salem",
+    "google_maps_location": null,
+    "device_type": "SafDrive Model X",
+    "number_of_devices": 1,
+    "number_of_vehicles": 1,
+    "extra_devices": false,
+    "extra_device_type": null,
+    "extra_device_count": null,
+    "confirmed_price": 0,
+    "payment_method": "UPI",
+    "advance_received": false,
+    "advance_amount": 0,
+    "pending_payment": false,
+    "pending_amount": 0,
+    "installation_duration": "2 Days",
+    "vehicle_type": "Truck",
+    "expected_arrival_date": "2029-05-15",
+    "expected_arrival_time": "09:00:00",
+    "installation_or_service": "Installation",
+    "service_engineer": "Kamalesh",
+    "service_assistant": "",
+    "installation_status": "Completed",
+    "payment_status": "Pending",
+    "remarks": null,
+    "client_confirmation": "Confirmed",
+    "created_at": "2026-10-15T08:56:17.619+00:00",
+    "updated_at": "2026-10-15T08:56:25.39983+00:00",
+    "carry_extra_backup_items": false,
+    "service_engineer_id": "e1000000-0000-0000-0000-000000000002",
+    "booking_end_date": "2029-05-16",
+    "original_expected_arrival_date": null,
+    "original_expected_arrival_time": null,
+    "original_installation_duration": null,
+    "original_booking_end_date": null,
+    "current_expected_arrival_date": null,
+    "current_expected_arrival_time": null,
+    "current_installation_duration": null,
+    "current_booking_end_date": "2029-05-16",
+    "schedule_revision_number": 0,
+    "schedule_last_updated_at": null,
+    "actual_start_datetime": null,
+    "actual_completion_datetime": "2029-05-16T18:00:00+00:00",
+    "device_configurations": null,
+    "bom_snapshot": null,
+    "material_issuance_status": "PENDING",
+    "material_issued_at": null,
+    "material_issued_by": null,
+    "salesperson_name": null,
+    "final_bom_snapshot": {
+      "items": [],
+      "final_bom": {
+        "items": [],
+        "warning": "No Bill of Materials (BOM) is configured for \"SafDrive Model X\". Material requirements cannot be displayed as final until all selected device types have configured BOMs.",
+        "configured": false,
+        "total_devices": 1,
+        "total_vehicles": 1,
+        "device_configurations": [
+          {
+            "items": [],
+            "configured": false,
+            "bom_version": null,
+            "device_type": "SafDrive Model X",
+            "number_of_devices": 1,
+            "number_of_vehicles": 1
+          }
+        ],
+        "unconfigured_device_types": [
+          "SafDrive Model X"
+        ]
+      },
+      "comparison": [],
+      "configured": false,
+      "calculated_at": "2026-10-15T08:56:27.143Z",
+      "total_devices_installed": 1,
+      "installed_device_configurations": [
+        {
+          "device_type": "SafDrive Model X",
+          "quantity_carried": 1,
+          "number_of_devices": 1,
+          "number_of_vehicles": 1
+        }
+      ]
+    },
+    "actual_materials_used": [],
+    "actual_materials_returned": [],
+    "material_return_status": "NOT_APPLICABLE",
+    "reconciliation_status": "FULLY_RECONCILED",
+    "carry_status": "NOT_RECORDED"
+  },
+  {
+    "id": "8f82e385-5ac2-482f-8164-0c07d9549e1e",
+    "checklist_number": "EE-INST-20261015-0030",
+    "created_by": "00000000-0000-0000-0000-000000000001",
+    "client_name": "Beta Completed Transport",
+    "client_mobile": "9888822222",
+    "client_location": "Harbor Gate 4",
+    "google_maps_location": null,
+    "device_type": "4 Channel Live",
+    "number_of_devices": 2,
+    "number_of_vehicles": 2,
+    "extra_devices": false,
+    "extra_device_type": null,
+    "extra_device_count": null,
+    "confirmed_price": 45000,
+    "payment_method": "UPI",
+    "advance_received": false,
+    "advance_amount": 0,
+    "pending_payment": false,
+    "pending_amount": 0,
+    "installation_duration": "1 Day",
+    "vehicle_type": "Truck",
+    "expected_arrival_date": "2029-09-23",
+    "expected_arrival_time": "10:00:00",
+    "installation_or_service": "Installation",
+    "service_engineer": "Guna",
+    "service_assistant": "",
+    "installation_status": "Completed",
+    "payment_status": "Pending",
+    "remarks": null,
+    "client_confirmation": "Confirmed",
+    "created_at": "2026-10-15T08:57:48.134+00:00",
+    "updated_at": "2026-10-15T08:57:46.62565+00:00",
+    "carry_extra_backup_items": false,
+    "service_engineer_id": "e1000000-0000-0000-0000-000000000006",
+    "booking_end_date": "2029-09-23",
+    "original_expected_arrival_date": null,
+    "original_expected_arrival_time": null,
+    "original_installation_duration": null,
+    "original_booking_end_date": null,
+    "current_expected_arrival_date": null,
+    "current_expected_arrival_time": null,
+    "current_installation_duration": null,
+    "current_booking_end_date": "2029-09-23",
+    "schedule_revision_number": 0,
+    "schedule_last_updated_at": null,
+    "actual_start_datetime": null,
+    "actual_completion_datetime": null,
+    "device_configurations": null,
+    "bom_snapshot": null,
+    "material_issuance_status": "PENDING",
+    "material_issued_at": null,
+    "material_issued_by": null,
+    "salesperson_name": null,
+    "final_bom_snapshot": null,
+    "actual_materials_used": null,
+    "actual_materials_returned": null,
+    "material_return_status": "NOT_APPLICABLE",
+    "reconciliation_status": "SALES_CREATED",
+    "carry_status": "NOT_RECORDED"
+  },
+  {
+    "id": "ed4e608d-7085-452c-b506-3a7617f78c81",
+    "checklist_number": "EE-INST-20261015-0038",
+    "created_by": "f3a5e467-a1bf-40ef-8878-ec64b29bbfd5",
+    "client_name": "Apollo Logistics Pvt Ltd",
+    "client_mobile": "9840123456",
+    "client_location": "Guindy Industrial Estate, Chennai",
+    "google_maps_location": null,
+    "device_type": "4 Channel Live",
+    "number_of_devices": 2,
+    "number_of_vehicles": 1,
+    "extra_devices": false,
+    "extra_device_type": null,
+    "extra_device_count": null,
+    "confirmed_price": 0,
+    "payment_method": "UPI",
+    "advance_received": false,
+    "advance_amount": 0,
+    "pending_payment": false,
+    "pending_amount": 0,
+    "installation_duration": "1 Day",
+    "vehicle_type": "Truck",
+    "expected_arrival_date": "2026-10-15",
+    "expected_arrival_time": "09:30:00",
+    "installation_or_service": "Installation",
+    "service_engineer": "Karthik Raja",
+    "service_assistant": "Suresh Kumar",
+    "installation_status": "Completed",
+    "payment_status": "Pending",
+    "remarks": "[CANCELLED: Cancelled by Coordinator] [CANCELLED: Cancelled by Coordinator] [CANCELLED: Cancelled by Coordinator]",
+    "client_confirmation": "Confirmed",
+    "created_at": "2026-10-15T08:59:55.031+00:00",
+    "updated_at": "2026-10-15T10:49:32.973028+00:00",
+    "carry_extra_backup_items": false,
+    "service_engineer_id": null,
+    "booking_end_date": null,
+    "original_expected_arrival_date": null,
+    "original_expected_arrival_time": null,
+    "original_installation_duration": null,
+    "original_booking_end_date": null,
+    "current_expected_arrival_date": null,
+    "current_expected_arrival_time": null,
+    "current_installation_duration": null,
+    "current_booking_end_date": null,
+    "schedule_revision_number": 0,
+    "schedule_last_updated_at": null,
+    "actual_start_datetime": null,
+    "actual_completion_datetime": "2026-10-15T09:00:03.318+00:00",
+    "device_configurations": null,
+    "bom_snapshot": null,
+    "material_issuance_status": "PENDING",
+    "material_issued_at": null,
+    "material_issued_by": null,
+    "salesperson_name": null,
+    "final_bom_snapshot": {
+      "items": [
+        {
+          "unit": "Nos.",
+          "breakdown": [
+            {
+              "subtotal": 2,
+              "device_type": "4 Channel Live",
+              "number_of_devices": 1,
+              "quantity_per_device": 2
+            }
+          ],
+          "sort_order": 1,
+          "material_id": "c99c1b8d-fa0b-4e65-8d9e-96549a591865",
+          "material_sku": "MAT-INSU-TAPE",
+          "material_name": "Insulation Tape",
+          "total_quantity": 2,
+          "number_of_devices": 1,
+          "quantity_per_device": 2
+        },
+        {
+          "unit": "Packets",
+          "breakdown": [
+            {
+              "subtotal": 1,
+              "device_type": "4 Channel Live",
+              "number_of_devices": 1,
+              "quantity_per_device": 1
+            }
+          ],
+          "sort_order": 2,
+          "material_id": "bd1ed5a4-94c0-4f38-aabc-f6a46b0b0159",
+          "material_sku": "MAT-CT-200MM",
+          "material_name": "Cable Tie – 200 mm",
+          "total_quantity": 1,
+          "number_of_devices": 1,
+          "quantity_per_device": 1
+        },
+        {
+          "unit": "Packets",
+          "breakdown": [
+            {
+              "subtotal": 1,
+              "device_type": "4 Channel Live",
+              "number_of_devices": 1,
+              "quantity_per_device": 1
+            }
+          ],
+          "sort_order": 3,
+          "material_id": "893d903a-4d30-4fc2-96c2-fc7a2b872ed2",
+          "material_sku": "MAT-CT-300MM",
+          "material_name": "Cable Tie – 300 mm",
+          "total_quantity": 1,
+          "number_of_devices": 1,
+          "quantity_per_device": 1
+        },
+        {
+          "unit": "Nos.",
+          "breakdown": [
+            {
+              "subtotal": 12,
+              "device_type": "4 Channel Live",
+              "number_of_devices": 1,
+              "quantity_per_device": 12
+            }
+          ],
+          "sort_order": 4,
+          "material_id": "943eb9be-f4bb-4300-90e9-6ce23cc90549",
+          "material_sku": "MAT-SCREW-LONG",
+          "material_name": "Long Screw",
+          "total_quantity": 12,
+          "number_of_devices": 1,
+          "quantity_per_device": 12
+        },
+        {
+          "unit": "Nos.",
+          "breakdown": [
+            {
+              "subtotal": 12,
+              "device_type": "4 Channel Live",
+              "number_of_devices": 1,
+              "quantity_per_device": 12
+            }
+          ],
+          "sort_order": 5,
+          "material_id": "bd02bad8-3b6f-45b9-bbc7-c5c79ecb86bd",
+          "material_sku": "MAT-SCREW-SMALL",
+          "material_name": "Small Screw",
+          "total_quantity": 12,
+          "number_of_devices": 1,
+          "quantity_per_device": 12
+        },
+        {
+          "unit": "Nos.",
+          "breakdown": [
+            {
+              "subtotal": 1,
+              "device_type": "4 Channel Live",
+              "number_of_devices": 1,
+              "quantity_per_device": 1
+            }
+          ],
+          "sort_order": 6,
+          "material_id": "9f46d34e-91a4-4f31-a8c5-b5541cc8b32d",
+          "material_sku": "MAT-MEM-CARD",
+          "material_name": "Memory Card",
+          "total_quantity": 1,
+          "number_of_devices": 1,
+          "quantity_per_device": 1
+        },
+        {
+          "unit": "Metres",
+          "breakdown": [
+            {
+              "subtotal": 20,
+              "device_type": "4 Channel Live",
+              "number_of_devices": 1,
+              "quantity_per_device": 20
+            }
+          ],
+          "sort_order": 7,
+          "material_id": "fcc5f452-6ae7-4097-bd5a-0ca9f29421e3",
+          "material_sku": "MAT-WIRE-0.5MM",
+          "material_name": "0.5 mm Wire",
+          "total_quantity": 20,
+          "number_of_devices": 1,
+          "quantity_per_device": 20
+        },
+        {
+          "unit": "Nos.",
+          "breakdown": [
+            {
+              "subtotal": 3,
+              "device_type": "4 Channel Live",
+              "number_of_devices": 1,
+              "quantity_per_device": 3
+            }
+          ],
+          "sort_order": 8,
+          "material_id": "d9583db5-eb4c-4059-b86c-f9548c99ac85",
+          "material_sku": "MAT-CBL-5M",
+          "material_name": "5-metre Cable",
+          "total_quantity": 3,
+          "number_of_devices": 1,
+          "quantity_per_device": 3
+        },
+        {
+          "unit": "Nos.",
+          "breakdown": [
+            {
+              "subtotal": 1,
+              "device_type": "4 Channel Live",
+              "number_of_devices": 1,
+              "quantity_per_device": 1
+            }
+          ],
+          "sort_order": 9,
+          "material_id": "ffb14238-0b26-4bd5-ba71-d362cb6861dc",
+          "material_sku": "MAT-CBL-15M",
+          "material_name": "15-metre Cable",
+          "total_quantity": 1,
+          "number_of_devices": 1,
+          "quantity_per_device": 1
+        }
+      ],
+      "final_bom": {
+        "items": [
+          {
+            "unit": "Nos.",
+            "breakdown": [
+              {
+                "subtotal": 2,
+                "device_type": "4 Channel Live",
+                "number_of_devices": 1,
+                "quantity_per_device": 2
+              }
+            ],
+            "sort_order": 1,
+            "material_id": "c99c1b8d-fa0b-4e65-8d9e-96549a591865",
+            "material_sku": "MAT-INSU-TAPE",
+            "material_name": "Insulation Tape",
+            "total_quantity": 2,
+            "number_of_devices": 1,
+            "quantity_per_device": 2
+          },
+          {
+            "unit": "Packets",
+            "breakdown": [
+              {
+                "subtotal": 1,
+                "device_type": "4 Channel Live",
+                "number_of_devices": 1,
+                "quantity_per_device": 1
+              }
+            ],
+            "sort_order": 2,
+            "material_id": "bd1ed5a4-94c0-4f38-aabc-f6a46b0b0159",
+            "material_sku": "MAT-CT-200MM",
+            "material_name": "Cable Tie – 200 mm",
+            "total_quantity": 1,
+            "number_of_devices": 1,
+            "quantity_per_device": 1
+          },
+          {
+            "unit": "Packets",
+            "breakdown": [
+              {
+                "subtotal": 1,
+                "device_type": "4 Channel Live",
+                "number_of_devices": 1,
+                "quantity_per_device": 1
+              }
+            ],
+            "sort_order": 3,
+            "material_id": "893d903a-4d30-4fc2-96c2-fc7a2b872ed2",
+            "material_sku": "MAT-CT-300MM",
+            "material_name": "Cable Tie – 300 mm",
+            "total_quantity": 1,
+            "number_of_devices": 1,
+            "quantity_per_device": 1
+          },
+          {
+            "unit": "Nos.",
+            "breakdown": [
+              {
+                "subtotal": 12,
+                "device_type": "4 Channel Live",
+                "number_of_devices": 1,
+                "quantity_per_device": 12
+              }
+            ],
+            "sort_order": 4,
+            "material_id": "943eb9be-f4bb-4300-90e9-6ce23cc90549",
+            "material_sku": "MAT-SCREW-LONG",
+            "material_name": "Long Screw",
+            "total_quantity": 12,
+            "number_of_devices": 1,
+            "quantity_per_device": 12
+          },
+          {
+            "unit": "Nos.",
+            "breakdown": [
+              {
+                "subtotal": 12,
+                "device_type": "4 Channel Live",
+                "number_of_devices": 1,
+                "quantity_per_device": 12
+              }
+            ],
+            "sort_order": 5,
+            "material_id": "bd02bad8-3b6f-45b9-bbc7-c5c79ecb86bd",
+            "material_sku": "MAT-SCREW-SMALL",
+            "material_name": "Small Screw",
+            "total_quantity": 12,
+            "number_of_devices": 1,
+            "quantity_per_device": 12
+          },
+          {
+            "unit": "Nos.",
+            "breakdown": [
+              {
+                "subtotal": 1,
+                "device_type": "4 Channel Live",
+                "number_of_devices": 1,
+                "quantity_per_device": 1
+              }
+            ],
+            "sort_order": 6,
+            "material_id": "9f46d34e-91a4-4f31-a8c5-b5541cc8b32d",
+            "material_sku": "MAT-MEM-CARD",
+            "material_name": "Memory Card",
+            "total_quantity": 1,
+            "number_of_devices": 1,
+            "quantity_per_device": 1
+          },
+          {
+            "unit": "Metres",
+            "breakdown": [
+              {
+                "subtotal": 20,
+                "device_type": "4 Channel Live",
+                "number_of_devices": 1,
+                "quantity_per_device": 20
+              }
+            ],
+            "sort_order": 7,
+            "material_id": "fcc5f452-6ae7-4097-bd5a-0ca9f29421e3",
+            "material_sku": "MAT-WIRE-0.5MM",
+            "material_name": "0.5 mm Wire",
+            "total_quantity": 20,
+            "number_of_devices": 1,
+            "quantity_per_device": 20
+          },
+          {
+            "unit": "Nos.",
+            "breakdown": [
+              {
+                "subtotal": 3,
+                "device_type": "4 Channel Live",
+                "number_of_devices": 1,
+                "quantity_per_device": 3
+              }
+            ],
+            "sort_order": 8,
+            "material_id": "d9583db5-eb4c-4059-b86c-f9548c99ac85",
+            "material_sku": "MAT-CBL-5M",
+            "material_name": "5-metre Cable",
+            "total_quantity": 3,
+            "number_of_devices": 1,
+            "quantity_per_device": 3
+          },
+          {
+            "unit": "Nos.",
+            "breakdown": [
+              {
+                "subtotal": 1,
+                "device_type": "4 Channel Live",
+                "number_of_devices": 1,
+                "quantity_per_device": 1
+              }
+            ],
+            "sort_order": 9,
+            "material_id": "ffb14238-0b26-4bd5-ba71-d362cb6861dc",
+            "material_sku": "MAT-CBL-15M",
+            "material_name": "15-metre Cable",
+            "total_quantity": 1,
+            "number_of_devices": 1,
+            "quantity_per_device": 1
+          }
+        ],
+        "configured": true,
+        "bom_version": 1,
+        "device_type": "4 Channel Live",
+        "calculated_at": "2026-10-15T09:00:01.274Z",
+        "total_devices": 1,
+        "total_vehicles": 1,
+        "number_of_devices": 1,
+        "device_configurations": [
+          {
+            "items": [
+              {
+                "id": "9cbcac70-fba4-44c7-8808-18ae31fb8b87",
+                "unit": "Nos.",
+                "sort_order": 1,
+                "material_id": "c99c1b8d-fa0b-4e65-8d9e-96549a591865",
+                "material_sku": "MAT-INSU-TAPE",
+                "material_name": "Insulation Tape",
+                "inventory_unit": "Nos.",
+                "total_quantity": 2,
+                "number_of_devices": 1,
+                "quantity_per_device": 2
+              },
+              {
+                "id": "3555aa92-2f01-497d-91ce-54a00515f541",
+                "unit": "Packets",
+                "sort_order": 2,
+                "material_id": "bd1ed5a4-94c0-4f38-aabc-f6a46b0b0159",
+                "material_sku": "MAT-CT-200MM",
+                "material_name": "Cable Tie – 200 mm",
+                "inventory_unit": "Packets",
+                "total_quantity": 1,
+                "number_of_devices": 1,
+                "quantity_per_device": 1
+              },
+              {
+                "id": "7ba0b794-37d4-475e-94a9-bbb8aa8cc532",
+                "unit": "Packets",
+                "sort_order": 3,
+                "material_id": "893d903a-4d30-4fc2-96c2-fc7a2b872ed2",
+                "material_sku": "MAT-CT-300MM",
+                "material_name": "Cable Tie – 300 mm",
+                "inventory_unit": "Packets",
+                "total_quantity": 1,
+                "number_of_devices": 1,
+                "quantity_per_device": 1
+              },
+              {
+                "id": "1ebc3f19-8a0e-466d-b534-f5efb034264f",
+                "unit": "Nos.",
+                "sort_order": 4,
+                "material_id": "943eb9be-f4bb-4300-90e9-6ce23cc90549",
+                "material_sku": "MAT-SCREW-LONG",
+                "material_name": "Long Screw",
+                "inventory_unit": "Nos.",
+                "total_quantity": 12,
+                "number_of_devices": 1,
+                "quantity_per_device": 12
+              },
+              {
+                "id": "e7b91079-a982-4984-b864-2ff700afe541",
+                "unit": "Nos.",
+                "sort_order": 5,
+                "material_id": "bd02bad8-3b6f-45b9-bbc7-c5c79ecb86bd",
+                "material_sku": "MAT-SCREW-SMALL",
+                "material_name": "Small Screw",
+                "inventory_unit": "Nos.",
+                "total_quantity": 12,
+                "number_of_devices": 1,
+                "quantity_per_device": 12
+              },
+              {
+                "id": "0b36ce85-4589-4d1d-b823-cfe13bde2ba0",
+                "unit": "Nos.",
+                "sort_order": 6,
+                "material_id": "9f46d34e-91a4-4f31-a8c5-b5541cc8b32d",
+                "material_sku": "MAT-MEM-CARD",
+                "material_name": "Memory Card",
+                "inventory_unit": "Nos.",
+                "total_quantity": 1,
+                "number_of_devices": 1,
+                "quantity_per_device": 1
+              },
+              {
+                "id": "97aac822-5016-4126-b94d-9696201dbb04",
+                "unit": "Metres",
+                "sort_order": 7,
+                "material_id": "fcc5f452-6ae7-4097-bd5a-0ca9f29421e3",
+                "material_sku": "MAT-WIRE-0.5MM",
+                "material_name": "0.5 mm Wire",
+                "inventory_unit": "Metres",
+                "total_quantity": 20,
+                "number_of_devices": 1,
+                "quantity_per_device": 20
+              },
+              {
+                "id": "e946dd25-9dfc-4026-9583-51bea05ca9c4",
+                "unit": "Nos.",
+                "sort_order": 8,
+                "material_id": "d9583db5-eb4c-4059-b86c-f9548c99ac85",
+                "material_sku": "MAT-CBL-5M",
+                "material_name": "5-metre Cable",
+                "inventory_unit": "Nos.",
+                "total_quantity": 3,
+                "number_of_devices": 1,
+                "quantity_per_device": 3
+              },
+              {
+                "id": "c09acbf1-f2d1-49a6-8a55-507e34c71743",
+                "unit": "Nos.",
+                "sort_order": 9,
+                "material_id": "ffb14238-0b26-4bd5-ba71-d362cb6861dc",
+                "material_sku": "MAT-CBL-15M",
+                "material_name": "15-metre Cable",
+                "inventory_unit": "Nos.",
+                "total_quantity": 1,
+                "number_of_devices": 1,
+                "quantity_per_device": 1
+              }
+            ],
+            "bom_id": "091f053b-71b1-43ed-8c64-bae9b9a84fea",
+            "configured": true,
+            "bom_version": 1,
+            "device_type": "4 Channel Live",
+            "number_of_devices": 1,
+            "number_of_vehicles": 1
+          }
+        ],
+        "total_materials_count": 9
+      },
+      "comparison": [
+        {
+          "unit": "Nos.",
+          "status": "MATCHED",
+          "difference": -2,
+          "actual_used": 0,
+          "material_id": "c99c1b8d-fa0b-4e65-8d9e-96549a591865",
+          "material_sku": "MAT-INSU-TAPE",
+          "actual_issued": 0,
+          "material_name": "Insulation Tape",
+          "final_quantity": 2,
+          "variance_label": "-2",
+          "actual_returned": 0,
+          "preliminary_quantity": 4
+        },
+        {
+          "unit": "Packets",
+          "status": "MATCHED",
+          "difference": -1,
+          "actual_used": 0,
+          "material_id": "bd1ed5a4-94c0-4f38-aabc-f6a46b0b0159",
+          "material_sku": "MAT-CT-200MM",
+          "actual_issued": 0,
+          "material_name": "Cable Tie – 200 mm",
+          "final_quantity": 1,
+          "variance_label": "-1",
+          "actual_returned": 0,
+          "preliminary_quantity": 2
+        },
+        {
+          "unit": "Packets",
+          "status": "MATCHED",
+          "difference": -1,
+          "actual_used": 0,
+          "material_id": "893d903a-4d30-4fc2-96c2-fc7a2b872ed2",
+          "material_sku": "MAT-CT-300MM",
+          "actual_issued": 0,
+          "material_name": "Cable Tie – 300 mm",
+          "final_quantity": 1,
+          "variance_label": "-1",
+          "actual_returned": 0,
+          "preliminary_quantity": 2
+        },
+        {
+          "unit": "Nos.",
+          "status": "MATCHED",
+          "difference": -12,
+          "actual_used": 0,
+          "material_id": "943eb9be-f4bb-4300-90e9-6ce23cc90549",
+          "material_sku": "MAT-SCREW-LONG",
+          "actual_issued": 0,
+          "material_name": "Long Screw",
+          "final_quantity": 12,
+          "variance_label": "-12",
+          "actual_returned": 0,
+          "preliminary_quantity": 24
+        },
+        {
+          "unit": "Nos.",
+          "status": "MATCHED",
+          "difference": -12,
+          "actual_used": 0,
+          "material_id": "bd02bad8-3b6f-45b9-bbc7-c5c79ecb86bd",
+          "material_sku": "MAT-SCREW-SMALL",
+          "actual_issued": 0,
+          "material_name": "Small Screw",
+          "final_quantity": 12,
+          "variance_label": "-12",
+          "actual_returned": 0,
+          "preliminary_quantity": 24
+        },
+        {
+          "unit": "Nos.",
+          "status": "MATCHED",
+          "difference": -1,
+          "actual_used": 0,
+          "material_id": "9f46d34e-91a4-4f31-a8c5-b5541cc8b32d",
+          "material_sku": "MAT-MEM-CARD",
+          "actual_issued": 0,
+          "material_name": "Memory Card",
+          "final_quantity": 1,
+          "variance_label": "-1",
+          "actual_returned": 0,
+          "preliminary_quantity": 2
+        },
+        {
+          "unit": "Metres",
+          "status": "MATCHED",
+          "difference": -20,
+          "actual_used": 0,
+          "material_id": "fcc5f452-6ae7-4097-bd5a-0ca9f29421e3",
+          "material_sku": "MAT-WIRE-0.5MM",
+          "actual_issued": 0,
+          "material_name": "0.5 mm Wire",
+          "final_quantity": 20,
+          "variance_label": "-20",
+          "actual_returned": 0,
+          "preliminary_quantity": 40
+        },
+        {
+          "unit": "Nos.",
+          "status": "MATCHED",
+          "difference": -3,
+          "actual_used": 0,
+          "material_id": "d9583db5-eb4c-4059-b86c-f9548c99ac85",
+          "material_sku": "MAT-CBL-5M",
+          "actual_issued": 0,
+          "material_name": "5-metre Cable",
+          "final_quantity": 3,
+          "variance_label": "-3",
+          "actual_returned": 0,
+          "preliminary_quantity": 6
+        },
+        {
+          "unit": "Nos.",
+          "status": "MATCHED",
+          "difference": -1,
+          "actual_used": 0,
+          "material_id": "ffb14238-0b26-4bd5-ba71-d362cb6861dc",
+          "material_sku": "MAT-CBL-15M",
+          "actual_issued": 0,
+          "material_name": "15-metre Cable",
+          "final_quantity": 1,
+          "variance_label": "-1",
+          "actual_returned": 0,
+          "preliminary_quantity": 2
+        },
+        {
+          "unit": "Nos.",
+          "status": "ISSUED_ONLY",
+          "difference": 0,
+          "actual_used": 1,
+          "material_id": null,
+          "material_sku": null,
+          "actual_issued": 2,
+          "material_name": "Camera Cable (10m)",
+          "final_quantity": 0,
+          "variance_label": "Equal",
+          "actual_returned": 1,
+          "preliminary_quantity": 0
+        }
+      ],
+      "configured": true,
+      "calculated_at": "2026-10-15T09:00:01.275Z",
+      "total_devices_installed": 1,
+      "installed_device_configurations": [
+        {
+          "device_type": "4 Channel Live",
+          "quantity_carried": 1,
+          "number_of_devices": 1,
+          "number_of_vehicles": 1
+        }
+      ]
+    },
+    "actual_materials_used": [
+      {
+        "unit": "Nos.",
+        "remarks": null,
+        "material_id": null,
+        "material_name": "Camera Cable (10m)",
+        "quantity_used": 1,
+        "quantity_issued": 2,
+        "quantity_damaged": 0,
+        "quantity_missing": 0,
+        "quantity_returned": 1
+      }
+    ],
+    "actual_materials_returned": [
+      {
+        "unit": "Nos.",
+        "remarks": null,
+        "material_id": null,
+        "material_name": "Camera Cable (10m)",
+        "quantity_used": 1,
+        "quantity_issued": 2,
+        "quantity_damaged": 0,
+        "quantity_missing": 0,
+        "quantity_returned": 1
+      }
+    ],
+    "material_return_status": "PENDING_STORE_VERIFICATION",
+    "reconciliation_status": "FULLY_RECONCILED",
+    "carry_status": "NOT_RECORDED"
+  },
+  {
+    "id": "d68580ca-c303-4ef6-981e-fac94d7fd783",
+    "checklist_number": "EE-INST-20261015-0045",
+    "created_by": "00000000-0000-0000-0000-000000000001",
+    "client_name": "Beta Completed Transport",
+    "client_mobile": "9888822222",
+    "client_location": "Harbor Gate 4",
+    "google_maps_location": null,
+    "device_type": "4 Channel Live",
+    "number_of_devices": 2,
+    "number_of_vehicles": 2,
+    "extra_devices": false,
+    "extra_device_type": null,
+    "extra_device_count": null,
+    "confirmed_price": 0,
+    "payment_method": "UPI",
+    "advance_received": false,
+    "advance_amount": 0,
+    "pending_payment": false,
+    "pending_amount": 0,
+    "installation_duration": "1 Day",
+    "vehicle_type": "Truck",
+    "expected_arrival_date": "2030-01-29",
+    "expected_arrival_time": "10:00:00",
+    "installation_or_service": "Installation",
+    "service_engineer": "Guna",
+    "service_assistant": "",
+    "installation_status": "Completed",
+    "payment_status": "Pending",
+    "remarks": "[CANCELLED: Cancelled by Coordinator]",
+    "client_confirmation": "Confirmed",
+    "created_at": "2026-10-15T09:44:23.572+00:00",
+    "updated_at": "2026-10-15T10:59:05.497986+00:00",
+    "carry_extra_backup_items": false,
+    "service_engineer_id": "e1000000-0000-0000-0000-000000000006",
+    "booking_end_date": "2030-01-29",
+    "original_expected_arrival_date": null,
+    "original_expected_arrival_time": null,
+    "original_installation_duration": null,
+    "original_booking_end_date": null,
+    "current_expected_arrival_date": null,
+    "current_expected_arrival_time": null,
+    "current_installation_duration": null,
+    "current_booking_end_date": "2030-01-29",
+    "schedule_revision_number": 0,
+    "schedule_last_updated_at": null,
+    "actual_start_datetime": null,
+    "actual_completion_datetime": null,
+    "device_configurations": null,
+    "bom_snapshot": null,
+    "material_issuance_status": "PENDING",
+    "material_issued_at": null,
+    "material_issued_by": null,
+    "salesperson_name": null,
+    "final_bom_snapshot": null,
+    "actual_materials_used": null,
+    "actual_materials_returned": null,
+    "material_return_status": "NOT_APPLICABLE",
+    "reconciliation_status": "SALES_CREATED",
+    "carry_status": "NOT_RECORDED"
+  },
+  {
+    "id": "8ca578f6-130a-4f8b-9fc4-feb1ea92acc6",
+    "checklist_number": "EE-INST-20261015-0019",
+    "created_by": "f3a5e467-a1bf-40ef-8878-ec64b29bbfd5",
+    "client_name": "Apollo Logistics Pvt Ltd",
+    "client_mobile": "9840123456",
+    "client_location": "Guindy Industrial Estate, Chennai",
+    "google_maps_location": null,
+    "device_type": "4 Channel Live",
+    "number_of_devices": 2,
+    "number_of_vehicles": 1,
+    "extra_devices": false,
+    "extra_device_type": null,
+    "extra_device_count": null,
+    "confirmed_price": 32000,
+    "payment_method": "UPI",
+    "advance_received": false,
+    "advance_amount": 0,
+    "pending_payment": false,
+    "pending_amount": 0,
+    "installation_duration": "1 Day",
+    "vehicle_type": "Truck",
+    "expected_arrival_date": "2026-10-15",
+    "expected_arrival_time": "09:30:00",
+    "installation_or_service": "Installation",
+    "service_engineer": "Karthik Raja",
+    "service_assistant": "Suresh Kumar",
+    "installation_status": "Completed",
+    "payment_status": "Pending",
+    "remarks": null,
+    "client_confirmation": "Confirmed",
+    "created_at": "2026-10-15T08:41:12.714+00:00",
+    "updated_at": "2026-10-15T08:41:37.725189+00:00",
+    "carry_extra_backup_items": false,
+    "service_engineer_id": null,
+    "booking_end_date": null,
+    "original_expected_arrival_date": null,
+    "original_expected_arrival_time": null,
+    "original_installation_duration": null,
+    "original_booking_end_date": null,
+    "current_expected_arrival_date": null,
+    "current_expected_arrival_time": null,
+    "current_installation_duration": null,
+    "current_booking_end_date": null,
+    "schedule_revision_number": 0,
+    "schedule_last_updated_at": null,
+    "actual_start_datetime": null,
+    "actual_completion_datetime": "2026-10-15T08:41:20.386+00:00",
+    "device_configurations": null,
+    "bom_snapshot": null,
+    "material_issuance_status": "PENDING",
+    "material_issued_at": null,
+    "material_issued_by": null,
+    "salesperson_name": null,
+    "final_bom_snapshot": {
+      "items": [
+        {
+          "unit": "Nos.",
+          "breakdown": [
+            {
+              "subtotal": 2,
+              "device_type": "4 Channel Live",
+              "number_of_devices": 1,
+              "quantity_per_device": 2
+            }
+          ],
+          "sort_order": 1,
+          "material_id": "c99c1b8d-fa0b-4e65-8d9e-96549a591865",
+          "material_sku": "MAT-INSU-TAPE",
+          "material_name": "Insulation Tape",
+          "total_quantity": 2,
+          "number_of_devices": 1,
+          "quantity_per_device": 2
+        },
+        {
+          "unit": "Packets",
+          "breakdown": [
+            {
+              "subtotal": 1,
+              "device_type": "4 Channel Live",
+              "number_of_devices": 1,
+              "quantity_per_device": 1
+            }
+          ],
+          "sort_order": 2,
+          "material_id": "bd1ed5a4-94c0-4f38-aabc-f6a46b0b0159",
+          "material_sku": "MAT-CT-200MM",
+          "material_name": "Cable Tie – 200 mm",
+          "total_quantity": 1,
+          "number_of_devices": 1,
+          "quantity_per_device": 1
+        },
+        {
+          "unit": "Packets",
+          "breakdown": [
+            {
+              "subtotal": 1,
+              "device_type": "4 Channel Live",
+              "number_of_devices": 1,
+              "quantity_per_device": 1
+            }
+          ],
+          "sort_order": 3,
+          "material_id": "893d903a-4d30-4fc2-96c2-fc7a2b872ed2",
+          "material_sku": "MAT-CT-300MM",
+          "material_name": "Cable Tie – 300 mm",
+          "total_quantity": 1,
+          "number_of_devices": 1,
+          "quantity_per_device": 1
+        },
+        {
+          "unit": "Nos.",
+          "breakdown": [
+            {
+              "subtotal": 12,
+              "device_type": "4 Channel Live",
+              "number_of_devices": 1,
+              "quantity_per_device": 12
+            }
+          ],
+          "sort_order": 4,
+          "material_id": "943eb9be-f4bb-4300-90e9-6ce23cc90549",
+          "material_sku": "MAT-SCREW-LONG",
+          "material_name": "Long Screw",
+          "total_quantity": 12,
+          "number_of_devices": 1,
+          "quantity_per_device": 12
+        },
+        {
+          "unit": "Nos.",
+          "breakdown": [
+            {
+              "subtotal": 12,
+              "device_type": "4 Channel Live",
+              "number_of_devices": 1,
+              "quantity_per_device": 12
+            }
+          ],
+          "sort_order": 5,
+          "material_id": "bd02bad8-3b6f-45b9-bbc7-c5c79ecb86bd",
+          "material_sku": "MAT-SCREW-SMALL",
+          "material_name": "Small Screw",
+          "total_quantity": 12,
+          "number_of_devices": 1,
+          "quantity_per_device": 12
+        },
+        {
+          "unit": "Nos.",
+          "breakdown": [
+            {
+              "subtotal": 1,
+              "device_type": "4 Channel Live",
+              "number_of_devices": 1,
+              "quantity_per_device": 1
+            }
+          ],
+          "sort_order": 6,
+          "material_id": "9f46d34e-91a4-4f31-a8c5-b5541cc8b32d",
+          "material_sku": "MAT-MEM-CARD",
+          "material_name": "Memory Card",
+          "total_quantity": 1,
+          "number_of_devices": 1,
+          "quantity_per_device": 1
+        },
+        {
+          "unit": "Metres",
+          "breakdown": [
+            {
+              "subtotal": 20,
+              "device_type": "4 Channel Live",
+              "number_of_devices": 1,
+              "quantity_per_device": 20
+            }
+          ],
+          "sort_order": 7,
+          "material_id": "fcc5f452-6ae7-4097-bd5a-0ca9f29421e3",
+          "material_sku": "MAT-WIRE-0.5MM",
+          "material_name": "0.5 mm Wire",
+          "total_quantity": 20,
+          "number_of_devices": 1,
+          "quantity_per_device": 20
+        },
+        {
+          "unit": "Nos.",
+          "breakdown": [
+            {
+              "subtotal": 3,
+              "device_type": "4 Channel Live",
+              "number_of_devices": 1,
+              "quantity_per_device": 3
+            }
+          ],
+          "sort_order": 8,
+          "material_id": "d9583db5-eb4c-4059-b86c-f9548c99ac85",
+          "material_sku": "MAT-CBL-5M",
+          "material_name": "5-metre Cable",
+          "total_quantity": 3,
+          "number_of_devices": 1,
+          "quantity_per_device": 3
+        },
+        {
+          "unit": "Nos.",
+          "breakdown": [
+            {
+              "subtotal": 1,
+              "device_type": "4 Channel Live",
+              "number_of_devices": 1,
+              "quantity_per_device": 1
+            }
+          ],
+          "sort_order": 9,
+          "material_id": "ffb14238-0b26-4bd5-ba71-d362cb6861dc",
+          "material_sku": "MAT-CBL-15M",
+          "material_name": "15-metre Cable",
+          "total_quantity": 1,
+          "number_of_devices": 1,
+          "quantity_per_device": 1
+        }
+      ],
+      "final_bom": {
+        "items": [
+          {
+            "unit": "Nos.",
+            "breakdown": [
+              {
+                "subtotal": 2,
+                "device_type": "4 Channel Live",
+                "number_of_devices": 1,
+                "quantity_per_device": 2
+              }
+            ],
+            "sort_order": 1,
+            "material_id": "c99c1b8d-fa0b-4e65-8d9e-96549a591865",
+            "material_sku": "MAT-INSU-TAPE",
+            "material_name": "Insulation Tape",
+            "total_quantity": 2,
+            "number_of_devices": 1,
+            "quantity_per_device": 2
+          },
+          {
+            "unit": "Packets",
+            "breakdown": [
+              {
+                "subtotal": 1,
+                "device_type": "4 Channel Live",
+                "number_of_devices": 1,
+                "quantity_per_device": 1
+              }
+            ],
+            "sort_order": 2,
+            "material_id": "bd1ed5a4-94c0-4f38-aabc-f6a46b0b0159",
+            "material_sku": "MAT-CT-200MM",
+            "material_name": "Cable Tie – 200 mm",
+            "total_quantity": 1,
+            "number_of_devices": 1,
+            "quantity_per_device": 1
+          },
+          {
+            "unit": "Packets",
+            "breakdown": [
+              {
+                "subtotal": 1,
+                "device_type": "4 Channel Live",
+                "number_of_devices": 1,
+                "quantity_per_device": 1
+              }
+            ],
+            "sort_order": 3,
+            "material_id": "893d903a-4d30-4fc2-96c2-fc7a2b872ed2",
+            "material_sku": "MAT-CT-300MM",
+            "material_name": "Cable Tie – 300 mm",
+            "total_quantity": 1,
+            "number_of_devices": 1,
+            "quantity_per_device": 1
+          },
+          {
+            "unit": "Nos.",
+            "breakdown": [
+              {
+                "subtotal": 12,
+                "device_type": "4 Channel Live",
+                "number_of_devices": 1,
+                "quantity_per_device": 12
+              }
+            ],
+            "sort_order": 4,
+            "material_id": "943eb9be-f4bb-4300-90e9-6ce23cc90549",
+            "material_sku": "MAT-SCREW-LONG",
+            "material_name": "Long Screw",
+            "total_quantity": 12,
+            "number_of_devices": 1,
+            "quantity_per_device": 12
+          },
+          {
+            "unit": "Nos.",
+            "breakdown": [
+              {
+                "subtotal": 12,
+                "device_type": "4 Channel Live",
+                "number_of_devices": 1,
+                "quantity_per_device": 12
+              }
+            ],
+            "sort_order": 5,
+            "material_id": "bd02bad8-3b6f-45b9-bbc7-c5c79ecb86bd",
+            "material_sku": "MAT-SCREW-SMALL",
+            "material_name": "Small Screw",
+            "total_quantity": 12,
+            "number_of_devices": 1,
+            "quantity_per_device": 12
+          },
+          {
+            "unit": "Nos.",
+            "breakdown": [
+              {
+                "subtotal": 1,
+                "device_type": "4 Channel Live",
+                "number_of_devices": 1,
+                "quantity_per_device": 1
+              }
+            ],
+            "sort_order": 6,
+            "material_id": "9f46d34e-91a4-4f31-a8c5-b5541cc8b32d",
+            "material_sku": "MAT-MEM-CARD",
+            "material_name": "Memory Card",
+            "total_quantity": 1,
+            "number_of_devices": 1,
+            "quantity_per_device": 1
+          },
+          {
+            "unit": "Metres",
+            "breakdown": [
+              {
+                "subtotal": 20,
+                "device_type": "4 Channel Live",
+                "number_of_devices": 1,
+                "quantity_per_device": 20
+              }
+            ],
+            "sort_order": 7,
+            "material_id": "fcc5f452-6ae7-4097-bd5a-0ca9f29421e3",
+            "material_sku": "MAT-WIRE-0.5MM",
+            "material_name": "0.5 mm Wire",
+            "total_quantity": 20,
+            "number_of_devices": 1,
+            "quantity_per_device": 20
+          },
+          {
+            "unit": "Nos.",
+            "breakdown": [
+              {
+                "subtotal": 3,
+                "device_type": "4 Channel Live",
+                "number_of_devices": 1,
+                "quantity_per_device": 3
+              }
+            ],
+            "sort_order": 8,
+            "material_id": "d9583db5-eb4c-4059-b86c-f9548c99ac85",
+            "material_sku": "MAT-CBL-5M",
+            "material_name": "5-metre Cable",
+            "total_quantity": 3,
+            "number_of_devices": 1,
+            "quantity_per_device": 3
+          },
+          {
+            "unit": "Nos.",
+            "breakdown": [
+              {
+                "subtotal": 1,
+                "device_type": "4 Channel Live",
+                "number_of_devices": 1,
+                "quantity_per_device": 1
+              }
+            ],
+            "sort_order": 9,
+            "material_id": "ffb14238-0b26-4bd5-ba71-d362cb6861dc",
+            "material_sku": "MAT-CBL-15M",
+            "material_name": "15-metre Cable",
+            "total_quantity": 1,
+            "number_of_devices": 1,
+            "quantity_per_device": 1
+          }
+        ],
+        "configured": true,
+        "bom_version": 1,
+        "device_type": "4 Channel Live",
+        "calculated_at": "2026-10-15T08:41:18.681Z",
+        "total_devices": 1,
+        "total_vehicles": 1,
+        "number_of_devices": 1,
+        "device_configurations": [
+          {
+            "items": [
+              {
+                "id": "9cbcac70-fba4-44c7-8808-18ae31fb8b87",
+                "unit": "Nos.",
+                "sort_order": 1,
+                "material_id": "c99c1b8d-fa0b-4e65-8d9e-96549a591865",
+                "material_sku": "MAT-INSU-TAPE",
+                "material_name": "Insulation Tape",
+                "inventory_unit": "Nos.",
+                "total_quantity": 2,
+                "number_of_devices": 1,
+                "quantity_per_device": 2
+              },
+              {
+                "id": "3555aa92-2f01-497d-91ce-54a00515f541",
+                "unit": "Packets",
+                "sort_order": 2,
+                "material_id": "bd1ed5a4-94c0-4f38-aabc-f6a46b0b0159",
+                "material_sku": "MAT-CT-200MM",
+                "material_name": "Cable Tie – 200 mm",
+                "inventory_unit": "Packets",
+                "total_quantity": 1,
+                "number_of_devices": 1,
+                "quantity_per_device": 1
+              },
+              {
+                "id": "7ba0b794-37d4-475e-94a9-bbb8aa8cc532",
+                "unit": "Packets",
+                "sort_order": 3,
+                "material_id": "893d903a-4d30-4fc2-96c2-fc7a2b872ed2",
+                "material_sku": "MAT-CT-300MM",
+                "material_name": "Cable Tie – 300 mm",
+                "inventory_unit": "Packets",
+                "total_quantity": 1,
+                "number_of_devices": 1,
+                "quantity_per_device": 1
+              },
+              {
+                "id": "1ebc3f19-8a0e-466d-b534-f5efb034264f",
+                "unit": "Nos.",
+                "sort_order": 4,
+                "material_id": "943eb9be-f4bb-4300-90e9-6ce23cc90549",
+                "material_sku": "MAT-SCREW-LONG",
+                "material_name": "Long Screw",
+                "inventory_unit": "Nos.",
+                "total_quantity": 12,
+                "number_of_devices": 1,
+                "quantity_per_device": 12
+              },
+              {
+                "id": "e7b91079-a982-4984-b864-2ff700afe541",
+                "unit": "Nos.",
+                "sort_order": 5,
+                "material_id": "bd02bad8-3b6f-45b9-bbc7-c5c79ecb86bd",
+                "material_sku": "MAT-SCREW-SMALL",
+                "material_name": "Small Screw",
+                "inventory_unit": "Nos.",
+                "total_quantity": 12,
+                "number_of_devices": 1,
+                "quantity_per_device": 12
+              },
+              {
+                "id": "0b36ce85-4589-4d1d-b823-cfe13bde2ba0",
+                "unit": "Nos.",
+                "sort_order": 6,
+                "material_id": "9f46d34e-91a4-4f31-a8c5-b5541cc8b32d",
+                "material_sku": "MAT-MEM-CARD",
+                "material_name": "Memory Card",
+                "inventory_unit": "Nos.",
+                "total_quantity": 1,
+                "number_of_devices": 1,
+                "quantity_per_device": 1
+              },
+              {
+                "id": "97aac822-5016-4126-b94d-9696201dbb04",
+                "unit": "Metres",
+                "sort_order": 7,
+                "material_id": "fcc5f452-6ae7-4097-bd5a-0ca9f29421e3",
+                "material_sku": "MAT-WIRE-0.5MM",
+                "material_name": "0.5 mm Wire",
+                "inventory_unit": "Metres",
+                "total_quantity": 20,
+                "number_of_devices": 1,
+                "quantity_per_device": 20
+              },
+              {
+                "id": "e946dd25-9dfc-4026-9583-51bea05ca9c4",
+                "unit": "Nos.",
+                "sort_order": 8,
+                "material_id": "d9583db5-eb4c-4059-b86c-f9548c99ac85",
+                "material_sku": "MAT-CBL-5M",
+                "material_name": "5-metre Cable",
+                "inventory_unit": "Nos.",
+                "total_quantity": 3,
+                "number_of_devices": 1,
+                "quantity_per_device": 3
+              },
+              {
+                "id": "c09acbf1-f2d1-49a6-8a55-507e34c71743",
+                "unit": "Nos.",
+                "sort_order": 9,
+                "material_id": "ffb14238-0b26-4bd5-ba71-d362cb6861dc",
+                "material_sku": "MAT-CBL-15M",
+                "material_name": "15-metre Cable",
+                "inventory_unit": "Nos.",
+                "total_quantity": 1,
+                "number_of_devices": 1,
+                "quantity_per_device": 1
+              }
+            ],
+            "bom_id": "091f053b-71b1-43ed-8c64-bae9b9a84fea",
+            "configured": true,
+            "bom_version": 1,
+            "device_type": "4 Channel Live",
+            "number_of_devices": 1,
+            "number_of_vehicles": 1
+          }
+        ],
+        "total_materials_count": 9
+      },
+      "comparison": [
+        {
+          "unit": "Nos.",
+          "status": "MATCHED",
+          "difference": -2,
+          "actual_used": 0,
+          "material_id": "c99c1b8d-fa0b-4e65-8d9e-96549a591865",
+          "material_sku": "MAT-INSU-TAPE",
+          "actual_issued": 0,
+          "material_name": "Insulation Tape",
+          "final_quantity": 2,
+          "variance_label": "-2",
+          "actual_returned": 0,
+          "preliminary_quantity": 4
+        },
+        {
+          "unit": "Packets",
+          "status": "MATCHED",
+          "difference": -1,
+          "actual_used": 0,
+          "material_id": "bd1ed5a4-94c0-4f38-aabc-f6a46b0b0159",
+          "material_sku": "MAT-CT-200MM",
+          "actual_issued": 0,
+          "material_name": "Cable Tie – 200 mm",
+          "final_quantity": 1,
+          "variance_label": "-1",
+          "actual_returned": 0,
+          "preliminary_quantity": 2
+        },
+        {
+          "unit": "Packets",
+          "status": "MATCHED",
+          "difference": -1,
+          "actual_used": 0,
+          "material_id": "893d903a-4d30-4fc2-96c2-fc7a2b872ed2",
+          "material_sku": "MAT-CT-300MM",
+          "actual_issued": 0,
+          "material_name": "Cable Tie – 300 mm",
+          "final_quantity": 1,
+          "variance_label": "-1",
+          "actual_returned": 0,
+          "preliminary_quantity": 2
+        },
+        {
+          "unit": "Nos.",
+          "status": "MATCHED",
+          "difference": -12,
+          "actual_used": 0,
+          "material_id": "943eb9be-f4bb-4300-90e9-6ce23cc90549",
+          "material_sku": "MAT-SCREW-LONG",
+          "actual_issued": 0,
+          "material_name": "Long Screw",
+          "final_quantity": 12,
+          "variance_label": "-12",
+          "actual_returned": 0,
+          "preliminary_quantity": 24
+        },
+        {
+          "unit": "Nos.",
+          "status": "MATCHED",
+          "difference": -12,
+          "actual_used": 0,
+          "material_id": "bd02bad8-3b6f-45b9-bbc7-c5c79ecb86bd",
+          "material_sku": "MAT-SCREW-SMALL",
+          "actual_issued": 0,
+          "material_name": "Small Screw",
+          "final_quantity": 12,
+          "variance_label": "-12",
+          "actual_returned": 0,
+          "preliminary_quantity": 24
+        },
+        {
+          "unit": "Nos.",
+          "status": "MATCHED",
+          "difference": -1,
+          "actual_used": 0,
+          "material_id": "9f46d34e-91a4-4f31-a8c5-b5541cc8b32d",
+          "material_sku": "MAT-MEM-CARD",
+          "actual_issued": 0,
+          "material_name": "Memory Card",
+          "final_quantity": 1,
+          "variance_label": "-1",
+          "actual_returned": 0,
+          "preliminary_quantity": 2
+        },
+        {
+          "unit": "Metres",
+          "status": "MATCHED",
+          "difference": -20,
+          "actual_used": 0,
+          "material_id": "fcc5f452-6ae7-4097-bd5a-0ca9f29421e3",
+          "material_sku": "MAT-WIRE-0.5MM",
+          "actual_issued": 0,
+          "material_name": "0.5 mm Wire",
+          "final_quantity": 20,
+          "variance_label": "-20",
+          "actual_returned": 0,
+          "preliminary_quantity": 40
+        },
+        {
+          "unit": "Nos.",
+          "status": "MATCHED",
+          "difference": -3,
+          "actual_used": 0,
+          "material_id": "d9583db5-eb4c-4059-b86c-f9548c99ac85",
+          "material_sku": "MAT-CBL-5M",
+          "actual_issued": 0,
+          "material_name": "5-metre Cable",
+          "final_quantity": 3,
+          "variance_label": "-3",
+          "actual_returned": 0,
+          "preliminary_quantity": 6
+        },
+        {
+          "unit": "Nos.",
+          "status": "MATCHED",
+          "difference": -1,
+          "actual_used": 0,
+          "material_id": "ffb14238-0b26-4bd5-ba71-d362cb6861dc",
+          "material_sku": "MAT-CBL-15M",
+          "actual_issued": 0,
+          "material_name": "15-metre Cable",
+          "final_quantity": 1,
+          "variance_label": "-1",
+          "actual_returned": 0,
+          "preliminary_quantity": 2
+        },
+        {
+          "unit": "Nos.",
+          "status": "ISSUED_ONLY",
+          "difference": 0,
+          "actual_used": 1,
+          "material_id": null,
+          "material_sku": null,
+          "actual_issued": 2,
+          "material_name": "Camera Cable (10m)",
+          "final_quantity": 0,
+          "variance_label": "Equal",
+          "actual_returned": 1,
+          "preliminary_quantity": 0
+        }
+      ],
+      "configured": true,
+      "calculated_at": "2026-10-15T08:41:18.681Z",
+      "total_devices_installed": 1,
+      "installed_device_configurations": [
+        {
+          "device_type": "4 Channel Live",
+          "quantity_carried": 1,
+          "number_of_devices": 1,
+          "number_of_vehicles": 1
+        }
+      ]
+    },
+    "actual_materials_used": [
+      {
+        "unit": "Nos.",
+        "remarks": null,
+        "material_id": null,
+        "material_name": "Camera Cable (10m)",
+        "quantity_used": 1,
+        "quantity_issued": 2,
+        "quantity_damaged": 0,
+        "quantity_missing": 0,
+        "quantity_returned": 1
+      }
+    ],
+    "actual_materials_returned": [
+      {
+        "unit": "Nos.",
+        "remarks": null,
+        "material_id": null,
+        "material_name": "Camera Cable (10m)",
+        "quantity_used": 1,
+        "quantity_issued": 2,
+        "quantity_damaged": 0,
+        "quantity_missing": 0,
+        "quantity_returned": 1
+      }
+    ],
+    "material_return_status": "PENDING_STORE_VERIFICATION",
+    "reconciliation_status": "FULLY_RECONCILED",
+    "carry_status": "NOT_RECORDED"
+  }
+]

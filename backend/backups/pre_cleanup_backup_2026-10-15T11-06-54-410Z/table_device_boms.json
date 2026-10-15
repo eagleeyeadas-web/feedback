@@ -1,0 +1,79 @@
+[
+  {
+    "id": "7e102ef4-954a-4dd5-9fd8-3d8945a53c9c",
+    "device_type": "2 Channel Live",
+    "version": 1,
+    "is_configured": true,
+    "notes": "Default business-confirmed minimum required BOM configuration",
+    "created_by": null,
+    "updated_by": null,
+    "created_at": "2026-10-14T11:35:34.415753+00:00",
+    "updated_at": "2026-10-14T11:35:34.415753+00:00"
+  },
+  {
+    "id": "aed7408d-e2ac-4a5b-9a0e-a7130d12954d",
+    "device_type": "2 Channel Recording",
+    "version": 1,
+    "is_configured": true,
+    "notes": "Default business-confirmed minimum required BOM configuration",
+    "created_by": null,
+    "updated_by": null,
+    "created_at": "2026-10-14T11:35:34.415753+00:00",
+    "updated_at": "2026-10-14T11:35:34.415753+00:00"
+  },
+  {
+    "id": "091f053b-71b1-43ed-8c64-bae9b9a84fea",
+    "device_type": "4 Channel Live",
+    "version": 1,
+    "is_configured": true,
+    "notes": "Default business-confirmed minimum required BOM configuration",
+    "created_by": null,
+    "updated_by": null,
+    "created_at": "2026-10-14T11:35:34.415753+00:00",
+    "updated_at": "2026-10-14T11:35:34.415753+00:00"
+  },
+  {
+    "id": "bd6c56ce-7516-46ec-9e92-6c94f96fb321",
+    "device_type": "4 Channel Recording",
+    "version": 1,
+    "is_configured": true,
+    "notes": "Default business-confirmed minimum required BOM configuration",
+    "created_by": null,
+    "updated_by": null,
+    "created_at": "2026-10-14T11:35:34.415753+00:00",
+    "updated_at": "2026-10-14T11:35:34.415753+00:00"
+  },
+  {
+    "id": "3cf73692-40ca-4e27-9c7e-79042ff4a57e",
+    "device_type": "6 Channel Live",
+    "version": 1,
+    "is_configured": true,
+    "notes": "Default business-confirmed minimum required BOM configuration",
+    "created_by": null,
+    "updated_by": null,
+    "created_at": "2026-10-14T11:35:34.415753+00:00",
+    "updated_at": "2026-10-14T11:35:34.415753+00:00"
+  },
+  {
+    "id": "8d1192aa-73e1-4f0a-87b4-bebc9ebce9a0",
+    "device_type": "6 Channel Recording",
+    "version": 1,
+    "is_configured": true,
+    "notes": "Default business-confirmed minimum required BOM configuration",
+    "created_by": null,
+    "updated_by": null,
+    "created_at": "2026-10-14T11:35:34.415753+00:00",
+    "updated_at": "2026-10-14T11:35:34.415753+00:00"
+  },
+  {
+    "id": "6f645498-bce0-4368-9c36-b1f23216eaa8",
+    "device_type": "8 Channel Live",
+    "version": 1,
+    "is_configured": true,
+    "notes": "Default business-confirmed minimum required BOM configuration",
+    "created_by": null,
+    "updated_by": null,
+    "created_at": "2026-10-14T11:35:34.415753+00:00",
+    "updated_at": "2026-10-14T11:35:34.415753+00:00"
+  }
+]

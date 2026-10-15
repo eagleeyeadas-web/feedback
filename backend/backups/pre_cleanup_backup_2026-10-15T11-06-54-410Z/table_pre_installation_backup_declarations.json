@@ -1,0 +1,28 @@
+[
+  {
+    "id": "42c878e5-52e6-4276-ba51-4221efcc4954",
+    "checklist_id": "62918991-3871-42c7-9c98-a49bcec5d5bb",
+    "technician_id": "e1000000-0000-0000-0000-000000000001",
+    "technician_name": "Mathi",
+    "has_backup_items": true,
+    "no_items_reason": null,
+    "status": "DECLARED",
+    "declaration_timestamp": "2026-10-15T08:50:51.585+00:00",
+    "history": [],
+    "created_at": "2026-10-15T08:50:51.585+00:00",
+    "updated_at": "2026-10-15T08:50:51.585+00:00"
+  },
+  {
+    "id": "f52ff6bd-3b8a-4373-ba1a-594834d50530",
+    "checklist_id": "5fd6cf2b-877f-4a8c-ac97-bab438b77aab",
+    "technician_id": "e1000000-0000-0000-0000-000000000001",
+    "technician_name": "Mathi",
+    "has_backup_items": true,
+    "no_items_reason": null,
+    "status": "DECLARED",
+    "declaration_timestamp": "2026-10-15T08:54:07.752+00:00",
+    "history": [],
+    "created_at": "2026-10-15T08:54:07.752+00:00",
+    "updated_at": "2026-10-15T08:54:07.752+00:00"
+  }
+]

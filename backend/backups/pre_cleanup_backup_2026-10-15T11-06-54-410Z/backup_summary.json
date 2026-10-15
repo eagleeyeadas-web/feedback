@@ -1,0 +1,198 @@
+{
+  "timestamp": "2026-10-15T11:06:54.414Z",
+  "backupDir": "C:\\Users\\mwahi\\OneDrive\\Desktop\\feedback\\backend\\backups\\pre_cleanup_backup_2026-10-15T11-06-54-410Z",
+  "tables": {
+    "quotations": {
+      "status": "OK",
+      "count": 28
+    },
+    "quotation_items": {
+      "status": "OK",
+      "count": 33
+    },
+    "quotation_sequence": {
+      "status": "ERROR",
+      "error": "Could not find the table 'public.quotation_sequence' in the schema cache"
+    },
+    "admin_users": {
+      "status": "OK",
+      "count": 6
+    },
+    "feedback": {
+      "status": "OK",
+      "count": 0
+    },
+    "installation_checklists": {
+      "status": "OK",
+      "count": 12
+    },
+    "installation_checklist_sequence": {
+      "status": "OK",
+      "count": 1
+    },
+    "customers": {
+      "status": "ERROR",
+      "error": "Could not find the table 'public.customers' in the schema cache"
+    },
+    "inventory_products": {
+      "status": "OK",
+      "count": 7
+    },
+    "inventory_transactions": {
+      "status": "ERROR",
+      "error": "Could not find the table 'public.inventory_transactions' in the schema cache"
+    },
+    "job_device_issues": {
+      "status": "ERROR",
+      "error": "Could not find the table 'public.job_device_issues' in the schema cache"
+    },
+    "technical_installation_reports": {
+      "status": "OK",
+      "count": 7
+    },
+    "technical_installation_report_items": {
+      "status": "OK",
+      "count": 6
+    },
+    "job_device_returns": {
+      "status": "OK",
+      "count": 6
+    },
+    "inventory_discrepancies": {
+      "status": "OK",
+      "count": 0
+    },
+    "audit_logs": {
+      "status": "ERROR",
+      "error": "Could not find the table 'public.audit_logs' in the schema cache"
+    },
+    "job_device_carry_records": {
+      "status": "OK",
+      "count": 0
+    },
+    "job_device_carry_items": {
+      "status": "OK",
+      "count": 0
+    },
+    "service_engineers": {
+      "status": "OK",
+      "count": 6
+    },
+    "engineer_bookings": {
+      "status": "OK",
+      "count": 6
+    },
+    "system_cleanup_state": {
+      "status": "OK",
+      "count": 1
+    },
+    "store_material_requirements": {
+      "status": "OK",
+      "count": 0
+    },
+    "material_inventory": {
+      "status": "OK",
+      "count": 13
+    },
+    "device_boms": {
+      "status": "OK",
+      "count": 7
+    },
+    "bom_items": {
+      "status": "OK",
+      "count": 62
+    },
+    "material_stock_transactions": {
+      "status": "OK",
+      "count": 23
+    },
+    "job_material_returns": {
+      "status": "OK",
+      "count": 8
+    },
+    "job_expenses": {
+      "status": "OK",
+      "count": 14
+    },
+    "coordinator_bookings": {
+      "status": "OK",
+      "count": 0
+    },
+    "coordinator_booking_audit_logs": {
+      "status": "OK",
+      "count": 0
+    },
+    "pre_installation_backup_declarations": {
+      "status": "OK",
+      "count": 2
+    },
+    "pre_installation_backup_items": {
+      "status": "OK",
+      "count": 6
+    },
+    "stock_movements": {
+      "status": "OK",
+      "count": 152
+    },
+    "retention_cleanup_logs": {
+      "status": "OK",
+      "count": 11
+    },
+    "schedule_extension_requests": {
+      "status": "OK",
+      "count": 0
+    },
+    "rest_day_requests": {
+      "status": "OK",
+      "count": 0
+    },
+    "leave_requests": {
+      "status": "OK",
+      "count": 0
+    },
+    "app_notifications": {
+      "status": "OK",
+      "count": 0
+    },
+    "device_allocations": {
+      "status": "ERROR",
+      "error": "Could not find the table 'public.device_allocations' in the schema cache"
+    },
+    "additional_customer_installations": {
+      "status": "ERROR",
+      "error": "Could not find the table 'public.additional_customer_installations' in the schema cache"
+    }
+  },
+  "localFiles": {
+    "app_notifications_storage.json": {
+      "sizeBytes": 69
+    },
+    "backup_items_storage.json": {
+      "sizeBytes": 84047
+    },
+    "coordinator_bookings_storage.json": {
+      "sizeBytes": 35643
+    },
+    "engineer_bookings_storage.json": {
+      "sizeBytes": 47191
+    },
+    "inventory_storage.json": {
+      "sizeBytes": 220821
+    },
+    "leave_requests_storage.json": {
+      "sizeBytes": 62
+    },
+    "rest_days_storage.json": {
+      "sizeBytes": 65
+    },
+    "schedule_extensions_storage.json": {
+      "sizeBytes": 7767
+    },
+    "workflow_storage.json": {
+      "sizeBytes": 1128443
+    },
+    "assets/quotation_sequence.json": {
+      "sizeBytes": 70
+    }
+  }
+}
