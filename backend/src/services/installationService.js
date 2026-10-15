@@ -322,7 +322,7 @@ export async function createChecklist(adminUserId, data) {
       endDate: bookingEndDate,
       duration,
       user: { id: adminUserId },
-      status: data.installation_status || 'Assigned',
+      status: (data.installation_status === 'Completed' || data.installation_status === 'Site Work Completed') ? 'COMPLETED' : 'ASSIGNED',
     }).catch((e) => console.warn('Could not associate checklist_id with booking:', e.message));
   }
 
@@ -534,7 +534,7 @@ export async function getChecklistById(id, { enrich = true } = {}) {
     query = query.eq('checklist_number', id);
   }
 
-  const { data, error } = await query.single();
+  const { data, error } = await query.maybeSingle();
 
   if (error || !data) {
     throw new Error('Installation checklist not found');

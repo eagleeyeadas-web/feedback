@@ -54,6 +54,45 @@ const processedMaterialReturnCredits = new Set();
 let dbSeeded = false;
 
 /**
+ * Safe insert for material_stock_transactions handling missing new_balance column or foreign keys
+ */
+async function safeInsertMaterialStockTransaction(record) {
+  const payload = {
+    material_id: record.material_id && !String(record.material_id).startsWith('mat-') ? record.material_id : null,
+    material_name: record.material_name,
+    transaction_type: record.transaction_type,
+    quantity: record.quantity,
+    previous_balance: record.previous_balance,
+    new_balance: record.new_balance,
+    unit: record.unit,
+    checklist_id: record.checklist_id || null,
+    performed_by: record.performed_by || null,
+    reason_or_remarks: record.reason_or_remarks,
+    idempotency_key: record.idempotency_key,
+  };
+
+  try {
+    let { error } = await supabase.from('material_stock_transactions').insert([payload]);
+    if (error) {
+      if (error.message?.includes('new_balance') || error.message?.includes('previous_balance')) {
+        delete payload.previous_balance;
+        delete payload.new_balance;
+      }
+      if (error.message?.includes('violates foreign key constraint') && payload.performed_by) {
+        payload.performed_by = null;
+      }
+      const retry = await supabase.from('material_stock_transactions').insert([payload]);
+      if (retry.error && retry.error.message?.includes('violates foreign key constraint') && payload.performed_by) {
+        payload.performed_by = null;
+        await supabase.from('material_stock_transactions').insert([payload]);
+      }
+    }
+  } catch (txErr) {
+    console.warn('DB transaction insert notice for material stock:', txErr.message);
+  }
+}
+
+/**
  * Load persistent materials state from JSON file
  */
 export function loadMaterialFallbackStorage() {
@@ -255,22 +294,18 @@ export async function setMaterialOpeningStock({
     created_at: new Date().toISOString(),
   };
 
-  try {
-    await supabase.from('material_stock_transactions').insert([{
-      material_id: targetId,
-      material_name: targetName,
-      transaction_type: 'OPENING_STOCK',
-      quantity: qty,
-      previous_balance: previousBalance,
-      new_balance: newBalance,
-      unit,
-      performed_by: user?.id || null,
-      reason_or_remarks: txRecord.reason_or_remarks,
-      idempotency_key: txRecord.idempotency_key,
-    }]);
-  } catch (txErr) {
-    console.warn('DB transaction insert error:', txErr.message);
-  }
+  await safeInsertMaterialStockTransaction({
+    material_id: targetId,
+    material_name: targetName,
+    transaction_type: 'OPENING_STOCK',
+    quantity: qty,
+    previous_balance: previousBalance,
+    new_balance: newBalance,
+    unit,
+    performed_by: user?.id || null,
+    reason_or_remarks: txRecord.reason_or_remarks,
+    idempotency_key: txRecord.idempotency_key,
+  });
 
   // Record into persistent stock_movements ledger in Supabase
   await recordStockMovement({
@@ -465,22 +500,18 @@ export async function adjustMaterialStock({
     created_at: new Date().toISOString(),
   };
 
-  try {
-    await supabase.from('material_stock_transactions').insert([{
-      material_id: materialId,
-      material_name: name,
-      transaction_type: txType,
-      quantity: Math.abs(qtyDelta),
-      previous_balance: previousBalance,
-      new_balance: newCurrent,
-      unit: material.unit,
-      performed_by: user?.id || null,
-      reason_or_remarks: txRecord.reason_or_remarks,
-      idempotency_key: txRecord.idempotency_key,
-    }]);
-  } catch (txErr) {
-    console.warn('DB transaction insert error for material stock:', txErr.message);
-  }
+  await safeInsertMaterialStockTransaction({
+    material_id: materialId,
+    material_name: name,
+    transaction_type: txType,
+    quantity: Math.abs(qtyDelta),
+    previous_balance: previousBalance,
+    new_balance: newCurrent,
+    unit: material.unit,
+    performed_by: user?.id || null,
+    reason_or_remarks: txRecord.reason_or_remarks,
+    idempotency_key: txRecord.idempotency_key,
+  });
 
   // Record into persistent stock_movements ledger in Supabase
   await recordStockMovement({
@@ -684,23 +715,19 @@ export async function issueMaterialsForChecklist({
       created_at: new Date().toISOString(),
     };
 
-    try {
-      await supabase.from('material_stock_transactions').insert([{
-        material_id: materialId,
-        material_name: matName,
-        transaction_type: 'STOCK_ISSUED',
-        quantity: qtyRequired,
-        previous_balance: previousBalance,
-        new_balance: newStock,
-        unit,
-        checklist_id,
-        performed_by: user?.id || null,
-        reason_or_remarks: txRecord.reason_or_remarks,
-        idempotency_key: idempotencyKey,
-      }]);
-    } catch (txErr) {
-      console.warn('DB material transaction insert error:', txErr.message);
-    }
+    await safeInsertMaterialStockTransaction({
+      material_id: materialId,
+      material_name: matName,
+      transaction_type: 'STOCK_ISSUED',
+      quantity: qtyRequired,
+      previous_balance: previousBalance,
+      new_balance: newStock,
+      unit,
+      checklist_id,
+      performed_by: user?.id || null,
+      reason_or_remarks: txRecord.reason_or_remarks,
+      idempotency_key: idempotencyKey,
+    });
 
     // Record into persistent stock_movements ledger in Supabase
     await recordStockMovement({
@@ -981,23 +1008,19 @@ export async function creditMaterialStockForVerifiedReturn({
         created_at: new Date().toISOString(),
       };
 
-      try {
-        await supabase.from('material_stock_transactions').insert([{
-          material_id: matched?.id && !String(matched.id).startsWith('mat-') ? matched.id : null,
-          material_name: targetName,
-          transaction_type: 'RETURNED_USABLE',
-          quantity: usableQty,
-          previous_balance: previousBalance,
-          new_balance: newBalance,
-          unit,
-          checklist_id,
-          performed_by: user?.id || null,
-          reason_or_remarks: txUsable.reason_or_remarks,
-          idempotency_key: idempotencyKeyUsable,
-        }]);
-      } catch (txErr) {
-        console.warn('DB tx insert error for usable material return:', txErr.message);
-      }
+      await safeInsertMaterialStockTransaction({
+        material_id: matched?.id,
+        material_name: targetName,
+        transaction_type: 'RETURNED_USABLE',
+        quantity: usableQty,
+        previous_balance: previousBalance,
+        new_balance: newBalance,
+        unit,
+        checklist_id,
+        performed_by: user?.id || null,
+        reason_or_remarks: txUsable.reason_or_remarks,
+        idempotency_key: idempotencyKeyUsable,
+      });
 
       // Record into persistent stock_movements ledger in Supabase
       await recordStockMovement({
@@ -1042,23 +1065,19 @@ export async function creditMaterialStockForVerifiedReturn({
         created_at: new Date().toISOString(),
       };
 
-      try {
-        await supabase.from('material_stock_transactions').insert([{
-          material_id: matched?.id && !String(matched.id).startsWith('mat-') ? matched.id : null,
-          material_name: targetName,
-          transaction_type: 'RETURNED_DAMAGED',
-          quantity: damagedQty,
-          previous_balance: previousDamaged,
-          new_balance: newDamaged,
-          unit,
-          checklist_id,
-          performed_by: user?.id || null,
-          reason_or_remarks: txDmg.reason_or_remarks,
-          idempotency_key: idempotencyKeyDmg,
-        }]);
-      } catch (txErr) {
-        console.warn('DB tx insert error for damaged material return:', txErr.message);
-      }
+      await safeInsertMaterialStockTransaction({
+        material_id: matched?.id,
+        material_name: targetName,
+        transaction_type: 'RETURNED_DAMAGED',
+        quantity: damagedQty,
+        previous_balance: previousDamaged,
+        new_balance: newDamaged,
+        unit,
+        checklist_id,
+        performed_by: user?.id || null,
+        reason_or_remarks: txDmg.reason_or_remarks,
+        idempotency_key: idempotencyKeyDmg,
+      });
 
       // Record into persistent stock_movements ledger in Supabase
       await recordStockMovement({

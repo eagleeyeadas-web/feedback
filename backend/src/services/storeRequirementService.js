@@ -288,6 +288,7 @@ export async function syncStoreRequirementForChecklist(checklistOrId) {
         error.message?.includes('expected_arrival_date') ||
         error.message?.includes('expected_arrival_time') ||
         error.message?.includes('installation_duration') ||
+        error.message?.includes('device_items') ||
         error.message?.includes('required_device_items') ||
         error.message?.includes('extra_device_items') ||
         error.message?.includes('extra_device_configurations'))
@@ -299,6 +300,7 @@ export async function syncStoreRequirementForChecklist(checklistOrId) {
       delete strippedPayload.expected_arrival_date;
       delete strippedPayload.expected_arrival_time;
       delete strippedPayload.installation_duration;
+      delete strippedPayload.device_items;
       delete strippedPayload.required_device_items;
       delete strippedPayload.extra_device_items;
       delete strippedPayload.extra_device_configurations;

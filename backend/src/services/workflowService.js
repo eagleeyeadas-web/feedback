@@ -820,6 +820,8 @@ export async function submitInstallationCompletionReport(param1, param2) {
       if (!retryResult.error) {
         created = retryResult.data;
         error = null;
+      } else {
+        error = retryResult.error;
       }
     }
 
@@ -841,14 +843,38 @@ export async function submitInstallationCompletionReport(param1, param2) {
 
     // Insert items
     const reportItems = processedItems.map((i) => ({ ...i, report_id: reportId }));
-    await supabase.from('technical_installation_report_items').insert(reportItems);
+    const { error: repItemErr } = await supabase.from('technical_installation_report_items').insert(reportItems);
+    if (repItemErr) {
+      console.warn('Failed to insert full technical_installation_report_items, retrying with core columns:', repItemErr.message);
+      const coreReportItems = processedItems.map((i) => ({
+        report_id: reportId,
+        checklist_id: i.checklist_id,
+        device_type: i.device_type,
+        quantity_carried: i.quantity_carried,
+        quantity_installed: i.quantity_installed,
+        quantity_to_return: i.quantity_to_return,
+        quantity_damaged: i.quantity_damaged,
+        quantity_missing: i.quantity_missing,
+        discrepancy_reason: i.discrepancy_reason,
+      }));
+      await supabase.from('technical_installation_report_items').insert(coreReportItems);
+    }
   } catch (dbErr) {
     console.warn('DB technical_installation_reports not available, using in-memory store:', dbErr.message);
     reportId = `report-${checklist_id}-${Date.now()}`;
-    const savedReport = { ...reportData, id: reportId, items: processedItems, extra_installations: processedExtraInstallations };
-    inMemoryCompletionReports.set(checklist_id, savedReport);
-    saveFallbackStorage();
   }
+
+  // Always keep in-memory cache synchronized with the latest submitted report
+  const savedReport = {
+    ...reportData,
+    id: reportId,
+    items: processedItems,
+    device_items: processedItems,
+    material_items: processedMaterialItems,
+    extra_installations: processedExtraInstallations,
+  };
+  inMemoryCompletionReports.set(checklist_id, savedReport);
+  saveFallbackStorage();
 
   // Auto create return declaration if unused devices exist
   if (totalUnused > 0) {
@@ -1018,10 +1044,19 @@ export async function getInstallationCompletionReport(checklist_id) {
         getAdditionalCustomerInstallations({ checklist_id }),
       ]);
 
+      const cached = inMemoryCompletionReports.get(checklist_id);
+      const effectiveItems = (items && items.length > 0)
+        ? items
+        : (cached?.items || cached?.device_items || report.items || []);
+
       return {
         ...report,
-        items: items || [],
-        extra_installations: extraInstallations || report.extra_installations || [],
+        items: effectiveItems,
+        device_items: effectiveItems,
+        material_items: report.material_items || cached?.material_items || [],
+        extra_installations: (extraInstallations && extraInstallations.length > 0)
+          ? extraInstallations
+          : (cached?.extra_installations || report.extra_installations || []),
       };
     }
   } catch (err) {
@@ -1033,6 +1068,8 @@ export async function getInstallationCompletionReport(checklist_id) {
     const extraInstallations = await getAdditionalCustomerInstallations({ checklist_id });
     return {
       ...cached,
+      items: cached.items || cached.device_items || [],
+      device_items: cached.items || cached.device_items || [],
       extra_installations: extraInstallations || cached.extra_installations || [],
     };
   }
@@ -1078,7 +1115,7 @@ export async function declareDeviceReturns({
   }
 
   const returnRecord = {
-    id: `return-${checklist_id}-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+    id: crypto.randomUUID(),
     checklist_id,
     device_type,
     declared_return_qty,
@@ -1089,9 +1126,10 @@ export async function declareDeviceReturns({
   };
 
   try {
-    const { data: created, error } = await supabase
+    let { data: created, error } = await supabase
       .from('job_device_returns')
       .insert([{
+        id: returnRecord.id,
         checklist_id,
         device_type,
         declared_return_qty,
@@ -1101,7 +1139,29 @@ export async function declareDeviceReturns({
         verification_remarks: remarks,
       }])
       .select()
-      .single();
+      .maybeSingle();
+
+    if (error && error.message?.includes('violates foreign key constraint') && user.id) {
+      const retry = await supabase
+        .from('job_device_returns')
+        .insert([{
+          id: returnRecord.id,
+          checklist_id,
+          device_type,
+          declared_return_qty,
+          declared_by: null,
+          declared_at: returnRecord.declared_at,
+          status: 'PENDING_STORE_VERIFICATION',
+          verification_remarks: remarks,
+        }])
+        .select()
+        .maybeSingle();
+
+      if (!retry.error && retry.data) {
+        created = retry.data;
+        error = null;
+      }
+    }
 
     if (!error && created) {
       returnRecord.id = created.id;
@@ -1302,23 +1362,43 @@ export async function verifyStoreReturn({
   inMemoryReturns.set(return_id, updatedReturn);
   saveFallbackStorage();
 
-  try {
-    await supabase
-      .from('job_device_returns')
-      .update({
-        actual_received_qty,
-        accepted_usable_qty,
-        damaged_qty,
-        missing_qty,
-        status: returnStatus,
-        verification_remarks: remarks,
-        verified_by: user.id,
-        verified_at: updatedReturn.verified_at,
-        updated_at: updatedReturn.updated_at,
-      })
-      .eq('id', return_id);
-  } catch (e) {
-    console.warn('Could not update job_device_returns in DB:', e.message);
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(return_id);
+  if (isUuid) {
+    try {
+      let { error: updErr } = await supabase
+        .from('job_device_returns')
+        .update({
+          actual_received_qty,
+          accepted_usable_qty,
+          damaged_qty,
+          missing_qty,
+          status: returnStatus,
+          verification_remarks: remarks,
+          verified_by: user.id,
+          verified_at: updatedReturn.verified_at,
+          updated_at: updatedReturn.updated_at,
+        })
+        .eq('id', return_id);
+
+      if (updErr && updErr.message?.includes('violates foreign key constraint')) {
+        await supabase
+          .from('job_device_returns')
+          .update({
+            actual_received_qty,
+            accepted_usable_qty,
+            damaged_qty,
+            missing_qty,
+            status: returnStatus,
+            verification_remarks: remarks,
+            verified_by: null,
+            verified_at: updatedReturn.verified_at,
+            updated_at: updatedReturn.updated_at,
+          })
+          .eq('id', return_id);
+      }
+    } catch (e) {
+      console.warn('Could not update job_device_returns in DB:', e.message);
+    }
   }
 
   // 3. Create Discrepancy if flagged

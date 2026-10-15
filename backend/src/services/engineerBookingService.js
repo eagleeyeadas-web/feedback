@@ -900,6 +900,13 @@ export async function reserveEngineerAtomic({
     }
 
     const bookingId = `booking-${engId}-${checklistId || Date.now()}`;
+    const normalizedBookingStatus = (() => {
+      const s = String(status || '').toUpperCase().trim().replace(/\s+/g, '_');
+      if (['ASSIGNED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED', 'RELEASED'].includes(s)) return s;
+      if (s === 'SITE_WORK_COMPLETED' || s === 'CLOSED' || s === 'DONE') return 'COMPLETED';
+      return 'ASSIGNED';
+    })();
+
     const bookingRecord = {
       id: bookingId,
       engineer_id: engId,
@@ -908,7 +915,7 @@ export async function reserveEngineerAtomic({
       checklist_number: checklistNumber || 'TBD',
       booking_start_date: startDate,
       booking_end_date: finalEndDate,
-      status: status || 'ASSIGNED',
+      status: normalizedBookingStatus,
       created_by: user ? user.id : null,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
@@ -926,7 +933,7 @@ export async function reserveEngineerAtomic({
             checklist_number: checklistNumber,
             booking_start_date: startDate,
             booking_end_date: finalEndDate,
-            status: status || 'ASSIGNED',
+            status: normalizedBookingStatus,
             created_by: user ? user.id : null,
           },
         ])
