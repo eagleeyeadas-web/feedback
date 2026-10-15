@@ -24,6 +24,7 @@ import {
   Loader2,
   ShieldCheck,
   X,
+  Archive,
 } from 'lucide-react';
 import InstallationCompletionModal from '../../../components/workspaces/InstallationCompletionModal';
 import TechnicianExpenseModal from '../../../components/workspaces/TechnicianExpenseModal';
