@@ -41,6 +41,29 @@ function saveStorage() {
 loadStorage();
 
 /**
+ * Permanently delete notifications associated with a deleted checklist
+ */
+export function deleteNotificationsForChecklist(checklistId, checklistNumber = null) {
+  let changed = false;
+  inMemoryNotifications.forEach((n, k) => {
+    const matchId = n.checklist_id === checklistId || n.metadata?.checklist_id === checklistId;
+    const matchNum =
+      checklistNumber &&
+      (n.checklist_number === checklistNumber ||
+        n.metadata?.checklist_number === checklistNumber ||
+        n.message?.includes(checklistNumber) ||
+        n.title?.includes(checklistNumber));
+    if (matchId || matchNum) {
+      inMemoryNotifications.delete(k);
+      changed = true;
+    }
+  });
+  if (changed) {
+    saveStorage();
+  }
+}
+
+/**
  * Create a new application notification
  */
 export async function createNotification({

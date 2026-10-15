@@ -1062,11 +1062,12 @@ export async function fetchCoordinatorBookingHistory(token, checklistId) {
 }
 
 /**
- * Coordinator Safe Checklist Deletion APIs
+ * Checklist Deletion & Complete Workflow Cascade APIs
+ * Authorized for SALES, COORDINATOR, and ADMIN
  */
 export async function fetchChecklistDeletionPreviewApi(token, params = {}) {
   const query = new URLSearchParams(params).toString();
-  const res = await fetch(`${API_BASE}/admin/coordinator/checklists/deletion-preview?${query}`, {
+  const res = await fetch(`${API_BASE}/admin/installations/checklists/deletion-preview?${query}`, {
     headers: adminHeaders(token),
   });
   const json = await res.json();
@@ -1075,14 +1076,14 @@ export async function fetchChecklistDeletionPreviewApi(token, params = {}) {
 }
 
 export async function deleteAllEligibleChecklistsApi(token, confirmedCount, params = {}) {
-  const res = await fetch(`${API_BASE}/admin/coordinator/checklists/delete-all`, {
+  const res = await fetch(`${API_BASE}/admin/installations/checklists/delete-all`, {
     method: 'POST',
     headers: adminHeaders(token),
     body: JSON.stringify({ confirmedCount, params }),
   });
   const json = await res.json();
   if (!res.ok) {
-    const err = new Error(json.error || 'Failed to delete eligible checklists');
+    const err = new Error(json.error || 'Failed to delete checklists');
     err.preview = json.preview;
     err.status = res.status;
     throw err;
@@ -1091,7 +1092,7 @@ export async function deleteAllEligibleChecklistsApi(token, confirmedCount, para
 }
 
 export async function checkChecklistDeletionEligibilityApi(token, checklistId) {
-  const res = await fetch(`${API_BASE}/admin/coordinator/checklists/${checklistId}/deletion-check`, {
+  const res = await fetch(`${API_BASE}/admin/installations/${checklistId}/deletion-check`, {
     headers: adminHeaders(token),
   });
   const json = await res.json();
@@ -1100,7 +1101,7 @@ export async function checkChecklistDeletionEligibilityApi(token, checklistId) {
 }
 
 export async function deleteChecklistApi(token, checklistId) {
-  const res = await fetch(`${API_BASE}/admin/coordinator/checklists/${checklistId}`, {
+  const res = await fetch(`${API_BASE}/admin/installations/${checklistId}`, {
     method: 'DELETE',
     headers: adminHeaders(token),
   });
@@ -1117,7 +1118,7 @@ export async function deleteChecklistApi(token, checklistId) {
 }
 
 export async function cancelChecklistApi(token, checklistId, reason = '') {
-  const res = await fetch(`${API_BASE}/admin/coordinator/checklists/${checklistId}/cancel`, {
+  const res = await fetch(`${API_BASE}/admin/installations/${checklistId}/cancel`, {
     method: 'POST',
     headers: adminHeaders(token),
     body: JSON.stringify({ reason }),

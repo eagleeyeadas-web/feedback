@@ -82,6 +82,19 @@ function saveFallbackStorage() {
 loadFallbackStorage();
 
 /**
+ * Permanently delete workflow cache entries for a deleted checklist
+ */
+export function deleteWorkflowRecordsForChecklist(checklistId) {
+  inMemoryCarryRecords.delete(checklistId);
+  inMemoryCompletionReports.delete(checklistId);
+  inMemoryReturns.delete(checklistId);
+  inMemoryMaterialReturns.delete(checklistId);
+  inMemoryChecklistFinalBoms.delete(checklistId);
+  inMemoryAdditionalInstallations.delete(checklistId);
+  saveFallbackStorage();
+}
+
+/**
  * Stage 2.5: Technical submits Pre-Installation Device Carry Form (Dynamic Device Selection)
  */
 export async function submitDeviceCarryRecord({ checklist_id, user, items, remarks = '' }) {

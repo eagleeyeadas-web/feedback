@@ -51,14 +51,14 @@ import {
 
 const router = Router();
 
-// Strict least-privilege access: ONLY COORDINATOR and ADMIN can access Coordinator workspace APIs
-router.use(requireRole('COORDINATOR', 'ADMIN'));
+// Checklist deletion endpoints are accessible to SALES, COORDINATOR, and ADMIN
+const requireChecklistDeleteRole = requireRole('SALES', 'COORDINATOR', 'ADMIN', 'SUPER_ADMIN');
 
 /**
  * GET /api/admin/coordinator/checklists/deletion-preview
- * Previews eligible vs protected checklists for deletion.
+ * Previews eligible checklists and calculated workflow impact for deletion.
  */
-router.get('/checklists/deletion-preview', async (req, res) => {
+router.get('/checklists/deletion-preview', requireChecklistDeleteRole, async (req, res) => {
   try {
     const preview = await previewChecklistsDeletion(req.query);
     return res.json(preview);
@@ -70,9 +70,9 @@ router.get('/checklists/deletion-preview', async (req, res) => {
 
 /**
  * POST /api/admin/coordinator/checklists/delete-all
- * Deletes all eligible draft checklists safely after confirming the eligible count.
+ * Deletes all eligible checklists and their complete workflows safely.
  */
-router.post('/checklists/delete-all', async (req, res) => {
+router.post('/checklists/delete-all', requireChecklistDeleteRole, async (req, res) => {
   try {
     const result = await safeDeleteAllEligibleChecklists({
       user: req.profile || req.user,
@@ -92,9 +92,9 @@ router.post('/checklists/delete-all', async (req, res) => {
 
 /**
  * GET /api/admin/coordinator/checklists/:id/deletion-check
- * Evaluates whether a single checklist is eligible for permanent deletion or why it is protected.
+ * Evaluates checklist deletion eligibility and full workflow impact breakdown.
  */
-router.get('/checklists/:id/deletion-check', async (req, res) => {
+router.get('/checklists/:id/deletion-check', requireChecklistDeleteRole, async (req, res) => {
   try {
     const check = await checkChecklistDeletionEligibility(req.params.id);
     return res.json(check);
@@ -107,9 +107,9 @@ router.get('/checklists/:id/deletion-check', async (req, res) => {
 
 /**
  * DELETE /api/admin/coordinator/checklists/:id
- * Permanently deletes an eligible draft checklist. Fails with 409 if dependencies exist.
+ * Permanently deletes a checklist and its entire workflow cascade.
  */
-router.delete('/checklists/:id', async (req, res) => {
+router.delete('/checklists/:id', requireChecklistDeleteRole, async (req, res) => {
   try {
     const result = await safeDeleteChecklist(req.params.id, req.profile || req.user);
     return res.json(result);
@@ -129,12 +129,12 @@ router.delete('/checklists/:id', async (req, res) => {
  * POST /api/admin/coordinator/checklists/:id/cancel
  * Cancels a checklist when permanent deletion is unsafe, preserving operational history.
  */
-router.post('/checklists/:id/cancel', async (req, res) => {
+router.post('/checklists/:id/cancel', requireChecklistDeleteRole, async (req, res) => {
   try {
     const result = await cancelChecklist({
       checklistId: req.params.id,
       user: req.profile || req.user,
-      reason: req.body.reason || 'Cancelled by Coordinator',
+      reason: req.body.reason || 'Cancelled by authorized user',
     });
     return res.json(result);
   } catch (err) {
@@ -143,6 +143,9 @@ router.post('/checklists/:id/cancel', async (req, res) => {
     return res.status(status).json({ error: err.message || 'Failed to cancel checklist' });
   }
 });
+
+// Strict least-privilege access: ONLY COORDINATOR and ADMIN can access Coordinator workspace APIs (travel, accommodation, leaves, rest days, extensions)
+router.use(requireRole('COORDINATOR', 'ADMIN'));
 
 /**
  * GET /api/admin/coordinator/bookings

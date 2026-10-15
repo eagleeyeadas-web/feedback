@@ -796,11 +796,10 @@ export async function updateChecklist(id, data) {
 }
 
 /**
- * Check if a checklist is eligible for permanent deletion.
- * Protects operational history, completed jobs, active work, stock ledgers,
- * reports, expenses, returns, and coordinator bookings.
+ * Computes deletion impact and counts all dependent records across the workflow
+ * created specifically from a checklist.
  */
-export async function checkChecklistDeletionEligibility(checklistIdOrObj) {
+export async function getChecklistDeletionImpact(checklistIdOrObj) {
   let checklist = checklistIdOrObj;
   if (typeof checklistIdOrObj === 'string') {
     checklist = await getChecklistById(checklistIdOrObj, { enrich: false });
@@ -813,305 +812,323 @@ export async function checkChecklistDeletionEligibility(checklistIdOrObj) {
   }
 
   const checklistId = checklist.id;
-  const reasons = [];
 
-  // 1. Status checks: In-Progress, Completed, or Site Work Completed checklists must not be deleted
-  const protectedStatuses = ['In Progress', 'Completed', 'Site Work Completed'];
-  if (protectedStatuses.includes(checklist.installation_status)) {
-    reasons.push(`Job has active operational status '${checklist.installation_status}'`);
-  }
+  // Query counts of all dependent records tied specifically to this checklist
+  const [
+    { count: storeBomCount },
+    { count: engineerBookingCount },
+    { count: coordBookingCount },
+    { count: coordAuditCount },
+    { count: techReportsCount },
+    { count: techExpensesCount },
+    { count: devReturnsCount },
+    { count: matReturnsCount },
+    { count: backupDeclCount },
+    { count: carryRecordsCount },
+    { count: extensionsCount },
+    { count: notifCount },
+  ] = await Promise.all([
+    supabase.from('store_material_requirements').select('*', { count: 'exact', head: true }).eq('checklist_id', checklistId),
+    supabase.from('engineer_bookings').select('*', { count: 'exact', head: true }).eq('checklist_id', checklistId),
+    supabase.from('coordinator_bookings').select('*', { count: 'exact', head: true }).eq('checklist_id', checklistId),
+    supabase.from('coordinator_booking_audit_logs').select('*', { count: 'exact', head: true }).eq('checklist_id', checklistId),
+    supabase.from('technical_installation_reports').select('*', { count: 'exact', head: true }).eq('checklist_id', checklistId),
+    supabase.from('job_expenses').select('*', { count: 'exact', head: true }).eq('checklist_id', checklistId),
+    supabase.from('job_device_returns').select('*', { count: 'exact', head: true }).eq('checklist_id', checklistId),
+    supabase.from('job_material_returns').select('*', { count: 'exact', head: true }).eq('checklist_id', checklistId),
+    supabase.from('pre_installation_backup_declarations').select('*', { count: 'exact', head: true }).eq('checklist_id', checklistId),
+    supabase.from('job_device_carry_records').select('*', { count: 'exact', head: true }).eq('checklist_id', checklistId),
+    supabase.from('schedule_extension_requests').select('*', { count: 'exact', head: true }).eq('checklist_id', checklistId),
+    supabase.from('app_notifications').select('*', { count: 'exact', head: true }).or(`checklist_id.eq.${checklistId},metadata->>checklist_id.eq.${checklistId}`),
+  ]);
 
-  // 2. Material/Device issuance flag on checklist
-  if (
-    checklist.material_issuance_status === 'ISSUED' ||
-    checklist.devices_issuance_status === 'ISSUED' ||
-    checklist.material_issued_at ||
-    checklist.material_issued_by
-  ) {
-    reasons.push('Devices or installation materials have already been issued for this job');
-  }
+  const impact = {
+    checklist: 1,
+    storeBoms: storeBomCount || 0,
+    engineerBookings: engineerBookingCount || 0,
+    coordinatorBookings: coordBookingCount || 0,
+    coordinatorAuditLogs: coordAuditCount || 0,
+    technicianReports: techReportsCount || 0,
+    technicianExpenses: techExpensesCount || 0,
+    deviceReturns: devReturnsCount || 0,
+    materialReturns: matReturnsCount || 0,
+    backupDeclarations: backupDeclCount || 0,
+    carryRecords: carryRecordsCount || 0,
+    scheduleExtensions: extensionsCount || 0,
+    notifications: notifCount || 0,
+  };
 
-  // 3. Technical installation reports check (Site work completion reports)
-  try {
-    const { inMemoryCompletionReports } = await import('./workflowService.js');
-    const inMemReport = inMemoryCompletionReports.get(checklistId);
-    if (inMemReport) {
-      reasons.push('Technical installation / site work completion report exists in system');
-    } else {
-      const { data: dbReports } = await supabase
-        .from('technical_installation_reports')
-        .select('id, completion_status')
-        .eq('checklist_id', checklistId)
-        .limit(1);
-      if (dbReports && dbReports.length > 0) {
-        reasons.push('Technical installation / site work completion report is recorded in database');
-      }
-    }
-  } catch (e) {}
+  const totalDependentRecords =
+    impact.storeBoms +
+    impact.engineerBookings +
+    impact.coordinatorBookings +
+    impact.coordinatorAuditLogs +
+    impact.technicianReports +
+    impact.technicianExpenses +
+    impact.deviceReturns +
+    impact.materialReturns +
+    impact.backupDeclarations +
+    impact.carryRecords +
+    impact.scheduleExtensions +
+    impact.notifications;
 
-  // 4. Device carry records check
-  try {
-    const { inMemoryCarryRecords } = await import('./workflowService.js');
-    const inMemCarry = inMemoryCarryRecords.get(checklistId);
-    if (inMemCarry && inMemCarry.items && inMemCarry.items.length > 0) {
-      reasons.push('Technician device carry record has been registered for this job');
-    } else {
-      const { data: dbCarry } = await supabase
-        .from('job_device_carry_records')
-        .select('id')
-        .eq('checklist_id', checklistId)
-        .limit(1);
-      if (dbCarry && dbCarry.length > 0) {
-        reasons.push('Technician device carry record exists in database');
-      }
-    }
-  } catch (e) {}
-
-  // 5. Store material requirement & stock issuance check
-  try {
-    const { inMemoryStoreRequirements } = await import('./storeRequirementService.js');
-    const inMemReq = inMemoryStoreRequirements.get(checklistId);
-    if (
-      inMemReq &&
-      (inMemReq.status === 'ISSUED' ||
-        inMemReq.status === 'PARTIALLY_ISSUED' ||
-        inMemReq.material_issuance_status === 'ISSUED' ||
-        inMemReq.devices_issuance_status === 'ISSUED' ||
-        (inMemReq.devices_issued && inMemReq.devices_issued > 0) ||
-        (inMemReq.materials_issued && inMemReq.materials_issued > 0))
-    ) {
-      reasons.push('Store Manager has issued inventory devices/materials for this requirement');
-    } else {
-      const { data: dbReq } = await supabase
-        .from('store_material_requirements')
-        .select('id, status, material_issuance_status')
-        .eq('checklist_id', checklistId)
-        .maybeSingle();
-      if (
-        dbReq &&
-        (dbReq.status === 'ISSUED' ||
-          dbReq.status === 'PARTIALLY_ISSUED' ||
-          dbReq.material_issuance_status === 'ISSUED')
-      ) {
-        reasons.push('Store Manager has issued inventory devices/materials for this requirement');
-      }
-    }
-  } catch (e) {}
-
-  // 6. Stock movements / Inventory transactions check
-  try {
-    const { inMemoryStockMovements } = await import('./stockMovementService.js');
-    const inMemMovements = inMemoryStockMovements.filter((m) => m.checklist_id === checklistId);
-    if (inMemMovements.length > 0) {
-      reasons.push(`${inMemMovements.length} inventory stock movement transaction(s) recorded in stock ledger`);
-    } else {
-      const { data: dbMovements } = await supabase
-        .from('stock_movements')
-        .select('id')
-        .eq('checklist_id', checklistId)
-        .limit(1);
-      if (dbMovements && dbMovements.length > 0) {
-        reasons.push('Inventory stock movement transactions are recorded in stock ledger');
-      }
-    }
-  } catch (e) {}
-
-  // 7. Device & Material Returns check
-  try {
-    const { inMemoryReturns, inMemoryMaterialReturns } = await import('./workflowService.js');
-    const devReturns = Array.from(inMemoryReturns.values()).filter((r) => r.checklist_id === checklistId);
-    const matReturns = Array.from(inMemoryMaterialReturns.values()).filter((r) => r.checklist_id === checklistId);
-    if (devReturns.length > 0 || matReturns.length > 0) {
-      reasons.push('Device or material return / verification records are attached');
-    } else {
-      const { data: dbDevRet } = await supabase
-        .from('store_device_returns')
-        .select('id')
-        .eq('checklist_id', checklistId)
-        .limit(1);
-      if (dbDevRet && dbDevRet.length > 0) {
-        reasons.push('Device return verification records are recorded in database');
-      }
-    }
-  } catch (e) {}
-
-  // 8. Technician job expenses check
-  try {
-    const { inMemoryJobExpenses } = await import('./expenseService.js');
-    const inMemExpenses = Array.from(inMemoryJobExpenses.values()).filter(
-      (e) => e.checklist_id === checklistId && (e.status === 'Recorded' || e.amount > 0)
-    );
-    if (inMemExpenses.length > 0) {
-      reasons.push(`${inMemExpenses.length} technician expense claim(s) recorded`);
-    } else {
-      const { data: dbExpenses } = await supabase
-        .from('job_expenses')
-        .select('id')
-        .eq('checklist_id', checklistId)
-        .limit(1);
-      if (dbExpenses && dbExpenses.length > 0) {
-        reasons.push('Technician job expense claims recorded in database');
-      }
-    }
-  } catch (e) {}
-
-  // 9. Schedule extension & revision requests check
-  try {
-    const { inMemoryExtensions } = await import('./scheduleExtensionService.js');
-    const activeExtensions = Array.from(inMemoryExtensions.values()).filter(
-      (ext) => ext.checklist_id === checklistId && (ext.status === 'APPROVED' || ext.status === 'PENDING')
-    );
-    if (activeExtensions.length > 0) {
-      reasons.push('Active or approved schedule extension request exists');
-    } else {
-      const { data: dbExt } = await supabase
-        .from('schedule_extension_requests')
-        .select('id, status')
-        .eq('checklist_id', checklistId)
-        .in('status', ['APPROVED', 'PENDING'])
-        .limit(1);
-      if (dbExt && dbExt.length > 0) {
-        reasons.push('Active or approved schedule extension request exists in database');
-      }
-    }
-  } catch (e) {}
-
-  // 10. Coordinator bookings check (arranged travel or hotel accommodation)
-  try {
-    const { inMemoryBookings } = await import('./coordinatorBookingService.js');
-    const booking = inMemoryBookings.get(checklistId);
-    if (
-      booking &&
-      (booking.booking_status === 'COMPLETED' ||
-        booking.booking_status === 'IN_PROGRESS' ||
-        (booking.travel_required && (booking.ticket_reference || booking.travel_datetime)) ||
-        (booking.accommodation_required && (booking.hotel_booking_reference || booking.hotel_name)))
-    ) {
-      reasons.push(`Travel or hotel accommodation has been arranged (Booking status: ${booking.booking_status || 'ARRANGED'})`);
-    } else {
-      const { data: dbBooking } = await supabase
-        .from('coordinator_bookings')
-        .select('*')
-        .eq('checklist_id', checklistId)
-        .maybeSingle();
-      if (
-        dbBooking &&
-        (dbBooking.booking_status === 'COMPLETED' ||
-          dbBooking.booking_status === 'IN_PROGRESS' ||
-          (dbBooking.travel_required && (dbBooking.ticket_reference || dbBooking.travel_datetime)) ||
-          (dbBooking.accommodation_required && (dbBooking.hotel_booking_reference || dbBooking.hotel_name)))
-      ) {
-        reasons.push(`Travel or hotel accommodation has been arranged (Booking status: ${dbBooking.booking_status || 'ARRANGED'})`);
-      }
-    }
-  } catch (e) {}
-
-  const isEligible = reasons.length === 0;
+  const dependentRecordsBreakdown = [
+    { label: 'Store BOM Material Requirements', count: impact.storeBoms },
+    { label: 'Engineer Appointment / Booking Schedule', count: impact.engineerBookings },
+    { label: 'Coordinator Travel / Room Bookings', count: impact.coordinatorBookings },
+    { label: 'Coordinator Workflow Audit Entries', count: impact.coordinatorAuditLogs },
+    { label: 'Technician Completion Reports & Tasks', count: impact.technicianReports },
+    { label: 'Technician Job Expenses', count: impact.technicianExpenses },
+    { label: 'Device & Material Return Records', count: impact.deviceReturns + impact.materialReturns },
+    { label: 'Pre-Installation Backup Declarations', count: impact.backupDeclarations },
+    { label: 'Device Carry Audit Records', count: impact.carryRecords },
+    { label: 'Schedule Revision Requests', count: impact.scheduleExtensions },
+    { label: 'Checklist-Generated Notifications', count: impact.notifications },
+  ].filter((item) => item.count > 0);
 
   return {
-    checklistId,
+    checklistId: checklist.id,
     checklistNumber: checklist.checklist_number,
     clientName: checklist.client_name,
+    clientMobile: checklist.client_mobile,
     installationStatus: checklist.installation_status,
-    isEligible,
-    canPermanentDelete: isEligible,
-    reasons,
-    canCancel: checklist.installation_status !== 'Cancelled',
+    isEligible: true,
+    eligible: true,
+    canPermanentDelete: true,
+    reasons: [],
+    impact: { ...impact, totalDependentRecords },
+    dependentRecordsBreakdown,
+    message: totalDependentRecords > 0
+      ? `Deleting this checklist will permanently delete the original checklist and ${totalDependentRecords} dependent workflow record(s) across Store, Coordinator, and Technician modules.`
+      : 'This checklist has no dependent workflow records. Only the original checklist will be deleted.',
     checklist,
   };
 }
 
 /**
- * Safely delete an installation checklist.
- * Only unprocessed drafts with no dependent records can be deleted.
- * Rejects with 409 if dependencies or status protect the record.
+ * Check if a checklist is eligible for permanent deletion and calculate workflow dependencies.
+ * Fully allows authorized Sales, Coordinator, and Admin users to delete checklists.
+ */
+export async function checkChecklistDeletionEligibility(checklistIdOrObj) {
+  return await getChecklistDeletionImpact(checklistIdOrObj);
+}
+
+/**
+ * Safely and permanently deletes an installation checklist and its entire workflow.
+ * Propagates through all dependent records (BOM, bookings, technician assignments,
+ * reports, expenses, returns, declarations, notifications, and local storage caches)
+ * so that no orphaned records remain.
  */
 export async function safeDeleteChecklist(id, user = null) {
   const existing = await getChecklistById(id, { enrich: false });
-  const eligibility = await checkChecklistDeletionEligibility(existing);
-
-  if (!eligibility.isEligible) {
-    const error = new Error(
-      `Cannot permanently delete checklist ${existing.checklist_number}: ${eligibility.reasons.join('; ')}`
-    );
-    error.statusCode = 409;
-    error.reasons = eligibility.reasons;
-    error.canCancel = eligibility.canCancel;
-    error.checklist = {
-      id: existing.id,
-      checklist_number: existing.checklist_number,
-      client_name: existing.client_name,
-      installation_status: existing.installation_status,
-    };
-    throw error;
+  if (!existing) {
+    const err = new Error(`Checklist with ID "${id}" not found.`);
+    err.statusCode = 404;
+    throw err;
   }
 
-  // 1. Release engineer booking if an engineer was reserved for this draft
-  await releaseEngineerBooking({ checklistId: existing.id });
+  const checklistId = existing.id;
+  const checklistNumber = existing.checklist_number;
 
-  // 2. Safely remove unissued draft store requirement (if any)
+  // 1. Evaluate impact prior to deletion for reporting and audit
+  let impactData = null;
   try {
-    await supabase.from('store_material_requirements').delete().eq('checklist_id', existing.id);
+    impactData = await getChecklistDeletionImpact(checklistId);
+  } catch (e) {
+    impactData = { impact: { totalDependentRecords: 0 }, dependentRecordsBreakdown: [] };
+  }
+
+  // 2. Cascade delete dependent child records in strict reverse dependency order:
+
+  // a. Technical report items and reports
+  try {
+    const { data: techReports } = await supabase
+      .from('technical_installation_reports')
+      .select('id')
+      .eq('checklist_id', checklistId);
+    if (techReports && techReports.length > 0) {
+      const repIds = techReports.map((r) => r.id);
+      await supabase.from('technical_installation_report_items').delete().in('report_id', repIds);
+    }
+    await supabase.from('technical_installation_reports').delete().eq('checklist_id', checklistId);
+  } catch (err) {
+    console.warn(`[ChecklistDeletion] Notice cleaning technical reports: ${err.message}`);
+  }
+
+  // b. Pre-installation backup items and declarations
+  try {
+    const { data: backupDecls } = await supabase
+      .from('pre_installation_backup_declarations')
+      .select('id')
+      .eq('checklist_id', checklistId);
+    if (backupDecls && backupDecls.length > 0) {
+      const declIds = backupDecls.map((d) => d.id);
+      await supabase.from('pre_installation_backup_items').delete().in('declaration_id', declIds);
+    }
+    await supabase.from('pre_installation_backup_declarations').delete().eq('checklist_id', checklistId);
+    const { deleteBackupDeclarationForChecklist } = await import('./backupItemService.js');
+    deleteBackupDeclarationForChecklist(checklistId);
+  } catch (err) {
+    console.warn(`[ChecklistDeletion] Notice cleaning backup items: ${err.message}`);
+  }
+
+  // c. Device carry items and carry records
+  try {
+    const { data: carryRecs } = await supabase
+      .from('job_device_carry_records')
+      .select('id')
+      .eq('checklist_id', checklistId);
+    if (carryRecs && carryRecs.length > 0) {
+      const carryIds = carryRecs.map((c) => c.id);
+      await supabase.from('job_device_carry_items').delete().in('carry_record_id', carryIds);
+    }
+    await supabase.from('job_device_carry_records').delete().eq('checklist_id', checklistId);
+  } catch (err) {
+    console.warn(`[ChecklistDeletion] Notice cleaning carry records: ${err.message}`);
+  }
+
+  // d. Job expenses
+  try {
+    await supabase.from('job_expenses').delete().eq('checklist_id', checklistId);
+    const { deleteJobExpensesForChecklist } = await import('./expenseService.js');
+    deleteJobExpensesForChecklist(checklistId);
+  } catch (err) {
+    console.warn(`[ChecklistDeletion] Notice cleaning job expenses: ${err.message}`);
+  }
+
+  // e. Device and material returns
+  try {
+    await supabase.from('job_device_returns').delete().eq('checklist_id', checklistId);
+    await supabase.from('job_material_returns').delete().eq('checklist_id', checklistId);
+  } catch (err) {
+    console.warn(`[ChecklistDeletion] Notice cleaning returns: ${err.message}`);
+  }
+
+  // f. Store material requirements (BOM)
+  try {
+    await supabase.from('store_material_requirements').delete().eq('checklist_id', checklistId);
     const { inMemoryStoreRequirements } = await import('./storeRequirementService.js');
-    inMemoryStoreRequirements.delete(existing.id);
-  } catch (e) {}
+    inMemoryStoreRequirements.delete(checklistId);
+  } catch (err) {
+    console.warn(`[ChecklistDeletion] Notice cleaning store requirements: ${err.message}`);
+  }
 
-  // 3. Safely remove unarranged draft coordinator booking (if any)
+  // g. Engineer bookings (Appointment schedule)
   try {
-    await supabase.from('coordinator_bookings').delete().eq('checklist_id', existing.id);
-    const { inMemoryBookings, inMemoryAuditLogs } = await import('./coordinatorBookingService.js');
-    inMemoryBookings.delete(existing.id);
-    inMemoryAuditLogs.delete(existing.id);
-  } catch (e) {}
+    const { deleteEngineerBookingForChecklist } = await import('./engineerBookingService.js');
+    await deleteEngineerBookingForChecklist(checklistId);
+  } catch (err) {
+    console.warn(`[ChecklistDeletion] Notice cleaning engineer booking: ${err.message}`);
+  }
 
-  // 4. Delete the checklist record from installation_checklists
-  const { error } = await supabase
+  // h. Coordinator bookings and audit logs
+  try {
+    await supabase.from('coordinator_booking_audit_logs').delete().eq('checklist_id', checklistId);
+    await supabase.from('coordinator_bookings').delete().eq('checklist_id', checklistId);
+    const { deleteCoordinatorBookingForChecklist } = await import('./coordinatorBookingService.js');
+    deleteCoordinatorBookingForChecklist(checklistId);
+  } catch (err) {
+    console.warn(`[ChecklistDeletion] Notice cleaning coordinator bookings: ${err.message}`);
+  }
+
+  // i. Schedule extension requests
+  try {
+    await supabase.from('schedule_extension_requests').delete().eq('checklist_id', checklistId);
+    const { deleteScheduleExtensionsForChecklist } = await import('./scheduleExtensionService.js');
+    deleteScheduleExtensionsForChecklist(checklistId);
+  } catch (err) {
+    console.warn(`[ChecklistDeletion] Notice cleaning schedule extensions: ${err.message}`);
+  }
+
+  // j. Checklist notifications
+  try {
+    await supabase.from('app_notifications').delete().or(`checklist_id.eq.${checklistId},metadata->>checklist_id.eq.${checklistId}`);
+    const { deleteNotificationsForChecklist } = await import('./appNotificationService.js');
+    deleteNotificationsForChecklist(checklistId, checklistNumber);
+  } catch (err) {
+    console.warn(`[ChecklistDeletion] Notice cleaning notifications: ${err.message}`);
+  }
+
+  // k. Release any reserved device stock allocations
+  try {
+    const { releaseDeviceAllocation, getDeviceStockAllocations } = await import('./deviceSetService.js');
+    const allocations = await getDeviceStockAllocations();
+    const active = allocations.filter((a) => a.checklist_id === checklistId && a.status === 'ALLOCATED');
+    for (const alloc of active) {
+      await releaseDeviceAllocation({
+        allocation_id: alloc.id,
+        reason: `Released due to checklist ${checklistNumber} deletion`,
+        user,
+      });
+    }
+  } catch (err) {
+    console.warn(`[ChecklistDeletion] Notice releasing allocations: ${err.message}`);
+  }
+
+  // l. Clean workflow storage in-memory maps & file backing
+  try {
+    const { deleteWorkflowRecordsForChecklist } = await import('./workflowService.js');
+    deleteWorkflowRecordsForChecklist(checklistId);
+  } catch (err) {
+    console.warn(`[ChecklistDeletion] Notice cleaning workflow storage: ${err.message}`);
+  }
+
+  // m. Clean in-memory caches in installationService
+  inMemoryChecklistExtraConfigs.delete(checklistId);
+  inMemoryChecklistBomSnapshots.delete(checklistId);
+  inMemoryChecklistSchedules.delete(checklistId);
+
+  // n. Permanently delete the checklist row from installation_checklists
+  const { error: delErr } = await supabase
     .from('installation_checklists')
     .delete()
-    .eq('id', existing.id);
+    .eq('id', checklistId);
 
-  if (error) {
-    console.error('Database delete error for checklist:', error);
-    throw new Error(error.message || 'Failed to delete installation checklist from database');
+  if (delErr) {
+    console.error('Database delete error for checklist:', delErr);
+    throw new Error(delErr.message || 'Failed to delete checklist from database');
   }
 
-  // 5. Clean runtime in-memory caches
-  inMemoryChecklistExtraConfigs.delete(existing.id);
-  inMemoryChecklistBomSnapshots.delete(existing.id);
-  inMemoryChecklistSchedules.delete(existing.id);
-
-  // 6. Record audit entry
+  // o. Record audit entry
+  const userRole = (user?.role || 'SALES').toUpperCase();
   try {
     await logAudit({
       actor_id: user?.id,
       actor_email: user?.email,
-      actor_role: user?.role || 'COORDINATOR',
-      action: 'DELETE_CHECKLIST',
+      actor_role: userRole,
+      action: 'DELETE_CHECKLIST_WORKFLOW',
       target_table: 'installation_checklists',
-      target_id: existing.id,
+      target_id: checklistId,
       details: {
-        checklist_number: existing.checklist_number,
+        checklist_number: checklistNumber,
         client_name: existing.client_name,
         service_engineer: existing.service_engineer,
         installation_status: existing.installation_status,
-        safe_delete: true,
+        dependentRecordsRemoved: impactData?.impact?.totalDependentRecords || 0,
+        breakdown: impactData?.dependentRecordsBreakdown || [],
       },
     });
   } catch (auditErr) {
     console.warn('Could not record checklist deletion audit:', auditErr.message);
   }
 
+  const removedCount = impactData?.impact?.totalDependentRecords || 0;
   return {
     success: true,
-    deletedId: existing.id,
-    checklistNumber: existing.checklist_number,
-    message: `Checklist ${existing.checklist_number} (${existing.client_name}) was permanently deleted.`,
+    deletedId: checklistId,
+    checklistNumber,
+    clientName: existing.client_name,
+    impact: impactData?.impact,
+    dependentRecordsBreakdown: impactData?.dependentRecordsBreakdown || [],
+    message: removedCount > 0
+      ? `Checklist ${checklistNumber} (${existing.client_name}) and ${removedCount} associated workflow record(s) were permanently deleted.`
+      : `Checklist ${checklistNumber} (${existing.client_name}) was permanently deleted.`,
   };
 }
 
 /**
- * Preview bulk checklist deletion eligibility across records.
- * Identifies eligible drafts vs protected operational records.
+ * Preview checklist deletion across records.
+ * Evaluates impact and eligible checklists for deletion.
  */
 export async function previewChecklistsDeletion(params = {}) {
   const checklistResult = await getChecklists({
@@ -1129,40 +1146,33 @@ export async function previewChecklistsDeletion(params = {}) {
   const evaluated = await Promise.all(
     rawList.map(async (chk) => {
       try {
-        const el = await checkChecklistDeletionEligibility(chk);
-        return { chk, el };
+        const impact = await getChecklistDeletionImpact(chk);
+        return { chk, impact, error: null };
       } catch (e) {
-        return {
-          chk,
-          el: {
-            isEligible: false,
-            reasons: [`Error evaluating eligibility: ${e.message}`],
-            canCancel: false,
-          },
-        };
+        return { chk, impact: null, error: e.message };
       }
     })
   );
 
-  for (const { chk, el } of evaluated) {
-    if (el.isEligible) {
+  for (const { chk, impact, error } of evaluated) {
+    if (!error && impact) {
       eligibleChecklists.push({
         id: chk.id,
         checklist_number: chk.checklist_number,
         client_name: chk.client_name,
+        client_mobile: chk.client_mobile,
         installation_status: chk.installation_status,
         service_engineer: chk.service_engineer,
         created_at: chk.created_at,
+        impact: impact.impact,
+        dependentRecordsBreakdown: impact.dependentRecordsBreakdown,
       });
     } else {
       protectedChecklists.push({
         id: chk.id,
         checklist_number: chk.checklist_number,
         client_name: chk.client_name,
-        installation_status: chk.installation_status,
-        service_engineer: chk.service_engineer,
-        reasons: el.reasons,
-        canCancel: el.canCancel,
+        reasons: [error || 'Unexpected error calculating deletion impact'],
       });
     }
   }
@@ -1173,21 +1183,19 @@ export async function previewChecklistsDeletion(params = {}) {
     protectedCount: protectedChecklists.length,
     eligibleChecklists,
     protectedChecklists,
-    explanation:
-      'Active assignments, completed reports, inventory transactions, and related business records prevent permanent deletion to preserve operational history and stock accountability.',
+    explanation: 'Checklists and all of their generated workflow records (BOM, bookings, technician assignments, reports) will be permanently deleted.',
   };
 }
 
 /**
- * Delete all eligible draft checklists safely.
+ * Delete all eligible checklists safely.
  * Requires confirmation of the actual eligible count before executing.
- * Never truncates tables or resets IDs.
  */
 export async function safeDeleteAllEligibleChecklists({ user, confirmedCount, params = {} }) {
   const preview = await previewChecklistsDeletion(params);
 
   if (confirmedCount === undefined || confirmedCount === null) {
-    const err = new Error('Explicit confirmation of the eligible checklist count is required before proceeding.');
+    const err = new Error('Explicit confirmation of the checklist count is required before proceeding.');
     err.statusCode = 400;
     err.preview = preview;
     throw err;
@@ -1213,12 +1221,12 @@ export async function safeDeleteAllEligibleChecklists({ user, confirmedCount, pa
       success: true,
       totalProcessed: preview.totalCount,
       deletedCount: 0,
-      skippedCount: preview.protectedCount,
+      skippedCount: 0,
       failedCount: 0,
       deletedChecklists: [],
-      skippedChecklists: preview.protectedChecklists,
+      skippedChecklists: [],
       failures: [],
-      message: 'No eligible draft checklists were found to delete. All checklists are protected.',
+      message: 'No checklists were found to delete.',
     };
   }
 
@@ -1234,7 +1242,7 @@ export async function safeDeleteAllEligibleChecklists({ user, confirmedCount, pa
         client_name: item.client_name,
       });
     } catch (err) {
-      console.error(`Failed to delete eligible checklist ${item.checklist_number}:`, err.message);
+      console.error(`Failed to delete checklist ${item.checklist_number}:`, err.message);
       failures.push({
         id: item.id,
         checklist_number: item.checklist_number,
@@ -1244,11 +1252,12 @@ export async function safeDeleteAllEligibleChecklists({ user, confirmedCount, pa
     }
   }
 
+  const userRole = (user?.role || 'SALES').toUpperCase();
   try {
     await logAudit({
       actor_id: user?.id,
       actor_email: user?.email,
-      actor_role: user?.role || 'COORDINATOR',
+      actor_role: userRole,
       action: 'BULK_DELETE_CHECKLISTS',
       target_table: 'installation_checklists',
       target_id: 'bulk',
@@ -1256,7 +1265,6 @@ export async function safeDeleteAllEligibleChecklists({ user, confirmedCount, pa
         totalEvaluated: preview.totalCount,
         eligibleCount: preview.eligibleCount,
         deletedCount: deletedChecklists.length,
-        skippedProtectedCount: preview.protectedCount,
         failedCount: failures.length,
       },
     });
@@ -1275,8 +1283,8 @@ export async function safeDeleteAllEligibleChecklists({ user, confirmedCount, pa
     failures,
     message:
       failures.length === 0
-        ? `Successfully deleted ${deletedChecklists.length} eligible draft checklist(s). ${preview.protectedCount} protected checklist(s) were preserved.`
-        : `Deleted ${deletedChecklists.length} checklist(s). ${failures.length} failed. ${preview.protectedCount} protected checklist(s) were preserved.`,
+        ? `Successfully deleted ${deletedChecklists.length} checklist(s) and all associated workflow records.`
+        : `Deleted ${deletedChecklists.length} checklist(s). ${failures.length} failed.`,
   };
 }
 

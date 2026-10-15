@@ -70,6 +70,28 @@ function saveStorage() {
 
 loadStorage();
 
+/**
+ * Permanently delete schedule extensions and revisions for a deleted checklist
+ */
+export function deleteScheduleExtensionsForChecklist(checklistId) {
+  let changed = false;
+  inMemoryExtensions.forEach((e, k) => {
+    if (e.checklist_id === checklistId) {
+      inMemoryExtensions.delete(k);
+      changed = true;
+    }
+  });
+  inMemoryRevisions.forEach((r, k) => {
+    if (r.checklist_id === checklistId) {
+      inMemoryRevisions.delete(k);
+      changed = true;
+    }
+  });
+  if (changed) {
+    saveStorage();
+  }
+}
+
 export function cleanupTestExtensionsForYear(year = '2028') {
   inMemoryExtensions.forEach((e, k) => {
     if (e.requested_completion_date?.startsWith(year) || e.original_dates?.arrival_date?.startsWith(year)) {

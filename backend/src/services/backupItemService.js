@@ -58,6 +58,16 @@ function saveBackupItemsStorage() {
 loadBackupItemsStorage();
 
 /**
+ * Permanently delete backup declarations and items for a deleted checklist
+ */
+export function deleteBackupDeclarationForChecklist(checklistId) {
+  if (inMemoryDeclarations.has(checklistId)) {
+    inMemoryDeclarations.delete(checklistId);
+    saveBackupItemsStorage();
+  }
+}
+
+/**
  * Get available loose backup products from both Camera/Device Products and Material Inventory catalogs
  */
 export async function getAvailableBackupProducts() {

@@ -57,6 +57,24 @@ export function cleanupTestCoordinatorBookingsForYear(year = '2028') {
   saveFallbackStorage();
 }
 
+/**
+ * Permanently delete coordinator booking and audit logs for a deleted checklist
+ */
+export function deleteCoordinatorBookingForChecklist(checklistId) {
+  let changed = false;
+  if (inMemoryBookings.has(checklistId)) {
+    inMemoryBookings.delete(checklistId);
+    changed = true;
+  }
+  if (inMemoryAuditLogs.has(checklistId)) {
+    inMemoryAuditLogs.delete(checklistId);
+    changed = true;
+  }
+  if (changed) {
+    saveFallbackStorage();
+  }
+}
+
 
 /**
  * Validate that all required booking details are present before allowing COMPLETED status.

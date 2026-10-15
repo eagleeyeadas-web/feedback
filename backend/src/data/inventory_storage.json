@@ -1,7 +1,7 @@
 {
   "deviceProducts": {
     "2 Channel Live": {
-      "id": "dev-001",
+      "id": "dbe45e2e-812c-4906-95f5-645965148088",
       "sku": "EE-2CH-LIVE",
       "device_name": "2 Channel Live Camera System",
       "device_type": "2 Channel Live",
@@ -14,10 +14,12 @@
       "returned_usable_stock": 0,
       "damaged_stock": 0,
       "min_stock_level": 5,
-      "is_active": true
+      "is_active": true,
+      "created_at": "2026-10-14T10:17:13.435702+00:00",
+      "updated_at": "2026-10-15T11:08:39.355+00:00"
     },
     "2 Channel Recording": {
-      "id": "dev-002",
+      "id": "0ab0154a-4d60-4713-8b3e-21a9a44dbf3d",
       "sku": "EE-2CH-REC",
       "device_name": "2 Channel Recording System",
       "device_type": "2 Channel Recording",
@@ -30,10 +32,12 @@
       "returned_usable_stock": 0,
       "damaged_stock": 0,
       "min_stock_level": 5,
-      "is_active": true
+      "is_active": true,
+      "created_at": "2026-10-14T10:17:13.435702+00:00",
+      "updated_at": "2026-10-15T11:08:39.503+00:00"
     },
     "4 Channel Live": {
-      "id": "dev-003",
+      "id": "aecfb17b-40a8-4f6c-a7bc-ae393c0e5f7b",
       "sku": "EE-4CH-LIVE",
       "device_name": "4 Channel Live MDVR System",
       "device_type": "4 Channel Live",
@@ -46,10 +50,12 @@
       "returned_usable_stock": 0,
       "damaged_stock": 0,
       "min_stock_level": 5,
-      "is_active": true
+      "is_active": true,
+      "created_at": "2026-10-14T10:17:13.435702+00:00",
+      "updated_at": "2026-10-15T11:08:39.722+00:00"
     },
     "4 Channel Recording": {
-      "id": "dev-004",
+      "id": "4833ea52-354b-46c2-968b-07a9a1a63b08",
       "sku": "EE-4CH-REC",
       "device_name": "4 Channel Recording MDVR System",
       "device_type": "4 Channel Recording",
@@ -62,10 +68,12 @@
       "returned_usable_stock": 0,
       "damaged_stock": 0,
       "min_stock_level": 5,
-      "is_active": true
+      "is_active": true,
+      "created_at": "2026-10-14T10:17:13.435702+00:00",
+      "updated_at": "2026-10-15T11:08:38.411+00:00"
     },
     "6 Channel Live": {
-      "id": "dev-005",
+      "id": "93cd8a15-6569-4eb8-b21d-d8456635e66d",
       "sku": "EE-6CH-LIVE",
       "device_name": "6 Channel Live Telematics System",
       "device_type": "6 Channel Live",
@@ -78,10 +86,12 @@
       "returned_usable_stock": 0,
       "damaged_stock": 0,
       "min_stock_level": 5,
-      "is_active": true
+      "is_active": true,
+      "created_at": "2026-10-14T10:17:13.435702+00:00",
+      "updated_at": "2026-10-15T11:08:38.718+00:00"
     },
     "6 Channel Recording": {
-      "id": "dev-006",
+      "id": "e65ad7a9-4dfa-4bb3-95c0-d365842e91c4",
       "sku": "EE-6CH-REC",
       "device_name": "6 Channel Recording Telematics System",
       "device_type": "6 Channel Recording",
@@ -94,10 +104,12 @@
       "returned_usable_stock": 0,
       "damaged_stock": 0,
       "min_stock_level": 5,
-      "is_active": true
+      "is_active": true,
+      "created_at": "2026-10-14T10:17:13.435702+00:00",
+      "updated_at": "2026-10-15T11:08:38.989+00:00"
     },
     "8 Channel Live": {
-      "id": "dev-007",
+      "id": "bf3f0a17-a15d-46e6-9502-5bc723736d09",
       "sku": "EE-8CH-LIVE",
       "device_name": "8 Channel Live Enterprise System",
       "device_type": "8 Channel Live",
@@ -110,7 +122,9 @@
       "returned_usable_stock": 0,
       "damaged_stock": 0,
       "min_stock_level": 5,
-      "is_active": true
+      "is_active": true,
+      "created_at": "2026-10-14T10:17:13.435702+00:00",
+      "updated_at": "2026-10-15T11:08:39.175+00:00"
     }
   },
   "deviceTransactions": [],
@@ -118,134 +132,199 @@
   "processedChecklistDeviceIssuances": [],
   "materialProducts": {
     "Insulation Tape": {
-      "id": "mat-001",
+      "id": "c99c1b8d-fa0b-4e65-8d9e-96549a591865",
       "sku": "MAT-INSU-TAPE",
       "material_name": "Insulation Tape",
       "unit": "Nos.",
-      "opening_stock": 100,
       "current_stock": 100,
+      "opening_stock": 100,
       "opening_stock_set": true,
-      "min_stock_level": 20
+      "issued_stock": 0,
+      "damaged_stock": 0,
+      "min_stock_level": 20,
+      "is_active": true,
+      "created_at": "2026-10-14T10:17:13.435702+00:00",
+      "updated_at": "2026-10-15T11:08:42.097587+00:00"
     },
     "Cable Tie – 200 mm": {
-      "id": "mat-002",
+      "id": "bd1ed5a4-94c0-4f38-aabc-f6a46b0b0159",
       "sku": "MAT-CT-200MM",
       "material_name": "Cable Tie – 200 mm",
       "unit": "Packets",
-      "opening_stock": 50,
       "current_stock": 50,
+      "opening_stock": 50,
       "opening_stock_set": true,
-      "min_stock_level": 10
+      "issued_stock": 0,
+      "damaged_stock": 0,
+      "min_stock_level": 10,
+      "is_active": true,
+      "created_at": "2026-10-14T10:17:13.435702+00:00",
+      "updated_at": "2026-10-15T11:08:40.205163+00:00"
     },
     "Cable Tie – 300 mm": {
-      "id": "mat-003",
+      "id": "893d903a-4d30-4fc2-96c2-fc7a2b872ed2",
       "sku": "MAT-CT-300MM",
       "material_name": "Cable Tie – 300 mm",
       "unit": "Packets",
-      "opening_stock": 40,
       "current_stock": 40,
+      "opening_stock": 40,
       "opening_stock_set": true,
-      "min_stock_level": 10
+      "issued_stock": 0,
+      "damaged_stock": 0,
+      "min_stock_level": 10,
+      "is_active": true,
+      "created_at": "2026-10-14T10:17:13.435702+00:00",
+      "updated_at": "2026-10-15T11:08:40.375623+00:00"
     },
     "Long Screw": {
-      "id": "mat-004",
+      "id": "943eb9be-f4bb-4300-90e9-6ce23cc90549",
       "sku": "MAT-SCREW-LONG",
       "material_name": "Long Screw",
       "unit": "Nos.",
-      "opening_stock": 500,
       "current_stock": 500,
+      "opening_stock": 500,
       "opening_stock_set": true,
-      "min_stock_level": 50
+      "issued_stock": 0,
+      "damaged_stock": 0,
+      "min_stock_level": 50,
+      "is_active": true,
+      "created_at": "2026-10-14T10:17:13.435702+00:00",
+      "updated_at": "2026-10-15T11:08:40.923454+00:00"
     },
     "Small Screw": {
-      "id": "mat-005",
+      "id": "bd02bad8-3b6f-45b9-bbc7-c5c79ecb86bd",
       "sku": "MAT-SCREW-SMALL",
       "material_name": "Small Screw",
       "unit": "Nos.",
-      "opening_stock": 500,
       "current_stock": 500,
+      "opening_stock": 500,
       "opening_stock_set": true,
-      "min_stock_level": 50
+      "issued_stock": 0,
+      "damaged_stock": 0,
+      "min_stock_level": 50,
+      "is_active": true,
+      "created_at": "2026-10-14T10:17:13.435702+00:00",
+      "updated_at": "2026-10-15T11:08:41.138646+00:00"
     },
     "Memory Card": {
-      "id": "mat-006",
+      "id": "9f46d34e-91a4-4f31-a8c5-b5541cc8b32d",
       "sku": "MAT-MEM-CARD",
       "material_name": "Memory Card",
       "unit": "Nos.",
-      "opening_stock": 100,
       "current_stock": 100,
+      "opening_stock": 100,
       "opening_stock_set": true,
-      "min_stock_level": 15
+      "issued_stock": 0,
+      "damaged_stock": 0,
+      "min_stock_level": 15,
+      "is_active": true,
+      "created_at": "2026-10-14T10:17:13.435702+00:00",
+      "updated_at": "2026-10-15T11:08:40.545889+00:00"
     },
     "0.5 mm Wire": {
-      "id": "mat-007",
+      "id": "fcc5f452-6ae7-4097-bd5a-0ca9f29421e3",
       "sku": "MAT-WIRE-0.5MM",
       "material_name": "0.5 mm Wire",
       "unit": "Metres",
-      "opening_stock": 1000,
       "current_stock": 1000,
+      "opening_stock": 1000,
       "opening_stock_set": true,
-      "min_stock_level": 100
+      "issued_stock": 0,
+      "damaged_stock": 0,
+      "min_stock_level": 100,
+      "is_active": true,
+      "created_at": "2026-10-14T10:17:13.435702+00:00",
+      "updated_at": "2026-10-15T11:08:42.458139+00:00"
     },
     "5-metre Cable": {
-      "id": "mat-008",
+      "id": "d9583db5-eb4c-4059-b86c-f9548c99ac85",
       "sku": "MAT-CBL-5M",
       "material_name": "5-metre Cable",
       "unit": "Nos.",
-      "opening_stock": 150,
       "current_stock": 150,
+      "opening_stock": 150,
       "opening_stock_set": true,
-      "min_stock_level": 25
+      "issued_stock": 0,
+      "damaged_stock": 0,
+      "min_stock_level": 25,
+      "is_active": true,
+      "created_at": "2026-10-14T10:17:13.435702+00:00",
+      "updated_at": "2026-10-15T11:08:41.738261+00:00"
     },
     "15-metre Cable": {
-      "id": "mat-009",
+      "id": "ffb14238-0b26-4bd5-ba71-d362cb6861dc",
       "sku": "MAT-CBL-15M",
       "material_name": "15-metre Cable",
       "unit": "Nos.",
-      "opening_stock": 50,
       "current_stock": 50,
+      "opening_stock": 50,
       "opening_stock_set": true,
-      "min_stock_level": 10
+      "issued_stock": 0,
+      "damaged_stock": 0,
+      "min_stock_level": 10,
+      "is_active": true,
+      "created_at": "2026-10-14T10:17:13.435702+00:00",
+      "updated_at": "2026-10-15T11:08:40.72091+00:00"
     },
     "Camera": {
-      "id": "mat-010",
+      "id": "c7b53868-efff-486d-9b6f-560baf2b3cae",
       "sku": "MAT-CAM-LOOSE",
       "material_name": "Camera",
       "unit": "Nos.",
-      "opening_stock": 50,
       "current_stock": 50,
+      "opening_stock": 50,
       "opening_stock_set": true,
-      "min_stock_level": 10
+      "issued_stock": 0,
+      "damaged_stock": 0,
+      "min_stock_level": 10,
+      "is_active": true,
+      "created_at": "2026-10-14T10:17:13.435702+00:00",
+      "updated_at": "2026-10-15T11:08:42.282785+00:00"
     },
     "Display": {
-      "id": "mat-011",
+      "id": "b6d9a205-f951-4e02-ae32-75b2bbcf005b",
       "sku": "MAT-DISP-LOOSE",
       "material_name": "Display",
       "unit": "Nos.",
-      "opening_stock": 50,
       "current_stock": 50,
+      "opening_stock": 50,
       "opening_stock_set": true,
-      "min_stock_level": 10
+      "issued_stock": 0,
+      "damaged_stock": 0,
+      "min_stock_level": 10,
+      "is_active": true,
+      "created_at": "2026-10-14T10:17:13.435702+00:00",
+      "updated_at": "2026-10-15T11:08:41.934492+00:00"
     },
     "Live Display": {
-      "id": "mat-012",
+      "id": "7eb8416b-3226-4017-9298-fc2438634176",
       "sku": "MAT-DISP-LIVE",
       "material_name": "Live Display",
       "unit": "Nos.",
-      "opening_stock": 0,
       "current_stock": 0,
+      "opening_stock": 0,
       "opening_stock_set": false,
-      "min_stock_level": 5
+      "issued_stock": 0,
+      "damaged_stock": 0,
+      "min_stock_level": 5,
+      "is_active": true,
+      "created_at": "2026-10-15T06:02:59.014663+00:00",
+      "updated_at": "2026-10-15T11:08:41.484118+00:00"
     },
     "Recording Display": {
-      "id": "mat-013",
+      "id": "db8e8411-cda3-4423-8d34-3443e8407d61",
       "sku": "MAT-DISP-REC",
       "material_name": "Recording Display",
       "unit": "Nos.",
-      "opening_stock": 0,
       "current_stock": 0,
+      "opening_stock": 0,
       "opening_stock_set": false,
-      "min_stock_level": 5
+      "issued_stock": 0,
+      "damaged_stock": 0,
+      "min_stock_level": 5,
+      "is_active": true,
+      "created_at": "2026-10-15T06:02:59.014663+00:00",
+      "updated_at": "2026-10-15T11:08:41.313614+00:00"
     }
   },
   "materialTransactions": [],

@@ -393,7 +393,10 @@ export async function getEngineerCommitments(engineerIdOrName) {
 
   const restStorage = readJsonFallback('rest_days_storage.json');
   if (restStorage?.rest_days) {
-    restStorage.rest_days.forEach((r) => {
+    const restArray = Array.isArray(restStorage.rest_days)
+      ? restStorage.rest_days
+      : Object.values(restStorage.rest_days);
+    restArray.forEach((r) => {
       if (r.status === 'APPROVED' && (r.engineer_id === engId || r.engineer_name?.toLowerCase() === engName.toLowerCase())) {
         if (!commitments.some((c) => c.id === r.id)) {
           commitments.push({
@@ -429,7 +432,10 @@ export async function getEngineerCommitments(engineerIdOrName) {
 
   const leaveStorage = readJsonFallback('leave_requests_storage.json');
   if (leaveStorage?.leaves) {
-    leaveStorage.leaves.forEach((l) => {
+    const leaveArray = Array.isArray(leaveStorage.leaves)
+      ? leaveStorage.leaves
+      : Object.values(leaveStorage.leaves);
+    leaveArray.forEach((l) => {
       if (l.status === 'APPROVED' && (l.engineer_id === engId || l.engineer_name?.toLowerCase() === engName.toLowerCase())) {
         if (!commitments.some((c) => c.id === l.id)) {
           commitments.push({
@@ -546,7 +552,10 @@ export async function getPendingExtensionsForEngineer(engineerIdOrName) {
 
   const extStorage = readJsonFallback('schedule_extensions_storage.json');
   if (extStorage?.extensions) {
-    extStorage.extensions.forEach((e) => {
+    const extArray = Array.isArray(extStorage.extensions)
+      ? extStorage.extensions
+      : Object.values(extStorage.extensions);
+    extArray.forEach((e) => {
       if (seenIds.has(e.id)) return;
       if (e.status === 'PENDING') {
         const matches =
@@ -595,7 +604,10 @@ export async function getEngineerPendingWarnings(engineerIdOrName) {
   // 2. Pending Rest Days
   const restStorage = readJsonFallback('rest_days_storage.json');
   if (restStorage?.rest_days) {
-    restStorage.rest_days.forEach((r) => {
+    const restArray = Array.isArray(restStorage.rest_days)
+      ? restStorage.rest_days
+      : Object.values(restStorage.rest_days);
+    restArray.forEach((r) => {
       if (r.status === 'PENDING' && (r.engineer_id === engId || r.engineer_name?.toLowerCase() === engName.toLowerCase())) {
         warnings.push({
           type: 'PENDING_REST',
@@ -613,7 +625,10 @@ export async function getEngineerPendingWarnings(engineerIdOrName) {
   // 3. Pending Leave
   const leaveStorage = readJsonFallback('leave_requests_storage.json');
   if (leaveStorage?.leaves) {
-    leaveStorage.leaves.forEach((l) => {
+    const leaveArray = Array.isArray(leaveStorage.leaves)
+      ? leaveStorage.leaves
+      : Object.values(leaveStorage.leaves);
+    leaveArray.forEach((l) => {
       if (l.status === 'PENDING' && (l.engineer_id === engId || l.engineer_name?.toLowerCase() === engName.toLowerCase())) {
         warnings.push({
           type: 'PENDING_LEAVE',
@@ -1008,6 +1023,29 @@ export async function releaseEngineerBooking({ checklistId }) {
     if (b.checklist_id === checklistId || k === checklistId) {
       b.status = 'RELEASED';
       b.updated_at = new Date().toISOString();
+      found = true;
+    }
+  });
+
+  if (found) {
+    saveStorage();
+  }
+}
+
+/**
+ * Permanently delete engineer booking for a deleted checklist
+ */
+export async function deleteEngineerBookingForChecklist(checklistId) {
+  if (!checklistId) return;
+
+  try {
+    await supabase.from('engineer_bookings').delete().eq('checklist_id', checklistId);
+  } catch (err) {}
+
+  let found = false;
+  inMemoryBookings.forEach((b, k) => {
+    if (b.checklist_id === checklistId || k === checklistId) {
+      inMemoryBookings.delete(k);
       found = true;
     }
   });

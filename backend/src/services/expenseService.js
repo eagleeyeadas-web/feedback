@@ -65,6 +65,22 @@ function saveFallbackStorage() {
 loadFallbackStorage();
 
 /**
+ * Permanently delete job expenses for a deleted checklist
+ */
+export function deleteJobExpensesForChecklist(checklistId) {
+  let changed = false;
+  inMemoryJobExpenses.forEach((exp, k) => {
+    if (exp.checklist_id === checklistId) {
+      inMemoryJobExpenses.delete(k);
+      changed = true;
+    }
+  });
+  if (changed) {
+    saveFallbackStorage();
+  }
+}
+
+/**
  * Validates that the job exists, that post-installation report was submitted,
  * and that the technician is authorized for this job.
  * Enforces privacy: Sales, Coordinator, and Store Manager cannot access expenses.

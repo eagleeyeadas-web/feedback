@@ -1830,37 +1830,47 @@ export default function CoordinatorWorkspace() {
                 <p className="text-xs font-semibold text-gray-700">Validating operational dependencies...</p>
                 <p className="text-[11px] text-gray-500">Checking completion reports, stock ledger, expenses, and travel bookings</p>
               </div>
-            ) : deleteSingleModal.eligibility?.isEligible ? (
-              /* Case A: Record is safe unprocessed draft */
-              <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-200 space-y-2">
-                <div className="flex items-center gap-2 text-emerald-800 font-bold text-xs">
-                  <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
-                  <span>Eligible for Permanent Deletion</span>
-                </div>
-                <p className="text-xs text-emerald-700">
-                  This checklist is an unprocessed draft with no completion reports, stock movements, technician expenses, or arranged travel.
-                  Any engineer reservation will be released immediately.
-                </p>
-              </div>
             ) : (
-              /* Case B: Record has dependencies and is protected */
-              <div className="p-4 bg-amber-50 rounded-2xl border border-amber-300 space-y-3">
-                <div className="flex items-center gap-2 text-amber-900 font-bold text-xs">
-                  <AlertTriangle size={16} className="text-amber-600 shrink-0" />
-                  <span>Permanent Deletion Blocked</span>
+              <div className="space-y-3">
+                <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl text-rose-950 text-xs space-y-2">
+                  <div className="flex items-center gap-2 font-bold text-rose-800 text-xs">
+                    <AlertTriangle size={16} className="text-rose-600 shrink-0" />
+                    <span>Permanent Workflow Deletion</span>
+                  </div>
+                  <p className="text-[11px] text-rose-900 leading-relaxed">
+                    Deleting this checklist permanently deletes the original checklist and all records created specifically from it, including:
+                  </p>
+                  <ul className="list-disc list-inside text-[11px] text-rose-800 space-y-0.5 pl-1">
+                    <li>Original checklist data and intake details</li>
+                    <li>Store Bill of Materials (BOM) & material requests</li>
+                    <li>Service Engineer appointments & booking schedules</li>
+                    <li>Coordinator travel/hotel bookings & audit logs</li>
+                    <li>Technician jobs, completion reports, expenses & return receipts</li>
+                    <li>Checklist-specific notifications & workflow entries</li>
+                  </ul>
                 </div>
-                <p className="text-xs text-amber-800">
-                  This checklist cannot be permanently deleted because it has active business records:
-                </p>
-                <ul className="list-disc list-inside text-xs text-amber-900 space-y-1 font-medium bg-amber-100/60 p-2.5 rounded-xl border border-amber-200">
-                  {(deleteSingleModal.eligibility?.reasons || []).map((r, i) => (
-                    <li key={i}>{r}</li>
-                  ))}
-                </ul>
-                <p className="text-xs text-amber-700">
-                  Completed business records and inventory accountability must be preserved.
-                  You may <strong>Cancel the Checklist</strong> instead to release the engineer.
-                </p>
+
+                {deleteSingleModal.eligibility?.dependentRecordsBreakdown && deleteSingleModal.eligibility.dependentRecordsBreakdown.length > 0 ? (
+                  <div className="p-3 bg-amber-50/70 border border-amber-200 rounded-xl space-y-1.5 text-xs">
+                    <span className="font-bold text-amber-950 block text-[11px]">
+                      Records to be deleted with this checklist ({deleteSingleModal.eligibility.impact?.totalDependentRecords || 0} total):
+                    </span>
+                    <div className="grid grid-cols-1 gap-1 text-[11px]">
+                      {deleteSingleModal.eligibility.dependentRecordsBreakdown.map((item, idx) => (
+                        <div key={idx} className="flex justify-between items-center text-amber-900 bg-white/70 px-2 py-1 rounded border border-amber-200/60 font-medium">
+                          <span>{item.label}</span>
+                          <span className="font-bold font-mono bg-amber-100 text-amber-900 px-1.5 py-0.2 rounded text-[10px]">
+                            {item.count}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-[11px] text-gray-600 text-center">
+                    No active dependent records found. Only the draft checklist itself will be removed.
+                  </div>
+                )}
               </div>
             )}
 
@@ -1884,39 +1894,20 @@ export default function CoordinatorWorkspace() {
               </button>
 
               <div className="flex items-center gap-2">
-                {/* Cancellation Fallback Button if Protected */}
-                {!deleteSingleModal.checking && !deleteSingleModal.eligibility?.isEligible && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const chk = deleteSingleModal.checklist;
-                      setDeleteSingleModal(null);
-                      openCancelModal(chk);
-                    }}
-                    className="px-4 py-2 text-xs font-bold text-amber-800 bg-amber-100 hover:bg-amber-200 border border-amber-300 rounded-xl transition cursor-pointer flex items-center gap-1.5"
-                  >
-                    <Ban size={14} />
-                    <span>Cancel Assignment Instead</span>
-                  </button>
-                )}
-
-                {/* Permanent Delete Button if Eligible */}
-                {!deleteSingleModal.checking && deleteSingleModal.eligibility?.isEligible && (
-                  <button
-                    type="button"
-                    id="btn-confirm-delete-single"
-                    disabled={deleteSingleModal.submitting}
-                    onClick={handleConfirmDeleteSingle}
-                    className="px-5 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 active:bg-rose-800 rounded-xl shadow-xs transition cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
-                  >
-                    {deleteSingleModal.submitting ? (
-                      <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    ) : (
-                      <Trash2 size={14} />
-                    )}
-                    <span>Confirm Permanent Deletion</span>
-                  </button>
-                )}
+                <button
+                  type="button"
+                  id="btn-confirm-delete-single"
+                  disabled={deleteSingleModal.submitting || deleteSingleModal.checking}
+                  onClick={handleConfirmDeleteSingle}
+                  className="px-5 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 active:bg-rose-800 rounded-xl shadow-xs transition cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  {deleteSingleModal.submitting ? (
+                    <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <Trash2 size={14} />
+                  )}
+                  <span>Confirm Delete Entire Workflow</span>
+                </button>
               </div>
             </div>
           </div>
