@@ -146,6 +146,7 @@ export const checklistValidationSchema = z.object({
   device_type: z.string().optional(),
   number_of_devices: z.coerce.number().int().gt(0, 'Number of devices must be greater than 0').optional(),
   number_of_vehicles: z.coerce.number().int().gt(0, 'Number of vehicles must be greater than 0').optional().default(1),
+  carry_extra_backup_items: z.boolean().optional().default(false),
   extra_devices: z.boolean().default(false),
   extra_device_configurations: z.array(extraDeviceItemSchema).optional().nullable(),
   extra_device_type: z.string().nullable().optional(),
@@ -214,16 +215,6 @@ export const checklistValidationSchema = z.object({
       path: ['advance_amount'],
       message: 'Advance amount + Pending amount cannot exceed Confirmed Price',
     });
-  }
-
-  if (data.extra_devices) {
-    if (Array.isArray(data.extra_device_configurations) && data.extra_device_configurations.length === 0 && !data.extra_device_type) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['extra_device_configurations'],
-        message: 'At least one extra device is required when carrying extra devices',
-      });
-    }
   }
 });
 

@@ -268,16 +268,7 @@ export async function saveBackupDeclaration({
     // Non-blocking
   }
 
-  const salesExpected = Boolean(checklist?.carry_extra_backup_items ?? checklist?.extra_devices);
   const isCarrying = Boolean(hasBackupItems);
-
-  // Validations per requirement:
-  // If Sales selected Yes, technician must record backup items or explicitly confirm none were carried with reason
-  if (salesExpected && !isCarrying) {
-    if (!noItemsReason || !noItemsReason.trim()) {
-      throw new Error('Sales indicated extra backup items are expected. Please specify backup items or provide a reason why no extra items were carried.');
-    }
-  }
 
   let validatedItems = [];
   if (isCarrying) {
@@ -429,9 +420,23 @@ export async function saveBackupDeclaration({
     };
   }
 
-  savedDeclaration.sales_expected = salesExpected;
+  savedDeclaration.sales_expected = false;
   inMemoryDeclarations.set(checklistId, savedDeclaration);
   saveBackupItemsStorage();
+
+  // Synchronize technician's backup declaration onto the parent installation checklist record
+  try {
+    await supabase
+      .from('installation_checklists')
+      .update({
+        carry_extra_backup_items: isCarrying,
+        extra_devices: isCarrying,
+        updated_at: nowIso,
+      })
+      .eq('id', checklistId);
+  } catch (err) {
+    console.warn('Could not update carry_extra_backup_items on installation_checklists:', err.message);
+  }
 
   // Audit log
   await logAudit({

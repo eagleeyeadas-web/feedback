@@ -560,15 +560,15 @@ export default function InstallationChecklistDetails({ id: propId, onEdit, onBac
                       ? 'bg-amber-100 text-amber-900 border border-amber-300'
                       : 'bg-gray-100 text-gray-600 border border-gray-200'
                   }`}>
-                    {(checklist.carry_extra_backup_items ?? checklist.extra_devices) ? 'Backup Expected: YES' : 'Backup Expected: NO'}
+                    {(checklist.carry_extra_backup_items ?? checklist.extra_devices) ? 'Extra Backup: YES' : 'Extra Backup: NO'}
                   </span>
                 </div>
 
                 <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
                   <div>
-                    <span className="font-bold text-gray-800 block">Will the technician carry extra backup items?</span>
+                    <span className="font-bold text-gray-800 block">Technician extra backup items:</span>
                     <span className="text-[11px] text-gray-500">
-                      Sales declared: loose items do not increase the Sales BOM or vehicle count.
+                      Pre-installation declaration. Loose items do not increase the Sales BOM or vehicle count.
                     </span>
                   </div>
                   <span className={`px-2.5 py-0.5 rounded-md font-bold text-xs self-start sm:self-auto ${

@@ -799,7 +799,7 @@ export default function StoreInstallationRequirements({ token, onSelectChecklist
                               <span>1B. Pre-Installation Loose Backup Items (Separate from Sales BOM)</span>
                             </span>
                             <span className="text-[10px] text-gray-500 block">
-                              Sales declared extra backup items: <strong>{req.carry_extra_backup_items ? 'Yes (Technician to carry items)' : 'No'}</strong>. Loose backup items do NOT increase Sales BOM or device set counts.
+                              Technician backup items: <strong>{req.carry_extra_backup_items ? 'Yes (Carried by Tech)' : 'No (None)'}</strong>. Loose backup items do NOT increase Sales BOM or device set counts.
                             </span>
                           </div>
                           {req.backup_declaration?.items?.some((it) => Number(it.quantity_returned) > 0) && (

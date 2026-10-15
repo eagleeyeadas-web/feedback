@@ -397,7 +397,6 @@ export default function TechnicianBackupDeclarationModal({
   const [declarationStatus, setDeclarationStatus] = useState('NOT_RECORDED');
   const [declarationTimestamp, setDeclarationTimestamp] = useState(null);
   const [history, setHistory] = useState([]);
-  const [salesExpected, setSalesExpected] = useState(false);
 
   useEffect(() => {
     if (!isOpen || !job?.id) return;
@@ -416,9 +415,6 @@ export default function TechnicianBackupDeclarationModal({
         if (!isMounted) return;
 
         setAvailableProducts(products);
-
-        const salesExpects = Boolean(job.carry_extra_backup_items ?? job.extra_devices ?? decl?.sales_expected);
-        setSalesExpected(salesExpects);
 
         if (decl && decl.status && decl.status !== 'NOT_RECORDED') {
           setHasBackupItems(Boolean(decl.has_backup_items));
@@ -462,30 +458,13 @@ export default function TechnicianBackupDeclarationModal({
           }
         } else {
           // Defaults if not yet recorded
-          setHasBackupItems(salesExpects);
+          const previouslyCarried = Boolean(job.carry_extra_backup_items ?? job.extra_devices);
+          setHasBackupItems(previouslyCarried);
           setNoItemsReason('');
           setDeclarationStatus('NOT_RECORDED');
           setDeclarationTimestamp(null);
           setHistory([]);
-          if (salesExpects) {
-            const firstComp = products.find(
-              (p) => p.category === 'Device Component' || p.category_group === 'A' || (p.item_name || '').toLowerCase().includes('camera')
-            ) || products[0];
-
-            setItems([
-              {
-                id: `item-init-${Date.now()}`,
-                category: 'Device Component',
-                item_name: firstComp ? firstComp.item_name : 'Camera',
-                quantity: 1,
-                unit: firstComp ? firstComp.unit : 'Nos.',
-                sku: firstComp ? firstComp.sku : '',
-                material_id: firstComp ? firstComp.id : null,
-              },
-            ]);
-          } else {
-            setItems([]);
-          }
+          setItems([]);
         }
       } catch (err) {
         if (isMounted) setError(err.message || 'Failed to load backup declaration details');
@@ -599,12 +578,6 @@ export default function TechnicianBackupDeclarationModal({
   };
 
   const validate = () => {
-    if (salesExpected && !hasBackupItems) {
-      if (!noItemsReason || !noItemsReason.trim()) {
-        return 'Sales indicated extra backup items are expected. Please specify why no extra backup items were carried to the site.';
-      }
-    }
-
     if (hasBackupItems) {
       if (!items || items.length === 0) {
         return 'Please add at least one extra backup item.';
@@ -729,23 +702,6 @@ export default function TechnicianBackupDeclarationModal({
             </div>
           )}
 
-          {/* Sales Checklist Expectation Card */}
-          <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between text-xs">
-            <div className="flex items-center gap-2">
-              <span className="text-[11px] font-semibold text-gray-500">Sales Team Expectation:</span>
-              <span className="font-bold text-gray-900">Technician carrying extra backup items?</span>
-            </div>
-            <span
-              className={`px-2.5 py-1 rounded-md text-[11px] font-extrabold tracking-wide uppercase ${
-                salesExpected
-                  ? 'bg-amber-100 text-amber-900 border border-amber-300'
-                  : 'bg-slate-200 text-slate-700 border border-slate-300'
-              }`}
-            >
-              {salesExpected ? 'YES' : 'NO'}
-            </span>
-          </div>
-
           {/* Business Rule Banner */}
           <div className="p-3 bg-purple-50/80 border border-purple-200/80 rounded-xl text-xs text-purple-950 flex items-start gap-2.5">
             <Info size={16} className="text-purple-700 shrink-0 mt-0.5" />
@@ -764,7 +720,7 @@ export default function TechnicianBackupDeclarationModal({
               {/* Technician Declaration Radio */}
               <div className="p-4 rounded-xl border border-gray-200 bg-white space-y-3 shadow-2xs">
                 <label className="block text-xs font-bold text-gray-900">
-                  Are you carrying extra backup items for this job? <span className="text-rose-500">*</span>
+                  Are you carrying extra backup items / hardware for this job? <span className="text-rose-500">*</span>
                 </label>
                 <div className="flex flex-wrap items-center gap-6">
                   <label className="inline-flex items-center gap-2 cursor-pointer">
@@ -793,19 +749,10 @@ export default function TechnicianBackupDeclarationModal({
                   </label>
                 </div>
 
-                {/* Reason required if Sales expects but Tech selects NO */}
-                {salesExpected && !hasBackupItems && (
-                  <div className="pt-2 border-t border-gray-100">
-                    <label className="block text-xs font-bold text-rose-800 mb-1.5">
-                      Reason why no backup items were carried <span className="text-rose-500">*</span>
-                    </label>
-                    <textarea
-                      value={noItemsReason}
-                      onChange={(e) => setNoItemsReason(e.target.value)}
-                      placeholder="Explain why backup hardware was not carried (e.g., standard depot fleet, verified working stock on site)..."
-                      rows={2}
-                      className="w-full text-xs p-3 border border-rose-300 rounded-xl focus:outline-none focus:border-rose-500 font-medium bg-rose-50/20 text-gray-900"
-                    />
+                {!hasBackupItems && (
+                  <div className="pt-2 border-t border-gray-100 flex items-center gap-2 text-xs text-gray-500 bg-slate-50/80 p-2.5 rounded-lg">
+                    <Info size={15} className="text-slate-400 shrink-0" />
+                    <span>No extra backup items declared. Only the customer's required installation devices will be prepared.</span>
                   </div>
                 )}
               </div>

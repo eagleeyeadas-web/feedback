@@ -25,7 +25,6 @@ import {
   HelpCircle,
   CheckSquare,
   Clock,
-  Sparkles,
   Plus,
   Trash2,
   Info,
@@ -100,9 +99,6 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
   const [deviceConfigs, setDeviceConfigs] = useState([
     { id: 'dev-1', device_type: DEVICE_OPTIONS[0], number_of_devices: 1, quantity_carried: 1 },
   ]);
-
-  // Extra Backup Items Question (Sales declaration: Yes/No)
-  const [carryExtraBackupItems, setCarryExtraBackupItems] = useState(false);
 
   // Form State matching all 27 questions exactly
   const [formData, setFormData] = useState({
@@ -179,10 +175,6 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
               },
             ]);
           }
-
-          // Populate Extra Backup Items expectation (Sales Yes/No)
-          const carriesBackup = Boolean(data.carry_extra_backup_items ?? data.extra_devices);
-          setCarryExtraBackupItems(carriesBackup);
 
           setFormData({
             salesperson_name: data.salesperson_name || '',
@@ -327,8 +319,6 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
     (sum, c) => sum + (parseInt(c.number_of_devices || c.quantity_carried, 10) || 0),
     0
   );
-  // Extra loose backup items are not full device sets and do not alter customer device count
-  const totalDevicesCarried = totalRequiredDevices;
 
   const validateForm = () => {
     if (!formData.salesperson_name || !SALESPERSON_OPTIONS.includes(formData.salesperson_name)) {
@@ -448,8 +438,6 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
         ? normalizedReqConfigs[0].device_type
         : normalizedReqConfigs.map((c) => `${c.device_type} (${c.number_of_devices})`).join(', ');
 
-      // Combine duplicates in extra devices if any
-      let normalizedExtraConfigs = [];
       const payload = {
         salesperson_name: formData.salesperson_name,
         client_name: formData.client_name.trim(),
@@ -461,8 +449,8 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
         total_devices_carried: totalReq, // Calculated strictly from required installation devices
         number_of_vehicles: totalVeh,
         device_configurations: normalizedReqConfigs,
-        carry_extra_backup_items: Boolean(carryExtraBackupItems),
-        extra_devices: Boolean(carryExtraBackupItems), // backward-compatible flag
+        carry_extra_backup_items: false,
+        extra_devices: false, // backward-compatible flag
         extra_device_type: null,
         extra_device_count: null,
         extra_device_configurations: [],
@@ -849,90 +837,16 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
               </div>
             </div>
           )}
-        </div>
 
-        {/* SECTION 2A — EXTRA BACKUP ITEMS (SALES QUESTION) */}
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-2 border-b border-gray-200 gap-2">
-            <div>
-              <h3 className="text-sm font-bold text-navy flex items-center gap-2">
-                <Sparkles className="text-amber-500" size={18} />
-                EXTRA BACKUP ITEMS
-              </h3>
-              <p className="text-[11px] text-gray-500 mt-0.5">
-                Declare whether the technician will carry extra backup hardware to the site. Loose backup items do not increase the Sales BOM or installation requirements.
-              </p>
-            </div>
-          </div>
-
-          {/* Simple Required Question: Will the technician carry extra backup items? */}
-          <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div>
-              <span className="block text-xs font-bold text-gray-900">
-                Will the technician carry extra backup items? <span className="text-rose-500">*</span>
-              </span>
-              <span className="text-[11px] text-gray-500">
-                Select "Yes" if the technician is expected to carry backup items for site safety and contingencies.
-              </span>
-            </div>
-            <div className="flex items-center gap-4">
-              <label className="inline-flex items-center gap-2 cursor-pointer">
-                <input
-                  type="radio"
-                  name="carryExtraBackupItemsRadio"
-                  checked={!carryExtraBackupItems}
-                  onChange={() => setCarryExtraBackupItems(false)}
-                  className="w-4 h-4 text-blue-600 focus:ring-blue-500 cursor-pointer"
-                />
-                <span className="text-xs font-semibold text-gray-700">No</span>
-              </label>
-              <label className="inline-flex items-center gap-2 cursor-pointer">
-                <input
-                  type="radio"
-                  name="carryExtraBackupItemsRadio"
-                  checked={carryExtraBackupItems}
-                  onChange={() => setCarryExtraBackupItems(true)}
-                  className="w-4 h-4 text-blue-600 focus:ring-blue-500 cursor-pointer"
-                />
-                <span className="text-xs font-bold text-blue-700">Yes</span>
-              </label>
-            </div>
-          </div>
-
-          {carryExtraBackupItems && (
-            <div className="p-3 bg-amber-50/70 border border-amber-200/80 rounded-xl text-xs text-amber-900 flex items-start gap-2.5">
-              <Info size={16} className="text-amber-600 shrink-0 mt-0.5" />
-              <div>
-                <strong>Technical Team Notice:</strong> The technician will declare specific loose products and quantities in the Technical Workspace before installation begins. Sales preliminary BOM is calculated strictly from required installation devices only.
-              </div>
-            </div>
-          )}
-
-          {/* Authoritative Device Allocation KPI Summary Card */}
-          <div className="mt-4 p-4 bg-gradient-to-r from-slate-50 via-blue-50/30 to-slate-50 rounded-2xl border border-slate-200">
-            <h4 className="text-[11px] font-bold text-gray-600 uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
-              <HardDrive size={13} className="text-blue-600" />
-              Device Allocation Summary
-            </h4>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-center">
-              <div className="p-3 bg-white rounded-xl border border-blue-100 shadow-2xs">
-                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">
-                  Required Installation Devices
-                </span>
-                <span className="text-lg font-black font-mono text-blue-900 mt-0.5 block">
-                  {totalRequiredDevices} <span className="text-xs font-normal text-gray-500">Units</span>
-                </span>
-              </div>
-
-              <div className="p-3 bg-white rounded-xl border border-amber-100 shadow-2xs">
-                <span className="text-[10px] font-bold text-amber-800 uppercase tracking-wider block">
-                  Extra Backup Items Expected
-                </span>
-                <span className={`text-lg font-black font-mono mt-0.5 block ${carryExtraBackupItems ? 'text-amber-600' : 'text-gray-400'}`}>
-                  {carryExtraBackupItems ? 'YES' : 'NO'}
-                </span>
-              </div>
-            </div>
+          {/* Required Device Allocation KPI */}
+          <div className="mt-3 p-3 bg-blue-50/50 rounded-xl border border-blue-100 flex items-center justify-between text-xs">
+            <span className="font-bold text-gray-700 flex items-center gap-1.5">
+              <HardDrive size={14} className="text-blue-600" />
+              Total Required Installation Devices:
+            </span>
+            <span className="text-sm font-black font-mono text-blue-900 bg-white px-3 py-1 rounded-lg border border-blue-200">
+              {totalRequiredDevices} Units
+            </span>
           </div>
         </div>
 
