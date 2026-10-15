@@ -32,15 +32,26 @@ import { fetchInstallationChecklists, fetchServiceEngineers, startInstallationJo
 
 // Helper to extract separated required and extra device allocations
 function getDeviceAllocationSummary(item) {
-  if (!item) return { reqConfigs: [], carryExtra: false, totalReq: 0 };
+  if (!item) {
+    return { reqConfigs: [], extraConfigs: [], carryExtra: false, totalReq: 0, totalExtra: 0, totalCarried: 0 };
+  }
   const reqConfigs = Array.isArray(item.device_configurations) && item.device_configurations.length > 0
     ? item.device_configurations
     : (item.device_type ? [{ device_type: item.device_type, number_of_devices: item.number_of_devices || 1 }] : []);
 
-  const carryExtra = Boolean(item.carry_extra_backup_items ?? item.extra_devices);
-  const totalReq = reqConfigs.reduce((sum, c) => sum + (Number(c.number_of_devices ?? c.quantity_carried) || 1), 0);
+  let extraConfigs = [];
+  if (Array.isArray(item.extra_device_configurations) && item.extra_device_configurations.length > 0) {
+    extraConfigs = item.extra_device_configurations;
+  } else if (item.extra_devices && item.extra_device_type) {
+    extraConfigs = [{ device_type: item.extra_device_type, extra_quantity: item.extra_device_count || 1 }];
+  }
 
-  return { reqConfigs, carryExtra, totalReq };
+  const carryExtra = Boolean(item.carry_extra_backup_items ?? item.extra_devices) || extraConfigs.length > 0;
+  const totalReq = reqConfigs.reduce((sum, c) => sum + (Number(c.number_of_devices ?? c.quantity_carried) || 1), 0);
+  const totalExtra = extraConfigs.reduce((sum, c) => sum + (Number(c.extra_quantity ?? c.quantity_carried ?? c.number_of_devices) || 1), 0);
+  const totalCarried = totalReq + (carryExtra ? totalExtra : 0);
+
+  return { reqConfigs, extraConfigs, carryExtra, totalReq, totalExtra, totalCarried };
 }
 
 export default function TechnicalWorkspace({ onSelectChecklist }) {
@@ -813,10 +824,10 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
                                 </div>
 
                                 {/* Extra Devices Carried */}
-                                {extraConfigs.length > 0 && (
+                                {Array.isArray(extraConfigs) && extraConfigs.length > 0 && (
                                   <div className="space-y-1 pt-0.5">
                                     <span className="text-[10px] font-bold text-amber-800 uppercase tracking-wider block">
-                                      Extra Backup ({totalExtra}):
+                                      Extra Backup ({totalExtra || 0}):
                                     </span>
                                     {extraConfigs.map((ec, idx) => (
                                       <div key={idx} className="flex items-center justify-between gap-1 text-[11px] bg-amber-50/80 px-2 py-0.5 rounded border border-amber-200">
