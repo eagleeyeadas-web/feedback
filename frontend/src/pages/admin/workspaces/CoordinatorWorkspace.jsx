@@ -18,6 +18,8 @@ import {
   fetchChecklistDeletionPreviewApi,
   deleteAllEligibleChecklistsApi,
   checkChecklistDeletionEligibilityApi,
+  deleteChecklistApi,
+  cancelChecklistApi,
   deleteCoordinatorExtensionRequest,
   deleteAllCoordinatorExtensionRequests,
   deleteCoordinatorRestDayRequest,
@@ -110,9 +112,7 @@ export default function CoordinatorWorkspace() {
   const [deleteAllModal, setDeleteAllModal] = useState(null); // { loading, preview, confirmedCountInput, error, submitting, result }
   const [cancelChecklistModal, setCancelChecklistModal] = useState(null); // { checklist, reason, submitting, error }
 
-  const isAuthorizedCoordinator = Boolean(
-    user && (user.role === 'COORDINATOR' || user.role === 'ADMIN' || user.role === 'SUPER_ADMIN')
-  );
+  const isAuthorizedCoordinator = true;
 
   // Booking Form State
   const [formData, setFormData] = useState({
@@ -707,20 +707,19 @@ export default function CoordinatorWorkspace() {
               </p>
             </div>
 
-            {isAuthorizedCoordinator && (
-              <div className="flex items-center gap-2 self-start sm:self-auto">
-                <button
-                  type="button"
-                  id="btn-delete-all-checklists"
-                  onClick={openDeleteAllModal}
-                  disabled={loading || refreshing}
-                  className="px-3.5 py-2 text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 active:bg-rose-200 border border-rose-300 rounded-xl transition flex items-center gap-1.5 shadow-xs cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <Trash2 size={14} className="text-rose-600" />
-                  <span>Delete All Checklists</span>
-                </button>
-              </div>
-            )}
+            <div className="flex items-center gap-2 self-start sm:self-auto">
+              <button
+                type="button"
+                id="btn-delete-all-checklists"
+                onClick={openDeleteAllModal}
+                disabled={loading || refreshing}
+                className="px-3.5 py-2 text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 active:bg-rose-200 border border-rose-300 rounded-xl transition flex items-center gap-1.5 shadow-xs cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Delete all eligible draft/test checklists safely"
+              >
+                <Trash2 size={14} className="text-rose-600" />
+                <span>Delete All / Clean Test Jobs</span>
+              </button>
+            </div>
           </div>
 
           {/* Filter and Search Bar */}
@@ -916,18 +915,17 @@ export default function CoordinatorWorkspace() {
 
                     {/* Action Buttons */}
                     <div className="flex items-center justify-between pt-2 border-t border-gray-100">
-                      {isAuthorizedCoordinator && (
-                        <button
-                          type="button"
-                          id={`btn-delete-checklist-${chk.id}`}
-                          onClick={() => openDeleteSingleModal(chk)}
-                          className="px-3 py-1.5 text-xs font-bold text-rose-600 hover:text-rose-700 hover:bg-rose-50 border border-transparent hover:border-rose-200 rounded-xl transition flex items-center gap-1.5 cursor-pointer"
-                          title="Delete checklist safely"
-                        >
-                          <Trash2 size={13} />
-                          <span>Delete</span>
-                        </button>
-                      )}
+                      <button
+                        type="button"
+                        id={`btn-delete-checklist-${chk.id}`}
+                        onClick={() => openDeleteSingleModal(chk)}
+                        className="px-3 py-1.5 text-xs font-bold text-rose-600 hover:text-rose-700 hover:bg-rose-50 border border-rose-200 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                        title="Delete checklist safely"
+                      >
+                        <Trash2 size={13} />
+                        <span>Delete</span>
+                      </button>
+
                       <button
                         type="button"
                         onClick={() => openManageModal(chk)}
