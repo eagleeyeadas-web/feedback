@@ -8,7 +8,7 @@ import {
   combineCarriedDevicesAllocation,
 } from './bomService.js';
 import { enrichChecklistsWithWorkflowStatus } from './workflowService.js';
-import { getBackupDeclaration } from './backupItemService.js';
+import { getBackupDeclaration, issueBackupItemsForChecklist } from './backupItemService.js';
 
 // In-memory fallback cache
 const inMemoryStoreRequirements = new Map();
@@ -747,6 +747,7 @@ export async function issueFullJobStock({
   checklist_id,
   issue_devices = true,
   issue_materials = true,
+  issue_backup_items = true,
   remarks = '',
   user,
 }) {
@@ -801,6 +802,22 @@ export async function issueFullJobStock({
       user,
     });
     results.materials = matResults;
+  }
+
+  // 3. Issue Declared Loose Backup Items (if declared by technician and requested)
+  if (issue_backup_items) {
+    try {
+      const backupResults = await issueBackupItemsForChecklist({
+        checklist_id,
+        user,
+        remarks: remarks || `Loose backup items issued for job ${req.checklist_number}`,
+      });
+      if (backupResults?.issued_items?.length > 0) {
+        results.backup_items = backupResults;
+      }
+    } catch (bErr) {
+      console.warn('Backup items issuance notice during job stock issuance:', bErr.message);
+    }
   }
 
   return {

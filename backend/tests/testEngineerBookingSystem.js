@@ -127,7 +127,7 @@ async function runTestSuite() {
 
       throw new Error('Overlapping booking should have been REJECTED, but succeeded!');
     } catch (err) {
-      if (err.message.includes('already booked') || err.message.includes('Booking conflict')) {
+      if (err.message.toLowerCase().includes('already booked') || err.message.toLowerCase().includes('booking conflict')) {
         console.log(`Successfully blocked overlapping assignment: "${err.message}"`);
         console.log('✅ Scenario 2: Overlapping booking correctly rejected.\n');
         passedTests++;

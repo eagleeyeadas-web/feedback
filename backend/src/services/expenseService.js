@@ -164,13 +164,14 @@ export async function getExpensesForChecklist(checklistId, user) {
       .order('expense_date', { ascending: true })
       .order('created_at', { ascending: true });
 
-    if (!error && Array.isArray(data)) {
+    if (!error && Array.isArray(data) && data.length > 0) {
       expenses = data;
     } else {
-      // Fallback to in-memory
-      expenses = Array.from(inMemoryJobExpenses.values()).filter(
+      // Fallback to in-memory if DB query returned empty or errored
+      const inMem = Array.from(inMemoryJobExpenses.values()).filter(
         (e) => e.checklist_id === checklistId
       );
+      expenses = inMem.length > 0 ? inMem : (data || []);
     }
   } catch (err) {
     expenses = Array.from(inMemoryJobExpenses.values()).filter(
@@ -392,10 +393,22 @@ export async function saveJobExpenses({
   // 4. Persist to DB with fallback to memory
   let insertedData = null;
   try {
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from('job_expenses')
       .upsert(validatedRecords, { onConflict: 'id' })
       .select();
+
+    if (error && error.message?.includes('violates foreign key constraint')) {
+      const recordsWithNullTech = validatedRecords.map((r) => ({ ...r, technician_id: null }));
+      const retryResult = await supabase
+        .from('job_expenses')
+        .upsert(recordsWithNullTech, { onConflict: 'id' })
+        .select();
+      if (!retryResult.error && Array.isArray(retryResult.data)) {
+        data = retryResult.data;
+        error = null;
+      }
+    }
 
     if (!error && Array.isArray(data)) {
       insertedData = data;

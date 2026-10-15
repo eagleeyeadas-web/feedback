@@ -25,8 +25,29 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 
+const SERVER_STARTUP_TIMESTAMP = Date.now();
+console.log(`[BACKEND_STARTUP] Node.js Process ${process.pid} initialized at ${new Date(SERVER_STARTUP_TIMESTAMP).toISOString()}`);
+
 // Trust reverse proxy (e.g. Render, Nginx, Cloudflare) for accurate client IP rate limiting
 app.set('trust proxy', 1);
+
+// Safe Request Timing Middleware (Measures arrival time and total processing duration without logging sensitive data)
+app.use((req, res, next) => {
+  const reqStart = performance.now();
+  const arrivalIso = new Date().toISOString();
+  const uptimeSeconds = ((Date.now() - SERVER_STARTUP_TIMESTAMP) / 1000).toFixed(1);
+  const method = req.method;
+  const path = req.path;
+
+  console.log(`[BACKEND_REQ_START] ${arrivalIso} | ${method} ${path} | Server Uptime: ${uptimeSeconds}s`);
+
+  res.on('finish', () => {
+    const duration = (performance.now() - reqStart).toFixed(2);
+    console.log(`[BACKEND_REQ_END] ${new Date().toISOString()} | ${method} ${path} | Status: ${res.statusCode} | Duration: ${duration}ms | Server Uptime: ${uptimeSeconds}s`);
+  });
+
+  next();
+});
 
 // Security middleware
 app.use(helmet());

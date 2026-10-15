@@ -19,9 +19,13 @@ import {
   getAllStoreMaterialReturns,
   verifyStoreReturn,
   verifyStoreMaterialReturn,
+  deleteStoreReturnById,
+  clearStoreReturnsHistory,
 } from '../services/workflowService.js';
 import {
   getStockMovements,
+  deleteStockMovementById,
+  clearStockMovementsHistory,
 } from '../services/stockMovementService.js';
 import {
   executeInventoryCleanup,
@@ -395,15 +399,65 @@ router.post('/cleanup', requireRole('STORE_MANAGER', 'ADMIN'), async (req, res) 
  * GET /api/admin/inventory/cleanup-logs
  * Fetch retention cleanup audit logs (STORE_MANAGER, ADMIN)
  */
-router.get('/cleanup-logs', requireRole('STORE_MANAGER', 'ADMIN'), async (req, res) => {
+/**
+ * DELETE /api/admin/inventory/movements/:id
+ * Delete a specific stock movement by ID (STORE_MANAGER, ADMIN)
+ */
+router.delete('/movements/:id', requireRole('STORE_MANAGER', 'ADMIN'), async (req, res) => {
   try {
-    const limit = parseInt(req.query.limit, 10) || 20;
-    const logs = await getCleanupLogs(limit);
-    return res.json(logs);
+    const { id } = req.params;
+    const success = await deleteStockMovementById(id);
+    return res.json({ success, message: 'Stock movement deleted successfully' });
   } catch (err) {
-    console.error('Error fetching cleanup logs:', err);
-    return res.status(500).json({ error: err.message || 'Failed to fetch cleanup logs' });
+    console.error('Error deleting stock movement:', err);
+    return res.status(500).json({ error: err.message || 'Failed to delete stock movement' });
+  }
+});
+
+/**
+ * DELETE /api/admin/inventory/movements
+ * Delete all or filtered stock movements history (STORE_MANAGER, ADMIN)
+ */
+router.delete('/movements', requireRole('STORE_MANAGER', 'ADMIN'), async (req, res) => {
+  try {
+    const { category, type } = req.query;
+    const result = await clearStockMovementsHistory({ category, type });
+    return res.json({ success: true, ...result, message: 'Stock movement history deleted successfully' });
+  } catch (err) {
+    console.error('Error clearing stock movement history:', err);
+    return res.status(500).json({ error: err.message || 'Failed to clear stock movement history' });
+  }
+});
+
+/**
+ * DELETE /api/admin/inventory/returns/:id
+ * Delete a specific return record by ID (STORE_MANAGER, ADMIN)
+ */
+router.delete('/returns/:id', requireRole('STORE_MANAGER', 'ADMIN'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const success = await deleteStoreReturnById(id);
+    return res.json({ success, message: 'Return record deleted successfully' });
+  } catch (err) {
+    console.error('Error deleting return record:', err);
+    return res.status(500).json({ error: err.message || 'Failed to delete return record' });
+  }
+});
+
+/**
+ * DELETE /api/admin/inventory/returns
+ * Delete all or status-filtered return records (STORE_MANAGER, ADMIN)
+ */
+router.delete('/returns', requireRole('STORE_MANAGER', 'ADMIN'), async (req, res) => {
+  try {
+    const { status } = req.query;
+    const result = await clearStoreReturnsHistory({ status });
+    return res.json({ success: true, ...result, message: 'Return records deleted successfully' });
+  } catch (err) {
+    console.error('Error clearing return records:', err);
+    return res.status(500).json({ error: err.message || 'Failed to clear return records' });
   }
 });
 
 export default router;
+

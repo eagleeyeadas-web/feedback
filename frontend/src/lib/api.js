@@ -456,6 +456,49 @@ export async function fetchInventoryCleanupLogsApi(token, limit = 20) {
   return json;
 }
 
+export async function deleteStockMovementApi(token, id) {
+  const res = await fetch(`${API_BASE}/admin/inventory/movements/${id}`, {
+    method: 'DELETE',
+    headers: adminHeaders(token),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to delete stock movement');
+  return json;
+}
+
+export async function clearStockMovementsHistoryApi(token, params = {}) {
+  const query = new URLSearchParams(params).toString();
+  const res = await fetch(`${API_BASE}/admin/inventory/movements?${query}`, {
+    method: 'DELETE',
+    headers: adminHeaders(token),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to clear stock movement history');
+  return json;
+}
+
+export async function deleteStoreReturnApi(token, id) {
+  const res = await fetch(`${API_BASE}/admin/inventory/returns/${id}`, {
+    method: 'DELETE',
+    headers: adminHeaders(token),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to delete return record');
+  return json;
+}
+
+export async function clearStoreReturnsHistoryApi(token, params = {}) {
+  const query = new URLSearchParams(params).toString();
+  const res = await fetch(`${API_BASE}/admin/inventory/returns?${query}`, {
+    method: 'DELETE',
+    headers: adminHeaders(token),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to clear return records');
+  return json;
+}
+
+
 /**
  * Trigger user-activity-based 24-hour retention cleanup check
  */

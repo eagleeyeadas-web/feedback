@@ -251,7 +251,7 @@ export async function createChecklist(adminUserId, data) {
       .single();
 
     if (error) throw error;
-    inserted = { ...payload, ...res, id: res.id, carry_status: 'RECORDED' };
+    inserted = { ...payload, ...res, id: res.id, carry_status: res.carry_status || 'NOT_RECORDED' };
   } catch (error) {
     // If device_configurations / extra_device_configurations / service_engineer_id / booking_end_date / bom_snapshot / material_issuance_status / salesperson_name columns are not migrated yet in PostgreSQL, retry without optional columns
     if (
@@ -343,7 +343,6 @@ export async function createChecklist(adminUserId, data) {
   }
 
   inserted = normalizeChecklistDeviceConfigs(inserted);
-  inserted.carry_status = 'RECORDED';
   return inserted;
 }
 

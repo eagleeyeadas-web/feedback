@@ -58,25 +58,89 @@ function saveBackupItemsStorage() {
 loadBackupItemsStorage();
 
 /**
- * Get available loose backup products from material inventory catalog
+ * Get available loose backup products from both Camera/Device Products and Material Inventory catalogs
  */
 export async function getAvailableBackupProducts() {
   try {
-    const materials = await getMaterialInventory();
-    return materials.map((m) => ({
-      id: m.id,
-      item_id: m.id,
-      material_id: m.id,
-      item_name: m.material_name,
-      material_name: m.material_name,
-      sku: m.sku,
-      unit: m.unit || 'Nos.',
-      available_stock: Number(m.current_stock) || 0,
-      current_stock: Number(m.current_stock) || 0,
-      min_stock_level: Number(m.min_stock_level) || 0,
+    const [materials, devices] = await Promise.all([
+      getMaterialInventory().catch(() => []),
+      getInventoryProducts().catch(() => []),
+    ]);
+
+    // Category A: Camera / Device Products (Complete systems & MDVRs)
+    const deviceProducts = (devices || []).map((d) => ({
+      id: d.id,
+      item_id: d.id,
+      product_id: d.id,
+      item_name: d.device_name || `${d.device_type} System`,
+      display_name: d.device_name || d.device_type,
+      device_type: d.device_type,
+      sku: d.sku || 'N/A',
+      unit: d.unit || 'Nos.',
+      category: 'Device Component',
+      category_group: 'A',
+      item_type: 'DEVICE',
+      available_stock: Number(d.usable_stock) || 0,
+      current_stock: Number(d.usable_stock) || 0,
+      min_stock_level: Number(d.min_stock_level) || 0,
     }));
+
+    const categoryAComponents = [];
+    const categoryBMaterials = [];
+
+    (materials || []).forEach((m) => {
+      const lower = (m.material_name || '').toLowerCase();
+      const isDeviceComp =
+        lower.includes('camera') ||
+        lower.includes('display') ||
+        lower.includes('screen') ||
+        lower.includes('mdvr') ||
+        lower.includes('sensor');
+
+      const entry = {
+        id: m.id,
+        item_id: m.id,
+        material_id: m.id,
+        item_name: m.material_name,
+        display_name: m.material_name,
+        sku: m.sku || 'N/A',
+        unit: m.unit || 'Nos.',
+        category: isDeviceComp ? 'Device Component' : 'Installation Material',
+        category_group: isDeviceComp ? 'A' : 'B',
+        item_type: isDeviceComp ? 'COMPONENT' : 'MATERIAL',
+        available_stock: Number(m.current_stock) || 0,
+        current_stock: Number(m.current_stock) || 0,
+        min_stock_level: Number(m.min_stock_level) || 0,
+      };
+
+      if (isDeviceComp) {
+        categoryAComponents.push(entry);
+        // If loose Display item exists, provide explicit Live Display and Recording Display options for technician selection
+        if (lower === 'display') {
+          categoryAComponents.push({
+            ...entry,
+            id: `${m.id}-live-display`,
+            canonical_id: m.id,
+            item_name: 'Live Display',
+            display_name: 'Live Display',
+          });
+          categoryAComponents.push({
+            ...entry,
+            id: `${m.id}-recording-display`,
+            canonical_id: m.id,
+            item_name: 'Recording Display',
+            display_name: 'Recording Display',
+          });
+        }
+      } else {
+        categoryBMaterials.push(entry);
+      }
+    });
+
+    // Return Category A components first (Cameras, Displays, MDVRs), then Category B installation materials
+    return [...categoryAComponents, ...deviceProducts, ...categoryBMaterials];
   } catch (err) {
-    console.warn('Could not load materials for backup products:', err.message);
+    console.warn('Could not load authoritative catalogue for backup products:', err.message);
     return [];
   }
 }
@@ -449,12 +513,145 @@ export async function reconcileBackupItems({ checklistId, user, items = [] }) {
   };
 }
 
+const processedChecklistBackupIssuances = new Set();
+
+/**
+ * Server-side atomic transaction to issue declared loose backup items for a checklist.
+ * Deducts stock only when authorized Store Manager issues the actual quantities.
+ * Prevents double-deductions and negative stock.
+ */
+export async function issueBackupItemsForChecklist({
+  checklist_id,
+  items,
+  remarks = '',
+  user,
+}) {
+  if (!checklist_id) throw new Error('Checklist ID is required.');
+  if (processedChecklistBackupIssuances.has(checklist_id)) {
+    return { success: true, message: 'Backup items already issued' };
+  }
+
+  const declaration = await getBackupDeclaration(checklist_id);
+  if (!declaration || !declaration.has_backup_items) {
+    return { success: true, items: [] };
+  }
+
+  const itemsToIssue = Array.isArray(items) && items.length > 0 ? items : (declaration.items || []);
+  if (itemsToIssue.length === 0) return { success: true, items: [] };
+
+  const [allMats, allDevs] = await Promise.all([
+    getMaterialInventory().catch(() => []),
+    getInventoryProducts().catch(() => []),
+  ]);
+
+  const matMap = new Map(allMats.map((m) => [m.material_name.toLowerCase(), m]));
+  const devMap = new Map(allDevs.map((d) => [d.device_type.toLowerCase(), d]));
+
+  const issuedResults = [];
+
+  for (const it of itemsToIssue) {
+    const name = (it.item_name || '').trim();
+    const qty = Number(it.quantity) || 0;
+    if (qty <= 0) continue;
+
+    // Skip if already issued
+    if (Number(it.quantity_issued) >= qty) {
+      continue;
+    }
+
+    let mat = matMap.get(name.toLowerCase());
+    if (!mat && name.toLowerCase().includes('display')) {
+      mat = matMap.get('display');
+    }
+    const dev = devMap.get(name.toLowerCase());
+
+    if (mat) {
+      const currentStock = Number(mat.current_stock) || 0;
+      if (qty > currentStock) {
+        throw new Error(
+          `Insufficient stock for backup material "${name}". In store: ${currentStock} ${mat.unit || 'Nos.'}, required: ${qty} ${mat.unit || 'Nos.'}.`
+        );
+      }
+      await adjustMaterialStock({
+        material_name: mat.material_name,
+        action: 'REMOVE',
+        quantity: qty,
+        reason: `Backup material issued for checklist ${checklist_id}: ${qty} ${mat.unit}. ${remarks || ''}`.trim(),
+        user,
+      });
+    } else if (dev) {
+      const currentStock = Number(dev.usable_stock) || 0;
+      if (qty > currentStock) {
+        throw new Error(
+          `Insufficient stock for backup device "${name}". In store: ${currentStock} Nos., required: ${qty} Nos.`
+        );
+      }
+      await adjustStock({
+        device_type: dev.device_type,
+        action: 'REMOVE',
+        quantity: qty,
+        reason: `Backup device issued for checklist ${checklist_id}: ${qty} Nos. ${remarks || ''}`.trim(),
+        user,
+      });
+    } else {
+      console.warn(`Backup item "${name}" not found in materials or device products. Stock not deducted.`);
+    }
+
+    it.quantity_issued = qty;
+    issuedResults.push({
+      item_name: name,
+      quantity_issued: qty,
+      unit: it.unit || mat?.unit || dev?.unit || 'Nos.',
+    });
+
+    // Update in Supabase
+    if (it.id) {
+      try {
+        await supabase
+          .from('pre_installation_backup_items')
+          .update({
+            quantity_issued: qty,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', it.id);
+      } catch (e) {
+        // Non-blocking
+      }
+    }
+  }
+
+  // Update in-memory declaration
+  declaration.items = itemsToIssue;
+  inMemoryDeclarations.set(checklist_id, declaration);
+  saveBackupItemsStorage();
+  processedChecklistBackupIssuances.add(checklist_id);
+
+  if (issuedResults.length > 0) {
+    await logAudit({
+      actor_id: user?.id,
+      actor_email: user?.email,
+      actor_role: user?.role || 'STORE_MANAGER',
+      action: 'ISSUE_BACKUP_ITEMS',
+      target_table: 'pre_installation_backup_declarations',
+      target_id: declaration.id,
+      details: {
+        checklist_id,
+        issued_items: issuedResults,
+        remarks,
+      },
+    });
+  }
+
+  return { success: true, issued_items: issuedResults };
+}
+
 /**
  * Store Manager physically verifies returned loose backup items
  * Restores usable stock ONLY after physical verification.
  * Missing items are never added to stock.
  * Damaged items are recorded separately and not added to usable stock.
  * Prevents duplicate additions.
+ * Safeguard: Unissued items are never restored to stock.
  */
 export async function verifyStoreBackupItemReturn({
   checklistId,
@@ -482,26 +679,52 @@ export async function verifyStoreBackupItemReturn({
     const damagedQty = Math.max(0, Number(row.damaged_qty) || 0);
     const missingQty = Math.max(0, Number(row.missing_qty) || 0);
 
-    const matchingDeclItem = declaration.items.find(
+    let matchingDeclItem = declaration.items.find(
       (it) => it.item_name.toLowerCase() === itemName.toLowerCase()
     );
+    if (!matchingDeclItem && itemName.toLowerCase().includes('display')) {
+      matchingDeclItem = declaration.items.find((it) => it.item_name.toLowerCase().includes('display'));
+    }
 
     if (!matchingDeclItem) {
       continue;
     }
 
+    // Safeguard: Do NOT restore stock for unissued items
+    const issuedQty = Number(matchingDeclItem.quantity_issued) || 0;
+    if (issuedQty <= 0) {
+      console.warn(`Skipping stock restoration for unissued backup item "${itemName}" (quantity_issued is 0).`);
+      verificationResults.push({
+        item_name: itemName,
+        unit: matchingDeclItem.unit,
+        accepted_usable_qty: 0,
+        unissued_discarded_qty: acceptedUsable,
+        damaged_qty: damagedQty,
+        missing_qty: missingQty,
+        notice: 'Unissued items cannot restore stock',
+        verified_at: new Date().toISOString(),
+      });
+      continue;
+    }
+
+    // Do not restore more stock than was actually issued
+    const finalUsableRestored = Math.min(acceptedUsable, issuedQty);
+
     // Only restore stock if the item was physically verified as usable by Store Manager
     // And only add the accepted usable quantity (never damaged or missing)
-    if (acceptedUsable > 0) {
+    if (finalUsableRestored > 0) {
       try {
         const allMats = await getMaterialInventory();
-        const matExists = allMats.some((m) => m.material_name.toLowerCase() === itemName.toLowerCase());
-        if (matExists) {
+        let targetMat = allMats.find((m) => m.material_name.toLowerCase() === itemName.toLowerCase());
+        if (!targetMat && itemName.toLowerCase().includes('display')) {
+          targetMat = allMats.find((m) => m.material_name.toLowerCase() === 'display');
+        }
+        if (targetMat) {
           await adjustMaterialStock({
-            material_name: itemName,
+            material_name: targetMat.material_name,
             action: 'ADD',
-            quantity: acceptedUsable,
-            reason: `Physical return verification for checklist ${checklistId}: ${acceptedUsable} ${matchingDeclItem.unit || 'Nos.'} usable stock restored. ${remarks || ''}`.trim(),
+            quantity: finalUsableRestored,
+            reason: `Physical return verification for checklist ${checklistId}: ${finalUsableRestored} ${matchingDeclItem.unit || 'Nos.'} usable stock restored. ${remarks || ''}`.trim(),
             user,
           });
         } else {
@@ -511,16 +734,16 @@ export async function verifyStoreBackupItemReturn({
             await adjustStock({
               device_type: itemName,
               action: 'ADD',
-              quantity: acceptedUsable,
-              reason: `Physical return verification for checklist ${checklistId}: ${acceptedUsable} units usable stock restored. ${remarks || ''}`.trim(),
+              quantity: finalUsableRestored,
+              reason: `Physical return verification for checklist ${checklistId}: ${finalUsableRestored} units usable stock restored. ${remarks || ''}`.trim(),
               user,
             });
           } else {
             await adjustMaterialStock({
               material_name: itemName,
               action: 'ADD',
-              quantity: acceptedUsable,
-              reason: `Physical return verification for checklist ${checklistId}: ${acceptedUsable} ${matchingDeclItem.unit || 'Nos.'} usable stock restored. ${remarks || ''}`.trim(),
+              quantity: finalUsableRestored,
+              reason: `Physical return verification for checklist ${checklistId}: ${finalUsableRestored} ${matchingDeclItem.unit || 'Nos.'} usable stock restored. ${remarks || ''}`.trim(),
               user,
             });
           }

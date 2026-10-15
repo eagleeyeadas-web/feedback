@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../../hooks/useAuth';
-import { fetchInstallationChecklistDetail, downloadInstallationPDF, API_BASE } from '../../../lib/api';
+import { fetchInstallationChecklistDetail, downloadInstallationPDF, fetchBackupDeclaration, API_BASE } from '../../../lib/api';
 import InstallationCompletionModal from '../../../components/workspaces/InstallationCompletionModal';
 import IssueMaterialsModal from '../../../components/bom/IssueMaterialsModal';
 import { downloadInstallationExcel } from '../../../lib/excelHelper';
@@ -45,6 +45,7 @@ export default function InstallationChecklistDetails({ id: propId, onEdit, onBac
   const [error, setError] = useState(null);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [toastMessage, setToastMessage] = useState(null);
+  const [backupDeclaration, setBackupDeclaration] = useState(null);
 
   // Workflow Modal States
   const [showIssueModal, setShowIssueModal] = useState(false);
@@ -67,6 +68,11 @@ export default function InstallationChecklistDetails({ id: propId, onEdit, onBac
     fetchInstallationChecklistDetail(token, checklistId)
       .then((data) => {
         setChecklist(data);
+
+        // Fetch pre-installation loose backup items declaration
+        fetchBackupDeclaration(token, checklistId)
+          .then((bData) => setBackupDeclaration(bData))
+          .catch(() => setBackupDeclaration(null));
 
         // Auto trigger action if query param present
         const action = searchParams.get('action');
@@ -542,57 +548,121 @@ export default function InstallationChecklistDetails({ id: propId, onEdit, onBac
                 </div>
               )}
 
-              {/* SECTION 2A: EXTRA DEVICES CARRIED */}
+              {/* SECTION 2A: EXTRA BACKUP ITEMS DECLARATION */}
               <div className="pt-2 space-y-3">
                 <div className="flex items-center justify-between pb-1 border-b border-gray-200">
                   <h3 className="text-xs font-black text-navy uppercase tracking-wider flex items-center gap-2">
                     <Package size={15} className="text-amber-600" />
-                    EXTRA DEVICES CARRIED (BACKUP STOCK)
+                    EXTRA BACKUP ITEMS DECLARATION
                   </h3>
                   <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${
-                    hasExtra
+                    (checklist.carry_extra_backup_items ?? checklist.extra_devices)
                       ? 'bg-amber-100 text-amber-900 border border-amber-300'
                       : 'bg-gray-100 text-gray-600 border border-gray-200'
                   }`}>
-                    {hasExtra ? `Extra Backup: ${totalExtraDevices} Units` : 'No Extra Devices Carried'}
+                    {(checklist.carry_extra_backup_items ?? checklist.extra_devices) ? 'Backup Expected: YES' : 'Backup Expected: NO'}
                   </span>
                 </div>
 
-                {hasExtra && extraConfigs.length > 0 ? (
-                  <div className="overflow-x-auto rounded-xl border border-amber-200 bg-white shadow-xs">
-                    <table className="w-full text-left border-collapse text-xs">
-                      <thead>
-                        <tr className="bg-amber-50 border-b border-amber-200 text-[11px] font-bold text-amber-900 uppercase">
-                          <th className="py-2.5 px-3 w-12 text-center">#</th>
-                          <th className="py-2.5 px-4">Type of Device</th>
-                          <th className="py-2.5 px-4 text-center">Extra Quantity Carried</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-amber-100">
-                        {extraConfigs.map((ec, idx) => (
-                          <tr key={idx} className="hover:bg-amber-50/40 transition-colors">
-                            <td className="py-2 px-3 text-center text-amber-700 font-mono text-[11px]">{idx + 1}</td>
-                            <td className="py-2 px-4 font-bold text-gray-900">{ec.device_type}</td>
-                            <td className="py-2 px-4 text-center font-mono font-semibold text-amber-900">
-                              <span className="px-2.5 py-0.5 rounded-md bg-amber-100/80 text-amber-900 border border-amber-300 font-bold">
-                                +{ec.extra_quantity || 1} units backup
-                              </span>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                      <tfoot>
-                        <tr className="bg-amber-100/60 font-bold border-t border-amber-300 text-amber-950 text-xs">
-                          <td colSpan={2} className="py-2.5 px-4">TOTAL EXTRA DEVICES CARRIED</td>
-                          <td className="py-2.5 px-4 text-center font-mono text-amber-900">+{totalExtraDevices} Units</td>
-                        </tr>
-                      </tfoot>
-                    </table>
+                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                  <div>
+                    <span className="font-bold text-gray-800 block">Will the technician carry extra backup items?</span>
+                    <span className="text-[11px] text-gray-500">
+                      Sales declared: loose items do not increase the Sales BOM or vehicle count.
+                    </span>
                   </div>
-                ) : (
-                  <div className="p-3 bg-gray-50 rounded-xl border border-gray-200 text-xs text-gray-500 flex items-center justify-between">
-                    <span>Are you carrying any extra devices?</span>
-                    <span className="font-bold text-gray-700 bg-gray-200/80 px-2 py-0.5 rounded text-[11px]">No</span>
+                  <span className={`px-2.5 py-0.5 rounded-md font-bold text-xs self-start sm:self-auto ${
+                    (checklist.carry_extra_backup_items ?? checklist.extra_devices)
+                      ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                      : 'bg-gray-200 text-gray-700 border border-gray-300'
+                  }`}>
+                    {(checklist.carry_extra_backup_items ?? checklist.extra_devices) ? 'Yes' : 'No'}
+                  </span>
+                </div>
+
+                {/* Pre-Installation Loose Backup Items Table */}
+                {backupDeclaration?.items && backupDeclaration.items.length > 0 ? (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-bold text-gray-700">Pre-Installation Declared Loose Items:</span>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 border border-purple-200">
+                        Status: {backupDeclaration.status}
+                      </span>
+                    </div>
+                    <div className="overflow-x-auto rounded-xl border border-amber-200 bg-white shadow-2xs">
+                      <table className="w-full text-left border-collapse text-xs">
+                        <thead>
+                          <tr className="bg-amber-50/80 border-b border-amber-200 text-[10px] font-bold text-amber-900 uppercase">
+                            <th className="py-2 px-3 w-10 text-center">#</th>
+                            <th className="py-2 px-3">Item Name</th>
+                            <th className="py-2 px-3">SKU</th>
+                            <th className="py-2 px-3 text-center">Quantity Carried</th>
+                            <th className="py-2 px-3 text-center">Unit</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-amber-100">
+                          {backupDeclaration.items.map((it, idx) => (
+                            <tr key={idx} className="hover:bg-amber-50/40">
+                              <td className="py-2 px-3 text-center font-mono text-gray-400">{idx + 1}</td>
+                              <td className="py-2 px-3 font-bold text-gray-900">{it.item_name}</td>
+                              <td className="py-2 px-3 font-mono text-gray-500 text-[11px]">{it.item_sku || it.sku || '—'}</td>
+                              <td className="py-2 px-3 text-center font-mono font-bold text-amber-800">{it.quantity}</td>
+                              <td className="py-2 px-3 text-center text-gray-600">{it.unit || 'Nos.'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ) : backupDeclaration?.has_backup_items === false ? (
+                  <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-900">
+                    <strong>Technician Confirmation:</strong> Confirmed no extra backup items were carried to the site.
+                    {backupDeclaration.no_items_reason && (
+                      <span className="block mt-0.5 text-gray-700">Reason: &ldquo;{backupDeclaration.no_items_reason}&rdquo;</span>
+                    )}
+                  </div>
+                ) : (checklist.carry_extra_backup_items ?? checklist.extra_devices) ? (
+                  <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800">
+                    <strong>Pre-Installation Notice:</strong> Technician will record specific loose products and quantities in the Technical Workspace before installation begins.
+                  </div>
+                ) : null}
+
+                {/* Legacy Extra Devices Carried Table (if any) */}
+                {extraConfigs.length > 0 && (
+                  <div className="space-y-1.5 pt-1">
+                    <span className="text-[11px] font-bold text-gray-600 uppercase tracking-wider block">
+                      Legacy Extra Devices Carried:
+                    </span>
+                    <div className="overflow-x-auto rounded-xl border border-amber-200 bg-white shadow-xs">
+                      <table className="w-full text-left border-collapse text-xs">
+                        <thead>
+                          <tr className="bg-amber-50 border-b border-amber-200 text-[11px] font-bold text-amber-900 uppercase">
+                            <th className="py-2.5 px-3 w-12 text-center">#</th>
+                            <th className="py-2.5 px-4">Type of Device</th>
+                            <th className="py-2.5 px-4 text-center">Extra Quantity Carried</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-amber-100">
+                          {extraConfigs.map((ec, idx) => (
+                            <tr key={idx} className="hover:bg-amber-50/40 transition-colors">
+                              <td className="py-2 px-3 text-center text-amber-700 font-mono text-[11px]">{idx + 1}</td>
+                              <td className="py-2 px-4 font-bold text-gray-900">{ec.device_type}</td>
+                              <td className="py-2 px-4 text-center font-mono font-semibold text-amber-900">
+                                <span className="px-2.5 py-0.5 rounded-md bg-amber-100/80 text-amber-900 border border-amber-300 font-bold">
+                                  +{ec.extra_quantity || 1} units backup
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot>
+                          <tr className="bg-amber-100/60 font-bold border-t border-amber-300 text-amber-950 text-xs">
+                            <td colSpan={2} className="py-2.5 px-4">TOTAL EXTRA DEVICES CARRIED</td>
+                            <td className="py-2.5 px-4 text-center font-mono text-amber-900">+{totalExtraDevices} Units</td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
                   </div>
                 )}
               </div>
@@ -609,18 +679,20 @@ export default function InstallationChecklistDetails({ id: propId, onEdit, onBac
 
                 <div className="p-3.5 rounded-xl border border-amber-200 bg-amber-50/70 flex items-center justify-between">
                   <div>
-                    <span className="text-[10px] uppercase font-bold text-amber-800 block">Extra Devices Carried</span>
-                    <span className="text-lg font-black font-mono text-amber-950">+{totalExtraDevices}</span>
+                    <span className="text-[10px] uppercase font-bold text-amber-800 block">Extra Backup Items</span>
+                    <span className="text-lg font-black font-mono text-amber-950">
+                      {(checklist.carry_extra_backup_items ?? checklist.extra_devices) ? 'YES' : 'NO'}
+                    </span>
                   </div>
-                  <span className="text-[10px] font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded">Backup Stock</span>
+                  <span className="text-[10px] font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded">Loose Backup</span>
                 </div>
 
                 <div className="p-3.5 rounded-xl border border-purple-200 bg-purple-50/70 flex items-center justify-between">
                   <div>
                     <span className="text-[10px] uppercase font-bold text-purple-700 block">Total Devices Carried to Site</span>
-                    <span className="text-lg font-black font-mono text-purple-950">{totalCarriedToSite}</span>
+                    <span className="text-lg font-black font-mono text-purple-950">{totalRequiredDevices}</span>
                   </div>
-                  <span className="text-[10px] font-bold text-purple-700 bg-purple-100 px-2 py-0.5 rounded">Total Dispatch</span>
+                  <span className="text-[10px] font-bold text-purple-700 bg-purple-100 px-2 py-0.5 rounded">Required Sets</span>
                 </div>
               </div>
             </div>

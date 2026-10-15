@@ -245,31 +245,78 @@ export async function getEngineerCommitments(engineerIdOrName) {
   const commitments = [];
   const seenIds = new Set();
 
-  // 1. Fetch Job Bookings from engineer_bookings
-  try {
-    const { data: dbBookings } = await supabase
-      .from('engineer_bookings')
-      .select('*')
-      .or(`engineer_id.eq.${engId},engineer_name.ilike.%${engName}%`)
-      .in('status', ['ASSIGNED', 'IN_PROGRESS', 'COMPLETED']);
+  // 1-5. Concurrently Fetch Bookings, Active Checklists, Rest Days, Leaves, and Travel from Supabase
+  const [
+    dbBookingsRes,
+    checklistsRes,
+    dbRestRes,
+    dbLeavesRes,
+    dbCoordRes,
+  ] = await Promise.all([
+    (async () => {
+      try {
+        return await supabase
+          .from('engineer_bookings')
+          .select('*')
+          .or(`engineer_id.eq.${engId},engineer_name.ilike.%${engName}%`)
+          .in('status', ['ASSIGNED', 'IN_PROGRESS', 'COMPLETED']);
+      } catch (e) { return { data: null }; }
+    })(),
+    (async () => {
+      try {
+        return await supabase
+          .from('installation_checklists')
+          .select('*')
+          .ilike('service_engineer', `%${engName}%`);
+      } catch (e) { return { data: null }; }
+    })(),
+    (async () => {
+      try {
+        return await supabase
+          .from('rest_day_requests')
+          .select('*')
+          .or(`engineer_id.eq.${engId},engineer_name.ilike.%${engName}%`)
+          .eq('status', 'APPROVED');
+      } catch (e) { return { data: null }; }
+    })(),
+    (async () => {
+      try {
+        return await supabase
+          .from('leave_requests')
+          .select('*')
+          .or(`engineer_id.eq.${engId},engineer_name.ilike.%${engName}%`)
+          .eq('status', 'APPROVED');
+      } catch (e) { return { data: null }; }
+    })(),
+    (async () => {
+      try {
+        return await supabase
+          .from('coordinator_bookings')
+          .select('*')
+          .eq('travel_required', true)
+          .not('travel_datetime', 'is', null);
+      } catch (e) { return { data: null }; }
+    })(),
+  ]);
 
-    if (Array.isArray(dbBookings)) {
-      dbBookings.forEach((b) => {
-        seenIds.add(b.id);
-        commitments.push({
-          id: b.id,
-          type: 'JOB',
-          status: b.status,
-          checklist_id: b.checklist_id,
-          checklist_number: b.checklist_number,
-          client_name: b.client_name,
-          start_date: b.booking_start_date,
-          end_date: b.booking_end_date,
-          actual_completion_datetime: b.actual_completion_datetime || null,
-        });
+  // Process 1: Job Bookings from engineer_bookings
+  const dbBookings = dbBookingsRes?.data;
+  if (Array.isArray(dbBookings)) {
+    dbBookings.forEach((b) => {
+      seenIds.add(b.id);
+      commitments.push({
+        id: b.id,
+        type: 'JOB',
+        status: b.status,
+        checklist_id: b.checklist_id,
+        checklist_number: b.checklist_number,
+        client_name: b.client_name,
+        start_date: b.booking_start_date,
+        end_date: b.booking_end_date,
+        actual_completion_datetime: b.actual_completion_datetime || null,
       });
-    }
-  } catch (err) {}
+    });
+  }
 
   // In-memory bookings fallback
   inMemoryBookings.forEach((b) => {
@@ -292,70 +339,57 @@ export async function getEngineerCommitments(engineerIdOrName) {
     }
   });
 
-  // 2. Fetch Active Checklists (source of truth for schedules & early completions)
-  try {
-    const { data: checklists } = await supabase
-      .from('installation_checklists')
-      .select('*')
-      .ilike('service_engineer', `%${engName}%`);
+  // Process 2: Active Checklists
+  const checklists = checklistsRes?.data;
+  if (Array.isArray(checklists)) {
+    checklists.forEach((ch) => {
+      const instStatus = String(ch.installation_status || '').toUpperCase();
+      if (!['ASSIGNED', 'IN PROGRESS', 'COMPLETED', 'SITE WORK COMPLETED'].includes(instStatus)) return;
+      const sched = inMemoryChecklistSchedules?.get(ch.id);
+      const start = sched?.current_expected_arrival_date || ch.current_expected_arrival_date || ch.expected_arrival_date;
+      const end = sched?.current_booking_end_date || ch.current_booking_end_date || ch.booking_end_date || calculateBookingEndDate(start, ch.installation_duration || '1 Day');
+      if (!start) return;
 
-    if (Array.isArray(checklists)) {
-      checklists.forEach((ch) => {
-        const instStatus = String(ch.installation_status || '').toUpperCase();
-        if (!['ASSIGNED', 'IN PROGRESS', 'COMPLETED', 'SITE WORK COMPLETED'].includes(instStatus)) return;
-        const sched = inMemoryChecklistSchedules?.get(ch.id);
-        const start = sched?.current_expected_arrival_date || ch.current_expected_arrival_date || ch.expected_arrival_date;
-        const end = sched?.current_booking_end_date || ch.current_booking_end_date || ch.booking_end_date || calculateBookingEndDate(start, ch.installation_duration || '1 Day');
-        if (!start) return;
-
-        const existingJob = commitments.find((c) => c.checklist_id === ch.id);
-        if (existingJob) {
-          existingJob.start_date = start;
-          existingJob.end_date = end;
-          existingJob.status = (instStatus === 'COMPLETED' || instStatus === 'SITE WORK COMPLETED') ? 'COMPLETED' : (instStatus === 'IN PROGRESS' ? 'IN_PROGRESS' : 'ASSIGNED');
-          existingJob.actual_completion_datetime = sched?.actual_completion_datetime || ch.actual_completion_datetime || existingJob.actual_completion_datetime || null;
-          existingJob.actual_start_datetime = sched?.actual_start_datetime || ch.actual_start_datetime || existingJob.actual_start_datetime || null;
-        } else {
-          commitments.push({
-            id: `chk-${ch.id}`,
-            type: 'JOB',
-            status: (instStatus === 'COMPLETED' || instStatus === 'SITE WORK COMPLETED') ? 'COMPLETED' : (instStatus === 'IN PROGRESS' ? 'IN_PROGRESS' : 'ASSIGNED'),
-            checklist_id: ch.id,
-            checklist_number: ch.checklist_number,
-            client_name: ch.client_name,
-            start_date: start,
-            end_date: end,
-            actual_completion_datetime: sched?.actual_completion_datetime || ch.actual_completion_datetime || null,
-            actual_start_datetime: sched?.actual_start_datetime || ch.actual_start_datetime || null,
-          });
-        }
-      });
-    }
-  } catch (err) {}
-
-  // 3. Fetch Approved Rest Days
-  try {
-    const { data: dbRest } = await supabase
-      .from('rest_day_requests')
-      .select('*')
-      .or(`engineer_id.eq.${engId},engineer_name.ilike.%${engName}%`)
-      .eq('status', 'APPROVED');
-
-    if (Array.isArray(dbRest)) {
-      dbRest.forEach((r) => {
+      const existingJob = commitments.find((c) => c.checklist_id === ch.id);
+      if (existingJob) {
+        existingJob.start_date = start;
+        existingJob.end_date = end;
+        existingJob.status = (instStatus === 'COMPLETED' || instStatus === 'SITE WORK COMPLETED') ? 'COMPLETED' : (instStatus === 'IN PROGRESS' ? 'IN_PROGRESS' : 'ASSIGNED');
+        existingJob.actual_completion_datetime = sched?.actual_completion_datetime || ch.actual_completion_datetime || existingJob.actual_completion_datetime || null;
+        existingJob.actual_start_datetime = sched?.actual_start_datetime || ch.actual_start_datetime || existingJob.actual_start_datetime || null;
+      } else {
         commitments.push({
-          id: r.id,
-          type: 'REST_DAY',
-          status: 'APPROVED',
-          checklist_id: r.checklist_id,
-          checklist_number: r.checklist_number,
-          start_date: r.rest_start_date,
-          end_date: r.rest_end_date,
-          reason: r.reason,
+          id: `chk-${ch.id}`,
+          type: 'JOB',
+          status: (instStatus === 'COMPLETED' || instStatus === 'SITE WORK COMPLETED') ? 'COMPLETED' : (instStatus === 'IN PROGRESS' ? 'IN_PROGRESS' : 'ASSIGNED'),
+          checklist_id: ch.id,
+          checklist_number: ch.checklist_number,
+          client_name: ch.client_name,
+          start_date: start,
+          end_date: end,
+          actual_completion_datetime: sched?.actual_completion_datetime || ch.actual_completion_datetime || null,
+          actual_start_datetime: sched?.actual_start_datetime || ch.actual_start_datetime || null,
         });
+      }
+    });
+  }
+
+  // Process 3: Approved Rest Days
+  const dbRest = dbRestRes?.data;
+  if (Array.isArray(dbRest)) {
+    dbRest.forEach((r) => {
+      commitments.push({
+        id: r.id,
+        type: 'REST_DAY',
+        status: 'APPROVED',
+        checklist_id: r.checklist_id,
+        checklist_number: r.checklist_number,
+        start_date: r.rest_start_date,
+        end_date: r.rest_end_date,
+        reason: r.reason,
       });
-    }
-  } catch (err) {}
+    });
+  }
 
   const restStorage = readJsonFallback('rest_days_storage.json');
   if (restStorage?.rest_days) {
@@ -377,28 +411,21 @@ export async function getEngineerCommitments(engineerIdOrName) {
     });
   }
 
-  // 4. Fetch Approved Leaves
-  try {
-    const { data: dbLeaves } = await supabase
-      .from('leave_requests')
-      .select('*')
-      .or(`engineer_id.eq.${engId},engineer_name.ilike.%${engName}%`)
-      .eq('status', 'APPROVED');
-
-    if (Array.isArray(dbLeaves)) {
-      dbLeaves.forEach((l) => {
-        commitments.push({
-          id: l.id,
-          type: 'LEAVE',
-          status: 'APPROVED',
-          leave_type: l.leave_type,
-          start_date: l.leave_start_date,
-          end_date: l.leave_end_date,
-          reason: l.reason,
-        });
+  // Process 4: Approved Leaves
+  const dbLeaves = dbLeavesRes?.data;
+  if (Array.isArray(dbLeaves)) {
+    dbLeaves.forEach((l) => {
+      commitments.push({
+        id: l.id,
+        type: 'LEAVE',
+        status: 'APPROVED',
+        leave_type: l.leave_type,
+        start_date: l.leave_start_date,
+        end_date: l.leave_end_date,
+        reason: l.reason,
       });
-    }
-  } catch (err) {}
+    });
+  }
 
   const leaveStorage = readJsonFallback('leave_requests_storage.json');
   if (leaveStorage?.leaves) {
@@ -419,33 +446,26 @@ export async function getEngineerCommitments(engineerIdOrName) {
     });
   }
 
-  // 5. Fetch Recorded Travel Commitments
-  try {
-    const { data: dbCoord } = await supabase
-      .from('coordinator_bookings')
-      .select('*')
-      .eq('travel_required', true)
-      .not('travel_datetime', 'is', null);
-
-    if (Array.isArray(dbCoord)) {
-      dbCoord.forEach((cb) => {
-        const assigned = (cb.assigned_engineer || '').toLowerCase();
-        if (assigned.includes(engName.toLowerCase()) && cb.travel_datetime) {
-          const travelDate = cb.travel_datetime.split('T')[0];
-          commitments.push({
-            id: `travel-${cb.id}`,
-            type: 'TRAVEL',
-            status: 'RECORDED',
-            checklist_id: cb.checklist_id,
-            start_date: travelDate,
-            end_date: travelDate,
-            destination: cb.destination,
-            departure_city: cb.departure_city,
-          });
-        }
-      });
-    }
-  } catch (err) {}
+  // Process 5: Recorded Travel Commitments
+  const dbCoord = dbCoordRes?.data;
+  if (Array.isArray(dbCoord)) {
+    dbCoord.forEach((cb) => {
+      const assigned = (cb.assigned_engineer || '').toLowerCase();
+      if (assigned.includes(engName.toLowerCase()) && cb.travel_datetime) {
+        const travelDate = cb.travel_datetime.split('T')[0];
+        commitments.push({
+          id: `travel-${cb.id}`,
+          type: 'TRAVEL',
+          status: 'RECORDED',
+          checklist_id: cb.checklist_id,
+          start_date: travelDate,
+          end_date: travelDate,
+          destination: cb.destination,
+          departure_city: cb.departure_city,
+        });
+      }
+    });
+  }
 
   const coordStorage = readJsonFallback('coordinator_bookings_storage.json');
   if (coordStorage?.bookings) {
@@ -965,10 +985,10 @@ export async function getAvailabilityCalendar({
     }
   }
 
-  let engineers = await getAllServiceEngineers();
-  if (engineerId && engineerId !== 'ALL') {
-    engineers = engineers.filter((e) => e.id === engineerId || e.name.toLowerCase() === engineerId.toLowerCase());
-  }
+  const allMainEngineers = await getAllServiceEngineers();
+  const engineers = (engineerId && engineerId !== 'ALL')
+    ? allMainEngineers.filter((e) => e.id === engineerId || e.name.toLowerCase() === engineerId.toLowerCase())
+    : allMainEngineers;
 
   const dateList = [];
   const [sy, sm, sd] = start.split('-').map(Number);
@@ -980,8 +1000,6 @@ export async function getAvailabilityCalendar({
     dateList.push(current.toISOString().split('T')[0]);
     current.setUTCDate(current.getUTCDate() + 1);
   }
-
-  const allMainEngineers = await getAllServiceEngineers();
 
   // Summary Metrics calculated at the reference start date
   const summary = {
@@ -996,8 +1014,23 @@ export async function getAvailabilityCalendar({
     conflicts: 0,
   };
 
+  // Batch prefetch commitments and warnings once in parallel for all engineers
+  const engineerCommitmentMap = new Map();
+  const engineerWarningMap = new Map();
+
+  await Promise.all(
+    allMainEngineers.map(async (eng) => {
+      const [comms, warns] = await Promise.all([
+        getEngineerCommitments(eng.id),
+        getEngineerPendingWarnings(eng.id),
+      ]);
+      engineerCommitmentMap.set(eng.id, comms);
+      engineerWarningMap.set(eng.id, warns);
+    })
+  );
+
   for (const eng of allMainEngineers) {
-    const comms = await getEngineerCommitments(eng.id);
+    const comms = engineerCommitmentMap.get(eng.id) || [];
     const dayStat = determineEngineerDateStatus(comms, start);
     if (dayStat.status === 'AVAILABLE') summary.available++;
     else if (dayStat.status === 'ASSIGNED') summary.assigned++;
@@ -1008,32 +1041,30 @@ export async function getAvailabilityCalendar({
     else if (dayStat.status === 'CONFLICT') summary.conflicts++;
   }
 
-  const schedule = await Promise.all(
-    engineers.map(async (eng) => {
-      const commitments = await getEngineerCommitments(eng.id);
-      const warnings = await getEngineerPendingWarnings(eng.id);
+  const schedule = engineers.map((eng) => {
+    const commitments = engineerCommitmentMap.get(eng.id) || [];
+    const warnings = engineerWarningMap.get(eng.id) || [];
 
-      const days = dateList.map((dateStr) => {
-        const dateStatus = determineEngineerDateStatus(commitments, dateStr);
-
-        return {
-          date: dateStr,
-          status: dateStatus.status,
-          status_label: dateStatus.label,
-          is_available: dateStatus.status === 'AVAILABLE',
-          commitment: dateStatus.commitment,
-          commitments: dateStatus.commitments,
-        };
-      });
+    const days = dateList.map((dateStr) => {
+      const dateStatus = determineEngineerDateStatus(commitments, dateStr);
 
       return {
-        engineer: eng,
-        days,
-        warnings,
-        total_booked_days: days.filter((d) => !d.is_available).length,
+        date: dateStr,
+        status: dateStatus.status,
+        status_label: dateStatus.label,
+        is_available: dateStatus.status === 'AVAILABLE',
+        commitment: dateStatus.commitment,
+        commitments: dateStatus.commitments,
       };
-    })
-  );
+    });
+
+    return {
+      engineer: eng,
+      days,
+      warnings,
+      total_booked_days: days.filter((d) => !d.is_available).length,
+    };
+  });
 
   return {
     start_date: start,

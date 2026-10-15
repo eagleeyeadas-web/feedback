@@ -136,7 +136,39 @@ export async function recordStockMovement({
     if (!error && dbCreated) {
       movementRecord.id = dbCreated.id;
     } else if (error) {
-      console.warn('DB stock_movements insert notice:', error.message);
+      if (error.message?.includes('violates foreign key constraint') && movementRecord.performed_by) {
+        const { data: dbRetry, error: retryError } = await supabase
+          .from('stock_movements')
+          .insert([{
+            product_id: movementRecord.product_id,
+            item_id: movementRecord.item_id,
+            item_name: movementRecord.item_name,
+            sku: movementRecord.sku,
+            category: movementRecord.category,
+            movement_type: movementRecord.movement_type,
+            quantity: movementRecord.quantity,
+            unit: movementRecord.unit,
+            balance_before: movementRecord.balance_before,
+            balance_after: movementRecord.balance_after,
+            checklist_id: movementRecord.checklist_id,
+            reference_transaction_id: movementRecord.reference_transaction_id,
+            performed_by: null,
+            performer_name: movementRecord.performer_name,
+            performer_email: movementRecord.performer_email,
+            reason_or_remarks: movementRecord.reason_or_remarks,
+            idempotency_key: movementRecord.idempotency_key,
+            created_at: movementRecord.created_at,
+          }])
+          .select()
+          .single();
+        if (!retryError && dbRetry) {
+          movementRecord.id = dbRetry.id;
+        } else {
+          console.warn('DB stock_movements retry notice:', retryError?.message);
+        }
+      } else {
+        console.warn('DB stock_movements insert notice:', error.message);
+      }
     }
   } catch (dbErr) {
     console.warn('DB stock_movements insert error:', dbErr.message);
@@ -260,3 +292,108 @@ export function pruneLocalExpiredMovements(cutoffDate) {
 
   return initialCount - surviving.length;
 }
+
+/**
+ * Delete a specific stock movement by ID from both Supabase and in-memory/file storage
+ */
+export async function deleteStockMovementById(movementId) {
+  if (!movementId) return false;
+
+  // 1. Delete from Supabase
+  try {
+    await supabase.from('stock_movements').delete().eq('id', movementId);
+  } catch (err) {
+    console.warn('Could not delete stock movement from Supabase:', err.message);
+  }
+
+  // 2. Delete from in-memory fallback list
+  const idx = inMemoryStockMovements.findIndex((m) => m.id === movementId);
+  if (idx !== -1) {
+    inMemoryStockMovements.splice(idx, 1);
+  }
+
+  // 3. Delete from inventory_storage.json legacy transactions if present
+  try {
+    if (fs.existsSync(STORAGE_FILE)) {
+      const data = JSON.parse(fs.readFileSync(STORAGE_FILE, 'utf-8')) || {};
+      if (Array.isArray(data.deviceTransactions)) {
+        data.deviceTransactions = data.deviceTransactions.filter((t) => t.id !== movementId);
+      }
+      if (Array.isArray(data.materialTransactions)) {
+        data.materialTransactions = data.materialTransactions.filter((t) => t.id !== movementId);
+      }
+      data.stockMovements = inMemoryStockMovements;
+      fs.writeFileSync(STORAGE_FILE, JSON.stringify(data, null, 2), 'utf-8');
+    }
+  } catch (err) {
+    console.warn('Could not update inventory_storage after delete:', err.message);
+  }
+
+  return true;
+}
+
+/**
+ * Clear all or filtered stock movements history from both Supabase and in-memory/file storage
+ */
+export async function clearStockMovementsHistory({ category = 'All', type = 'All' } = {}) {
+  let deletedCount = 0;
+
+  // 1. Delete from Supabase
+  try {
+    let query = supabase.from('stock_movements').delete();
+
+    if (category === 'Devices' || category === 'Camera Device') {
+      query = query.eq('category', 'Camera Device');
+    } else if (category === 'Materials' || category === 'Installation Material') {
+      query = query.eq('category', 'Installation Material');
+    } else {
+      query = query.not('id', 'is', null);
+    }
+
+    if (type && type !== 'All') {
+      query = query.eq('movement_type', type);
+    }
+
+    const { data, error } = await query;
+    if (!error && Array.isArray(data)) {
+      deletedCount = data.length;
+    }
+  } catch (err) {
+    console.warn('Could not delete stock movements from Supabase:', err.message);
+  }
+
+  // 2. Delete from in-memory fallback list
+  const beforeCount = inMemoryStockMovements.length;
+  if (category === 'All' && type === 'All') {
+    inMemoryStockMovements.length = 0;
+  } else {
+    const surviving = inMemoryStockMovements.filter((m) => {
+      const matchCat = (category === 'Devices' && m.category === 'Camera Device') ||
+                       (category === 'Materials' && m.category === 'Installation Material') ||
+                       category === 'All';
+      const matchType = type === 'All' || m.movement_type === type;
+      return !(matchCat && matchType);
+    });
+    inMemoryStockMovements.length = 0;
+    inMemoryStockMovements.push(...surviving);
+  }
+
+  // 3. Clear from inventory_storage.json
+  try {
+    if (fs.existsSync(STORAGE_FILE)) {
+      const data = JSON.parse(fs.readFileSync(STORAGE_FILE, 'utf-8')) || {};
+      if (category === 'All' && type === 'All') {
+        data.deviceTransactions = [];
+        data.materialTransactions = [];
+      }
+      data.stockMovements = inMemoryStockMovements;
+      fs.writeFileSync(STORAGE_FILE, JSON.stringify(data, null, 2), 'utf-8');
+    }
+  } catch (err) {
+    console.warn('Could not save storage after clear:', err.message);
+  }
+
+  deletedCount = Math.max(deletedCount, beforeCount - inMemoryStockMovements.length);
+  return { success: true, deletedCount };
+}
+

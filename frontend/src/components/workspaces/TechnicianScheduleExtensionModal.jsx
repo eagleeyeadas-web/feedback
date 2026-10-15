@@ -1,17 +1,5 @@
 import React, { useState } from 'react';
-import {
-  Clock,
-  Calendar,
-  AlertTriangle,
-  X,
-  Send,
-  Plus,
-  Bus,
-  Moon,
-  Info,
-  CheckCircle2,
-  FileText,
-} from 'lucide-react';
+import { X, ChevronDown, AlertTriangle } from 'lucide-react';
 import { submitTechnicianScheduleExtension } from '../../lib/api';
 
 const EXTENSION_REASONS = [
@@ -24,46 +12,113 @@ const EXTENSION_REASONS = [
   'Other operational site reason',
 ];
 
+function parseDateParts(dateStr) {
+  if (!dateStr || typeof dateStr !== 'string') return null;
+  const parts = dateStr.split('T')[0].split('-').map(Number);
+  if (parts.length < 3 || isNaN(parts[0]) || isNaN(parts[1]) || isNaN(parts[2])) return null;
+  return new Date(Date.UTC(parts[0], parts[1] - 1, parts[2]));
+}
+
+function formatDateString(dateObj) {
+  if (!dateObj || isNaN(dateObj.getTime())) return '';
+  return dateObj.toISOString().split('T')[0];
+}
+
+function addDaysToDate(dateStr, days) {
+  const d = parseDateParts(dateStr);
+  if (!d) return '';
+  d.setUTCDate(d.getUTCDate() + Number(days));
+  return formatDateString(d);
+}
+
+function diffDaysBetween(startDateStr, endDateStr) {
+  const s = parseDateParts(startDateStr);
+  const e = parseDateParts(endDateStr);
+  if (!s || !e) return 1;
+  const diffTime = e.getTime() - s.getTime();
+  return Math.round(diffTime / (1000 * 60 * 60 * 24));
+}
+
+function formatDisplayDate(dateStr) {
+  if (!dateStr) return 'Not scheduled';
+  const d = parseDateParts(dateStr);
+  if (!d) return dateStr;
+  return d.toLocaleDateString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'UTC',
+  });
+}
+
 export default function TechnicianScheduleExtensionModal({
   token,
   checklist,
   onClose,
   onSuccess,
 }) {
-  const [requestedCompletionDate, setRequestedCompletionDate] = useState(() => {
-    const curEnd = checklist?.current_booking_end_date || checklist?.booking_end_date || checklist?.expected_arrival_date;
-    if (curEnd) {
-      const [y, m, d] = curEnd.split('-').map(Number);
-      const dt = new Date(Date.UTC(y, m - 1, d));
-      dt.setUTCDate(dt.getUTCDate() + 1);
-      return dt.toISOString().split('T')[0];
-    }
-    return '';
-  });
+  const currentCompletionDate =
+    checklist?.current_booking_end_date ||
+    checklist?.booking_end_date ||
+    checklist?.current_expected_arrival_date ||
+    checklist?.expected_arrival_date ||
+    '';
+
+  const arrivalDate =
+    checklist?.current_expected_arrival_date ||
+    checklist?.expected_arrival_date ||
+    '';
+
+  const minCompletionDate = currentCompletionDate
+    ? addDaysToDate(currentCompletionDate, 1)
+    : arrivalDate;
 
   const [additionalWorkingDays, setAdditionalWorkingDays] = useState(1);
+  const [requestedCompletionDate, setRequestedCompletionDate] = useState(() => {
+    return currentCompletionDate ? addDaysToDate(currentCompletionDate, 1) : '';
+  });
+
+  const [selectedReason, setSelectedReason] = useState(EXTENSION_REASONS[0]);
+  const [customReason, setCustomReason] = useState('');
+
+  // Optional "More options" state
+  const [showMoreOptions, setShowMoreOptions] = useState(false);
   const [requestedReturnTravelDate, setRequestedReturnTravelDate] = useState('');
   const [restDayRequested, setRestDayRequested] = useState(false);
   const [requestedRestDate, setRequestedRestDate] = useState('');
-  const [selectedReason, setSelectedReason] = useState(EXTENSION_REASONS[0]);
-  const [customReason, setCustomReason] = useState('');
   const [notes, setNotes] = useState('');
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
-  const originalDates = {
-    arrival_date: checklist?.original_expected_arrival_date || checklist?.expected_arrival_date,
-    arrival_time: checklist?.original_expected_arrival_time || checklist?.expected_arrival_time,
-    duration: checklist?.original_installation_duration || checklist?.installation_duration || '1 Day',
-    completion_date: checklist?.original_booking_end_date || checklist?.booking_end_date,
+  // Sync date when user edits working days
+  const handleWorkingDaysChange = (e) => {
+    const val = e.target.value;
+    setAdditionalWorkingDays(val);
+    const num = parseInt(val, 10);
+    if (!isNaN(num) && num >= 1 && currentCompletionDate) {
+      setRequestedCompletionDate(addDaysToDate(currentCompletionDate, num));
+    }
   };
 
-  const currentDates = {
-    arrival_date: checklist?.current_expected_arrival_date || checklist?.expected_arrival_date,
-    arrival_time: checklist?.current_expected_arrival_time || checklist?.expected_arrival_time,
-    duration: checklist?.current_installation_duration || checklist?.installation_duration || '1 Day',
-    completion_date: checklist?.current_booking_end_date || checklist?.booking_end_date,
+  // Sync working days when user edits completion date
+  const handleCompletionDateChange = (e) => {
+    const val = e.target.value;
+    setRequestedCompletionDate(val);
+    if (currentCompletionDate && val) {
+      const diff = diffDaysBetween(currentCompletionDate, val);
+      if (diff >= 1) {
+        setAdditionalWorkingDays(diff);
+      }
+    }
+  };
+
+  const handleRestDayToggle = (e) => {
+    const checked = e.target.checked;
+    setRestDayRequested(checked);
+    if (checked && !requestedRestDate) {
+      setRequestedRestDate(addDaysToDate(requestedCompletionDate || currentCompletionDate, 1));
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -71,13 +126,18 @@ export default function TechnicianScheduleExtensionModal({
     setError('');
 
     if (!requestedCompletionDate) {
-      setError('Please select the requested revised completion date.');
+      setError('Please select the new completion date.');
       return;
     }
 
-    const arrivalDate = currentDates.arrival_date;
-    if (requestedCompletionDate < arrivalDate) {
-      setError(`Revised completion date cannot be before arrival date (${arrivalDate}).`);
+    const days = parseInt(additionalWorkingDays, 10);
+    if (isNaN(days) || days < 1) {
+      setError('Additional working days must be at least 1.');
+      return;
+    }
+
+    if (arrivalDate && requestedCompletionDate < arrivalDate) {
+      setError(`New completion date cannot be before arrival date (${arrivalDate}).`);
       return;
     }
 
@@ -86,16 +146,22 @@ export default function TechnicianScheduleExtensionModal({
       return;
     }
 
-    const finalReason = selectedReason === 'Other operational site reason' && customReason.trim()
-      ? customReason.trim()
-      : selectedReason;
+    const finalReason =
+      selectedReason === 'Other operational site reason' && customReason.trim()
+        ? customReason.trim()
+        : selectedReason;
+
+    if (selectedReason === 'Other operational site reason' && !customReason.trim()) {
+      setError('Please specify the operational reason.');
+      return;
+    }
 
     setSubmitting(true);
     try {
       const res = await submitTechnicianScheduleExtension(token, checklist.id, {
         requested_completion_date: requestedCompletionDate,
         requested_return_travel_date: requestedReturnTravelDate || null,
-        additional_working_days: parseInt(additionalWorkingDays, 10) || 1,
+        additional_working_days: days,
         rest_day_requested: Boolean(restDayRequested),
         requested_rest_date: restDayRequested ? requestedRestDate : null,
         reason: finalReason,
@@ -116,245 +182,226 @@ export default function TechnicianScheduleExtensionModal({
 
   return (
     <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-      <div className="bg-white rounded-3xl max-w-xl w-full p-6 shadow-2xl border border-gray-100 my-8 space-y-5 animate-in fade-in zoom-in-95">
-        {/* Modal Header */}
-        <div className="flex items-start justify-between border-b border-gray-100 pb-4">
+      <div className="bg-white rounded-2xl max-w-md w-full p-5 shadow-2xl border border-gray-100 my-auto space-y-4 animate-in fade-in zoom-in-95">
+        {/* Header */}
+        <div className="flex items-start justify-between border-b border-gray-100 pb-3">
           <div>
-            <div className="flex items-center gap-2">
-              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-amber-100 text-amber-800 border border-amber-200 uppercase tracking-wider">
-                Field Schedule Action
-              </span>
-              <span className="text-xs font-mono font-bold text-gray-500">{checklist?.checklist_number}</span>
-            </div>
-            <h2 className="text-lg font-black text-gray-900 mt-1 flex items-center gap-2">
-              <Clock className="w-5 h-5 text-amber-600" />
-              <span>Request Schedule Extension</span>
-            </h2>
-            <p className="text-xs text-gray-500 mt-0.5">
-              Submit an extension for Coordinator approval if installation requires extra days, return travel revision, or post-job rest.
+            <h2 className="text-base font-bold text-gray-900">Extend Schedule</h2>
+            <p className="text-xs text-gray-500 font-mono mt-0.5">
+              {checklist?.checklist_number ? `#${checklist.checklist_number}` : 'Checklist'}
             </p>
           </div>
           <button
             type="button"
+            id="close-extension-modal-btn"
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 p-1.5 rounded-xl hover:bg-gray-100 transition cursor-pointer"
+            className="text-gray-400 hover:text-gray-600 p-1.5 rounded-lg hover:bg-gray-100 transition cursor-pointer"
+            aria-label="Close"
           >
-            <X size={20} />
+            <X size={18} />
           </button>
         </div>
 
+        {/* Error Alert */}
         {error && (
-          <div className="p-3.5 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-xs flex items-center gap-2 font-medium">
+          <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-xs flex items-center gap-2 font-medium">
             <AlertTriangle className="w-4 h-4 shrink-0" />
             <span>{error}</span>
           </div>
         )}
 
-        {/* Schedule Context Box: Original vs Current */}
-        <div className="grid grid-cols-2 gap-3 p-3.5 bg-gray-50 rounded-2xl border border-gray-200 text-xs">
-          <div className="space-y-1">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500 block">
-              Original Planned Schedule
-            </span>
-            <div className="font-semibold text-gray-800">
-              Arrival: {originalDates.arrival_date} ({originalDates.arrival_time})
-            </div>
-            <div className="text-gray-600 text-[11px]">
-              Planned Duration: <span className="font-bold text-gray-900">{originalDates.duration}</span>
-            </div>
-            <div className="text-gray-600 text-[11px]">
-              Planned End: <span className="font-bold text-gray-900">{originalDates.completion_date || originalDates.arrival_date}</span>
-            </div>
-          </div>
-
-          <div className="space-y-1 border-l border-gray-200 pl-3">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 block">
-              Current Expected Schedule
-            </span>
-            <div className="font-semibold text-gray-800">
-              Arrival: {currentDates.arrival_date} ({currentDates.arrival_time})
-            </div>
-            <div className="text-gray-600 text-[11px]">
-              Current Duration: <span className="font-bold text-gray-900">{currentDates.duration}</span>
-            </div>
-            <div className="text-gray-600 text-[11px]">
-              Current Expected End: <span className="font-bold text-gray-900">{currentDates.completion_date || currentDates.arrival_date}</span>
-            </div>
-          </div>
+        {/* Compact Summary Card: Current Expected Completion Date */}
+        <div className="bg-gray-50 border border-gray-200/80 rounded-xl px-3.5 py-2.5 flex items-center justify-between text-xs">
+          <span className="text-gray-600 font-medium">Current Expected Completion</span>
+          <span className="font-bold text-gray-900 font-mono">
+            {formatDisplayDate(currentCompletionDate)}
+          </span>
         </div>
 
         {/* Extension Form */}
-        <form onSubmit={handleSubmit} className="space-y-4 text-xs">
-          {/* Section 1: Additional Installation Workdays */}
-          <div className="p-4 bg-amber-50/50 rounded-2xl border border-amber-200 space-y-3">
-            <h4 className="font-bold text-gray-900 flex items-center gap-1.5 text-xs text-amber-900">
-              <Plus className="w-4 h-4 text-amber-600" />
-              <span>1. Additional Installation / Service Workdays</span>
-            </h4>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-gray-700 font-semibold mb-1">
-                  Requested Revised Completion Date <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="date"
-                  value={requestedCompletionDate}
-                  min={currentDates.arrival_date}
-                  onChange={(e) => setRequestedCompletionDate(e.target.value)}
-                  required
-                  className="w-full px-3 py-2 bg-white border border-gray-300 rounded-xl font-medium text-gray-900 focus:outline-hidden focus:border-amber-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-gray-700 font-semibold mb-1">
-                  Additional Working Days <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="number"
-                  min="1"
-                  max="14"
-                  value={additionalWorkingDays}
-                  onChange={(e) => setAdditionalWorkingDays(e.target.value)}
-                  required
-                  className="w-full px-3 py-2 bg-white border border-gray-300 rounded-xl font-medium text-gray-900 focus:outline-hidden focus:border-amber-500"
-                />
-              </div>
-            </div>
+        <form onSubmit={handleSubmit} className="space-y-3.5 text-xs">
+          {/* New Completion Date */}
+          <div>
+            <label htmlFor="new-completion-date" className="block text-gray-700 font-semibold mb-1">
+              New Completion Date <span className="text-red-500">*</span>
+            </label>
+            <input
+              id="new-completion-date"
+              type="date"
+              min={minCompletionDate}
+              value={requestedCompletionDate}
+              onChange={handleCompletionDateChange}
+              required
+              className="w-full px-3 py-2 bg-white border border-gray-300 rounded-xl font-medium text-gray-900 focus:outline-hidden focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition"
+            />
           </div>
 
-          {/* Section 2: Return Travel Date (Distinct from workdays) */}
-          <div className="p-4 bg-purple-50/50 rounded-2xl border border-purple-200 space-y-2">
-            <h4 className="font-bold text-gray-900 flex items-center gap-1.5 text-xs text-purple-900">
-              <Bus className="w-4 h-4 text-purple-600" />
-              <span>2. Return Travel Date (When applicable)</span>
-            </h4>
-            <p className="text-[11px] text-gray-500">
-              If extended installation requires shifting your bus ticket or return travel, specify the new return departure date.
-            </p>
+          {/* Additional Working Days */}
+          <div>
+            <label htmlFor="additional-working-days" className="block text-gray-700 font-semibold mb-1">
+              Additional Working Days <span className="text-red-500">*</span>
+            </label>
+            <input
+              id="additional-working-days"
+              type="number"
+              min="1"
+              max="14"
+              value={additionalWorkingDays}
+              onChange={handleWorkingDaysChange}
+              required
+              className="w-full px-3 py-2 bg-white border border-gray-300 rounded-xl font-medium text-gray-900 focus:outline-hidden focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition"
+            />
+          </div>
+
+          {/* Reason for Extension */}
+          <div>
+            <label htmlFor="extension-reason" className="block text-gray-700 font-semibold mb-1">
+              Reason for Extension <span className="text-red-500">*</span>
+            </label>
+            <select
+              id="extension-reason"
+              value={selectedReason}
+              onChange={(e) => setSelectedReason(e.target.value)}
+              required
+              className="w-full px-3 py-2 bg-white border border-gray-300 rounded-xl font-medium text-gray-900 focus:outline-hidden focus:border-amber-500 focus:ring-1 focus:ring-amber-500 cursor-pointer transition"
+            >
+              {EXTENSION_REASONS.map((r) => (
+                <option key={r} value={r}>
+                  {r}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {selectedReason === 'Other operational site reason' && (
             <div>
+              <label htmlFor="custom-reason" className="block text-gray-700 font-semibold mb-1">
+                Specify Operational Reason <span className="text-red-500">*</span>
+              </label>
               <input
-                type="date"
-                value={requestedReturnTravelDate}
-                min={requestedCompletionDate || currentDates.arrival_date}
-                onChange={(e) => setRequestedReturnTravelDate(e.target.value)}
-                className="w-full sm:w-1/2 px-3 py-2 bg-white border border-gray-300 rounded-xl font-medium text-gray-900 focus:outline-hidden focus:border-purple-500"
+                id="custom-reason"
+                type="text"
+                value={customReason}
+                onChange={(e) => setCustomReason(e.target.value)}
+                placeholder="Describe reason for extension..."
+                required
+                className="w-full px-3 py-2 bg-white border border-gray-300 rounded-xl font-medium text-gray-900 focus:outline-hidden focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition"
               />
             </div>
-          </div>
+          )}
 
-          {/* Section 3: Rest Day Request (Distinct from workdays) */}
-          <div className="p-4 bg-indigo-50/50 rounded-2xl border border-indigo-200 space-y-3">
-            <div className="flex items-center justify-between">
-              <h4 className="font-bold text-gray-900 flex items-center gap-1.5 text-xs text-indigo-900">
-                <Moon className="w-4 h-4 text-indigo-600" />
-                <span>3. Post-Job Rest Day (Optional)</span>
-              </h4>
-              <label className="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-700 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={restDayRequested}
-                  onChange={(e) => {
-                    const checked = e.target.checked;
-                    setRestDayRequested(checked);
-                    if (checked && !requestedRestDate && requestedCompletionDate) {
-                      const [y, m, d] = requestedCompletionDate.split('-').map(Number);
-                      const dt = new Date(Date.UTC(y, m - 1, d));
-                      dt.setUTCDate(dt.getUTCDate() + 1);
-                      setRequestedRestDate(dt.toISOString().split('T')[0]);
-                    }
-                  }}
-                  className="rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-                />
-                <span>Request Rest Day</span>
-              </label>
-            </div>
-
-            {restDayRequested && (
-              <div className="pt-2 border-t border-indigo-100">
-                <label className="block text-gray-700 font-semibold mb-1">
-                  Requested Rest Date <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="date"
-                  value={requestedRestDate}
-                  min={requestedCompletionDate || currentDates.arrival_date}
-                  onChange={(e) => setRequestedRestDate(e.target.value)}
-                  required={restDayRequested}
-                  className="w-full sm:w-1/2 px-3 py-2 bg-white border border-gray-300 rounded-xl font-medium text-gray-900 focus:outline-hidden focus:border-indigo-500"
-                />
-                <p className="text-[10px] text-gray-500 mt-1">
-                  An approved rest day blocks future job bookings on this date and allows you time to recuperate after multi-day work.
-                </p>
-              </div>
-            )}
-          </div>
-
-          {/* Section 4: Reason & Operational Notes */}
-          <div className="space-y-3">
-            <div>
-              <label className="block text-gray-700 font-semibold mb-1">
-                Reason for Extension <span className="text-red-500">*</span>
-              </label>
-              <select
-                value={selectedReason}
-                onChange={(e) => setSelectedReason(e.target.value)}
-                className="w-full px-3 py-2 bg-white border border-gray-300 rounded-xl font-medium text-gray-900 focus:outline-hidden focus:border-indigo-500 cursor-pointer"
-              >
-                {EXTENSION_REASONS.map((r) => (
-                  <option key={r} value={r}>{r}</option>
-                ))}
-              </select>
-            </div>
-
-            {selectedReason === 'Other operational site reason' && (
-              <div>
-                <label className="block text-gray-700 font-semibold mb-1">
-                  Specify Operational Reason <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={customReason}
-                  onChange={(e) => setCustomReason(e.target.value)}
-                  placeholder="Describe why extra time is required..."
-                  required
-                  className="w-full px-3 py-2 bg-white border border-gray-300 rounded-xl font-medium text-gray-900 focus:outline-hidden focus:border-indigo-500"
-                />
-              </div>
-            )}
-
-            <div>
-              <label className="block text-gray-700 font-semibold mb-1">
-                Optional Notes for Coordinator
-              </label>
-              <textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                rows={2}
-                placeholder="Any site context, ticket references, or logistics details..."
-                className="w-full px-3 py-2 bg-white border border-gray-300 rounded-xl font-medium text-gray-900 focus:outline-hidden focus:border-indigo-500"
-              />
-            </div>
-          </div>
-
-          {/* Modal Actions */}
-          <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-100">
+          {/* More Options Collapsible */}
+          <div className="border-t border-gray-100 pt-2">
             <button
               type="button"
+              id="toggle-more-options-btn"
+              onClick={() => setShowMoreOptions((prev) => !prev)}
+              className="flex items-center justify-between w-full py-1 text-xs font-semibold text-gray-600 hover:text-gray-900 cursor-pointer transition"
+            >
+              <span className="flex items-center gap-1.5">
+                <span>More options</span>
+                {(requestedReturnTravelDate || restDayRequested || notes) && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 inline-block" title="Options configured" />
+                )}
+              </span>
+              <ChevronDown
+                className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${
+                  showMoreOptions ? 'rotate-180' : ''
+                }`}
+              />
+            </button>
+
+            {showMoreOptions && (
+              <div className="space-y-3 pt-2.5 animate-in fade-in">
+                {/* Return Travel Date (optional) */}
+                <div>
+                  <label htmlFor="return-travel-date" className="block text-gray-700 font-semibold mb-1">
+                    Return Travel Date <span className="text-gray-400 font-normal">(Optional)</span>
+                  </label>
+                  <input
+                    id="return-travel-date"
+                    type="date"
+                    min={requestedCompletionDate || minCompletionDate}
+                    value={requestedReturnTravelDate}
+                    onChange={(e) => setRequestedReturnTravelDate(e.target.value)}
+                    className="w-full px-3 py-2 bg-white border border-gray-300 rounded-xl font-medium text-gray-900 focus:outline-hidden focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition"
+                  />
+                </div>
+
+                {/* Request Rest Day (optional checkbox/toggle) */}
+                <div className="space-y-2">
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      id="request-rest-day-checkbox"
+                      checked={restDayRequested}
+                      onChange={handleRestDayToggle}
+                      className="w-4 h-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500 cursor-pointer"
+                    />
+                    <span className="text-gray-700 font-semibold">Request Rest Day</span>
+                  </label>
+
+                  {restDayRequested && (
+                    <div className="pl-6 pt-1">
+                      <label htmlFor="requested-rest-date" className="block text-gray-700 font-semibold mb-1">
+                        Requested Rest Date <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        id="requested-rest-date"
+                        type="date"
+                        min={requestedCompletionDate || minCompletionDate}
+                        value={requestedRestDate}
+                        onChange={(e) => setRequestedRestDate(e.target.value)}
+                        required={restDayRequested}
+                        className="w-full px-3 py-2 bg-white border border-gray-300 rounded-xl font-medium text-gray-900 focus:outline-hidden focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition"
+                      />
+                    </div>
+                  )}
+                </div>
+
+                {/* Optional Notes for Coordinator */}
+                <div>
+                  <label htmlFor="coordinator-notes" className="block text-gray-700 font-semibold mb-1">
+                    Optional Notes for Coordinator
+                  </label>
+                  <textarea
+                    id="coordinator-notes"
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    rows={2}
+                    placeholder="Details for coordinator (tickets, site delay, etc.)..."
+                    className="w-full px-3 py-2 bg-white border border-gray-300 rounded-xl font-medium text-gray-900 focus:outline-hidden focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition resize-none"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-gray-100">
+            <button
+              type="button"
+              id="cancel-extension-btn"
               onClick={onClose}
               disabled={submitting}
-              className="px-4 py-2 text-xs font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl transition cursor-pointer"
+              className="px-4 py-2 text-xs font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl transition cursor-pointer disabled:opacity-50"
             >
               Cancel
             </button>
             <button
               type="submit"
+              id="submit-extension-btn"
               disabled={submitting}
-              className="px-5 py-2 text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              className="px-5 py-2 text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 active:bg-amber-800 rounded-xl shadow-xs transition flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
             >
-              <Send size={14} />
-              <span>{submitting ? 'Submitting...' : 'Submit Extension Request'}</span>
+              {submitting ? (
+                <>
+                  <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  <span>Submitting...</span>
+                </>
+              ) : (
+                'Submit Request'
+              )}
             </button>
           </div>
         </form>

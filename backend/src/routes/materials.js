@@ -116,11 +116,12 @@ router.post('/issue-for-checklist', requireRole('STORE_MANAGER', 'ADMIN'), async
  */
 router.post('/issue-full-job', requireRole('STORE_MANAGER', 'ADMIN'), async (req, res) => {
   try {
-    const { checklist_id, issue_devices, issue_materials, remarks } = req.body;
+    const { checklist_id, issue_devices, issue_materials, issue_backup_items, remarks } = req.body;
     const result = await issueFullJobStock({
       checklist_id,
       issue_devices: issue_devices !== undefined ? Boolean(issue_devices) : true,
       issue_materials: issue_materials !== undefined ? Boolean(issue_materials) : true,
+      issue_backup_items: issue_backup_items !== undefined ? Boolean(issue_backup_items) : true,
       remarks,
       user: req.profile,
     });

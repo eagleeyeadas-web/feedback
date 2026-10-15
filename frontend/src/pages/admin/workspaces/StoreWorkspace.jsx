@@ -26,6 +26,7 @@ import {
   Calendar,
   User,
   DollarSign,
+  Trash2,
 } from 'lucide-react';
 import StoreBomManager from '../../../components/bom/StoreBomManager';
 import StoreInstallationRequirements from '../../../components/bom/StoreInstallationRequirements';
@@ -45,6 +46,10 @@ import {
   triggerInventoryCleanupApi,
   fetchStoreMaterialRequirements,
   createDeviceProductApi,
+  deleteStockMovementApi,
+  clearStockMovementsHistoryApi,
+  deleteStoreReturnApi,
+  clearStoreReturnsHistoryApi,
 } from '../../../lib/api';
 
 const STANDARD_DEVICE_TYPES = [
@@ -87,6 +92,15 @@ export default function StoreWorkspace({ onSelectChecklist }) {
   const [movementTotalPages, setMovementTotalPages] = useState(1);
   const [movementTotalCount, setMovementTotalCount] = useState(0);
   const [cleanupRunning, setCleanupRunning] = useState(false);
+
+  // Delete History States (Movements & Returns)
+  const [showDeleteMovementsModal, setShowDeleteMovementsModal] = useState(false);
+  const [deletingMovements, setDeletingMovements] = useState(false);
+  const [deleteMovementsScope, setDeleteMovementsScope] = useState('ALL'); // 'ALL' | 'FILTERED'
+
+  const [showDeleteReturnsModal, setShowDeleteReturnsModal] = useState(false);
+  const [deletingReturns, setDeletingReturns] = useState(false);
+  const [deleteReturnsScope, setDeleteReturnsScope] = useState('ALL'); // 'ALL' | 'VERIFIED_ONLY'
 
   // Manage Stock Modal State (Unified Simplified Stock Management)
   const [manageStockItem, setManageStockItem] = useState(null); // { type: 'DEVICE' | 'MATERIAL', name, unit, currentStock, rawItem }
@@ -195,6 +209,66 @@ export default function StoreWorkspace({ onSelectChecklist }) {
       showToast(`Cleanup notice: ${err.message}`);
     } finally {
       setCleanupRunning(false);
+    }
+  };
+
+  // Handle Delete / Clear Stock Movement History
+  const handleDeleteAllMovements = async (scope = deleteMovementsScope) => {
+    if (!token || deletingMovements) return;
+    setDeletingMovements(true);
+    try {
+      const params = scope === 'FILTERED'
+        ? { category: movementCategory, type: movementType }
+        : { category: 'All', type: 'All' };
+      const res = await clearStockMovementsHistoryApi(token, params);
+      showToast(res.message || 'Movement history deleted successfully!');
+      setShowDeleteMovementsModal(false);
+      await loadAllData();
+    } catch (err) {
+      showToast(err.message || 'Failed to delete movement history');
+    } finally {
+      setDeletingMovements(false);
+    }
+  };
+
+  const handleDeleteSingleMovement = async (id) => {
+    if (!token || !id) return;
+    if (!window.confirm('Are you sure you want to delete this stock movement record from history?')) return;
+    try {
+      await deleteStockMovementApi(token, id);
+      showToast('Stock movement deleted from history');
+      setMovements((prev) => prev.filter((m) => m.id !== id));
+      setMovementTotalCount((prev) => Math.max(0, prev - 1));
+    } catch (err) {
+      showToast(err.message || 'Failed to delete movement record');
+    }
+  };
+
+  // Handle Delete / Clear Return History
+  const handleDeleteAllReturns = async (statusScope = deleteReturnsScope) => {
+    if (!token || deletingReturns) return;
+    setDeletingReturns(true);
+    try {
+      const res = await clearStoreReturnsHistoryApi(token, { status: statusScope });
+      showToast(res.message || 'Return history records deleted successfully!');
+      setShowDeleteReturnsModal(false);
+      await loadAllData();
+    } catch (err) {
+      showToast(err.message || 'Failed to delete return records');
+    } finally {
+      setDeletingReturns(false);
+    }
+  };
+
+  const handleDeleteSingleReturn = async (id) => {
+    if (!token || !id) return;
+    if (!window.confirm('Are you sure you want to delete this return record from history?')) return;
+    try {
+      await deleteStoreReturnApi(token, id);
+      showToast('Return record deleted from history');
+      setStoreReturns((prev) => prev.filter((r) => r.id !== id));
+    } catch (err) {
+      showToast(err.message || 'Failed to delete return record');
     }
   };
 
@@ -1034,6 +1108,17 @@ export default function StoreWorkspace({ onSelectChecklist }) {
                 Technician declared returns must be verified by Store Manager. Usable stock is credited only upon verification; damaged units/materials are routed to scrap stock. Missing items are logged as discrepancies.
               </p>
             </div>
+            {storeReturns.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setShowDeleteReturnsModal(true)}
+                className="self-start sm:self-auto shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-xl transition-colors cursor-pointer"
+                title="Delete return records history"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Delete History</span>
+              </button>
+            )}
           </div>
 
           <div className="bg-white rounded-2xl border border-gray-200 shadow-xs overflow-x-auto">
@@ -1110,23 +1195,33 @@ export default function StoreWorkspace({ onSelectChecklist }) {
                           </span>
                         </td>
                         <td className="py-3 px-4 text-right">
-                          {r.status === 'PENDING_STORE_VERIFICATION' ? (
+                          <div className="flex items-center justify-end gap-2">
+                            {r.status === 'PENDING_STORE_VERIFICATION' ? (
+                              <button
+                                onClick={() => {
+                                  setVerifyReturnModal(r);
+                                  setModalQty(r.declared_return_qty || '');
+                                  setModalCost('0');
+                                  setModalSupplier('0');
+                                  setModalReason('');
+                                  setModalError('');
+                                }}
+                                className="px-3 py-1 text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 rounded-lg shadow-xs cursor-pointer"
+                              >
+                                Verify Return
+                              </button>
+                            ) : (
+                              <span className="text-gray-400 text-xs font-medium">Completed</span>
+                            )}
                             <button
-                              onClick={() => {
-                                setVerifyReturnModal(r);
-                                setModalQty(r.declared_return_qty || '');
-                                setModalCost('0');
-                                setModalSupplier('0');
-                                setModalReason('');
-                                setModalError('');
-                              }}
-                              className="px-3 py-1 text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 rounded-lg shadow-xs cursor-pointer"
+                              type="button"
+                              onClick={() => handleDeleteSingleReturn(r.id)}
+                              className="p-1 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                              title="Delete this return record"
                             >
-                              Verify Return
+                              <Trash2 className="w-3.5 h-3.5" />
                             </button>
-                          ) : (
-                            <span className="text-gray-400 text-xs">Completed</span>
-                          )}
+                          </div>
                         </td>
                       </tr>
                     );
@@ -1179,6 +1274,18 @@ export default function StoreWorkspace({ onSelectChecklist }) {
                 <option value="USABLE_STOCK_RETURNED">Usable Return</option>
                 <option value="DAMAGED_STOCK_RECEIVED">Damaged Return</option>
               </select>
+
+              {movementTotalCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteMovementsModal(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl font-bold transition-colors cursor-pointer"
+                  title="Delete movement history"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Delete History</span>
+                </button>
+              )}
             </div>
           </div>
 
@@ -1194,12 +1301,13 @@ export default function StoreWorkspace({ onSelectChecklist }) {
                   <th className="py-3 px-4 text-center">Balance Transition</th>
                   <th className="py-3 px-4">Performed By</th>
                   <th className="py-3 px-4 min-w-[200px]">Reason / Audit Remarks</th>
+                  <th className="py-3 px-4 text-right">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {movements.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="py-8 text-center text-gray-400">
+                    <td colSpan={9} className="py-8 text-center text-gray-400">
                       No stock movement records match the current filter.
                     </td>
                   </tr>
@@ -1242,6 +1350,16 @@ export default function StoreWorkspace({ onSelectChecklist }) {
                       </td>
                       <td className="py-3 px-4 text-gray-600 text-[11px]">
                         {t.reason_or_remarks || '—'}
+                      </td>
+                      <td className="py-3 px-4 text-right">
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteSingleMovement(t.id)}
+                          className="p-1 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                          title="Delete this movement record"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
                       </td>
                     </tr>
                   ))
@@ -1979,6 +2097,210 @@ export default function StoreWorkspace({ onSelectChecklist }) {
             loadAllData();
           }}
         />
+      )}
+
+      {/* 8. Delete Movement History Confirmation Modal */}
+      {showDeleteMovementsModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 border border-rose-100 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-3 border-b border-gray-100">
+              <div className="flex items-center gap-2 text-rose-700">
+                <div className="p-2 bg-rose-100 rounded-xl">
+                  <Trash2 className="w-5 h-5 text-rose-600" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-gray-900">Delete Stock Movements History</h3>
+                  <p className="text-[11px] text-gray-500">Permanently purge movement ledger records</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowDeleteMovementsModal(false)}
+                className="text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-gray-100 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Stock Balance Invariance Guarantee */}
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs space-y-1 text-amber-900">
+              <div className="flex items-center gap-1.5 font-bold">
+                <ShieldCheck className="w-4 h-4 text-amber-700 shrink-0" />
+                <span>Physical Stock Count Protected</span>
+              </div>
+              <p className="text-[11px] text-amber-800 leading-relaxed">
+                Deleting movement logs clears the transaction audit history only. Current usable balances in <strong>Camera Devices</strong> and <strong>Installation Materials</strong> will remain completely safe and untouched.
+              </p>
+            </div>
+
+            {/* Scope Selection */}
+            <div className="space-y-2 text-xs">
+              <label className="block font-bold text-gray-700">Select Deletion Scope:</label>
+              <label className={`flex items-start gap-2.5 p-3 rounded-xl border cursor-pointer transition-colors ${
+                deleteMovementsScope === 'ALL' ? 'border-rose-300 bg-rose-50/50' : 'border-gray-200 hover:bg-gray-50'
+              }`}>
+                <input
+                  type="radio"
+                  name="movementScope"
+                  value="ALL"
+                  checked={deleteMovementsScope === 'ALL'}
+                  onChange={() => setDeleteMovementsScope('ALL')}
+                  className="mt-0.5 text-rose-600 focus:ring-rose-500"
+                />
+                <div>
+                  <span className="font-bold text-gray-900 block">Delete All Stock Movements</span>
+                  <span className="text-[11px] text-gray-500">Purges all {movementTotalCount} movement ledger records across all categories.</span>
+                </div>
+              </label>
+
+              {(movementCategory !== 'All' || movementType !== 'All') && (
+                <label className={`flex items-start gap-2.5 p-3 rounded-xl border cursor-pointer transition-colors ${
+                  deleteMovementsScope === 'FILTERED' ? 'border-rose-300 bg-rose-50/50' : 'border-gray-200 hover:bg-gray-50'
+                }`}>
+                  <input
+                    type="radio"
+                    name="movementScope"
+                    value="FILTERED"
+                    checked={deleteMovementsScope === 'FILTERED'}
+                    onChange={() => setDeleteMovementsScope('FILTERED')}
+                    className="mt-0.5 text-rose-600 focus:ring-rose-500"
+                  />
+                  <div>
+                    <span className="font-bold text-gray-900 block">
+                      Delete Filtered Movements Only
+                    </span>
+                    <span className="text-[11px] text-gray-500">
+                      Only delete records matching {movementCategory !== 'All' ? `Category: ${movementCategory}` : ''} {movementType !== 'All' ? `Type: ${movementType}` : ''}.
+                    </span>
+                  </div>
+                </label>
+              )}
+            </div>
+
+            <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-800 text-[11px]">
+              <strong>Warning:</strong> This deletion is permanent and cannot be undone.
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                disabled={deletingMovements}
+                onClick={() => setShowDeleteMovementsModal(false)}
+                className="px-4 py-2 font-semibold text-gray-600 hover:bg-gray-100 rounded-xl text-xs cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={deletingMovements}
+                onClick={handleDeleteAllMovements}
+                className="px-4 py-2 font-bold text-white bg-rose-600 hover:bg-rose-700 disabled:opacity-50 rounded-xl text-xs flex items-center gap-1.5 cursor-pointer shadow-xs transition-colors"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>{deletingMovements ? 'Deleting History...' : 'Confirm & Delete History'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 9. Delete Return Records Confirmation Modal */}
+      {showDeleteReturnsModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 border border-rose-100 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-3 border-b border-gray-100">
+              <div className="flex items-center gap-2 text-rose-700">
+                <div className="p-2 bg-rose-100 rounded-xl">
+                  <Trash2 className="w-5 h-5 text-rose-600" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-gray-900">Delete Return Records History</h3>
+                  <p className="text-[11px] text-gray-500">Purge device and material return records</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowDeleteReturnsModal(false)}
+                className="text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-gray-100 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Reassurance */}
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs space-y-1 text-amber-900">
+              <div className="flex items-center gap-1.5 font-bold">
+                <ShieldCheck className="w-4 h-4 text-amber-700 shrink-0" />
+                <span>Credited Warehouse Stock Intact</span>
+              </div>
+              <p className="text-[11px] text-amber-800 leading-relaxed">
+                Stock already verified and credited back to inventory remains intact. Deleting records removes entries from this returns log only.
+              </p>
+            </div>
+
+            {/* Scope Selection */}
+            <div className="space-y-2 text-xs">
+              <label className="block font-bold text-gray-700">Select Deletion Scope:</label>
+              <label className={`flex items-start gap-2.5 p-3 rounded-xl border cursor-pointer transition-colors ${
+                deleteReturnsScope === 'ALL' ? 'border-rose-300 bg-rose-50/50' : 'border-gray-200 hover:bg-gray-50'
+              }`}>
+                <input
+                  type="radio"
+                  name="returnScope"
+                  value="ALL"
+                  checked={deleteReturnsScope === 'ALL'}
+                  onChange={() => setDeleteReturnsScope('ALL')}
+                  className="mt-0.5 text-rose-600 focus:ring-rose-500"
+                />
+                <div>
+                  <span className="font-bold text-gray-900 block">Delete All Return Records ({storeReturns.length})</span>
+                  <span className="text-[11px] text-gray-500">Deletes all return declaration entries, including pending test submissions.</span>
+                </div>
+              </label>
+
+              <label className={`flex items-start gap-2.5 p-3 rounded-xl border cursor-pointer transition-colors ${
+                deleteReturnsScope === 'VERIFIED_ONLY' ? 'border-rose-300 bg-rose-50/50' : 'border-gray-200 hover:bg-gray-50'
+              }`}>
+                <input
+                  type="radio"
+                  name="returnScope"
+                  value="VERIFIED_ONLY"
+                  checked={deleteReturnsScope === 'VERIFIED_ONLY'}
+                  onChange={() => setDeleteReturnsScope('VERIFIED_ONLY')}
+                  className="mt-0.5 text-rose-600 focus:ring-rose-500"
+                />
+                <div>
+                  <span className="font-bold text-gray-900 block">Delete Completed / Verified Returns Only</span>
+                  <span className="text-[11px] text-gray-500">Retains any returns currently awaiting physical store verification.</span>
+                </div>
+              </label>
+            </div>
+
+            <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-800 text-[11px]">
+              <strong>Warning:</strong> This deletion is permanent and cannot be undone.
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                disabled={deletingReturns}
+                onClick={() => setShowDeleteReturnsModal(false)}
+                className="px-4 py-2 font-semibold text-gray-600 hover:bg-gray-100 rounded-xl text-xs cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={deletingReturns}
+                onClick={handleDeleteAllReturns}
+                className="px-4 py-2 font-bold text-white bg-rose-600 hover:bg-rose-700 disabled:opacity-50 rounded-xl text-xs flex items-center gap-1.5 cursor-pointer shadow-xs transition-colors"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>{deletingReturns ? 'Deleting Records...' : 'Confirm & Delete Records'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

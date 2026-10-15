@@ -96,7 +96,7 @@ export async function submitDeviceCarryRecord({ checklist_id, user, items, remar
 
   // Prevent duplicate carry submission
   const existingCarry = await getDeviceCarryRecord(checklist_id);
-  if (existingCarry && existingCarry.items && existingCarry.items.length > 0) {
+  if (existingCarry && existingCarry.source !== 'SALES_CHECKLIST' && existingCarry.items && existingCarry.items.length > 0) {
     throw new Error('Device carry record has already been submitted for this installation job. Duplicate carry submission rejected.');
   }
 
@@ -154,11 +154,23 @@ export async function submitDeviceCarryRecord({ checklist_id, user, items, remar
 
   // 3. Try database insert, fallback to in-memory store if table missing
   try {
-    const { data: createdRecord, error: recordErr } = await supabase
+    let { data: createdRecord, error: recordErr } = await supabase
       .from('job_device_carry_records')
       .insert([carryRecord])
       .select()
       .single();
+
+    if (recordErr && recordErr.message?.includes('violates foreign key constraint') && carryRecord.technician_user_id) {
+      const retryResult = await supabase
+        .from('job_device_carry_records')
+        .insert([{ ...carryRecord, technician_user_id: null }])
+        .select()
+        .single();
+      if (!retryResult.error && retryResult.data) {
+        createdRecord = retryResult.data;
+        recordErr = null;
+      }
+    }
 
     if (recordErr) throw recordErr;
     recordId = createdRecord.id;
@@ -563,11 +575,23 @@ export async function submitInstallationCompletionReport(param1, param2) {
   let reportId = null;
 
   try {
-    const { data: created, error } = await supabase
+    let { data: created, error } = await supabase
       .from('technical_installation_reports')
       .upsert([reportData], { onConflict: 'checklist_id' })
       .select()
       .single();
+
+    if (error && error.message?.includes('violates foreign key constraint') && reportData.technician_id) {
+      const retryResult = await supabase
+        .from('technical_installation_reports')
+        .upsert([{ ...reportData, technician_id: null }], { onConflict: 'checklist_id' })
+        .select()
+        .single();
+      if (!retryResult.error && retryResult.data) {
+        created = retryResult.data;
+        error = null;
+      }
+    }
 
     if (error) throw error;
     reportId = created.id;
@@ -1414,6 +1438,96 @@ export async function getAllStoreMaterialReturns() {
   return returns;
 }
 
+/**
+ * Delete a specific return record by ID from DB and in-memory fallback stores
+ */
+export async function deleteStoreReturnById(returnId) {
+  if (!returnId) return false;
+
+  // 1. Delete from Supabase
+  try {
+    await Promise.all([
+      supabase.from('job_device_returns').delete().eq('id', returnId),
+      supabase.from('job_material_returns').delete().eq('id', returnId),
+    ]);
+  } catch (err) {
+    console.warn('Could not delete return from Supabase:', err.message);
+  }
+
+  // 2. Delete from in-memory fallback stores
+  inMemoryReturns.delete(returnId);
+  inMemoryMaterialReturns.delete(returnId);
+
+  // 3. Save to workflow_storage.json
+  saveFallbackStorage();
+
+  return true;
+}
+
+/**
+ * Clear all or status-filtered store returns from DB and in-memory fallback stores
+ */
+export async function clearStoreReturnsHistory({ status = 'ALL' } = {}) {
+  let deletedCount = 0;
+
+  // 1. Delete from Supabase
+  try {
+    let devQuery = supabase.from('job_device_returns').delete();
+    let matQuery = supabase.from('job_material_returns').delete();
+
+    if (status === 'VERIFIED_ONLY' || status === 'COMPLETED') {
+      devQuery = devQuery.in('status', ['VERIFIED_ACCEPTED', 'VERIFIED_AND_RECONCILED']);
+      matQuery = matQuery.in('status', ['VERIFIED_ACCEPTED', 'VERIFIED_AND_RECONCILED']);
+    } else if (status === 'PENDING_ONLY') {
+      devQuery = devQuery.eq('status', 'PENDING_STORE_VERIFICATION');
+      matQuery = matQuery.eq('status', 'PENDING_STORE_VERIFICATION');
+    } else {
+      devQuery = devQuery.not('id', 'is', null);
+      matQuery = matQuery.not('id', 'is', null);
+    }
+
+    await Promise.all([devQuery, matQuery]);
+  } catch (err) {
+    console.warn('Could not clear returns from Supabase:', err.message);
+  }
+
+  // 2. Clear from in-memory maps
+  const initialCount = inMemoryReturns.size + inMemoryMaterialReturns.size;
+
+  if (status === 'VERIFIED_ONLY' || status === 'COMPLETED') {
+    for (const [id, r] of inMemoryReturns.entries()) {
+      if (r.status === 'VERIFIED_ACCEPTED' || r.status === 'VERIFIED_AND_RECONCILED') {
+        inMemoryReturns.delete(id);
+      }
+    }
+    for (const [id, r] of inMemoryMaterialReturns.entries()) {
+      if (r.status === 'VERIFIED_ACCEPTED' || r.status === 'VERIFIED_AND_RECONCILED') {
+        inMemoryMaterialReturns.delete(id);
+      }
+    }
+  } else if (status === 'PENDING_ONLY') {
+    for (const [id, r] of inMemoryReturns.entries()) {
+      if (r.status === 'PENDING_STORE_VERIFICATION') {
+        inMemoryReturns.delete(id);
+      }
+    }
+    for (const [id, r] of inMemoryMaterialReturns.entries()) {
+      if (r.status === 'PENDING_STORE_VERIFICATION') {
+        inMemoryMaterialReturns.delete(id);
+      }
+    }
+  } else {
+    // ALL
+    inMemoryReturns.clear();
+    inMemoryMaterialReturns.clear();
+  }
+
+  saveFallbackStorage();
+  deletedCount = Math.max(0, initialCount - (inMemoryReturns.size + inMemoryMaterialReturns.size));
+
+  return { success: true, deletedCount };
+}
+
 
 /**
  * Stage 6: Admin resolves an open discrepancy
@@ -1504,7 +1618,7 @@ export async function enrichChecklistsWithWorkflowStatus(checklists) {
     try {
       const { data: reportRows, error: repErr } = await supabase
         .from('technical_installation_reports')
-        .select('id, checklist_id, reconciliation_status, completion_status')
+        .select('id, checklist_id, completion_status')
         .in('checklist_id', ids);
 
       if (!repErr && Array.isArray(reportRows)) {

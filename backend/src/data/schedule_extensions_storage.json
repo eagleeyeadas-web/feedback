@@ -67,10 +67,10 @@
       "updated_at": "2026-10-14T09:12:05.417Z"
     },
     {
-      "id": "4585280a-24aa-4efd-9a1f-cfe774161f0c",
-      "checklist_id": "774bcd14-cbea-4cb7-b6b0-475c320ebba0",
-      "checklist_number": "EE-INST-20261014-0066",
-      "client_name": "Test A Transport 1791974737917",
+      "id": "45fe079f-ac64-45c8-beaa-6f15a9e9ac17",
+      "checklist_id": "c44fb649-d937-446f-af85-013144572ad0",
+      "checklist_number": "EE-INST-20261014-0026",
+      "client_name": "Test A Transport 1791980706126",
       "client_location": "Chennai Central",
       "technician_user_id": "00000000-0000-0000-0000-000000000002",
       "technician_name": "tech@gmail.com",
@@ -98,15 +98,15 @@
       "status": "APPROVED",
       "coordinator_decision_notes": "Approved extension due to custom brackets on site. Extra day verified with client.",
       "decided_by": "00000000-0000-0000-0000-000000000004",
-      "decided_at": "2026-10-14T10:45:54.946Z",
-      "created_at": "2026-10-14T10:45:52.910Z",
-      "updated_at": "2026-10-14T10:45:54.946Z"
+      "decided_at": "2026-10-14T12:25:23.263Z",
+      "created_at": "2026-10-14T12:25:20.971Z",
+      "updated_at": "2026-10-14T12:25:23.263Z"
     },
     {
-      "id": "1a00a0a2-b803-45ea-9b84-9d438440ce08",
-      "checklist_id": "774bcd14-cbea-4cb7-b6b0-475c320ebba0",
-      "checklist_number": "EE-INST-20261014-0066",
-      "client_name": "Test A Transport 1791974737917",
+      "id": "1ab1f226-3bd4-4cd9-b094-83cc2f3a9c7b",
+      "checklist_id": "c44fb649-d937-446f-af85-013144572ad0",
+      "checklist_number": "EE-INST-20261014-0026",
+      "client_name": "Test A Transport 1791980706126",
       "client_location": "Chennai Central",
       "technician_user_id": "00000000-0000-0000-0000-000000000002",
       "technician_name": "tech@gmail.com",
@@ -134,15 +134,15 @@
       "status": "REJECTED",
       "coordinator_decision_notes": "Rejected: job must be handed over as agreed.",
       "decided_by": "00000000-0000-0000-0000-000000000004",
-      "decided_at": "2026-10-14T10:46:01.576Z",
-      "created_at": "2026-10-14T10:46:00.881Z",
-      "updated_at": "2026-10-14T10:46:01.576Z"
+      "decided_at": "2026-10-14T12:25:30.197Z",
+      "created_at": "2026-10-14T12:25:29.463Z",
+      "updated_at": "2026-10-14T12:25:30.197Z"
     },
     {
-      "id": "386e34cd-b76f-4d2e-b273-0482bfacf893",
-      "checklist_id": "72ce31aa-b286-4b7f-bcb1-f4e646c9801f",
-      "checklist_number": "EE-INST-20261014-0068",
-      "client_name": "Hotel Booking Client 1791974737917",
+      "id": "997bd9d5-9249-4d5b-a188-baa3261aae80",
+      "checklist_id": "305c2589-9310-47aa-8a57-e9915ead5ecc",
+      "checklist_number": "EE-INST-20261014-0028",
+      "client_name": "Hotel Booking Client 1791980706126",
       "client_location": "Madurai Outer",
       "technician_user_id": "00000000-0000-0000-0000-000000000002",
       "technician_name": "tech@gmail.com",
@@ -170,15 +170,51 @@
       "status": "APPROVED",
       "coordinator_decision_notes": "Approved additional days. Need to re-book travel & room.",
       "decided_by": "00000000-0000-0000-0000-000000000004",
-      "decided_at": "2026-10-14T10:46:20.942Z",
-      "created_at": "2026-10-14T10:46:19.149Z",
-      "updated_at": "2026-10-14T10:46:20.942Z"
+      "decided_at": "2026-10-14T12:25:50.826Z",
+      "created_at": "2026-10-14T12:25:49.219Z",
+      "updated_at": "2026-10-14T12:25:50.826Z"
+    },
+    {
+      "id": "b1e7970f-1248-4720-a6ba-53ee2ea829b3",
+      "checklist_id": "5e9380ce-0637-4f7d-adeb-648d4c0430c7",
+      "checklist_number": "EE-INST-20261014-0033",
+      "client_name": "Simplified UI Client 1791981370061",
+      "client_location": "Coimbatore Site",
+      "technician_user_id": "tech-1",
+      "technician_name": "Mathi",
+      "engineer_name": "Mathi",
+      "engineer_id": "e1000000-0000-0000-0000-000000000001",
+      "original_dates": {
+        "arrival_date": "2029-07-05",
+        "arrival_time": "09:00:00",
+        "duration": "2 Days",
+        "completion_date": "2029-07-06"
+      },
+      "current_dates": {
+        "arrival_date": "2029-07-05",
+        "arrival_time": "09:00:00",
+        "duration": "2 Days",
+        "completion_date": "2029-07-06"
+      },
+      "requested_completion_date": "2029-07-08",
+      "requested_return_travel_date": "2029-07-09",
+      "additional_working_days": 2,
+      "rest_day_requested": true,
+      "requested_rest_date": "2029-07-10",
+      "reason": "Installation work taking longer than expected",
+      "notes": "Customer added 2 more heavy vehicle installations.",
+      "status": "APPROVED",
+      "coordinator_decision_notes": "Approved 2 extra days for Mathi due to customer vehicle additions.",
+      "decided_by": "5aaef348-45ec-44de-9637-5033cd18db95",
+      "decided_at": "2026-10-14T12:36:17.721Z",
+      "created_at": "2026-10-14T12:36:15.616Z",
+      "updated_at": "2026-10-14T12:36:17.721Z"
     }
   ],
   "revisions": [
     {
-      "id": "68cecc9b-da74-4153-af15-3b6896099e07",
-      "checklist_id": "774bcd14-cbea-4cb7-b6b0-475c320ebba0",
+      "id": "c3bd2dcf-d726-4d14-a2fb-e2c65e0edb05",
+      "checklist_id": "c44fb649-d937-446f-af85-013144572ad0",
       "revision_number": 1,
       "previous_schedule": {
         "arrival_date": "2028-11-01",
@@ -198,12 +234,12 @@
       "changed_by": "00000000-0000-0000-0000-000000000004",
       "changed_by_email": "coordinator@gmail.com",
       "changed_by_role": "COORDINATOR",
-      "related_extension_id": "4585280a-24aa-4efd-9a1f-cfe774161f0c",
-      "created_at": "2026-10-14T10:45:54.946Z"
+      "related_extension_id": "45fe079f-ac64-45c8-beaa-6f15a9e9ac17",
+      "created_at": "2026-10-14T12:25:23.263Z"
     },
     {
-      "id": "be0d14d0-5893-4661-866e-832cf0fe0dda",
-      "checklist_id": "72ce31aa-b286-4b7f-bcb1-f4e646c9801f",
+      "id": "f6fa846d-7cd5-477f-acd9-50400fdc15b8",
+      "checklist_id": "305c2589-9310-47aa-8a57-e9915ead5ecc",
       "revision_number": 1,
       "previous_schedule": {
         "arrival_date": "2028-11-20",
@@ -223,9 +259,33 @@
       "changed_by": "00000000-0000-0000-0000-000000000004",
       "changed_by_email": "coordinator@gmail.com",
       "changed_by_role": "COORDINATOR",
-      "related_extension_id": "386e34cd-b76f-4d2e-b273-0482bfacf893",
-      "created_at": "2026-10-14T10:46:20.942Z"
+      "related_extension_id": "997bd9d5-9249-4d5b-a188-baa3261aae80",
+      "created_at": "2026-10-14T12:25:50.826Z"
+    },
+    {
+      "id": "da771280-238f-430f-ae2f-95b51598befb",
+      "checklist_id": "5e9380ce-0637-4f7d-adeb-648d4c0430c7",
+      "revision_number": 1,
+      "previous_schedule": {
+        "arrival_date": "2029-07-05",
+        "arrival_time": "09:00:00",
+        "duration": "2 Days",
+        "completion_date": "2029-07-06",
+        "revision_number": 0
+      },
+      "new_schedule": {
+        "arrival_date": "2029-07-05",
+        "arrival_time": "09:00:00",
+        "duration": "4 Days",
+        "completion_date": "2029-07-08",
+        "revision_number": 1
+      },
+      "reason": "Extension Request Approved: Installation work taking longer than expected | Note: Approved 2 extra days for Mathi due to customer vehicle additions.",
+      "changed_by": "5aaef348-45ec-44de-9637-5033cd18db95",
+      "changed_by_role": "COORDINATOR",
+      "related_extension_id": "b1e7970f-1248-4720-a6ba-53ee2ea829b3",
+      "created_at": "2026-10-14T12:36:17.721Z"
     }
   ],
-  "updated_at": "2026-10-14T10:46:21.799Z"
+  "updated_at": "2026-10-15T03:18:10.384Z"
 }

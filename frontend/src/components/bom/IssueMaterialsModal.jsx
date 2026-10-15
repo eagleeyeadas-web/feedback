@@ -4,11 +4,13 @@ import {
   fetchMaterialInventory,
   fetchInventoryProducts,
   issueFullJobStockApi,
+  fetchBackupDeclaration,
 } from '../../lib/api';
 
 export default function IssueMaterialsModal({ checklist, token, onClose, onSuccess }) {
   const [deviceInventory, setDeviceInventory] = useState([]);
   const [materialInventory, setMaterialInventory] = useState([]);
+  const [backupDeclaration, setBackupDeclaration] = useState(null);
   const [loadingInv, setLoadingInv] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [remarks, setRemarks] = useState('');
@@ -16,21 +18,25 @@ export default function IssueMaterialsModal({ checklist, token, onClose, onSucce
 
   const [issueDevices, setIssueDevices] = useState(true);
   const [issueMaterials, setIssueMaterials] = useState(true);
+  const [issueBackupItems, setIssueBackupItems] = useState(true);
 
   useEffect(() => {
     if (!token) return;
     setLoadingInv(true);
+    const chkId = checklist.id || checklist.checklist_id;
     Promise.all([
       fetchInventoryProducts(token).catch(() => []),
       fetchMaterialInventory(token).catch(() => []),
+      chkId ? fetchBackupDeclaration(token, chkId).catch(() => null) : Promise.resolve(null),
     ])
-      .then(([devs, mats]) => {
+      .then(([devs, mats, bDecl]) => {
         setDeviceInventory(devs || []);
         setMaterialInventory(mats || []);
+        setBackupDeclaration(bDecl);
       })
-      .catch((err) => console.error('Failed to load live inventory:', err))
+      .catch((err) => console.error('Failed to load live inventory or backup items:', err))
       .finally(() => setLoadingInv(false));
-  }, [token]);
+  }, [token, checklist]);
 
   // Maps for live availability
   const devMap = new Map(deviceInventory.map((d) => [d.device_type, d]));
@@ -81,18 +87,42 @@ export default function IssueMaterialsModal({ checklist, token, onClose, onSucce
     };
   });
 
+  // 3. Extra Loose Backup Items to Issue (if declared by technician)
+  const declaredBackupItems = backupDeclaration?.has_backup_items && Array.isArray(backupDeclaration.items)
+    ? backupDeclaration.items
+    : [];
+
+  const backupList = declaredBackupItems.map((b) => {
+    const bName = b.item_name || '';
+    const req = Number(b.quantity) || 0;
+    const inv = matMap.get(bName.toLowerCase());
+    const dev = devMap.get(bName);
+    const available = inv ? Number(inv.current_stock) || 0 : (dev ? Number(dev.usable_stock) || 0 : 0);
+    const shortage = Math.max(0, req - available);
+    return {
+      item_name: bName,
+      sku: inv?.sku || dev?.sku || b.item_sku || 'N/A',
+      required: req,
+      available,
+      shortage,
+      unit: b.unit || inv?.unit || dev?.unit || 'Nos.',
+    };
+  });
+
   // Shortage calculations
   const devDeficits = deviceList.filter((d) => d.shortage > 0);
   const matDeficits = materialList.filter((m) => m.shortage > 0);
+  const backupDeficits = backupList.filter((b) => b.shortage > 0);
 
   const hasDeviceDeficit = issueDevices && devDeficits.length > 0;
   const hasMaterialDeficit = issueMaterials && matDeficits.length > 0;
-  const hasDeficit = hasDeviceDeficit || hasMaterialDeficit;
+  const hasBackupDeficit = issueBackupItems && backupDeficits.length > 0;
+  const hasDeficit = hasDeviceDeficit || hasMaterialDeficit || hasBackupDeficit;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!issueDevices && !issueMaterials) {
-      setError('Please select at least one component (Camera Devices or Installation Materials) to issue.');
+    if (!issueDevices && !issueMaterials && (!declaredBackupItems.length || !issueBackupItems)) {
+      setError('Please select at least one component (Devices, Materials, or Backup Items) to issue.');
       return;
     }
 
@@ -109,6 +139,7 @@ export default function IssueMaterialsModal({ checklist, token, onClose, onSucce
         checklist_id: checklist.id || checklist.checklist_id,
         issue_devices: issueDevices,
         issue_materials: issueMaterials,
+        issue_backup_items: issueBackupItems,
         remarks: remarks.trim() || `Authorized stock issuance for job ${checklist.checklist_number}`,
       });
       onSuccess();
@@ -175,6 +206,17 @@ export default function IssueMaterialsModal({ checklist, token, onClose, onSucce
             />
             <span>Installation Materials ({materialList.length})</span>
           </label>
+          {declaredBackupItems.length > 0 && (
+            <label className="flex items-center gap-2 cursor-pointer bg-purple-100/70 text-purple-900 px-2 py-0.5 rounded-lg border border-purple-200">
+              <input
+                type="checkbox"
+                checked={issueBackupItems}
+                onChange={(e) => setIssueBackupItems(e.target.checked)}
+                className="w-4 h-4 text-purple-600 rounded border-purple-300 focus:ring-purple-500"
+              />
+              <span className="font-bold">Extra Loose Backup Items ({declaredBackupItems.length})</span>
+            </label>
+          )}
         </div>
 
         {loadingInv ? (
@@ -285,6 +327,59 @@ export default function IssueMaterialsModal({ checklist, token, onClose, onSucce
                 </div>
               </div>
             )}
+
+            {/* 3. Extra Loose Backup Items Stock Review */}
+            {issueBackupItems && backupList.length > 0 && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-xs font-bold text-gray-700">
+                  <span className="flex items-center gap-1.5 text-purple-900">
+                    <Package className="w-4 h-4 text-purple-600" /> Declared Loose Backup Items to Issue
+                  </span>
+                  {hasBackupDeficit && (
+                    <span className="text-rose-600 text-[11px] font-bold">
+                      ⚠ {backupDeficits.length} Backup Item Shortage
+                    </span>
+                  )}
+                </div>
+
+                <div className="border border-purple-200 rounded-xl overflow-hidden text-xs bg-purple-50/20">
+                  <table className="w-full text-left">
+                    <thead className="bg-purple-50 text-[10px] font-bold text-purple-900 uppercase border-b border-purple-200">
+                      <tr>
+                        <th className="py-2 px-3">Loose Product</th>
+                        <th className="py-2 px-3">SKU</th>
+                        <th className="py-2 px-3 text-center">Declared Qty</th>
+                        <th className="py-2 px-3 text-center">Unit</th>
+                        <th className="py-2 px-3 text-center">In Store</th>
+                        <th className="py-2 px-3 text-center">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-purple-100">
+                      {backupList.map((b, i) => (
+                        <tr key={i} className={b.shortage > 0 ? 'bg-rose-50/60' : 'hover:bg-purple-50/40'}>
+                          <td className="py-2 px-3 font-semibold text-gray-900">{b.item_name}</td>
+                          <td className="py-2 px-3 font-mono text-[11px] text-gray-500">{b.sku}</td>
+                          <td className="py-2 px-3 text-center font-bold text-gray-900">{b.required}</td>
+                          <td className="py-2 px-3 text-center text-gray-600 font-medium">{b.unit}</td>
+                          <td className="py-2 px-3 text-center font-mono font-bold text-gray-800">{b.available}</td>
+                          <td className="py-2 px-3 text-center">
+                            {b.shortage > 0 ? (
+                              <span className="text-[10px] font-bold text-rose-700 bg-rose-100 px-2 py-0.5 rounded-full">
+                                Short by {b.shortage}
+                              </span>
+                            ) : (
+                              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
+                                Available
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -314,7 +409,7 @@ export default function IssueMaterialsModal({ checklist, token, onClose, onSucce
             </button>
             <button
               type="submit"
-              disabled={submitting || hasDeficit || (!issueDevices && !issueMaterials)}
+              disabled={submitting || hasDeficit || (!issueDevices && !issueMaterials && (!declaredBackupItems.length || !issueBackupItems))}
               className="px-5 py-2 text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 rounded-xl transition-all shadow-xs flex items-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {submitting ? (
