@@ -1193,8 +1193,13 @@ export async function safeDeleteAllEligibleChecklists({ user, confirmedCount, pa
     throw err;
   }
 
+  const isExplicitToken =
+    confirmedCount === 'CONFIRM_ALL_ELIGIBLE' ||
+    confirmedCount === 'CONFIRM' ||
+    confirmedCount === true;
+
   const parsedConfirmed = Number(confirmedCount);
-  if (parsedConfirmed !== preview.eligibleCount) {
+  if (!isExplicitToken && parsedConfirmed !== preview.eligibleCount) {
     const err = new Error(
       `Confirmation count mismatch: Confirmed count (${parsedConfirmed}) does not match current eligible count (${preview.eligibleCount}). Checklist records may have changed. Please refresh and review before confirming.`
     );

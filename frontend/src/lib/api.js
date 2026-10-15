@@ -224,7 +224,51 @@ export async function deleteInstallationChecklist(token, id) {
     method: 'DELETE',
     headers: adminHeaders(token),
   });
-  return parseResponse(res, 'Failed to delete installation checklist');
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const err = new Error(json.error || 'Failed to delete installation checklist');
+    err.reasons = json.reasons || [];
+    err.canCancel = json.canCancel;
+    err.checklist = json.checklist;
+    err.status = res.status;
+    throw err;
+  }
+  return json;
+}
+
+export async function checkInstallationChecklistEligibility(token, id) {
+  const res = await fetch(`${API_BASE}/admin/installations/${id}/deletion-check`, {
+    headers: adminHeaders(token),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to check deletion eligibility');
+  return json;
+}
+
+export async function previewInstallationChecklistsDeletion(token, params = {}) {
+  const query = new URLSearchParams(params).toString();
+  const res = await fetch(`${API_BASE}/admin/installations/deletion-preview?${query}`, {
+    headers: adminHeaders(token),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to preview checklists deletion');
+  return json;
+}
+
+export async function deleteAllEligibleInstallationChecklists(token, confirmedCount, params = {}) {
+  const res = await fetch(`${API_BASE}/admin/installations/delete-all`, {
+    method: 'POST',
+    headers: adminHeaders(token),
+    body: JSON.stringify({ confirmedCount, params }),
+  });
+  const json = await res.json();
+  if (!res.ok) {
+    const err = new Error(json.error || 'Failed to delete eligible checklists');
+    err.preview = json.preview;
+    err.status = res.status;
+    throw err;
+  }
+  return json;
 }
 
 export async function downloadInstallationPDF(token, id) {

@@ -8,6 +8,10 @@ import {
   updateChecklist,
   deleteChecklist,
   safeDeleteChecklist,
+  previewChecklistsDeletion,
+  safeDeleteAllEligibleChecklists,
+  checkChecklistDeletionEligibility,
+  cancelChecklist,
   getInstallationStats,
   getServiceEngineers,
 } from '../services/installationService.js';
@@ -413,6 +417,42 @@ router.get('/notifications/tech', requireRole('TECHNICAL', 'ADMIN'), async (req,
 });
 
 /**
+ * GET /api/admin/installations/deletion-preview
+ * Previews eligible vs protected checklists for deletion
+ */
+router.get('/deletion-preview', requireRole('COORDINATOR', 'ADMIN', 'SUPER_ADMIN'), async (req, res) => {
+  try {
+    const preview = await previewChecklistsDeletion(req.query);
+    return res.json(preview);
+  } catch (err) {
+    console.error('Error in GET /installations/deletion-preview:', err);
+    return res.status(500).json({ error: err.message || 'Failed to preview checklists deletion' });
+  }
+});
+
+/**
+ * POST /api/admin/installations/delete-all
+ * Deletes all eligible draft checklists safely
+ */
+router.post('/delete-all', requireRole('COORDINATOR', 'ADMIN', 'SUPER_ADMIN'), async (req, res) => {
+  try {
+    const result = await safeDeleteAllEligibleChecklists({
+      user: req.profile || req.user,
+      confirmedCount: req.body.confirmedCount,
+      params: req.body.params || {},
+    });
+    return res.json(result);
+  } catch (err) {
+    console.error('Error in POST /installations/delete-all:', err);
+    const status = err.statusCode || 500;
+    return res.status(status).json({
+      error: err.message || 'Failed to delete eligible checklists',
+      preview: err.preview || null,
+    });
+  }
+});
+
+/**
  * GET /api/admin/installations
  * List installation checklists with search, filters, pagination (Accessible to all authorized roles)
  */
@@ -447,6 +487,8 @@ router.get('/:id', requireRole('ADMIN', 'SALES', 'TECHNICAL', 'STORE_MANAGER', '
     'service-engineers',
     'salespersons',
     'engineers',
+    'deletion-preview',
+    'delete-all',
   ];
   if (STATIC_ROUTE_KEYS.includes(req.params.id)) {
     return next();
@@ -599,6 +641,40 @@ router.delete('/:id', requireRole('COORDINATOR', 'ADMIN', 'SUPER_ADMIN'), async 
       canCancel: err.canCancel || false,
       checklist: err.checklist || null,
     });
+  }
+});
+
+/**
+ * GET /api/admin/installations/:id/deletion-check
+ * Evaluates whether a single checklist is eligible for permanent deletion or why it is protected
+ */
+router.get('/:id/deletion-check', requireRole('COORDINATOR', 'ADMIN', 'SUPER_ADMIN'), async (req, res) => {
+  try {
+    const check = await checkChecklistDeletionEligibility(req.params.id);
+    return res.json(check);
+  } catch (err) {
+    console.error('Error in GET /installations/:id/deletion-check:', err);
+    const status = err.statusCode || 500;
+    return res.status(status).json({ error: err.message || 'Failed to check deletion eligibility' });
+  }
+});
+
+/**
+ * POST /api/admin/installations/:id/cancel
+ * Cancels a checklist when permanent deletion is unsafe, preserving operational history
+ */
+router.post('/:id/cancel', requireRole('COORDINATOR', 'ADMIN', 'SUPER_ADMIN'), async (req, res) => {
+  try {
+    const result = await cancelChecklist({
+      checklistId: req.params.id,
+      user: req.profile || req.user,
+      reason: req.body.reason || 'Cancelled by authorized user',
+    });
+    return res.json(result);
+  } catch (err) {
+    console.error('Error in POST /installations/:id/cancel:', err);
+    const status = err.statusCode || 500;
+    return res.status(status).json({ error: err.message || 'Failed to cancel checklist' });
   }
 });
 
