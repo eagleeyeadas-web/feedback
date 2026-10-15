@@ -16,6 +16,7 @@ import {
 } from './bomService.js';
 import { syncStoreRequirementForChecklist } from './storeRequirementService.js';
 import { notifyStoreManagerOnInstallationChecklist } from './notificationService.js';
+import { getPendingExtensionForChecklist } from './scheduleExtensionService.js';
 
 // In-memory structured extra configurations cache for active runtime sessions
 export const inMemoryChecklistExtraConfigs = new Map();
@@ -404,6 +405,11 @@ export function normalizeChecklistDeviceConfigs(checklist) {
       checklist.schedule_revision_number = 0;
     }
   }
+
+  // Attach pending extension if one is awaiting review
+  const pendingExt = getPendingExtensionForChecklist(checklist.id);
+  checklist.pending_extension = pendingExt || null;
+  checklist.has_pending_extension = Boolean(pendingExt);
 
   return checklist;
 }

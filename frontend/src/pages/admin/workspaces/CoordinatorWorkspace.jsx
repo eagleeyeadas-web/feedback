@@ -71,6 +71,7 @@ export default function CoordinatorWorkspace() {
   const [scheduleConflicts, setScheduleConflicts] = useState([]);
   const [affectedBookings, setAffectedBookings] = useState([]);
   const [loadingSchedule, setLoadingSchedule] = useState(false);
+  const [calendarRefreshKey, setCalendarRefreshKey] = useState(0);
 
   // Decision Modal State (Approve / Reject for Extension, Rest Day, Leave)
   const [decisionModal, setDecisionModal] = useState(null); // { type: 'EXTENSION' | 'REST' | 'LEAVE', action: 'APPROVE' | 'REJECT', item: obj }
@@ -307,6 +308,7 @@ export default function CoordinatorWorkspace() {
       }
 
       setDecisionModal(null);
+      setCalendarRefreshKey((k) => k + 1);
       loadScheduleData();
       loadBookings(true);
     } catch (err) {
@@ -780,58 +782,57 @@ export default function CoordinatorWorkspace() {
                               {ext.checklist_number}
                             </span>
                             <h4 className="font-black text-gray-900 mt-1">{ext.client_name}</h4>
-                            <p className="text-gray-500 text-[11px]">{ext.client_location || 'Site'}</p>
+                            {ext.client_location && (
+                              <p className="text-gray-500 text-[11px]">{ext.client_location}</p>
+                            )}
                           </div>
                           <span className="px-2 py-0.5 bg-amber-100 text-amber-800 rounded font-bold text-[10px] uppercase">
                             Pending Review
                           </span>
                         </div>
 
-                        <div className="bg-white p-3 rounded-xl border border-amber-100 space-y-1">
+                        <div className="bg-white p-3 rounded-xl border border-amber-100 space-y-1.5">
                           <div className="flex justify-between">
-                            <span className="text-gray-500">Service Engineer:</span>
+                            <span className="text-gray-500 font-medium">Service Engineer:</span>
                             <span className="font-bold text-gray-900">{ext.engineer_name || ext.technician_name}</span>
                           </div>
                           <div className="flex justify-between">
-                            <span className="text-gray-500">Current Expected End:</span>
-                            <span className="font-semibold text-gray-700">{ext.current_dates?.completion_date || 'N/A'}</span>
+                            <span className="text-gray-500 font-medium">Current Expected Completion:</span>
+                            <span className="font-semibold text-gray-700 font-mono">
+                              {ext.current_dates?.completion_date || ext.current_completion_date || 'N/A'}
+                            </span>
                           </div>
                           <div className="flex justify-between text-amber-900 font-bold">
-                            <span>Requested Revised End:</span>
-                            <span>{ext.requested_completion_date} (+{ext.additional_working_days} workdays)</span>
+                            <span>Requested New Completion:</span>
+                            <span className="font-mono text-amber-700">{ext.requested_completion_date}</span>
                           </div>
-                          {ext.requested_return_travel_date && (
-                            <div className="flex justify-between text-purple-700 font-semibold">
-                              <span>Return Travel Date:</span>
-                              <span>{ext.requested_return_travel_date}</span>
-                            </div>
-                          )}
-                          {ext.rest_day_requested && (
-                            <div className="flex justify-between text-indigo-700 font-semibold">
-                              <span>Rest Day Requested:</span>
-                              <span>{ext.requested_rest_date || 'Yes'}</span>
-                            </div>
-                          )}
-                          <div className="pt-1 border-t border-gray-100 text-gray-700">
+                          <div className="pt-1.5 border-t border-gray-100 text-gray-700">
                             <span className="font-bold text-gray-800">Reason:</span> {ext.reason}
                           </div>
+                          {ext.notes && (
+                            <div className="text-gray-600 bg-gray-50 p-2 rounded-lg border border-gray-100">
+                              <span className="font-bold text-gray-700">Additional Notes:</span> {ext.notes}
+                            </div>
+                          )}
                         </div>
 
                         <div className="flex items-center justify-end gap-2 pt-1">
                           <button
                             type="button"
+                            id={`reject-ext-${ext.id}`}
                             onClick={() => openDecisionModal('EXTENSION', 'REJECT', ext)}
-                            className="px-3 py-1.5 bg-white hover:bg-rose-50 text-rose-700 border border-rose-200 rounded-xl font-bold text-xs transition cursor-pointer"
+                            className="px-3.5 py-1.5 bg-white hover:bg-rose-50 text-rose-700 border border-rose-200 rounded-xl font-bold text-xs transition cursor-pointer"
                           >
                             Reject
                           </button>
                           <button
                             type="button"
+                            id={`approve-ext-${ext.id}`}
                             onClick={() => openDecisionModal('EXTENSION', 'APPROVE', ext)}
                             className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs transition cursor-pointer shadow-xs flex items-center gap-1"
                           >
                             <Check size={14} />
-                            <span>Approve Extension</span>
+                            <span>Approve</span>
                           </button>
                         </div>
                       </div>
@@ -967,6 +968,7 @@ export default function CoordinatorWorkspace() {
           {/* SUB-SECTION 2: CALENDAR */}
           {scheduleSubTab === 'calendar' && (
             <EngineerAvailabilityCalendar
+              key={calendarRefreshKey}
               token={token}
               onSelectChecklist={(cid) => {
                 const found = checklists.find((c) => c.id === cid);

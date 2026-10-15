@@ -906,6 +906,34 @@ export async function releaseEngineerBooking({ checklistId }) {
 }
 
 /**
+ * Update active date range for an engineer booking upon approved schedule extension
+ */
+export async function updateEngineerBookingEndDate({ checklistId, newEndDate }) {
+  if (!checklistId || !newEndDate) return;
+  const nowIso = new Date().toISOString();
+
+  try {
+    await supabase
+      .from('engineer_bookings')
+      .update({ booking_end_date: newEndDate, updated_at: nowIso })
+      .eq('checklist_id', checklistId);
+  } catch (err) {}
+
+  let found = false;
+  inMemoryBookings.forEach((b, k) => {
+    if (b.checklist_id === checklistId || k === checklistId) {
+      b.booking_end_date = newEndDate;
+      b.updated_at = nowIso;
+      found = true;
+    }
+  });
+
+  if (found) {
+    saveStorage();
+  }
+}
+
+/**
  * Calculate meaningful status for an engineer on a single specific date
  */
 function determineEngineerDateStatus(commitments, dateStr) {

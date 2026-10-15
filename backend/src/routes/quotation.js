@@ -155,6 +155,7 @@ router.post('/', async (req, res) => {
       'Delivery timelines are estimates only and subject to stock availability.',
       'Products/services provided are subject to "3 years replacement warranty against manufacturing defects".',
       'This warranty does not cover normal wear and tear, misuse, or damage caused by improper handling.',
+      'Replacement Policy: No returns after sales; defective products will be replaced only after inspection and verification, subject to warranty terms and conditions.',
     ];
     const finalTerms = (data.terms_conditions && data.terms_conditions.length > 0)
       ? data.terms_conditions

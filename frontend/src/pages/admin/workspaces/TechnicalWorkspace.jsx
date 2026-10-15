@@ -567,6 +567,16 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
                               </div>
                             )}
 
+                            {/* Pending Extension Request Indicator */}
+                            {item.pending_extension && (
+                              <div className="pt-1 border-t border-amber-200">
+                                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1 w-fit">
+                                  <Clock className="w-2.5 h-2.5 text-amber-600" />
+                                  <span>Pending Ext: {item.pending_extension.requested_completion_date}</span>
+                                </span>
+                              </div>
+                            )}
+
                             <div className="text-[10px] text-gray-400 font-mono">{item.expected_arrival_time}</div>
                           </div>
                         </td>
@@ -610,10 +620,26 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
                                 <button
                                   type="button"
                                   onClick={() => setExtensionModalJob(item)}
-                                  className="px-2.5 py-1.5 text-xs font-semibold text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg flex items-center gap-1 cursor-pointer w-fit"
-                                  title="Request schedule extension for additional workdays or rest"
+                                  className={`px-2.5 py-1.5 text-xs font-semibold rounded-lg flex items-center gap-1 cursor-pointer w-fit ${
+                                    item.pending_extension
+                                      ? 'text-amber-900 bg-amber-100 hover:bg-amber-200 border border-amber-300 font-bold'
+                                      : 'text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200'
+                                  }`}
+                                  title={
+                                    item.pending_extension
+                                      ? `Extension to ${item.pending_extension.requested_completion_date} pending review`
+                                      : 'Request schedule extension'
+                                  }
                                 >
-                                  <CalendarPlus className="w-3.5 h-3.5 text-amber-600" /> Request Extension
+                                  {item.pending_extension ? (
+                                    <>
+                                      <Clock className="w-3.5 h-3.5 text-amber-700" /> Extension Pending
+                                    </>
+                                  ) : (
+                                    <>
+                                      <CalendarPlus className="w-3.5 h-3.5 text-amber-600" /> Request Extension
+                                    </>
+                                  )}
                                 </button>
                               </div>
                             ) : (

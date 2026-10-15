@@ -1,7 +1,7 @@
 {
   "rest_days": [
     {
-      "id": "ccd1eea4-ed6d-4715-9d5d-a06cdf4a4268",
+      "id": "2216bef5-c034-4d39-9701-5561ab586f31",
       "engineer_id": "e1000000-0000-0000-0000-000000000006",
       "engineer_name": "Guna",
       "checklist_id": null,
@@ -13,11 +13,11 @@
       "status": "APPROVED",
       "coordinator_decision_notes": "Approved rest day for Guna.",
       "decided_by": "00000000-0000-0000-0000-000000000004",
-      "decided_at": "2026-10-14T12:25:32.707Z",
+      "decided_at": "2026-10-15T04:16:29.644Z",
       "created_by": "00000000-0000-0000-0000-000000000002",
-      "created_at": "2026-10-14T12:25:31.259Z",
-      "updated_at": "2026-10-14T12:25:32.707Z"
+      "created_at": "2026-10-15T04:16:28.862Z",
+      "updated_at": "2026-10-15T04:16:29.644Z"
     }
   ],
-  "updated_at": "2026-10-14T12:25:32.870Z"
+  "updated_at": "2026-10-15T04:42:14.974Z"
 }

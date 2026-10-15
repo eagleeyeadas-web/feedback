@@ -563,6 +563,7 @@ export async function generateQuotationPDF(quotation, items = [], logoBase64 = n
     'Delivery timelines are estimates only and subject to stock availability.',
     'Products/services provided are subject to a 3-year replacement warranty against manufacturing defects.',
     'This warranty does not cover normal wear and tear, misuse, or damage caused by improper handling.',
+    'Replacement Policy: No returns after sales; defective products will be replaced only after inspection and verification, subject to warranty terms and conditions.',
   ];
 
   const rawTerms = (quotation.terms_conditions && quotation.terms_conditions.length > 0)
@@ -571,7 +572,7 @@ export async function generateQuotationPDF(quotation, items = [], logoBase64 = n
 
   rawTerms.forEach((rawTerm, idx) => {
     if (termY < y + splitBoxH - 3) {
-      const cleanTerm = sanitizePdfText(rawTerm.replace(/^\d+\.\s*/, ''));
+      const cleanTerm = sanitizePdfText(rawTerm.replace(/^\d+\.\s*/, '').replace(/\*\*/g, ''));
       const numPrefix = `${idx + 1}.  `;
       
       doc.setFont('helvetica', 'bold');
@@ -585,15 +586,24 @@ export async function generateQuotationPDF(quotation, items = [], logoBase64 = n
       doc.setFontSize(8.2);
       const textLines = doc.splitTextToSize(cleanTerm, textWidthMax);
       
-      doc.text(textLines[0], MARGIN_X + 3 + numWidth, termY);
+      const startsWithReplacementPolicy = textLines[0].startsWith('Replacement Policy:');
+      if (startsWithReplacementPolicy) {
+        doc.setFont('helvetica', 'bold');
+        doc.text('Replacement Policy:', MARGIN_X + 3 + numWidth, termY);
+        const rpWidth = doc.getTextWidth('Replacement Policy:');
+        doc.setFont('helvetica', 'normal');
+        doc.text(textLines[0].substring('Replacement Policy:'.length), MARGIN_X + 3 + numWidth + rpWidth, termY);
+      } else {
+        doc.text(textLines[0], MARGIN_X + 3 + numWidth, termY);
+      }
       
       if (textLines.length > 1) {
         for (let l = 1; l < textLines.length; l++) {
-          termY += 4.0;
+          termY += 3.8;
           doc.text(textLines[l], MARGIN_X + 3 + numWidth, termY);
         }
       }
-      termY += 5.2; // Generous line spacing between terms
+      termY += 4.8; // Spacing between terms to comfortably fit 7 clauses within the box
     }
   });
 

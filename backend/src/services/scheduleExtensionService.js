@@ -11,6 +11,7 @@ import {
   checkEngineerAvailability,
   calculateBookingEndDate,
   parseDurationDays,
+  updateEngineerBookingEndDate,
 } from './engineerBookingService.js';
 import { inMemoryChecklistSchedules } from './installationService.js';
 import { flagBookingForReview } from './coordinatorBookingService.js';
@@ -21,6 +22,19 @@ const STORAGE_FILE = path.join(__dirname, '../data/schedule_extensions_storage.j
 
 const inMemoryExtensions = new Map();
 const inMemoryRevisions = new Map();
+
+/**
+ * Helper to get currently active pending extension request for a checklist
+ */
+export function getPendingExtensionForChecklist(checklistId) {
+  if (!checklistId) return null;
+  for (const ext of inMemoryExtensions.values()) {
+    if (ext.checklist_id === checklistId && ext.status === 'PENDING') {
+      return ext;
+    }
+  }
+  return null;
+}
 
 function loadStorage() {
   try {
@@ -108,7 +122,7 @@ export async function requestScheduleExtension({
   user,
   requestedCompletionDate,
   requestedReturnTravelDate = null,
-  additionalWorkingDays = 1,
+  additionalWorkingDays = null,
   restDayRequested = false,
   requestedRestDate = null,
   reason,
@@ -126,9 +140,20 @@ export async function requestScheduleExtension({
   }
 
   // Prevent duplicate PENDING request for the same checklist
-  const existingPending = Array.from(inMemoryExtensions.values()).find(
+  let existingPending = Array.from(inMemoryExtensions.values()).find(
     (e) => e.checklist_id === checklistId && e.status === 'PENDING'
   );
+  if (!existingPending) {
+    try {
+      const { data } = await supabase
+        .from('schedule_extension_requests')
+        .select('*')
+        .eq('checklist_id', checklistId)
+        .eq('status', 'PENDING')
+        .maybeSingle();
+      if (data) existingPending = data;
+    } catch (e) {}
+  }
   if (existingPending) {
     const err = new Error(
       `An extension request is already pending review for ${checklist.checklist_number}. Please wait for Coordinator review.`
@@ -137,10 +162,25 @@ export async function requestScheduleExtension({
     throw err;
   }
 
-  // Validate dates: requested completion date cannot be before original arrival date
+  // Validate dates: requested completion date cannot be before original arrival date or current completion date
   const arrivalDate = checklist.current_expected_arrival_date || checklist.expected_arrival_date;
+  const currentCompletionDate = checklist.current_booking_end_date || checklist.booking_end_date || arrivalDate;
+
   if (requestedCompletionDate < arrivalDate) {
     throw new Error(`Requested completion date (${requestedCompletionDate}) cannot be before arrival date (${arrivalDate}).`);
+  }
+  if (currentCompletionDate && requestedCompletionDate <= currentCompletionDate) {
+    throw new Error(`Requested completion date (${requestedCompletionDate}) must be after current expected completion date (${currentCompletionDate}).`);
+  }
+
+  let days = parseInt(additionalWorkingDays, 10);
+  if (isNaN(days) || days <= 0) {
+    if (currentCompletionDate && requestedCompletionDate) {
+      const diff = Math.round((new Date(requestedCompletionDate) - new Date(currentCompletionDate)) / (1000 * 60 * 60 * 24));
+      days = Math.max(1, diff);
+    } else {
+      days = 1;
+    }
   }
 
   const reqId = uuidv4();
@@ -154,6 +194,7 @@ export async function requestScheduleExtension({
     technician_name: user?.full_name || user?.email || checklist.service_engineer,
     engineer_name: checklist.service_engineer,
     engineer_id: checklist.service_engineer_id,
+    current_completion_date: currentCompletionDate,
     original_dates: {
       arrival_date: checklist.original_expected_arrival_date || checklist.expected_arrival_date,
       arrival_time: checklist.original_expected_arrival_time || checklist.expected_arrival_time,
@@ -164,11 +205,11 @@ export async function requestScheduleExtension({
       arrival_date: checklist.current_expected_arrival_date || checklist.expected_arrival_date,
       arrival_time: checklist.current_expected_arrival_time || checklist.expected_arrival_time,
       duration: checklist.current_installation_duration || checklist.installation_duration,
-      completion_date: checklist.current_booking_end_date || checklist.booking_end_date,
+      completion_date: currentCompletionDate,
     },
     requested_completion_date: requestedCompletionDate,
     requested_return_travel_date: requestedReturnTravelDate || null,
-    additional_working_days: Math.max(0, parseInt(additionalWorkingDays, 10) || 0),
+    additional_working_days: days,
     rest_day_requested: Boolean(restDayRequested),
     requested_rest_date: requestedRestDate || null,
     reason: reason.trim(),
@@ -380,15 +421,7 @@ export async function approveScheduleExtension({ extensionId, user, decisionNote
     });
 
     // 4. Update engineer_bookings active date range
-    try {
-      await supabase
-        .from('engineer_bookings')
-        .update({
-          booking_end_date: newEndDate,
-          updated_at: nowIso,
-        })
-        .eq('checklist_id', ext.checklist_id);
-    } catch (e) {}
+    await updateEngineerBookingEndDate({ checklistId: ext.checklist_id, newEndDate });
 
     // 5. If rest day was requested within the extension, create/approve the rest day record
     if (ext.rest_day_requested && ext.requested_rest_date) {
@@ -423,7 +456,7 @@ export async function approveScheduleExtension({ extensionId, user, decisionNote
       await flagBookingForReview({
         checklistId: ext.checklist_id,
         reason: `Schedule extended to ${newEndDate} (${ext.additional_working_days} extra working days). Return travel / hotel dates may need manual adjustment.`,
-        returnTravelAffected: Boolean(ext.requested_return_travel_date),
+        returnTravelAffected: true,
         accommodationAffected: true,
       });
     } catch (e) {

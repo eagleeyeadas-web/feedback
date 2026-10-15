@@ -391,6 +391,9 @@ export async function submitInstallationCompletionReport(param1, param2) {
   if (param2 && typeof param2 === 'object') {
     const userObj = typeof param1 === 'object' ? param1 : { id: param1, email: 'tech@eagleeye.com', role: 'TECHNICAL' };
     opts = { ...param2, user: userObj };
+    if (!opts.checklist_id && typeof param1 === 'string') {
+      opts.checklist_id = param1;
+    }
   } else if (param1 && typeof param1 === 'object') {
     opts = param1;
   }

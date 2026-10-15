@@ -1,7 +1,7 @@
 {
   "leaves": [
     {
-      "id": "dfed353a-8a79-4e02-b999-7525d59f806b",
+      "id": "b15fd52e-89ab-43bc-9c09-184ad67e9afa",
       "engineer_id": "e1000000-0000-0000-0000-000000000004",
       "engineer_name": "Sakthivel",
       "leave_start_date": "2028-11-15",
@@ -12,11 +12,79 @@
       "status": "APPROVED",
       "coordinator_decision_notes": "Approved 2 days casual leave.",
       "decided_by": "00000000-0000-0000-0000-000000000004",
-      "decided_at": "2026-10-14T12:25:38.629Z",
+      "decided_at": "2026-10-15T04:16:32.743Z",
       "created_by": "00000000-0000-0000-0000-000000000002",
-      "created_at": "2026-10-14T12:25:37.015Z",
-      "updated_at": "2026-10-14T12:25:38.629Z"
+      "created_at": "2026-10-15T04:16:31.927Z",
+      "updated_at": "2026-10-15T04:16:32.743Z"
+    },
+    {
+      "id": "8750da05-214b-4edd-bf67-ec7ff44be076",
+      "engineer_id": "e1000000-0000-0000-0000-000000000002",
+      "engineer_name": "Kamalesh",
+      "leave_start_date": "2754-12-01",
+      "leave_end_date": "2754-12-03",
+      "leave_type": "Casual",
+      "reason": "Family event",
+      "notes": null,
+      "status": "APPROVED",
+      "coordinator_decision_notes": "Approved annual family leave",
+      "decided_by": "3c1e7aca-a262-4187-820e-83693d684d72",
+      "decided_at": "2026-10-15T04:36:03.756Z",
+      "created_by": "99dfce18-a283-424a-a52a-d29372ad8d9c",
+      "created_at": "2026-10-15T04:36:02.906Z",
+      "updated_at": "2026-10-15T04:36:03.756Z"
+    },
+    {
+      "id": "47790211-739a-4756-bb94-ab3d229371c4",
+      "engineer_id": "e1000000-0000-0000-0000-000000000002",
+      "engineer_name": "Kamalesh",
+      "leave_start_date": "2537-12-01",
+      "leave_end_date": "2537-12-03",
+      "leave_type": "Casual",
+      "reason": "Family event",
+      "notes": null,
+      "status": "APPROVED",
+      "coordinator_decision_notes": "Approved annual family leave",
+      "decided_by": "d81f972c-bf76-4971-8060-345d9d18e39e",
+      "decided_at": "2026-10-15T04:37:10.250Z",
+      "created_by": "4478d831-cd43-4cba-8c0e-75d25a70eb18",
+      "created_at": "2026-10-15T04:37:09.194Z",
+      "updated_at": "2026-10-15T04:37:10.250Z"
+    },
+    {
+      "id": "fb672b28-201b-4178-b4d6-80ce6aa08c9c",
+      "engineer_id": "e1000000-0000-0000-0000-000000000002",
+      "engineer_name": "Kamalesh",
+      "leave_start_date": "2774-12-01",
+      "leave_end_date": "2774-12-03",
+      "leave_type": "Casual",
+      "reason": "Family event",
+      "notes": null,
+      "status": "APPROVED",
+      "coordinator_decision_notes": "Approved annual family leave",
+      "decided_by": "77879871-72b3-4da2-8019-e10e3de57e6f",
+      "decided_at": "2026-10-15T04:39:18.243Z",
+      "created_by": "a2d95e11-87d4-49bd-8a29-68dac564784f",
+      "created_at": "2026-10-15T04:39:17.477Z",
+      "updated_at": "2026-10-15T04:39:18.243Z"
+    },
+    {
+      "id": "ed32e788-c199-4eea-aa6c-8daca213c112",
+      "engineer_id": "e1000000-0000-0000-0000-000000000002",
+      "engineer_name": "Kamalesh",
+      "leave_start_date": "2456-12-01",
+      "leave_end_date": "2456-12-03",
+      "leave_type": "Casual",
+      "reason": "Family event",
+      "notes": null,
+      "status": "APPROVED",
+      "coordinator_decision_notes": "Approved annual family leave",
+      "decided_by": "1deaccfe-fc7c-441d-be85-ad850cd9ada7",
+      "decided_at": "2026-10-15T04:40:41.783Z",
+      "created_by": "783e70f0-4598-415c-9400-ae184b06cb65",
+      "created_at": "2026-10-15T04:40:41.004Z",
+      "updated_at": "2026-10-15T04:40:41.783Z"
     }
   ],
-  "updated_at": "2026-10-14T12:25:38.804Z"
+  "updated_at": "2026-10-15T04:42:14.973Z"
 }
