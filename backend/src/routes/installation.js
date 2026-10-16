@@ -411,7 +411,7 @@ router.get('/notifications/tech', requireRole('TECHNICAL', 'ADMIN'), async (req,
  * GET /api/admin/installations/deletion-preview
  * Previews eligible vs protected checklists for deletion
  */
-router.get('/deletion-preview', requireRole('COORDINATOR', 'ADMIN', 'SUPER_ADMIN'), async (req, res) => {
+router.get('/deletion-preview', requireRole('SALES', 'COORDINATOR', 'ADMIN', 'SUPER_ADMIN'), async (req, res) => {
   try {
     const preview = await previewChecklistsDeletion(req.query);
     return res.json(preview);
@@ -425,7 +425,7 @@ router.get('/deletion-preview', requireRole('COORDINATOR', 'ADMIN', 'SUPER_ADMIN
  * POST /api/admin/installations/delete-all
  * Deletes all eligible draft checklists safely
  */
-router.post('/delete-all', requireRole('COORDINATOR', 'ADMIN', 'SUPER_ADMIN'), async (req, res) => {
+router.post('/delete-all', requireRole('SALES', 'COORDINATOR', 'ADMIN', 'SUPER_ADMIN'), async (req, res) => {
   try {
     const result = await safeDeleteAllEligibleChecklists({
       user: req.profile || req.user,

@@ -26,3 +26,5 @@ Thumbs.db
 # Scratch & temporary testing data
 scratch/
 supabase/.temp/
+backend/backups/
+*.pdf

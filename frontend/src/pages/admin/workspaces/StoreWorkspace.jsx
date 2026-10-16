@@ -1445,12 +1445,13 @@ export default function StoreWorkspace({ onSelectChecklist }) {
             {storeReturns.length > 0 && (
               <button
                 type="button"
+                id="btn-delete-all-returns"
                 onClick={() => setShowDeleteReturnsModal(true)}
                 className="self-start sm:self-auto shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-xl transition-colors cursor-pointer"
                 title="Delete return records history"
               >
                 <Trash2 className="w-3.5 h-3.5" />
-                <span>Delete History</span>
+                <span>Delete All / Clean Returns</span>
               </button>
             )}
           </div>
@@ -1612,12 +1613,13 @@ export default function StoreWorkspace({ onSelectChecklist }) {
               {movementTotalCount > 0 && (
                 <button
                   type="button"
+                  id="btn-delete-all-movements"
                   onClick={() => setShowDeleteMovementsModal(true)}
                   className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl font-bold transition-colors cursor-pointer"
                   title="Delete movement history"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
-                  <span>Delete History</span>
+                  <span>Delete All / Clean Movements</span>
                 </button>
               )}
             </div>

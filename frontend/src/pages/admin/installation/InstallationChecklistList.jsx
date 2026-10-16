@@ -43,7 +43,7 @@ export default function InstallationChecklistList({ onSelectChecklist, onCreateN
 
   const userRole = (role || 'ADMIN').toUpperCase();
   const canCreateOrEdit = userRole === 'SALES' || userRole === 'ADMIN' || userRole === 'SUPER_ADMIN';
-  const canDelete = userRole === 'ADMIN' || userRole === 'SUPER_ADMIN' || userRole === 'COORDINATOR';
+  const canDelete = userRole === 'ADMIN' || userRole === 'SUPER_ADMIN' || userRole === 'COORDINATOR' || userRole === 'SALES';
 
   const [checklists, setChecklists] = useState([]);
   const [loading, setLoading] = useState(true);
