@@ -18,6 +18,12 @@ import {
 } from 'lucide-react';
 import { fetchBackupProducts, fetchBackupDeclaration, saveBackupDeclaration } from '../../lib/api';
 
+export const EXTRA_DEVICE_OPTIONS = [
+  'Camera',
+  'Live Display',
+  'Recording Display',
+];
+
 /**
  * Portal-based Searchable Product Dropdown
  * Rendered directly to document.body to prevent parent container overflow clipping
@@ -482,14 +488,14 @@ export default function TechnicianBackupDeclarationModal({
 
   if (!isOpen || !job) return null;
 
-  // Add Product button adds a new independent row without resetting other rows
-  const handleAddItemRow = (initialCat = 'Device Component') => {
+  // Add Extra Device button adds a new independent row without resetting other rows
+  const handleAddItemRow = (initialDeviceType = '') => {
     setItems((prev) => [
       ...prev,
       {
         id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `item-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
-        category: initialCat,
-        item_name: '',
+        category: 'Device Component',
+        item_name: initialDeviceType,
         quantity: 1,
         unit: 'Nos.',
         sku: '',
@@ -502,34 +508,32 @@ export default function TechnicianBackupDeclarationModal({
     setItems((prev) => prev.filter((it) => it.id !== id));
   };
 
+  const handleDeviceTypeChange = (rowId, newDeviceType) => {
+    setItems((prev) =>
+      prev.map((it) => {
+        if (it.id !== rowId) return it;
+        const matched = availableProducts.find(
+          (p) => (p.item_name || '').toLowerCase() === newDeviceType.toLowerCase()
+        );
+        return {
+          ...it,
+          category: 'Device Component',
+          item_name: newDeviceType,
+          unit: matched?.unit || 'Nos.',
+          sku: matched?.sku || '',
+          material_id: matched?.id || matched?.material_id || null,
+        };
+      })
+    );
+  };
+
   const handleCategoryChange = (rowId, newCategory) => {
     setItems((prev) =>
       prev.map((it) => {
         if (it.id !== rowId) return it;
-        const prodsForCat = availableProducts.filter((p) =>
-          newCategory === 'Device Component'
-            ? p.category === 'Device Component' || p.category_group === 'A' || p.category?.includes('Component') || p.category?.includes('Device')
-            : p.category === 'Installation Material' || p.category_group === 'B' || p.category?.includes('Material')
-        );
-        const match = prodsForCat.find(
-          (p) => (p.item_name || '').toLowerCase() === (it.item_name || '').toLowerCase()
-        );
-        if (match) {
-          return {
-            ...it,
-            category: newCategory,
-            unit: match.unit || 'Nos.',
-            sku: match.sku || it.sku,
-            material_id: match.id || it.material_id,
-          };
-        }
         return {
           ...it,
           category: newCategory,
-          item_name: '',
-          unit: 'Nos.',
-          sku: '',
-          material_id: null,
         };
       })
     );
@@ -540,14 +544,9 @@ export default function TechnicianBackupDeclarationModal({
     setItems((prev) =>
       prev.map((it) => {
         if (it.id !== rowId) return it;
-        const isDeviceComp =
-          product.category === 'Device Component' ||
-          product.category_group === 'A' ||
-          product.category?.includes('Component') ||
-          product.category?.includes('Device');
         return {
           ...it,
-          category: isDeviceComp ? 'Device Component' : 'Installation Material',
+          category: 'Device Component',
           item_name: product.item_name,
           unit: product.unit || 'Nos.',
           sku: product.sku || '',
@@ -573,19 +572,19 @@ export default function TechnicianBackupDeclarationModal({
     setHasBackupItems(isYes);
     setError('');
     if (isYes && items.length === 0) {
-      handleAddItemRow('Device Component');
+      handleAddItemRow(EXTRA_DEVICE_OPTIONS[0]);
     }
   };
 
   const validate = () => {
     if (hasBackupItems) {
       if (!items || items.length === 0) {
-        return 'Please add at least one extra backup item.';
+        return 'Please add at least one extra backup device.';
       }
       for (let i = 0; i < items.length; i++) {
         const it = items[i];
         if (!it.item_name || !it.item_name.trim()) {
-          return `Row #${i + 1}: Please select a product from the dropdown.`;
+          return `Row #${i + 1}: Please select an Extra Device Type from the dropdown.`;
         }
         const q = Number(it.quantity);
         if (isNaN(q) || q <= 0) {
@@ -763,10 +762,10 @@ export default function TechnicianBackupDeclarationModal({
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div>
                       <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wider">
-                        Extra Items Declaration Table
+                        Extra Devices Declaration Table
                       </h4>
                       <p className="text-[11px] text-gray-500">
-                        Select category and product, then specify the exact quantity to carry.
+                        Select extra device type and enter the quantity to carry to the site.
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
@@ -774,22 +773,22 @@ export default function TechnicianBackupDeclarationModal({
                         <button
                           type="button"
                           onClick={() => {
-                            if (window.confirm('Are you sure you want to clear all declared backup items from this list?')) {
+                            if (window.confirm('Are you sure you want to clear all declared extra devices from this list?')) {
                               setItems([]);
                             }
                           }}
                           className="px-3 py-1.5 text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-xl flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs"
-                          title="Clear all declared items from list"
+                          title="Clear all declared devices from list"
                         >
-                          <Trash2 size={14} /> Clear All Items
+                          <Trash2 size={14} /> Clear All
                         </button>
                       )}
                       <button
                         type="button"
-                        onClick={() => handleAddItemRow('Device Component')}
+                        onClick={() => handleAddItemRow()}
                         className="px-3.5 py-1.5 text-xs font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-xl flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs"
                       >
-                        <Plus size={15} /> Add Product
+                        <Plus size={15} /> Add Extra Device
                       </button>
                     </div>
                   </div>
@@ -799,10 +798,9 @@ export default function TechnicianBackupDeclarationModal({
                     <table className="w-full text-left text-xs border-collapse">
                       <thead className="bg-slate-100/90 border-b border-gray-200 text-gray-700 font-bold uppercase tracking-wider text-[10px]">
                         <tr>
-                          <th className="py-3 px-3 w-10 text-center text-gray-400">#</th>
-                          <th className="py-3 px-3 w-48">Category</th>
-                          <th className="py-3 px-3 min-w-[280px]">Search & Select Product</th>
-                          <th className="py-3 px-3 w-28 text-center">Quantity</th>
+                          <th className="py-3 px-3 w-12 text-center text-gray-400">#</th>
+                          <th className="py-3 px-3 min-w-[280px]">Extra Device Type</th>
+                          <th className="py-3 px-3 w-36 text-center">Quantity to Carry</th>
                           <th className="py-3 px-3 w-24 text-center">Unit</th>
                           <th className="py-3 px-3 w-16 text-center">Remove</th>
                         </tr>
@@ -810,56 +808,42 @@ export default function TechnicianBackupDeclarationModal({
                       <tbody className="divide-y divide-gray-100">
                         {items.length === 0 ? (
                           <tr>
-                            <td colSpan={6} className="py-8 text-center text-gray-400 italic">
-                              No loose items declared yet. Click &ldquo;+ Add Product&rdquo; above to add a row.
+                            <td colSpan={5} className="py-8 text-center text-gray-400 italic">
+                              No extra devices declared yet. Click &ldquo;+ Add Extra Device&rdquo; above to add a row.
                             </td>
                           </tr>
                         ) : (
                           items.map((it, idx) => {
-                            const prodsForCat = availableProducts.filter((p) =>
-                              it.category === 'Device Component'
-                                ? p.category === 'Device Component' ||
-                                  p.category_group === 'A' ||
-                                  p.category?.includes('Component') ||
-                                  p.category?.includes('Device')
-                                : p.category === 'Installation Material' ||
-                                  p.category_group === 'B' ||
-                                  p.category?.includes('Material')
-                            );
-
-                            const otherItemNames = items
-                              .filter((other) => other.id !== it.id)
-                              .map((other) => other.item_name);
-
                             return (
                               <tr key={it.id} className="hover:bg-slate-50/70 transition-colors">
                                 <td className="py-3 px-3 font-mono font-bold text-gray-400 text-center align-middle">
                                   {idx + 1}
                                 </td>
-                                <td className="py-3 px-3 align-middle">
-                                  <select
-                                    value={it.category}
-                                    onChange={(e) => handleCategoryChange(it.id, e.target.value)}
-                                    className="w-full text-xs p-2.5 border border-gray-200 rounded-lg focus:outline-none focus:border-purple-500 font-semibold bg-white text-gray-800 cursor-pointer transition-all"
-                                  >
-                                    <option value="Device Component">Device Component</option>
-                                    <option value="Installation Material">Installation Material</option>
-                                  </select>
-                                </td>
                                 <td className="py-3 px-3 align-middle min-w-[280px]">
-                                  <SearchableProductSelect
+                                  <select
                                     value={it.item_name}
-                                    products={prodsForCat}
-                                    excludeItemNames={otherItemNames}
-                                    onSelect={(prod) => handleProductSelect(it.id, prod)}
-                                    placeholder="Search & select product..."
-                                  />
+                                    onChange={(e) => handleDeviceTypeChange(it.id, e.target.value)}
+                                    className="w-full text-xs p-2.5 border border-gray-200 rounded-lg focus:outline-none focus:border-purple-500 font-semibold bg-white text-gray-800 cursor-pointer transition-all"
+                                    required
+                                  >
+                                    <option value="">-- Select Extra Device Type --</option>
+                                    {EXTRA_DEVICE_OPTIONS.map((typeOption) => (
+                                      <option key={typeOption} value={typeOption}>
+                                        {typeOption}
+                                      </option>
+                                    ))}
+                                    {it.item_name && !EXTRA_DEVICE_OPTIONS.includes(it.item_name) && (
+                                      <option value={it.item_name}>
+                                        {it.item_name} (Historical)
+                                      </option>
+                                    )}
+                                  </select>
                                 </td>
                                 <td className="py-3 px-3 align-middle">
                                   <input
                                     type="number"
-                                    min="0.1"
-                                    step="any"
+                                    min="1"
+                                    step="1"
                                     value={it.quantity}
                                     onChange={(e) => handleItemChange(it.id, 'quantity', e.target.value)}
                                     placeholder="1"
@@ -894,30 +878,15 @@ export default function TechnicianBackupDeclarationModal({
                   <div className="md:hidden space-y-3">
                     {items.length === 0 ? (
                       <div className="p-5 border border-dashed border-gray-300 rounded-xl text-center text-gray-400 text-xs italic">
-                        No loose items declared yet. Click &ldquo;+ Add Product&rdquo; above to add a row.
+                        No extra devices declared yet. Click &ldquo;+ Add Extra Device&rdquo; above to add a row.
                       </div>
                     ) : (
                       items.map((it, idx) => {
-                        const prodsForCat = availableProducts.filter((p) =>
-                          it.category === 'Device Component'
-                            ? p.category === 'Device Component' ||
-                              p.category_group === 'A' ||
-                              p.category?.includes('Component') ||
-                              p.category?.includes('Device')
-                            : p.category === 'Installation Material' ||
-                              p.category_group === 'B' ||
-                              p.category?.includes('Material')
-                        );
-
-                        const otherItemNames = items
-                          .filter((other) => other.id !== it.id)
-                          .map((other) => other.item_name);
-
                         return (
                           <div key={it.id} className="p-4 bg-white border border-gray-200 rounded-xl space-y-3 shadow-2xs">
                             <div className="flex items-center justify-between border-b border-gray-100 pb-2">
                               <span className="font-bold text-xs text-purple-900 font-mono">
-                                Product Row #{idx + 1}
+                                Device #{idx + 1}
                               </span>
                               <button
                                 type="button"
@@ -930,28 +899,26 @@ export default function TechnicianBackupDeclarationModal({
                             <div className="space-y-2.5">
                               <div>
                                 <label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">
-                                  Category
+                                  Extra Device Type
                                 </label>
                                 <select
-                                  value={it.category}
-                                  onChange={(e) => handleCategoryChange(it.id, e.target.value)}
-                                  className="w-full text-xs p-2.5 border border-gray-200 rounded-lg focus:outline-none focus:border-purple-500 font-semibold bg-white text-gray-800"
-                                >
-                                  <option value="Device Component">Device Component</option>
-                                  <option value="Installation Material">Installation Material</option>
-                                </select>
-                              </div>
-                              <div>
-                                <label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">
-                                  Search & Select Product
-                                </label>
-                                <SearchableProductSelect
                                   value={it.item_name}
-                                  products={prodsForCat}
-                                  excludeItemNames={otherItemNames}
-                                  onSelect={(prod) => handleProductSelect(it.id, prod)}
-                                  placeholder="Search & select product..."
-                                />
+                                  onChange={(e) => handleDeviceTypeChange(it.id, e.target.value)}
+                                  className="w-full text-xs p-2.5 border border-gray-200 rounded-lg focus:outline-none focus:border-purple-500 font-semibold bg-white text-gray-800 cursor-pointer"
+                                  required
+                                >
+                                  <option value="">-- Select Extra Device Type --</option>
+                                  {EXTRA_DEVICE_OPTIONS.map((typeOption) => (
+                                    <option key={typeOption} value={typeOption}>
+                                      {typeOption}
+                                    </option>
+                                  ))}
+                                  {it.item_name && !EXTRA_DEVICE_OPTIONS.includes(it.item_name) && (
+                                    <option value={it.item_name}>
+                                      {it.item_name} (Historical)
+                                    </option>
+                                  )}
+                                </select>
                               </div>
                               <div className="grid grid-cols-2 gap-2.5">
                                 <div>
@@ -960,8 +927,8 @@ export default function TechnicianBackupDeclarationModal({
                                   </label>
                                   <input
                                     type="number"
-                                    min="0.1"
-                                    step="any"
+                                    min="1"
+                                    step="1"
                                     value={it.quantity}
                                     onChange={(e) => handleItemChange(it.id, 'quantity', e.target.value)}
                                     placeholder="1"

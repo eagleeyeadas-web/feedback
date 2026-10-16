@@ -331,9 +331,17 @@ export async function saveBackupDeclaration({
   }
 
   const nowIso = new Date().toISOString();
+  const isValidUuid = (val) =>
+    typeof val === 'string' &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(val);
+
   const declarationPayload = {
     checklist_id: checklistId,
-    technician_id: user?.id || checklist?.service_engineer_id || null,
+    technician_id: isValidUuid(user?.id)
+      ? user.id
+      : isValidUuid(checklist?.service_engineer_id)
+      ? checklist.service_engineer_id
+      : null,
     technician_name: user?.name || user?.email || checklist?.service_engineer || 'Technician',
     has_backup_items: isCarrying,
     no_items_reason: isCarrying ? null : (noItemsReason ? noItemsReason.trim() : null),
@@ -351,7 +359,7 @@ export async function saveBackupDeclaration({
       .from('pre_installation_backup_declarations')
       .upsert(
         {
-          ...(existingDecl?.id ? { id: existingDecl.id } : {}),
+          ...(isValidUuid(existingDecl?.id) ? { id: existingDecl.id } : {}),
           ...declarationPayload,
           created_at: existingDecl?.created_at || nowIso,
         },
@@ -373,7 +381,7 @@ export async function saveBackupDeclaration({
         const rowsToInsert = validatedItems.map((vi) => ({
           declaration_id: savedDeclaration.id,
           checklist_id: checklistId,
-          item_id: vi.item_id,
+          item_id: isValidUuid(vi.item_id) ? vi.item_id : crypto.randomUUID(),
           item_name: vi.item_name,
           item_sku: vi.item_sku,
           quantity: vi.quantity,
@@ -426,11 +434,15 @@ export async function saveBackupDeclaration({
 
   // Synchronize technician's backup declaration onto the parent installation checklist record
   try {
+    const totalExtra = validatedItems.reduce((sum, it) => sum + (Number(it.quantity) || 0), 0);
+
     await supabase
       .from('installation_checklists')
       .update({
         carry_extra_backup_items: isCarrying,
         extra_devices: isCarrying,
+        extra_device_type: isCarrying && validatedItems.length > 0 ? validatedItems.map((it) => `${it.item_name} (${it.quantity})`).join(', ') : null,
+        extra_device_count: isCarrying ? totalExtra : null,
         updated_at: nowIso,
       })
       .eq('id', checklistId);

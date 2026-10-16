@@ -3,13 +3,9 @@ import { Package, Truck, AlertTriangle, CheckCircle2, X, Plus, Trash2 } from 'lu
 import { submitDeviceCarryRecord } from '../../lib/api';
 
 const SUPPORTED_DEVICE_TYPES = [
-  '2 Channel Live',
-  '2 Channel Recording',
-  '4 Channel Live',
-  '4 Channel Recording',
-  '6 Channel Live',
-  '6 Channel Recording',
-  '8 Channel Live',
+  'Camera',
+  'Live Display',
+  'Recording Display',
 ];
 
 export default function DeviceCarryModal({ checklist, token, onClose, onSuccess }) {
