@@ -66,7 +66,8 @@ async function executeCleanAdminPanel() {
     { name: 'installation_checklists', key: 'id' },
     { name: 'material_stock_transactions', key: 'id' },
     { name: 'stock_movements', key: 'id' },
-    { name: 'retention_cleanup_logs', key: 'id' }
+    { name: 'retention_cleanup_logs', key: 'id' },
+    { name: 'feedback', key: 'id' }
   ];
 
   const deletionReport = {};
