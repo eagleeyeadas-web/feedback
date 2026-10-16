@@ -66,6 +66,37 @@ import {
 
 const SERVICE_ENGINEER_OPTIONS = ['Mathi', 'Guna', 'Sakthivel', 'Kamalesh'];
 
+function parseDateParts(dateStr) {
+  if (!dateStr || typeof dateStr !== 'string') return null;
+  const parts = dateStr.split('T')[0].split('-').map(Number);
+  if (parts.length < 3 || isNaN(parts[0]) || isNaN(parts[1]) || isNaN(parts[2])) return null;
+  return new Date(Date.UTC(parts[0], parts[1] - 1, parts[2]));
+}
+
+function formatDateString(dateObj) {
+  if (!dateObj || isNaN(dateObj.getTime())) return '';
+  return dateObj.toISOString().split('T')[0];
+}
+
+function addDaysToDate(dateStr, days = 1) {
+  const d = parseDateParts(dateStr);
+  if (!d) return '';
+  d.setUTCDate(d.getUTCDate() + Number(days));
+  return formatDateString(d);
+}
+
+function formatDisplayDate(dateStr) {
+  if (!dateStr) return 'Not scheduled';
+  const d = parseDateParts(dateStr);
+  if (!d) return dateStr;
+  return d.toLocaleDateString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'UTC',
+  });
+}
+
 export default function CoordinatorWorkspace() {
   const { token, user } = useAuth();
 
@@ -1068,12 +1099,25 @@ export default function CoordinatorWorkspace() {
                           <div className="flex justify-between">
                             <span className="text-gray-500 font-medium">Current Availability Date:</span>
                             <span className="font-semibold text-gray-700 font-mono">
-                              {ext.current_dates?.completion_date || ext.current_completion_date || 'N/A'}
+                              {formatDisplayDate(
+                                addDaysToDate(
+                                  ext.current_dates?.completion_date || ext.current_completion_date,
+                                  1
+                                )
+                              )}
+                            </span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-gray-500 font-medium">Extend Work Through (Inclusive):</span>
+                            <span className="font-semibold text-gray-700 font-mono">
+                              {formatDisplayDate(ext.requested_completion_date)}
                             </span>
                           </div>
                           <div className="flex justify-between text-amber-900 font-bold">
                             <span>Requested New Availability Date:</span>
-                            <span className="font-mono text-amber-700">{ext.requested_completion_date}</span>
+                            <span className="font-mono text-amber-700">
+                              {formatDisplayDate(addDaysToDate(ext.requested_completion_date, 1))}
+                            </span>
                           </div>
                           <div className="pt-1.5 border-t border-gray-100 text-gray-700">
                             <span className="font-bold text-gray-800">Reason for Date Change:</span> {ext.reason}

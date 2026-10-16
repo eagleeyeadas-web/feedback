@@ -144,6 +144,42 @@ export async function getAvailableBackupProducts() {
         }
       } else {
         categoryBMaterials.push(entry);
+        if (lower.includes('cable tie') && lower.includes('200')) {
+          categoryBMaterials.push({
+            ...entry,
+            id: `${m.id}-ct-200mm`,
+            canonical_id: m.id,
+            item_name: 'Cable Tie 200mm',
+            display_name: 'Cable Tie 200mm',
+          });
+        }
+        if (lower.includes('cable tie') && lower.includes('300')) {
+          categoryBMaterials.push({
+            ...entry,
+            id: `${m.id}-ct-300mm`,
+            canonical_id: m.id,
+            item_name: 'Cable Tie 300mm',
+            display_name: 'Cable Tie 300mm',
+          });
+        }
+        if (lower.includes('5-metre') || lower === '5m cable') {
+          categoryBMaterials.push({
+            ...entry,
+            id: `${m.id}-5m-cable`,
+            canonical_id: m.id,
+            item_name: '5m Cable',
+            display_name: '5m Cable',
+          });
+        }
+        if (lower.includes('15-metre') || lower === '15m cable') {
+          categoryBMaterials.push({
+            ...entry,
+            id: `${m.id}-15m-cable`,
+            canonical_id: m.id,
+            item_name: '15m Cable',
+            display_name: '15m Cable',
+          });
+        }
       }
     });
 
@@ -207,7 +243,12 @@ export async function getBackupDeclaration(checklistId) {
         .eq('declaration_id', decl.id)
         .order('created_at', { ascending: true });
 
-      const items = !rowsErr && Array.isArray(rows) ? rows : [];
+      const items = !rowsErr && Array.isArray(rows)
+        ? rows.map((r) => ({
+            ...r,
+            category: r.category || classifyBackupItemCategory(r.item_name),
+          }))
+        : [];
       const result = {
         ...decl,
         sales_expected: salesExpected,
@@ -227,6 +268,10 @@ export async function getBackupDeclaration(checklistId) {
     return {
       ...cached,
       sales_expected: salesExpected,
+      items: (cached.items || []).map((it) => ({
+        ...it,
+        category: it.category || classifyBackupItemCategory(it.item_name),
+      })),
     };
   }
 
@@ -239,6 +284,23 @@ export async function getBackupDeclaration(checklistId) {
     status: 'NOT_RECORDED',
     items: [],
   };
+}
+
+export function classifyBackupItemCategory(name = '', declaredCategory = '') {
+  if (declaredCategory === 'Device Component' || declaredCategory === 'Installation Material') {
+    return declaredCategory;
+  }
+  const lower = (name || '').toLowerCase();
+  if (
+    lower.includes('camera') ||
+    lower.includes('display') ||
+    lower.includes('mdvr') ||
+    lower.includes('sensor') ||
+    lower.includes('system')
+  ) {
+    return 'Device Component';
+  }
+  return 'Installation Material';
 }
 
 /**
@@ -270,6 +332,13 @@ export async function saveBackupDeclaration({
 
   const isCarrying = Boolean(hasBackupItems);
 
+  if (!isCarrying) {
+    const salesExpected = Boolean(checklist?.carry_extra_backup_items ?? checklist?.extra_devices);
+    if (salesExpected && (!noItemsReason || !noItemsReason.trim())) {
+      throw new Error('Please provide a reason why no extra backup items are carried when Sales indicated backup items were needed.');
+    }
+  }
+
   let validatedItems = [];
   if (isCarrying) {
     if (!Array.isArray(items) || items.length === 0) {
@@ -291,6 +360,7 @@ export async function saveBackupDeclaration({
       const unit = (it.unit || 'Nos.').trim();
       const itemId = (it.item_id || it.id || `item-${name.toLowerCase().replace(/\s+/g, '-')}`).trim();
       const sku = (it.sku || it.item_sku || '').trim();
+      const category = classifyBackupItemCategory(name, it.category);
 
       // Combine duplicate rows if user selected same item
       if (itemMap.has(name.toLowerCase())) {
@@ -301,6 +371,7 @@ export async function saveBackupDeclaration({
           item_id: itemId,
           item_name: name,
           item_sku: sku || null,
+          category,
           quantity: qty,
           unit: unit || 'Nos.',
           quantity_issued: 0,
@@ -401,7 +472,13 @@ export async function saveBackupDeclaration({
           .insert(rowsToInsert)
           .select();
 
-        savedDeclaration.items = insertedRows || rowsToInsert;
+        const finalRows = insertedRows || rowsToInsert;
+        savedDeclaration.items = finalRows.map((row) => ({
+          ...row,
+          category:
+            validatedItems.find((vi) => (vi.item_name || '').toLowerCase() === (row.item_name || '').toLowerCase())?.category ||
+            classifyBackupItemCategory(row.item_name),
+        }));
       } else {
         savedDeclaration.items = [];
       }
@@ -440,9 +517,6 @@ export async function saveBackupDeclaration({
       .from('installation_checklists')
       .update({
         carry_extra_backup_items: isCarrying,
-        extra_devices: isCarrying,
-        extra_device_type: isCarrying && validatedItems.length > 0 ? validatedItems.map((it) => `${it.item_name} (${it.quantity})`).join(', ') : null,
-        extra_device_count: isCarrying ? totalExtra : null,
         updated_at: nowIso,
       })
       .eq('id', checklistId);
@@ -603,6 +677,18 @@ export async function issueBackupItemsForChecklist({
     let mat = matMap.get(name.toLowerCase());
     if (!mat && name.toLowerCase().includes('display')) {
       mat = matMap.get('display');
+    }
+    if (!mat) {
+      const lower = name.toLowerCase();
+      if (lower.includes('cable tie') && lower.includes('200')) {
+        mat = allMats.find((m) => m.material_name.toLowerCase().includes('cable tie') && m.material_name.includes('200'));
+      } else if (lower.includes('cable tie') && lower.includes('300')) {
+        mat = allMats.find((m) => m.material_name.toLowerCase().includes('cable tie') && m.material_name.includes('300'));
+      } else if (lower.includes('5m') || lower.includes('5-metre')) {
+        mat = allMats.find((m) => m.material_name.toLowerCase().includes('5-metre'));
+      } else if (lower.includes('15m') || lower.includes('15-metre')) {
+        mat = allMats.find((m) => m.material_name.toLowerCase().includes('15-metre'));
+      }
     }
     const dev = devMap.get(name.toLowerCase());
 

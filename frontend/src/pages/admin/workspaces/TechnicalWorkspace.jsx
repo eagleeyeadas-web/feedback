@@ -43,6 +43,15 @@ import {
   deleteChecklistApi,
 } from '../../../lib/api';
 
+function addDaysToDate(dateStr, days = 1) {
+  if (!dateStr || typeof dateStr !== 'string') return '';
+  const parts = dateStr.split('T')[0].split('-').map(Number);
+  if (parts.length < 3 || isNaN(parts[0]) || isNaN(parts[1]) || isNaN(parts[2])) return '';
+  const dt = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2]));
+  dt.setUTCDate(dt.getUTCDate() + Number(days));
+  return dt.toISOString().split('T')[0];
+}
+
 // Helper to extract separated required and extra device allocations
 function getDeviceAllocationSummary(item) {
   if (!item) {
@@ -731,7 +740,7 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
                               <div className="pt-1 border-t border-amber-200">
                                 <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1 w-fit">
                                   <Clock className="w-2.5 h-2.5 text-amber-600" />
-                                  <span>Pending Avail: {item.pending_extension.requested_completion_date}</span>
+                                  <span>Pending Avail: {addDaysToDate(item.pending_extension.requested_completion_date, 1)}</span>
                                 </span>
                               </div>
                             )}
@@ -786,7 +795,7 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
                                   }`}
                                   title={
                                     item.pending_extension
-                                      ? `Availability date update to ${item.pending_extension.requested_completion_date} pending review`
+                                      ? `Availability date update to ${addDaysToDate(item.pending_extension.requested_completion_date, 1)} pending review`
                                       : 'Update availability date'
                                   }
                                 >

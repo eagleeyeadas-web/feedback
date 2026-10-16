@@ -178,6 +178,13 @@ export default function EngineerAvailabilityCalendar({
           label: 'Conflict!',
           icon: AlertTriangle,
         };
+      case 'OVERDUE':
+        return {
+          bg: 'bg-rose-100 text-rose-900 border-rose-300 animate-pulse hover:bg-rose-200',
+          dot: 'bg-rose-600',
+          label: commitment?.checklist_number ? `${commitment.checklist_number.replace('EE-INST-', '')} (Overdue)` : 'Overdue',
+          icon: AlertTriangle,
+        };
       default:
         return {
           bg: 'bg-gray-100 text-gray-800 border-gray-300',
@@ -325,6 +332,15 @@ export default function EngineerAvailabilityCalendar({
             <span className="font-black text-rose-700">{summary.on_leave}</span>
           </div>
         </div>
+        {summary.overdue > 0 && (
+          <div className="flex items-center gap-2 px-2 py-1 bg-rose-50 rounded-lg border border-rose-300">
+            <span className="w-2.5 h-2.5 rounded-full bg-rose-600 animate-pulse shrink-0" />
+            <div>
+              <span className="text-[10px] text-rose-700 uppercase block font-semibold">Overdue</span>
+              <span className="font-black text-rose-800">{summary.overdue}</span>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* 3. Filters (Engineer & Status) */}
@@ -354,6 +370,7 @@ export default function EngineerAvailabilityCalendar({
           <option value="AVAILABLE">Available</option>
           <option value="ASSIGNED">Assigned</option>
           <option value="IN_PROGRESS">On Installation/Service</option>
+          <option value="OVERDUE">Overdue (Incomplete)</option>
           <option value="REST">Rest Day</option>
           <option value="LEAVE">On Leave</option>
           <option value="TRAVEL">Traveling</option>

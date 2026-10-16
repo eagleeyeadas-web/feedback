@@ -54,7 +54,7 @@ export default function TechnicianScheduleExtensionModal({
   onClose,
   onSuccess,
 }) {
-  const currentCompletionDate =
+  const scheduledEndDate =
     checklist?.current_booking_end_date ||
     checklist?.booking_end_date ||
     checklist?.current_expected_arrival_date ||
@@ -66,12 +66,19 @@ export default function TechnicianScheduleExtensionModal({
     checklist?.expected_arrival_date ||
     '';
 
-  const minCompletionDate = currentCompletionDate
-    ? addDaysToDate(currentCompletionDate, 1)
+  // Rule: Scheduled end date is the final working day and is inclusive.
+  // Technician's earliest availability date is strictly the next calendar day (scheduled end date + 1 day).
+  const currentAvailabilityDate = scheduledEndDate
+    ? addDaysToDate(scheduledEndDate, 1)
+    : (arrivalDate ? addDaysToDate(arrivalDate, 1) : '');
+
+  // Earliest date the technician can extend work through is scheduledEndDate + 1 day
+  const minCompletionDate = scheduledEndDate
+    ? addDaysToDate(scheduledEndDate, 1)
     : (arrivalDate ? addDaysToDate(arrivalDate, 1) : '');
 
   const [requestedCompletionDate, setRequestedCompletionDate] = useState(() => {
-    return currentCompletionDate ? addDaysToDate(currentCompletionDate, 1) : '';
+    return scheduledEndDate ? addDaysToDate(scheduledEndDate, 1) : '';
   });
 
   const [selectedReason, setSelectedReason] = useState(EXTENSION_REASONS[0]);
@@ -107,18 +114,18 @@ export default function TechnicianScheduleExtensionModal({
     setError('');
 
     if (!requestedCompletionDate) {
-      setError('Please select the new availability date.');
+      setError('Please select the extended work completion date.');
       return;
     }
 
     if (arrivalDate && requestedCompletionDate < arrivalDate) {
-      setError(`New availability date cannot be before arrival date (${arrivalDate}).`);
+      setError(`Extended work date cannot be before arrival date (${arrivalDate}).`);
       return;
     }
 
-    if (currentCompletionDate && requestedCompletionDate <= currentCompletionDate) {
+    if (scheduledEndDate && requestedCompletionDate <= scheduledEndDate) {
       setError(
-        `New availability date must be after current availability date (${formatDisplayDate(currentCompletionDate)}).`
+        `Extended work date must be after current scheduled completion date (${formatDisplayDate(scheduledEndDate)}).`
       );
       return;
     }
@@ -133,8 +140,8 @@ export default function TechnicianScheduleExtensionModal({
       return;
     }
 
-    const days = currentCompletionDate && requestedCompletionDate
-      ? Math.max(1, diffDaysBetween(currentCompletionDate, requestedCompletionDate))
+    const days = scheduledEndDate && requestedCompletionDate
+      ? Math.max(1, diffDaysBetween(scheduledEndDate, requestedCompletionDate))
       : 1;
 
     setSubmitting(true);
@@ -206,16 +213,25 @@ export default function TechnicianScheduleExtensionModal({
                 <span className="text-gray-500 font-medium">Current Availability Date:</span>
                 <span className="font-bold text-gray-900 font-mono">
                   {formatDisplayDate(
-                    pendingRequest.current_dates?.completion_date ||
-                    pendingRequest.current_completion_date ||
-                    currentCompletionDate
+                    addDaysToDate(
+                      pendingRequest.current_dates?.completion_date ||
+                      pendingRequest.current_completion_date ||
+                      scheduledEndDate,
+                      1
+                    )
                   )}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500 font-medium">Extend Work Through (Inclusive):</span>
+                <span className="font-semibold text-gray-700 font-mono">
+                  {formatDisplayDate(pendingRequest.requested_completion_date)}
                 </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-500 font-medium">Requested New Availability Date:</span>
                 <span className="font-bold text-amber-700 font-mono">
-                  {formatDisplayDate(pendingRequest.requested_completion_date)}
+                  {formatDisplayDate(addDaysToDate(pendingRequest.requested_completion_date, 1))}
                 </span>
               </div>
               <div className="flex justify-between">
@@ -256,16 +272,23 @@ export default function TechnicianScheduleExtensionModal({
           <form onSubmit={handleSubmit} className="space-y-3.5 text-xs">
             {/* Current Availability Date (Read-Only) */}
             <div className="bg-gray-50 border border-gray-200/80 rounded-xl px-3.5 py-2.5 flex items-center justify-between text-xs">
-              <span className="text-gray-600 font-medium">Current Availability Date</span>
-              <span className="font-bold text-gray-900 font-mono">
-                {formatDisplayDate(currentCompletionDate)}
+              <div>
+                <span className="text-gray-600 font-medium block">Current Availability Date</span>
+                {scheduledEndDate && (
+                  <span className="text-[10px] text-gray-400">
+                    Work ends {formatDisplayDate(scheduledEndDate)} (inclusive)
+                  </span>
+                )}
+              </div>
+              <span className="font-bold text-gray-900 font-mono text-sm">
+                {formatDisplayDate(currentAvailabilityDate)}
               </span>
             </div>
 
-            {/* New Availability Date (Required Date Picker) */}
+            {/* Extend Work End Date (Required Date Picker) */}
             <div>
               <label htmlFor="new-completion-date" className="block text-gray-700 font-semibold mb-1">
-                New Availability Date <span className="text-red-500">*</span>
+                Extend Work Through Date (Final Working Day) <span className="text-red-500">*</span>
               </label>
               <input
                 id="new-completion-date"
@@ -276,6 +299,14 @@ export default function TechnicianScheduleExtensionModal({
                 required
                 className="w-full px-3 py-2 bg-white border border-gray-300 rounded-xl font-medium text-gray-900 focus:outline-hidden focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition"
               />
+              {requestedCompletionDate && (
+                <div className="mt-1.5 p-2 bg-amber-50/80 border border-amber-200/80 rounded-lg text-amber-900 flex items-center justify-between text-[11px]">
+                  <span className="font-medium text-amber-800">New Earliest Availability Date:</span>
+                  <span className="font-bold font-mono text-amber-900">
+                    {formatDisplayDate(addDaysToDate(requestedCompletionDate, 1))}
+                  </span>
+                </div>
+              )}
             </div>
 
             {/* Reason for Date Change (Required Dropdown) */}

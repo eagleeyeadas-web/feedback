@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import {
   X,
@@ -15,6 +15,7 @@ import {
   Search,
   ChevronDown,
   Check,
+  Wrench,
 } from 'lucide-react';
 import { fetchBackupProducts, fetchBackupDeclaration, saveBackupDeclaration } from '../../lib/api';
 
@@ -22,6 +23,18 @@ export const EXTRA_DEVICE_OPTIONS = [
   'Camera',
   'Live Display',
   'Recording Display',
+];
+
+export const STANDARD_INSTALLATION_MATERIALS = [
+  { item_name: 'Insulation Tape', unit: 'Nos.', sku: 'MAT-INSU-TAPE' },
+  { item_name: 'Cable Tie 200mm', canonical_name: 'Cable Tie – 200 mm', unit: 'Packets', sku: 'MAT-CT-200MM' },
+  { item_name: 'Cable Tie 300mm', canonical_name: 'Cable Tie – 300 mm', unit: 'Packets', sku: 'MAT-CT-300MM' },
+  { item_name: 'Long Screw', unit: 'Nos.', sku: 'MAT-SCREW-LONG' },
+  { item_name: 'Small Screw', unit: 'Nos.', sku: 'MAT-SCREW-SMALL' },
+  { item_name: 'Memory Card', unit: 'Nos.', sku: 'MAT-MEM-CARD' },
+  { item_name: '0.5 mm Wire', unit: 'Metres', sku: 'MAT-WIRE-0.5MM' },
+  { item_name: '5m Cable', canonical_name: '5-metre Cable', unit: 'Nos.', sku: 'MAT-CBL-5M' },
+  { item_name: '15m Cable', canonical_name: '15-metre Cable', unit: 'Nos.', sku: 'MAT-CBL-15M' },
 ];
 
 /**
@@ -399,10 +412,86 @@ export default function TechnicianBackupDeclarationModal({
   const [availableProducts, setAvailableProducts] = useState([]);
   const [hasBackupItems, setHasBackupItems] = useState(false);
   const [noItemsReason, setNoItemsReason] = useState('');
-  const [items, setItems] = useState([]);
+  const [deviceItems, setDeviceItems] = useState([]);
+  const [materialItems, setMaterialItems] = useState([]);
   const [declarationStatus, setDeclarationStatus] = useState('NOT_RECORDED');
   const [declarationTimestamp, setDeclarationTimestamp] = useState(null);
   const [history, setHistory] = useState([]);
+
+  // Match material name to product in availableProducts or STANDARD_INSTALLATION_MATERIALS
+  const findMaterialProduct = useCallback(
+    (name) => {
+      if (!name) return null;
+      const clean = name.toLowerCase().replace(/[\u2013\u2014-]/g, '-').replace(/\s+/g, ' ').trim();
+
+      const fromAvailable = availableProducts.find((p) => {
+        const pClean = (p.item_name || '').toLowerCase().replace(/[\u2013\u2014-]/g, '-').replace(/\s+/g, ' ').trim();
+        if (pClean === clean) return true;
+        if (clean === 'cable tie 200mm' && pClean.includes('cable tie') && pClean.includes('200')) return true;
+        if (clean === 'cable tie 300mm' && pClean.includes('cable tie') && pClean.includes('300')) return true;
+        if (clean === '5m cable' && (pClean.includes('5-metre') || pClean.includes('5m'))) return true;
+        if (clean === '15m cable' && (pClean.includes('15-metre') || pClean.includes('15m'))) return true;
+        return false;
+      });
+      if (fromAvailable) return fromAvailable;
+
+      const std = STANDARD_INSTALLATION_MATERIALS.find((s) => {
+        const sClean = s.item_name.toLowerCase().replace(/[\u2013\u2014-]/g, '-').replace(/\s+/g, ' ').trim();
+        return (
+          sClean === clean ||
+          (s.canonical_name &&
+            s.canonical_name.toLowerCase().replace(/[\u2013\u2014-]/g, '-').replace(/\s+/g, ' ').trim() === clean)
+        );
+      });
+      return std || null;
+    },
+    [availableProducts]
+  );
+
+  // Catalogue of installation materials for selector
+  const installationMaterialOptions = useMemo(() => {
+    const list = [];
+    const seen = new Set();
+
+    STANDARD_INSTALLATION_MATERIALS.forEach((std) => {
+      const matched = findMaterialProduct(std.item_name);
+      seen.add(std.item_name.toLowerCase());
+      if (std.canonical_name) {
+        seen.add(std.canonical_name.toLowerCase());
+      }
+      list.push({
+        item_name: std.item_name,
+        display_name: std.item_name,
+        unit: matched?.unit || std.unit,
+        sku: matched?.sku || std.sku,
+        id: matched?.id || matched?.material_id || null,
+        available_stock: matched?.available_stock ?? matched?.current_stock,
+      });
+    });
+
+    availableProducts.forEach((p) => {
+      if (p.category === 'Installation Material' || p.category_group === 'B') {
+        const key = (p.item_name || '').toLowerCase();
+        const isKnownAlias =
+          (key.includes('cable tie') && (key.includes('200') || key.includes('300'))) ||
+          key.includes('5-metre') ||
+          key.includes('15-metre');
+        if (!seen.has(key) && !isKnownAlias) {
+          seen.add(key);
+          list.push({
+            item_name: p.item_name,
+            display_name: p.display_name || p.item_name,
+            unit: p.unit || 'Nos.',
+            sku: p.sku || '',
+            id: p.id,
+            available_stock: p.available_stock ?? p.current_stock,
+          });
+        }
+      }
+    });
+
+    return list;
+  }, [availableProducts, findMaterialProduct]);
 
   useEffect(() => {
     if (!isOpen || !job?.id) return;
@@ -430,37 +519,46 @@ export default function TechnicianBackupDeclarationModal({
           setHistory(Array.isArray(decl.history) ? decl.history : []);
 
           if (Array.isArray(decl.items) && decl.items.length > 0) {
-            setItems(
-              decl.items.map((it, idx) => {
-                const matched = products.find(
-                  (p) =>
-                    p.id === it.material_id ||
-                    p.id === it.item_id ||
-                    (p.item_name || '').toLowerCase() === (it.item_name || '').toLowerCase()
-                );
-                const isDeviceComp =
-                  it.category === 'Device Component' ||
-                  matched?.category === 'Device Component' ||
-                  matched?.category_group === 'A' ||
-                  matched?.category?.includes('Component') ||
-                  matched?.category?.includes('Device') ||
-                  (it.item_name || '').toLowerCase().includes('camera') ||
-                  (it.item_name || '').toLowerCase().includes('display') ||
-                  (it.item_name || '').toLowerCase().includes('mdvr');
+            const loadedDevices = [];
+            const loadedMaterials = [];
 
-                return {
-                  id: it.id || `item-${idx}-${Date.now()}`,
-                  category: isDeviceComp ? 'Device Component' : 'Installation Material',
-                  item_name: it.item_name || '',
-                  quantity: Number(it.quantity) || 1,
-                  unit: it.unit || matched?.unit || 'Nos.',
-                  sku: it.item_sku || it.sku || matched?.sku || '',
-                  material_id: it.material_id || it.item_id || matched?.id || null,
-                };
-              })
-            );
+            decl.items.forEach((it, idx) => {
+              const matched = products.find(
+                (p) =>
+                  p.id === it.material_id ||
+                  p.id === it.item_id ||
+                  (p.item_name || '').toLowerCase() === (it.item_name || '').toLowerCase()
+              );
+              const isDeviceComp =
+                it.category === 'Device Component' ||
+                matched?.category === 'Device Component' ||
+                matched?.category_group === 'A' ||
+                (it.item_name || '').toLowerCase().includes('camera') ||
+                (it.item_name || '').toLowerCase().includes('display') ||
+                (it.item_name || '').toLowerCase().includes('mdvr');
+
+              const row = {
+                id: it.id || `item-${idx}-${Date.now()}`,
+                category: isDeviceComp ? 'Device Component' : 'Installation Material',
+                item_name: it.item_name || '',
+                quantity: Number(it.quantity) || 1,
+                unit: it.unit || matched?.unit || (isDeviceComp ? 'Nos.' : 'Nos.'),
+                sku: it.item_sku || it.sku || matched?.sku || '',
+                material_id: it.material_id || it.item_id || matched?.id || null,
+              };
+
+              if (isDeviceComp) {
+                loadedDevices.push(row);
+              } else {
+                loadedMaterials.push(row);
+              }
+            });
+
+            setDeviceItems(loadedDevices);
+            setMaterialItems(loadedMaterials);
           } else {
-            setItems([]);
+            setDeviceItems([]);
+            setMaterialItems([]);
           }
         } else {
           // Defaults if not yet recorded
@@ -470,7 +568,8 @@ export default function TechnicianBackupDeclarationModal({
           setDeclarationStatus('NOT_RECORDED');
           setDeclarationTimestamp(null);
           setHistory([]);
-          setItems([]);
+          setDeviceItems([]);
+          setMaterialItems([]);
         }
       } catch (err) {
         if (isMounted) setError(err.message || 'Failed to load backup declaration details');
@@ -488,12 +587,12 @@ export default function TechnicianBackupDeclarationModal({
 
   if (!isOpen || !job) return null;
 
-  // Add Extra Device button adds a new independent row without resetting other rows
-  const handleAddItemRow = (initialDeviceType = '') => {
-    setItems((prev) => [
+  // --- Extra Devices Handlers ---
+  const handleAddDeviceRow = (initialDeviceType = '') => {
+    setDeviceItems((prev) => [
       ...prev,
       {
-        id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `item-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
+        id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `dev-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
         category: 'Device Component',
         item_name: initialDeviceType,
         quantity: 1,
@@ -504,12 +603,18 @@ export default function TechnicianBackupDeclarationModal({
     ]);
   };
 
-  const handleRemoveItemRow = (id) => {
-    setItems((prev) => prev.filter((it) => it.id !== id));
+  const handleRemoveDeviceRow = (id) => {
+    setDeviceItems((prev) => prev.filter((it) => it.id !== id));
+  };
+
+  const handleClearDevices = () => {
+    if (window.confirm('Are you sure you want to clear all declared extra devices from this list?')) {
+      setDeviceItems([]);
+    }
   };
 
   const handleDeviceTypeChange = (rowId, newDeviceType) => {
-    setItems((prev) =>
+    setDeviceItems((prev) =>
       prev.map((it) => {
         if (it.id !== rowId) return it;
         const matched = availableProducts.find(
@@ -527,69 +632,105 @@ export default function TechnicianBackupDeclarationModal({
     );
   };
 
-  const handleCategoryChange = (rowId, newCategory) => {
-    setItems((prev) =>
-      prev.map((it) => {
-        if (it.id !== rowId) return it;
-        return {
-          ...it,
-          category: newCategory,
-        };
-      })
+  const handleDeviceQuantityChange = (id, value) => {
+    setDeviceItems((prev) =>
+      prev.map((it) => (it.id === id ? { ...it, quantity: value } : it))
     );
   };
 
-  const handleProductSelect = (rowId, product) => {
-    if (!product) return;
-    setItems((prev) =>
-      prev.map((it) => {
-        if (it.id !== rowId) return it;
-        return {
-          ...it,
-          category: 'Device Component',
-          item_name: product.item_name,
-          unit: product.unit || 'Nos.',
-          sku: product.sku || '',
-          material_id: product.id || product.item_id || null,
-        };
-      })
-    );
+  // --- Installation Materials Handlers ---
+  const handleAddMaterialRow = (initialMaterial = '') => {
+    const defaultMat = initialMaterial || '';
+    const matched = findMaterialProduct(defaultMat);
+    setMaterialItems((prev) => [
+      ...prev,
+      {
+        id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `mat-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
+        category: 'Installation Material',
+        item_name: defaultMat,
+        quantity: 1,
+        unit: matched?.unit || 'Nos.',
+        sku: matched?.sku || '',
+        material_id: matched?.id || matched?.material_id || null,
+      },
+    ]);
   };
 
-  const handleItemChange = (id, field, value) => {
-    setItems((prev) =>
-      prev.map((it) => {
-        if (it.id !== id) return it;
-        if (field === 'quantity') {
-          return { ...it, quantity: value };
-        }
-        return { ...it, [field]: value };
-      })
-    );
+  const handleRemoveMaterialRow = (id) => {
+    setMaterialItems((prev) => prev.filter((it) => it.id !== id));
   };
 
-  const handleToggleHasItems = (isYes) => {
-    setHasBackupItems(isYes);
-    setError('');
-    if (isYes && items.length === 0) {
-      handleAddItemRow(EXTRA_DEVICE_OPTIONS[0]);
+  const handleClearMaterials = () => {
+    if (window.confirm('Are you sure you want to clear all declared installation materials from this list?')) {
+      setMaterialItems([]);
     }
   };
 
+  const handleMaterialChange = (rowId, newMaterialName) => {
+    setMaterialItems((prev) =>
+      prev.map((it) => {
+        if (it.id !== rowId) return it;
+        const matched = findMaterialProduct(newMaterialName);
+        return {
+          ...it,
+          category: 'Installation Material',
+          item_name: newMaterialName,
+          unit: matched?.unit || 'Nos.',
+          sku: matched?.sku || '',
+          material_id: matched?.id || matched?.material_id || null,
+        };
+      })
+    );
+  };
+
+  const handleMaterialQuantityChange = (id, value) => {
+    setMaterialItems((prev) =>
+      prev.map((it) => (it.id === id ? { ...it, quantity: value } : it))
+    );
+  };
+
+  // Toggle carrying items radio
+  const handleToggleHasItems = (isYes) => {
+    setHasBackupItems(isYes);
+    setError('');
+    if (isYes && deviceItems.length === 0 && materialItems.length === 0) {
+      handleAddDeviceRow(EXTRA_DEVICE_OPTIONS[0]);
+    }
+  };
+
+  const salesExpected = Boolean(job.carry_extra_backup_items ?? job.extra_devices);
+
   const validate = () => {
     if (hasBackupItems) {
-      if (!items || items.length === 0) {
-        return 'Please add at least one extra backup device.';
+      const totalRows = deviceItems.length + materialItems.length;
+      if (totalRows === 0) {
+        return 'Please add at least one extra backup device or installation material.';
       }
-      for (let i = 0; i < items.length; i++) {
-        const it = items[i];
+
+      for (let i = 0; i < deviceItems.length; i++) {
+        const it = deviceItems[i];
         if (!it.item_name || !it.item_name.trim()) {
-          return `Row #${i + 1}: Please select an Extra Device Type from the dropdown.`;
+          return `Extra Devices Table - Row #${i + 1}: Please select an Extra Device Type from the dropdown.`;
         }
         const q = Number(it.quantity);
         if (isNaN(q) || q <= 0) {
-          return `Row #${i + 1} (${it.item_name}): Quantity must be a positive number greater than 0.`;
+          return `Extra Devices Table - Row #${i + 1} (${it.item_name}): Quantity must be a positive number greater than 0.`;
         }
+      }
+
+      for (let i = 0; i < materialItems.length; i++) {
+        const it = materialItems[i];
+        if (!it.item_name || !it.item_name.trim()) {
+          return `Installation Materials Table - Row #${i + 1}: Please select an Installation Material from the dropdown.`;
+        }
+        const q = Number(it.quantity);
+        if (isNaN(q) || q <= 0) {
+          return `Installation Materials Table - Row #${i + 1} (${it.item_name}): Quantity must be a positive number greater than 0.`;
+        }
+      }
+    } else {
+      if (salesExpected && (!noItemsReason || !noItemsReason.trim())) {
+        return 'Please provide a reason why no extra backup items are carried (Sales requested backup items for this job).';
       }
     }
 
@@ -607,11 +748,12 @@ export default function TechnicianBackupDeclarationModal({
     setError('');
     setSubmitting(true);
     try {
-      // Merge duplicate rows for the same product safely
+      const allItems = [...deviceItems, ...materialItems];
       const itemMap = new Map();
+
       if (hasBackupItems) {
-        items.forEach((it) => {
-          const key = it.item_name.trim().toLowerCase();
+        allItems.forEach((it) => {
+          const key = (it.item_name || '').trim().toLowerCase();
           const q = Number(it.quantity);
           if (!key || isNaN(q) || q <= 0) return;
           if (itemMap.has(key)) {
@@ -648,6 +790,12 @@ export default function TechnicianBackupDeclarationModal({
       setSubmitting(false);
     }
   };
+
+  const allDeclaredItems = useMemo(() => {
+    return [...deviceItems, ...materialItems].filter(
+      (it) => it.item_name && Number(it.quantity) > 0
+    );
+  }, [deviceItems, materialItems]);
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
@@ -715,7 +863,7 @@ export default function TechnicianBackupDeclarationModal({
               <p className="text-xs font-semibold text-gray-600">Loading product catalogue...</p>
             </div>
           ) : (
-            <form id="backup-declaration-form" onSubmit={handleSubmit} className="space-y-4">
+            <form id="backup-declaration-form" onSubmit={handleSubmit} className="space-y-5">
               {/* Technician Declaration Radio */}
               <div className="p-4 rounded-xl border border-gray-200 bg-white space-y-3 shadow-2xs">
                 <label className="block text-xs font-bold text-gray-900">
@@ -749,81 +897,188 @@ export default function TechnicianBackupDeclarationModal({
                 </div>
 
                 {!hasBackupItems && (
-                  <div className="pt-2 border-t border-gray-100 flex items-center gap-2 text-xs text-gray-500 bg-slate-50/80 p-2.5 rounded-lg">
-                    <Info size={15} className="text-slate-400 shrink-0" />
-                    <span>No extra backup items declared. Only the customer's required installation devices will be prepared.</span>
+                  <div className="pt-2 border-t border-gray-100 space-y-2.5 bg-slate-50/80 p-3 rounded-lg text-xs">
+                    <div className="flex items-center gap-2 text-gray-500">
+                      <Info size={15} className="text-slate-400 shrink-0" />
+                      <span>No extra backup items declared. Only the customer's required installation devices will be prepared.</span>
+                    </div>
+                    {salesExpected && (
+                      <div className="pt-2 border-t border-gray-200/60">
+                        <label className="block text-xs font-bold text-gray-800 mb-1">
+                          Reason for Not Carrying Extra Backup Items <span className="text-rose-500">*</span>
+                        </label>
+                        <p className="text-[11px] text-gray-500 mb-1.5">
+                          Sales checklist indicated backup hardware was requested. Please specify why no backup devices or materials are being carried.
+                        </p>
+                        <textarea
+                          rows={2}
+                          value={noItemsReason}
+                          onChange={(e) => setNoItemsReason(e.target.value)}
+                          placeholder="e.g. Adequate spares already stationed at client site / Stock not available in warehouse..."
+                          className="w-full text-xs p-2.5 border border-gray-200 rounded-lg focus:outline-none focus:border-purple-500 font-medium text-gray-900 bg-white"
+                          required
+                        />
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
 
-              {/* Extra Items Entry Table */}
+              {/* Extra Items Entry Tables */}
               {hasBackupItems && (
-                <div className="space-y-3 pt-1">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div>
-                      <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wider">
-                        Extra Devices Declaration Table
-                      </h4>
-                      <p className="text-[11px] text-gray-500">
-                        Select extra device type and enter the quantity to carry to the site.
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {items.length > 0 && (
+                <div className="space-y-6 pt-1">
+                  {/* ======================================================== */}
+                  {/* TABLE 1: EXTRA DEVICES DECLARATION TABLE                 */}
+                  {/* ======================================================== */}
+                  <div className="space-y-3 p-4 rounded-xl border border-gray-200 bg-white shadow-2xs">
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 pb-3">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <Package size={16} className="text-purple-600 shrink-0" />
+                          <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wider">
+                            Extra Devices Declaration Table
+                          </h4>
+                          <span className="text-[10px] font-mono font-bold text-purple-700 bg-purple-50 border border-purple-200 px-2 py-0.5 rounded-full">
+                            {deviceItems.length} row{deviceItems.length === 1 ? '' : 's'}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-gray-500 mt-0.5">
+                          Select extra device type and enter the quantity to carry to the site.
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {deviceItems.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={handleClearDevices}
+                            className="px-3 py-1.5 text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-xl flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs"
+                            title="Clear all declared extra devices from list"
+                          >
+                            <Trash2 size={14} /> Clear All
+                          </button>
+                        )}
                         <button
                           type="button"
-                          onClick={() => {
-                            if (window.confirm('Are you sure you want to clear all declared extra devices from this list?')) {
-                              setItems([]);
-                            }
-                          }}
-                          className="px-3 py-1.5 text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-xl flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs"
-                          title="Clear all declared devices from list"
+                          onClick={() => handleAddDeviceRow(EXTRA_DEVICE_OPTIONS[0])}
+                          className="px-3.5 py-1.5 text-xs font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-xl flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs"
                         >
-                          <Trash2 size={14} /> Clear All
+                          <Plus size={15} /> Add Extra Device
                         </button>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => handleAddItemRow()}
-                        className="px-3.5 py-1.5 text-xs font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-xl flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs"
-                      >
-                        <Plus size={15} /> Add Extra Device
-                      </button>
+                      </div>
                     </div>
-                  </div>
 
-                  {/* Desktop Table View */}
-                  <div className="hidden md:block border border-gray-200 rounded-xl bg-white shadow-2xs">
-                    <table className="w-full text-left text-xs border-collapse">
-                      <thead className="bg-slate-100/90 border-b border-gray-200 text-gray-700 font-bold uppercase tracking-wider text-[10px]">
-                        <tr>
-                          <th className="py-3 px-3 w-12 text-center text-gray-400">#</th>
-                          <th className="py-3 px-3 min-w-[280px]">Extra Device Type</th>
-                          <th className="py-3 px-3 w-36 text-center">Quantity to Carry</th>
-                          <th className="py-3 px-3 w-24 text-center">Unit</th>
-                          <th className="py-3 px-3 w-16 text-center">Remove</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-100">
-                        {items.length === 0 ? (
+                    {/* Desktop Table View */}
+                    <div className="hidden md:block border border-gray-200 rounded-xl bg-white overflow-hidden shadow-2xs">
+                      <table className="w-full text-left text-xs border-collapse">
+                        <thead className="bg-slate-100/90 border-b border-gray-200 text-gray-700 font-bold uppercase tracking-wider text-[10px]">
                           <tr>
-                            <td colSpan={5} className="py-8 text-center text-gray-400 italic">
-                              No extra devices declared yet. Click &ldquo;+ Add Extra Device&rdquo; above to add a row.
-                            </td>
+                            <th className="py-3 px-3 w-12 text-center text-gray-400">#</th>
+                            <th className="py-3 px-3 min-w-[280px]">Extra Device Type</th>
+                            <th className="py-3 px-3 w-36 text-center">Quantity to Carry</th>
+                            <th className="py-3 px-3 w-24 text-center">Unit</th>
+                            <th className="py-3 px-3 w-16 text-center">Remove</th>
                           </tr>
-                        ) : (
-                          items.map((it, idx) => {
-                            return (
-                              <tr key={it.id} className="hover:bg-slate-50/70 transition-colors">
-                                <td className="py-3 px-3 font-mono font-bold text-gray-400 text-center align-middle">
-                                  {idx + 1}
-                                </td>
-                                <td className="py-3 px-3 align-middle min-w-[280px]">
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                          {deviceItems.length === 0 ? (
+                            <tr>
+                              <td colSpan={5} className="py-8 text-center text-gray-400 italic">
+                                No extra devices declared yet. Click &ldquo;+ Add Extra Device&rdquo; above to add a row.
+                              </td>
+                            </tr>
+                          ) : (
+                            deviceItems.map((it, idx) => {
+                              return (
+                                <tr key={it.id} className="hover:bg-slate-50/70 transition-colors">
+                                  <td className="py-3 px-3 font-mono font-bold text-gray-400 text-center align-middle">
+                                    {idx + 1}
+                                  </td>
+                                  <td className="py-3 px-3 align-middle min-w-[280px]">
+                                    <select
+                                      value={it.item_name}
+                                      onChange={(e) => handleDeviceTypeChange(it.id, e.target.value)}
+                                      className="w-full text-xs p-2.5 border border-gray-200 rounded-lg focus:outline-none focus:border-purple-500 font-semibold bg-white text-gray-800 cursor-pointer transition-all"
+                                      required
+                                    >
+                                      <option value="">-- Select Extra Device Type --</option>
+                                      {EXTRA_DEVICE_OPTIONS.map((typeOption) => (
+                                        <option key={typeOption} value={typeOption}>
+                                          {typeOption}
+                                        </option>
+                                      ))}
+                                      {it.item_name && !EXTRA_DEVICE_OPTIONS.includes(it.item_name) && (
+                                        <option value={it.item_name}>
+                                          {it.item_name} (Historical)
+                                        </option>
+                                      )}
+                                    </select>
+                                  </td>
+                                  <td className="py-3 px-3 align-middle">
+                                    <input
+                                      type="number"
+                                      min="1"
+                                      step="1"
+                                      value={it.quantity}
+                                      onChange={(e) => handleDeviceQuantityChange(it.id, e.target.value)}
+                                      placeholder="1"
+                                      className="w-full text-xs p-2.5 border border-gray-200 rounded-lg focus:outline-none focus:border-purple-500 font-bold font-mono text-center text-gray-900 bg-white transition-all"
+                                      required
+                                    />
+                                  </td>
+                                  <td className="py-3 px-3 align-middle">
+                                    <div className="flex items-center justify-center px-2 py-2.5 bg-slate-100 border border-slate-200 rounded-lg text-slate-800 font-bold font-mono text-xs select-none">
+                                      <span>{it.unit || 'Nos.'}</span>
+                                    </div>
+                                  </td>
+                                  <td className="py-3 px-3 text-center align-middle">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRemoveDeviceRow(it.id)}
+                                      className="text-rose-500 hover:text-rose-700 hover:bg-rose-50 p-2 rounded-lg transition-colors cursor-pointer"
+                                      title="Remove row"
+                                    >
+                                      <Trash2 size={16} />
+                                    </button>
+                                  </td>
+                                </tr>
+                              );
+                            })
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Mobile Stacked Cards View */}
+                    <div className="md:hidden space-y-3">
+                      {deviceItems.length === 0 ? (
+                        <div className="p-5 border border-dashed border-gray-300 rounded-xl text-center text-gray-400 text-xs italic">
+                          No extra devices declared yet. Click &ldquo;+ Add Extra Device&rdquo; above to add a row.
+                        </div>
+                      ) : (
+                        deviceItems.map((it, idx) => {
+                          return (
+                            <div key={it.id} className="p-4 bg-white border border-gray-200 rounded-xl space-y-3 shadow-2xs">
+                              <div className="flex items-center justify-between border-b border-gray-100 pb-2">
+                                <span className="font-bold text-xs text-purple-900 font-mono">
+                                  Device #{idx + 1}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveDeviceRow(it.id)}
+                                  className="text-rose-500 hover:text-rose-700 hover:bg-rose-50 p-1.5 rounded-lg transition-colors cursor-pointer text-xs flex items-center gap-1 font-semibold"
+                                >
+                                  <Trash2 size={14} /> Remove
+                                </button>
+                              </div>
+                              <div className="space-y-2.5">
+                                <div>
+                                  <label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">
+                                    Extra Device Type
+                                  </label>
                                   <select
                                     value={it.item_name}
                                     onChange={(e) => handleDeviceTypeChange(it.id, e.target.value)}
-                                    className="w-full text-xs p-2.5 border border-gray-200 rounded-lg focus:outline-none focus:border-purple-500 font-semibold bg-white text-gray-800 cursor-pointer transition-all"
+                                    className="w-full text-xs p-2.5 border border-gray-200 rounded-lg focus:outline-none focus:border-purple-500 font-semibold bg-white text-gray-800 cursor-pointer"
                                     required
                                   >
                                     <option value="">-- Select Extra Device Type --</option>
@@ -838,148 +1093,272 @@ export default function TechnicianBackupDeclarationModal({
                                       </option>
                                     )}
                                   </select>
-                                </td>
-                                <td className="py-3 px-3 align-middle">
-                                  <input
-                                    type="number"
-                                    min="1"
-                                    step="1"
-                                    value={it.quantity}
-                                    onChange={(e) => handleItemChange(it.id, 'quantity', e.target.value)}
-                                    placeholder="1"
-                                    className="w-full text-xs p-2.5 border border-gray-200 rounded-lg focus:outline-none focus:border-purple-500 font-bold font-mono text-center text-gray-900 bg-white transition-all"
-                                    required
-                                  />
-                                </td>
-                                <td className="py-3 px-3 align-middle">
-                                  <div className="flex items-center justify-center px-2 py-2.5 bg-slate-100 border border-slate-200 rounded-lg text-slate-800 font-bold font-mono text-xs select-none">
-                                    <span>{it.unit || 'Nos.'}</span>
+                                </div>
+                                <div className="grid grid-cols-2 gap-2.5">
+                                  <div>
+                                    <label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">
+                                      Quantity to Carry
+                                    </label>
+                                    <input
+                                      type="number"
+                                      min="1"
+                                      step="1"
+                                      value={it.quantity}
+                                      onChange={(e) => handleDeviceQuantityChange(it.id, e.target.value)}
+                                      placeholder="1"
+                                      className="w-full text-xs p-2.5 border border-gray-200 rounded-lg focus:outline-none focus:border-purple-500 font-bold font-mono text-center text-gray-900 bg-white"
+                                      required
+                                    />
                                   </div>
-                                </td>
-                                <td className="py-3 px-3 text-center align-middle">
-                                  <button
-                                    type="button"
-                                    onClick={() => handleRemoveItemRow(it.id)}
-                                    className="text-rose-500 hover:text-rose-700 hover:bg-rose-50 p-2 rounded-lg transition-colors cursor-pointer"
-                                    title="Remove row"
-                                  >
-                                    <Trash2 size={16} />
-                                  </button>
-                                </td>
-                              </tr>
-                            );
-                          })
-                        )}
-                      </tbody>
-                    </table>
+                                  <div>
+                                    <label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">
+                                      Unit
+                                    </label>
+                                    <div className="w-full text-xs p-2.5 bg-slate-100 border border-slate-200 rounded-lg font-bold font-mono text-center text-slate-800">
+                                      {it.unit || 'Nos.'}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
                   </div>
 
-                  {/* Mobile Stacked Cards View */}
-                  <div className="md:hidden space-y-3">
-                    {items.length === 0 ? (
-                      <div className="p-5 border border-dashed border-gray-300 rounded-xl text-center text-gray-400 text-xs italic">
-                        No extra devices declared yet. Click &ldquo;+ Add Extra Device&rdquo; above to add a row.
+                  {/* ======================================================== */}
+                  {/* TABLE 2: INSTALLATION MATERIALS DECLARATION TABLE       */}
+                  {/* ======================================================== */}
+                  <div className="space-y-3 p-4 rounded-xl border border-gray-200 bg-white shadow-2xs">
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 pb-3">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <Wrench size={16} className="text-indigo-600 shrink-0" />
+                          <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wider">
+                            Installation Materials Declaration Table
+                          </h4>
+                          <span className="text-[10px] font-mono font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-full">
+                            {materialItems.length} row{materialItems.length === 1 ? '' : 's'}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-gray-500 mt-0.5">
+                          Select installation materials and enter the quantity to carry to the site.
+                        </p>
                       </div>
-                    ) : (
-                      items.map((it, idx) => {
-                        return (
-                          <div key={it.id} className="p-4 bg-white border border-gray-200 rounded-xl space-y-3 shadow-2xs">
-                            <div className="flex items-center justify-between border-b border-gray-100 pb-2">
-                              <span className="font-bold text-xs text-purple-900 font-mono">
-                                Device #{idx + 1}
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() => handleRemoveItemRow(it.id)}
-                                className="text-rose-500 hover:text-rose-700 hover:bg-rose-50 p-1.5 rounded-lg transition-colors cursor-pointer text-xs flex items-center gap-1 font-semibold"
-                              >
-                                <Trash2 size={14} /> Remove
-                              </button>
-                            </div>
-                            <div className="space-y-2.5">
-                              <div>
-                                <label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">
-                                  Extra Device Type
-                                </label>
-                                <select
-                                  value={it.item_name}
-                                  onChange={(e) => handleDeviceTypeChange(it.id, e.target.value)}
-                                  className="w-full text-xs p-2.5 border border-gray-200 rounded-lg focus:outline-none focus:border-purple-500 font-semibold bg-white text-gray-800 cursor-pointer"
-                                  required
+                      <div className="flex items-center gap-2">
+                        {materialItems.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={handleClearMaterials}
+                            className="px-3 py-1.5 text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-xl flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs"
+                            title="Clear all declared installation materials from list"
+                          >
+                            <Trash2 size={14} /> Clear All
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => handleAddMaterialRow()}
+                          className="px-3.5 py-1.5 text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-xl flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs"
+                        >
+                          <Plus size={15} /> Add Installation Material
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Desktop Table View */}
+                    <div className="hidden md:block border border-gray-200 rounded-xl bg-white overflow-hidden shadow-2xs">
+                      <table className="w-full text-left text-xs border-collapse">
+                        <thead className="bg-slate-100/90 border-b border-gray-200 text-gray-700 font-bold uppercase tracking-wider text-[10px]">
+                          <tr>
+                            <th className="py-3 px-3 w-12 text-center text-gray-400">#</th>
+                            <th className="py-3 px-3 min-w-[280px]">Installation Material</th>
+                            <th className="py-3 px-3 w-36 text-center">Quantity to Carry</th>
+                            <th className="py-3 px-3 w-28 text-center">Unit</th>
+                            <th className="py-3 px-3 w-16 text-center">Remove</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                          {materialItems.length === 0 ? (
+                            <tr>
+                              <td colSpan={5} className="py-8 text-center text-gray-400 italic">
+                                No installation materials declared yet. Click &ldquo;+ Add Installation Material&rdquo; above to add a row.
+                              </td>
+                            </tr>
+                          ) : (
+                            materialItems.map((it, idx) => {
+                              return (
+                                <tr key={it.id} className="hover:bg-slate-50/70 transition-colors">
+                                  <td className="py-3 px-3 font-mono font-bold text-gray-400 text-center align-middle">
+                                    {idx + 1}
+                                  </td>
+                                  <td className="py-3 px-3 align-middle min-w-[280px]">
+                                    <select
+                                      value={it.item_name}
+                                      onChange={(e) => handleMaterialChange(it.id, e.target.value)}
+                                      className="w-full text-xs p-2.5 border border-gray-200 rounded-lg focus:outline-none focus:border-indigo-500 font-semibold bg-white text-gray-800 cursor-pointer transition-all"
+                                      required
+                                    >
+                                      <option value="">-- Select Installation Material --</option>
+                                      {installationMaterialOptions.map((mat) => (
+                                        <option key={mat.id || mat.item_name} value={mat.item_name}>
+                                          {mat.item_name} ({mat.unit || 'Nos.'})
+                                        </option>
+                                      ))}
+                                      {it.item_name &&
+                                        !installationMaterialOptions.some((m) => m.item_name === it.item_name) && (
+                                          <option value={it.item_name}>
+                                            {it.item_name} (Historical)
+                                          </option>
+                                        )}
+                                    </select>
+                                  </td>
+                                  <td className="py-3 px-3 align-middle">
+                                    <input
+                                      type="number"
+                                      min="1"
+                                      step="1"
+                                      value={it.quantity}
+                                      onChange={(e) => handleMaterialQuantityChange(it.id, e.target.value)}
+                                      placeholder="1"
+                                      className="w-full text-xs p-2.5 border border-gray-200 rounded-lg focus:outline-none focus:border-indigo-500 font-bold font-mono text-center text-gray-900 bg-white transition-all"
+                                      required
+                                    />
+                                  </td>
+                                  <td className="py-3 px-3 align-middle">
+                                    <div className="flex items-center justify-center px-2 py-2.5 bg-slate-100 border border-slate-200 rounded-lg text-slate-800 font-bold font-mono text-xs select-none">
+                                      <span>{it.unit || 'Nos.'}</span>
+                                    </div>
+                                  </td>
+                                  <td className="py-3 px-3 text-center align-middle">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRemoveMaterialRow(it.id)}
+                                      className="text-rose-500 hover:text-rose-700 hover:bg-rose-50 p-2 rounded-lg transition-colors cursor-pointer"
+                                      title="Remove row"
+                                    >
+                                      <Trash2 size={16} />
+                                    </button>
+                                  </td>
+                                </tr>
+                              );
+                            })
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Mobile Stacked Cards View */}
+                    <div className="md:hidden space-y-3">
+                      {materialItems.length === 0 ? (
+                        <div className="p-5 border border-dashed border-gray-300 rounded-xl text-center text-gray-400 text-xs italic">
+                          No installation materials declared yet. Click &ldquo;+ Add Installation Material&rdquo; above to add a row.
+                        </div>
+                      ) : (
+                        materialItems.map((it, idx) => {
+                          return (
+                            <div key={it.id} className="p-4 bg-white border border-gray-200 rounded-xl space-y-3 shadow-2xs">
+                              <div className="flex items-center justify-between border-b border-gray-100 pb-2">
+                                <span className="font-bold text-xs text-indigo-900 font-mono">
+                                  Material #{idx + 1}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveMaterialRow(it.id)}
+                                  className="text-rose-500 hover:text-rose-700 hover:bg-rose-50 p-1.5 rounded-lg transition-colors cursor-pointer text-xs flex items-center gap-1 font-semibold"
                                 >
-                                  <option value="">-- Select Extra Device Type --</option>
-                                  {EXTRA_DEVICE_OPTIONS.map((typeOption) => (
-                                    <option key={typeOption} value={typeOption}>
-                                      {typeOption}
-                                    </option>
-                                  ))}
-                                  {it.item_name && !EXTRA_DEVICE_OPTIONS.includes(it.item_name) && (
-                                    <option value={it.item_name}>
-                                      {it.item_name} (Historical)
-                                    </option>
-                                  )}
-                                </select>
+                                  <Trash2 size={14} /> Remove
+                                </button>
                               </div>
-                              <div className="grid grid-cols-2 gap-2.5">
+                              <div className="space-y-2.5">
                                 <div>
                                   <label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">
-                                    Quantity
+                                    Installation Material
                                   </label>
-                                  <input
-                                    type="number"
-                                    min="1"
-                                    step="1"
-                                    value={it.quantity}
-                                    onChange={(e) => handleItemChange(it.id, 'quantity', e.target.value)}
-                                    placeholder="1"
-                                    className="w-full text-xs p-2.5 border border-gray-200 rounded-lg focus:outline-none focus:border-purple-500 font-bold font-mono text-center text-gray-900 bg-white"
+                                  <select
+                                    value={it.item_name}
+                                    onChange={(e) => handleMaterialChange(it.id, e.target.value)}
+                                    className="w-full text-xs p-2.5 border border-gray-200 rounded-lg focus:outline-none focus:border-indigo-500 font-semibold bg-white text-gray-800 cursor-pointer"
                                     required
-                                  />
+                                  >
+                                    <option value="">-- Select Installation Material --</option>
+                                    {installationMaterialOptions.map((mat) => (
+                                      <option key={mat.id || mat.item_name} value={mat.item_name}>
+                                        {mat.item_name} ({mat.unit || 'Nos.'})
+                                      </option>
+                                    ))}
+                                    {it.item_name &&
+                                      !installationMaterialOptions.some((m) => m.item_name === it.item_name) && (
+                                        <option value={it.item_name}>
+                                          {it.item_name} (Historical)
+                                        </option>
+                                      )}
+                                  </select>
                                 </div>
-                                <div>
-                                  <label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">
-                                    Unit
-                                  </label>
-                                  <div className="w-full text-xs p-2.5 bg-slate-100 border border-slate-200 rounded-lg font-bold font-mono text-center text-slate-800">
-                                    {it.unit || 'Nos.'}
+                                <div className="grid grid-cols-2 gap-2.5">
+                                  <div>
+                                    <label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">
+                                      Quantity to Carry
+                                    </label>
+                                    <input
+                                      type="number"
+                                      min="1"
+                                      step="1"
+                                      value={it.quantity}
+                                      onChange={(e) => handleMaterialQuantityChange(it.id, e.target.value)}
+                                      placeholder="1"
+                                      className="w-full text-xs p-2.5 border border-gray-200 rounded-lg focus:outline-none focus:border-indigo-500 font-bold font-mono text-center text-gray-900 bg-white"
+                                      required
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">
+                                      Unit
+                                    </label>
+                                    <div className="w-full text-xs p-2.5 bg-slate-100 border border-slate-200 rounded-lg font-bold font-mono text-center text-slate-800">
+                                      {it.unit || 'Nos.'}
+                                    </div>
                                   </div>
                                 </div>
                               </div>
                             </div>
-                          </div>
-                        );
-                      })
-                    )}
+                          );
+                        })
+                      )}
+                    </div>
                   </div>
 
                   {/* Declaration Summary Box */}
-                  {items.length > 0 && (
+                  {allDeclaredItems.length > 0 && (
                     <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-2 text-xs">
                       <div className="flex items-center justify-between font-bold text-gray-700">
                         <span className="flex items-center gap-1.5 uppercase text-[10px] tracking-wider text-purple-950 font-bold">
                           <Package size={14} className="text-purple-600" /> Declaration Summary
                         </span>
                         <span className="text-[11px] font-mono font-bold text-purple-800 bg-purple-100/70 px-2 py-0.5 rounded border border-purple-200">
-                          {items.filter((it) => it.item_name && Number(it.quantity) > 0).length} declared product line(s)
+                          {allDeclaredItems.length} declared product line(s)
                         </span>
                       </div>
                       <div className="flex flex-wrap gap-2">
-                        {items
-                          .filter((it) => it.item_name && Number(it.quantity) > 0)
-                          .map((it, idx) => (
+                        {allDeclaredItems.map((it, idx) => (
+                          <span
+                            key={idx}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-white border border-gray-200 rounded-lg text-gray-800 font-medium text-[11px] shadow-2xs"
+                          >
                             <span
-                              key={idx}
-                              className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-white border border-gray-200 rounded-lg text-gray-800 font-medium text-[11px] shadow-2xs"
+                              className={`text-[10px] font-bold ${
+                                it.category === 'Device Component' ? 'text-purple-700' : 'text-indigo-700'
+                              }`}
                             >
-                              <span className="text-gray-500 text-[10px]">
-                                [{it.category === 'Device Component' ? 'Device' : 'Mat'}]:
-                              </span>
-                              <span className="font-semibold text-gray-900">{it.item_name}:</span>
-                              <strong className="text-purple-800 font-mono">
-                                {it.quantity} {it.unit || 'Nos.'}
-                              </strong>
+                              [{it.category === 'Device Component' ? 'Device' : 'Material'}]:
                             </span>
-                          ))}
+                            <span className="font-semibold text-gray-900">{it.item_name}:</span>
+                            <strong className="text-purple-800 font-mono">
+                              {it.quantity} {it.unit || 'Nos.'}
+                            </strong>
+                          </span>
+                        ))}
                       </div>
                       <p className="text-[10px] text-gray-400 italic">
                         * Note: This declaration records what the technician carries to the site. Store Manager physically verifies and records stock movements upon issuance.

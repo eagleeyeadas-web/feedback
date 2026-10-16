@@ -155,6 +155,19 @@ export function calculateBookingEndDate(startDateStr, durationDaysOrEndDate) {
 }
 
 /**
+ * Helper: Calculate earliest availability date for a technician (YYYY-MM-DD)
+ * Rule: Scheduled end date is the final working day and is inclusive.
+ * The technician's earliest availability date is strictly the next calendar day (scheduled end date + 1 day).
+ */
+export function calculateEarliestAvailabilityDate(scheduledEndDateStr) {
+  if (!scheduledEndDateStr) return null;
+  const [y, m, d] = scheduledEndDateStr.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(dt.getUTCDate() + 1);
+  return dt.toISOString().split('T')[0];
+}
+
+/**
  * Overlap check for two inclusive date ranges [startA, endA] and [startB, endB]
  */
 export function isDateRangeOverlapping(startA, endA, startB, endB) {
@@ -497,8 +510,10 @@ export async function getEngineerCommitments(engineerIdOrName) {
   }
 
   // 6. Apply Early Completion and Incomplete Assignment rules:
-  // - A completed assignment does not block future dates: its blocking range ends strictly on actual completion!
-  // - Never mark a technician available solely because a date passed if their assignment is still active or incomplete!
+  // - Scheduled end date is the final working day (inclusive). Earliest availability date is strictly next calendar day.
+  // - A completed assignment does not block future dates: its blocking range ends strictly on actual completion date!
+  // - If the installation remains incomplete after scheduled end date, do not automatically release the technician.
+  //   Mark the job overdue and keep the technician unavailable until completion or an approved schedule update.
   const todayStr = new Date().toISOString().split('T')[0];
   commitments.forEach((c) => {
     if (c.type === 'JOB' && (c.status === 'COMPLETED' || c.status === 'SITE WORK COMPLETED')) {
@@ -506,12 +521,11 @@ export async function getEngineerCommitments(engineerIdOrName) {
       c.effective_end_date = completionDate;
       c.original_scheduled_end_date = c.end_date;
     } else if (c.type === 'JOB' && c.status !== 'CANCELLED') {
-      // If assignment is active and incomplete, but its scheduled end date was in the past,
-      // it continues to block today and cannot be marked available solely because the date passed!
       const scheduledEnd = c.effective_end_date || c.end_date;
       if (scheduledEnd && scheduledEnd < todayStr) {
         c.effective_end_date = todayStr;
         c.original_scheduled_end_date = scheduledEnd;
+        c.is_overdue = true;
       }
     }
   });
@@ -681,10 +695,17 @@ export async function checkEngineerAvailability({
     if (c.type === 'JOB' && (c.status === 'COMPLETED' || c.status === 'SITE WORK COMPLETED')) {
       const completionDate = (c.actual_completion_datetime || '').split('T')[0];
       if (completionDate) {
-        if (startDate >= completionDate) return false;
+        // Scheduled end date is the final working day (inclusive). Earliest availability is strictly the next calendar day.
+        if (startDate > completionDate) return false;
       } else {
-        if (startDate >= c.start_date) return false;
+        if (startDate > c.start_date) return false;
       }
+    }
+
+    // Incomplete & Overdue Rule: If installation remains incomplete after scheduled end date,
+    // do not automatically release the technician. Keep technician unavailable until completion or an approved schedule update.
+    if (c.type === 'JOB' && c.is_overdue) {
+      return true;
     }
 
     const effectiveEnd = c.effective_end_date || c.end_date;
@@ -725,7 +746,19 @@ export async function checkEngineerAvailability({
         reason: reasonText,
       };
     } else {
-      if (conflicting.type === 'REST_DAY') {
+      if (conflicting.is_overdue) {
+        reasonText = `Cannot Assign: Engineer ${engName} has an overdue incomplete installation (${conflicting.checklist_number || 'assignment'}) scheduled to finish on ${conflicting.original_scheduled_end_date || conflicting.end_date}. Technician remains unavailable until completion or an approved schedule update.`;
+        conflictObj = {
+          type: 'OVERDUE_INCOMPLETE',
+          checklist_id: conflicting.checklist_id || null,
+          checklist_number: conflicting.checklist_number || null,
+          client_name: conflicting.client_name || null,
+          booking_start_date: conflicting.start_date,
+          booking_end_date: conflicting.original_scheduled_end_date || conflicting.end_date,
+          status: 'OVERDUE',
+          reason: reasonText,
+        };
+      } else if (conflicting.type === 'REST_DAY') {
         reasonText = `Engineer ${engName} has an approved Rest Day from ${conflicting.start_date} to ${conflicting.end_date}.`;
       } else if (conflicting.type === 'LEAVE') {
         reasonText = `Engineer ${engName} is on approved Leave (${conflicting.leave_type || 'Casual'}) from ${conflicting.start_date} to ${conflicting.end_date}.`;
@@ -735,16 +768,18 @@ export async function checkEngineerAvailability({
         reasonText = `Engineer ${engName} is booked for ${conflicting.checklist_number || 'an assigned job'} from ${conflicting.start_date} to ${conflicting.end_date}.`;
       }
 
-      conflictObj = {
-        type: conflicting.type,
-        checklist_id: conflicting.checklist_id || null,
-        checklist_number: conflicting.checklist_number || null,
-        client_name: conflicting.client_name || null,
-        booking_start_date: conflicting.start_date,
-        booking_end_date: conflicting.effective_end_date || conflicting.end_date,
-        status: conflicting.status,
-        reason: reasonText,
-      };
+      if (!conflictObj) {
+        conflictObj = {
+          type: conflicting.type,
+          checklist_id: conflicting.checklist_id || null,
+          checklist_number: conflicting.checklist_number || null,
+          client_name: conflicting.client_name || null,
+          booking_start_date: conflicting.start_date,
+          booking_end_date: conflicting.effective_end_date || conflicting.end_date,
+          status: conflicting.status,
+          reason: reasonText,
+        };
+      }
     }
 
     // Find suggested available alternatives among the other authorized engineers
@@ -757,8 +792,11 @@ export async function checkEngineerAvailability({
       const hasConflict = otherCommitments.some((oc) => {
         if (oc.type === 'JOB' && (oc.status === 'COMPLETED' || oc.status === 'SITE WORK COMPLETED')) {
           const compDate = (oc.actual_completion_datetime || '').split('T')[0];
-          if (compDate && startDate >= compDate) return false;
-          if (!compDate && startDate >= oc.start_date) return false;
+          if (compDate && startDate > compDate) return false;
+          if (!compDate && startDate > oc.start_date) return false;
+        }
+        if (oc.type === 'JOB' && oc.is_overdue) {
+          return true;
         }
         const ocEnd = oc.effective_end_date || oc.end_date;
         const ocStart = oc.effective_start_date || oc.start_date;
@@ -804,6 +842,7 @@ export async function checkEngineerAvailability({
     engineer_name: engName,
     requested_start_date: startDate,
     requested_end_date: finalEndDate,
+    earliest_availability_date: calculateEarliestAvailabilityDate(finalEndDate),
     conflict: null,
     warnings,
     suggested_engineers: [],
@@ -849,6 +888,7 @@ export async function getEngineersAvailabilityForRange({
         role: eng.role,
         available: check.available,
         conflict: check.conflict,
+        earliest_availability_date: check.earliest_availability_date || calculateEarliestAvailabilityDate(finalEndDate),
         warnings: check.warnings || [],
         suggested_engineers: check.suggested_engineers || [],
         message: check.message || null,
@@ -1084,16 +1124,43 @@ export async function updateEngineerBookingEndDate({ checklistId, newEndDate }) 
 }
 
 /**
+ * Helper to calculate the earliest available date for an engineer starting from reference date
+ */
+function getEngineerEarliestAvailableDate(commitments, fromDateStr) {
+  if (!fromDateStr) return null;
+  const [y, m, d] = fromDateStr.split('-').map(Number);
+  const cur = new Date(Date.UTC(y, m - 1, d));
+  for (let i = 0; i < 90; i++) {
+    const dStr = cur.toISOString().split('T')[0];
+    const stat = determineEngineerDateStatus(commitments, dStr);
+    if (stat.status === 'AVAILABLE') {
+      return dStr;
+    }
+    cur.setUTCDate(cur.getUTCDate() + 1);
+  }
+  return null;
+}
+
+/**
  * Calculate meaningful status for an engineer on a single specific date
  */
 function determineEngineerDateStatus(commitments, dateStr) {
   const activeOnDate = commitments.filter((c) => {
     if (c.type === 'JOB' && (c.status === 'COMPLETED' || c.status === 'SITE WORK COMPLETED')) {
       const compDate = (c.actual_completion_datetime || '').split('T')[0];
-      // A completed assignment must NEVER block on or after its actual completion date!
-      if (compDate && dateStr >= compDate) return false;
-      if (!compDate) return false;
+      // Scheduled end date is final working day (inclusive).
+      // A completed assignment must NEVER block strictly AFTER its actual completion date!
+      if (compDate && dateStr > compDate) return false;
+      if (!compDate && dateStr > c.start_date) return false;
     }
+
+    // Overdue Incomplete Rule: If installation remains incomplete after scheduled end date,
+    // do not automatically release the technician. Keep technician unavailable.
+    if (c.type === 'JOB' && c.is_overdue) {
+      if (dateStr < c.start_date) return false;
+      return true;
+    }
+
     const end = c.effective_end_date || c.end_date;
     const start = c.effective_start_date || c.start_date;
     if (end < start) return false;
@@ -1122,6 +1189,10 @@ function determineEngineerDateStatus(commitments, dateStr) {
   if (primary.type === 'JOB') {
     if (primary.status === 'COMPLETED' || primary.status === 'SITE WORK COMPLETED') {
       return { status: 'COMPLETED', label: 'Completed', commitment: primary };
+    }
+    const schedEnd = primary.original_scheduled_end_date || primary.end_date;
+    if (primary.is_overdue && schedEnd && dateStr > schedEnd) {
+      return { status: 'OVERDUE', label: 'Overdue (Incomplete)', commitment: primary };
     }
     if (primary.status === 'IN_PROGRESS') {
       return { status: 'IN_PROGRESS', label: 'On Installation/Service', commitment: primary };
@@ -1190,6 +1261,7 @@ export async function getAvailabilityCalendar({
     available: 0,
     assigned: 0,
     in_progress: 0,
+    overdue: 0,
     traveling: 0,
     resting: 0,
     on_leave: 0,
@@ -1217,6 +1289,7 @@ export async function getAvailabilityCalendar({
     if (dayStat.status === 'AVAILABLE') summary.available++;
     else if (dayStat.status === 'ASSIGNED') summary.assigned++;
     else if (dayStat.status === 'IN_PROGRESS') summary.in_progress++;
+    else if (dayStat.status === 'OVERDUE') summary.overdue++;
     else if (dayStat.status === 'TRAVEL') summary.traveling++;
     else if (dayStat.status === 'REST') summary.resting++;
     else if (dayStat.status === 'LEAVE') summary.on_leave++;
@@ -1252,6 +1325,7 @@ export async function getAvailabilityCalendar({
       days,
       warnings,
       total_booked_days: days.filter((d) => !d.is_available).length,
+      earliest_availability_date: getEngineerEarliestAvailableDate(commitments, start),
     };
   });
 
