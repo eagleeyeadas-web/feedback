@@ -193,8 +193,7 @@ router.post('/requirements/sync', requireRole('STORE_MANAGER', 'ADMIN'), async (
     const { data: checklists, error } = await supabase
       .from('installation_checklists')
       .select('*')
-      .order('created_at', { ascending: false })
-      .limit(200);
+      .order('created_at', { ascending: false });
 
     if (error) throw error;
     let synced = 0;

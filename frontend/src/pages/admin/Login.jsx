@@ -17,6 +17,7 @@ import {
   CheckCircle2,
   LogOut,
   ArrowRight,
+  UserCheck,
 } from 'lucide-react';
 import Navbar from '../../components/Navbar';
 
@@ -85,6 +86,22 @@ const PORTALS = {
     iconBgClass: 'bg-indigo-500/20 text-indigo-300 border-indigo-400/30',
     activeTabClass: 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30',
   },
+  hr: {
+    id: 'hr',
+    name: 'HR Portal',
+    title: 'HR Portal Sign In',
+    subtitle: 'Technician availability management & extension approvals',
+    role: 'HR',
+    defaultEmail: 'hr@gmail.com',
+    targetPath: '/hr',
+    badge: 'Human Resources',
+    icon: UserCheck,
+    color: 'emerald',
+    badgeClass: 'bg-emerald-500/20 text-emerald-300 border-emerald-400/30',
+    btnClass: 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-600/30 hover:shadow-emerald-600/40',
+    iconBgClass: 'bg-emerald-500/20 text-emerald-300 border-emerald-400/30',
+    activeTabClass: 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30',
+  },
 };
 
 export default function Login() {
@@ -134,6 +151,7 @@ export default function Login() {
         else if (userRole === 'TECHNICAL') navigate('/technical', { replace: true });
         else if (userRole === 'STORE_MANAGER') navigate('/store-manager', { replace: true });
         else if (userRole === 'COORDINATOR') navigate('/coordinator', { replace: true });
+        else if (userRole === 'HR') navigate('/hr', { replace: true });
       }
     }
   }, [session, role, portalConfig, searchParams, navigate]);

@@ -14,7 +14,9 @@ import {
   cancelChecklist,
   getInstallationStats,
   getServiceEngineers,
+  getBusinessTomorrow,
 } from '../services/installationService.js';
+import config from '../config.js';
 import {
   getEngineersAvailabilityForRange,
   getAvailabilityCalendar,
@@ -160,29 +162,73 @@ export const checklistValidationSchema = z.object({
   advance_amount: z.number().gte(0, 'Advance amount cannot be negative').default(0),
   pending_payment: z.boolean().default(false),
   pending_amount: z.number().gte(0, 'Pending amount cannot be negative').default(0),
+  delivery_method: z.enum(['Technician Carries', 'Product Couriered']).optional().default('Technician Carries'),
+  courier_dispatch_status: z.string().optional().default('NOT_APPLICABLE'),
   installation_duration: z.string().min(1, 'Installation duration is required'),
   vehicle_type: z.string().min(1, 'Vehicle type is required'),
   custom_vehicle_type: z.string().nullable().optional(),
-  expected_arrival_date: z.string().min(1, 'Expected arrival date is required'),
-  expected_arrival_time: z.string().min(1, 'Expected arrival time is required'),
+  expected_arrival_date: z.string().nullable().optional(),
+  expected_arrival_time: z.string().nullable().optional(),
   installation_or_service: z.enum(['Installation', 'Service'], {
     errorMap: () => ({ message: 'Installation or Service selection is required' }),
   }),
-  service_engineer: z.enum(SERVICE_ENGINEER_OPTIONS, {
-    errorMap: () => ({ message: 'Service Engineer is required. Please select one of: Mathi, Guna, Sakthivel, or Kamalesh.' }),
-  }),
+  service_engineer: z.string().nullable().optional(),
   service_engineer_id: z.string().nullable().optional(),
   booking_end_date: z.string().nullable().optional(),
   service_assistant: z.string().nullable().optional().default(''),
-  installation_status: z.enum(['Assigned', 'Completed'], {
-    errorMap: () => ({ message: 'Installation Status must be either Assigned or Completed' }),
-  }).default('Assigned'),
+  installation_status: z.enum([
+    'Pending',
+    'Assigned',
+    'In Progress',
+    'Completed',
+    'Cancelled',
+    'Awaiting Technician Assignment',
+    'Awaiting Schedule',
+    'Ready for Installation',
+    'Courier Pending',
+    'Site Work Completed',
+  ], {
+    errorMap: () => ({ message: 'Invalid installation status' }),
+  }).optional().default('Assigned'),
   payment_status: z.enum(['Paid', 'Partially Paid', 'Pending']).default('Pending'),
   remarks: z.string().nullable().optional(),
   client_confirmation: z.enum(['Confirmed', 'Not Confirmed']).default('Confirmed'),
   bom_snapshot: z.any().nullable().optional(),
   material_issuance_status: z.enum(['PENDING', 'PARTIALLY_ISSUED', 'ISSUED', 'NOT_APPLICABLE']).optional(),
 }).superRefine((data, ctx) => {
+  const isCouriered = data.delivery_method === 'Product Couriered';
+
+  if (!isCouriered) {
+    if (!data.expected_arrival_date || !data.expected_arrival_date.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['expected_arrival_date'],
+        message: 'Expected arrival date is required',
+      });
+    }
+    if (!data.expected_arrival_time || !data.expected_arrival_time.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['expected_arrival_time'],
+        message: 'Expected arrival time is required',
+      });
+    }
+    if (!data.service_engineer || !SERVICE_ENGINEER_OPTIONS.includes(data.service_engineer.trim())) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['service_engineer'],
+        message: 'Service Engineer is required. Please select one of: Mathi, Guna, Sakthivel, or Kamalesh.',
+      });
+    }
+  } else {
+    if (data.service_engineer && data.service_engineer.trim() && !SERVICE_ENGINEER_OPTIONS.includes(data.service_engineer.trim())) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['service_engineer'],
+        message: 'Please select one of the authorized service engineers: Mathi, Guna, Sakthivel, or Kamalesh.',
+      });
+    }
+  }
   // If device_configurations is not provided, enforce legacy device fields
   if (!data.device_configurations || data.device_configurations.length === 0) {
     if (!data.device_type) {
@@ -577,12 +623,34 @@ router.post('/', requireRole('SALES', 'ADMIN'), async (req, res) => {
       });
     }
 
-    const created = await createChecklist(req.profile.id, parsed.data);
+    // Strict next-day-only work-start booking rule
+    // Sales can create and submit a new installation or service checklist only when its work starting date is exactly tomorrow
+    const isCouriered = parsed.data.delivery_method === 'Product Couriered';
+    const businessTomorrow = getBusinessTomorrow(config.timezone);
+
+    if (parsed.data.expected_arrival_date) {
+      if (parsed.data.expected_arrival_date !== businessTomorrow) {
+        return res.status(400).json({
+          error: 'Jobs can only be scheduled to start tomorrow. Advance pre-booking is not allowed.',
+          business_tomorrow: businessTomorrow,
+          provided_date: parsed.data.expected_arrival_date,
+        });
+      }
+    } else if (!isCouriered) {
+      return res.status(400).json({
+        error: 'Jobs can only be scheduled to start tomorrow. Advance pre-booking is not allowed.',
+        business_tomorrow: businessTomorrow,
+      });
+    }
+
+    const created = await createChecklist(req.profile.id, parsed.data, {
+      enforceNextDayBooking: Boolean(parsed.data.expected_arrival_date),
+    });
     return res.status(201).json(created);
   } catch (err) {
     console.error('Error in POST /installations:', err);
     const isConflict = err.statusCode === 409 || err.message?.includes('Booking Conflict') || err.message?.includes('already booked');
-    const status = isConflict ? 409 : 500;
+    const status = isConflict ? 409 : (err.statusCode || 500);
     return res.status(status).json({
       error: err.message || 'Failed to create installation checklist',
       conflict: err.conflict || null,

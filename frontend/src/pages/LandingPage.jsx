@@ -12,6 +12,7 @@ import {
   CheckCircle2,
   Sparkles,
   CalendarCheck,
+  UserCheck,
 } from 'lucide-react';
 
 export default function LandingPage() {
@@ -81,6 +82,22 @@ export default function LandingPage() {
       iconBg: 'bg-indigo-50 text-indigo-600 border-indigo-200/60',
       badgeClass: 'bg-indigo-50 text-indigo-700 border-indigo-200',
       features: ['Bus & Travel Arrangements', 'Room Bookings', 'WhatsApp Ticket Logistics'],
+    },
+    {
+      id: 'hr',
+      title: 'HR Portal',
+      subtitle: 'Technician Availability & Extensions',
+      icon: UserCheck,
+      description: 'Manage engineer manual availability, review extension requests, and oversee field capacity',
+      buttonText: 'HR Login',
+      color: 'emerald',
+      badge: 'Human Resources',
+      action: () => navigate('/login?portal=hr'),
+      buttonClass:
+        'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-500/20 hover:shadow-emerald-500/35',
+      iconBg: 'bg-emerald-50 text-emerald-600 border-emerald-200/60',
+      badgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+      features: ['Manual Availability Controls', 'Extension Approvals', 'Availability Calendar'],
     },
     {
       id: 'customer',

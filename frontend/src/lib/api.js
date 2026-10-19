@@ -1061,6 +1061,28 @@ export async function fetchCoordinatorBookingHistory(token, checklistId) {
   return json;
 }
 
+export async function extendCoordinatorRoomBookingApi(token, checklistId, data) {
+  const res = await fetch(`${API_BASE}/admin/coordinator/bookings/${checklistId}/extend-room`, {
+    method: 'POST',
+    headers: adminHeaders(token),
+    body: JSON.stringify(data),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to extend room booking');
+  return json;
+}
+
+export async function updateCoordinatorReturnTicketApi(token, checklistId, data) {
+  const res = await fetch(`${API_BASE}/admin/coordinator/bookings/${checklistId}/return-ticket`, {
+    method: 'POST',
+    headers: adminHeaders(token),
+    body: JSON.stringify(data),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to update return ticket booking');
+  return json;
+}
+
 /**
  * Checklist Deletion & Complete Workflow Cascade APIs
  * Authorized for SALES, COORDINATOR, and ADMIN
@@ -1604,6 +1626,216 @@ export async function deleteAllCoordinatorNotifications(token) {
   if (!res.ok) throw new Error(json.error || 'Failed to clear notifications');
   return json;
 }
+
+// ============================================================
+// HR WORKSPACE APIS
+// ============================================================
+
+export async function fetchHrAvailabilityOverview(token, date = '') {
+  const query = date ? `?date=${encodeURIComponent(date)}` : '';
+  const res = await fetch(`${API_BASE}/admin/hr/availability${query}`, {
+    headers: adminHeaders(token),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to fetch technician availability overview');
+  return json;
+}
+
+export async function setHrManualAvailability(token, data) {
+  const res = await fetch(`${API_BASE}/admin/hr/availability/override`, {
+    method: 'POST',
+    headers: adminHeaders(token),
+    body: JSON.stringify(data),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to set manual availability override');
+  return json;
+}
+
+export async function reverseHrManualAvailability(token, overrideId, reason = '') {
+  const res = await fetch(`${API_BASE}/admin/hr/availability/override/${overrideId}/reverse`, {
+    method: 'POST',
+    headers: adminHeaders(token),
+    body: JSON.stringify({ reason }),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to reverse availability override');
+  return json;
+}
+
+export async function fetchHrExtensionRequests(token, queryParams = {}) {
+  const params = new URLSearchParams();
+  if (queryParams.status) params.set('status', queryParams.status);
+  const qStr = params.toString() ? `?${params.toString()}` : '';
+
+  const res = await fetch(`${API_BASE}/admin/hr/extensions${qStr}`, {
+    headers: adminHeaders(token),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to fetch extension requests');
+  return json;
+}
+
+export async function approveHrExtensionRequest(token, id, data = {}) {
+  const res = await fetch(`${API_BASE}/admin/hr/extensions/${id}/approve`, {
+    method: 'POST',
+    headers: adminHeaders(token),
+    body: JSON.stringify(data),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to approve extension request');
+  return json;
+}
+
+export async function rejectHrExtensionRequest(token, id, data = {}) {
+  const res = await fetch(`${API_BASE}/admin/hr/extensions/${id}/reject`, {
+    method: 'POST',
+    headers: adminHeaders(token),
+    body: JSON.stringify(data),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to reject extension request');
+  return json;
+}
+
+export async function fetchHrAvailabilityCalendar(token, queryParams = {}) {
+  const params = new URLSearchParams();
+  if (queryParams.startDate) params.set('startDate', queryParams.startDate);
+  if (queryParams.endDate) params.set('endDate', queryParams.endDate);
+  if (queryParams.view) params.set('view', queryParams.view);
+  if (queryParams.engineerId) params.set('engineerId', queryParams.engineerId);
+  const qStr = params.toString() ? `?${params.toString()}` : '';
+
+  const res = await fetch(`${API_BASE}/admin/hr/calendar${qStr}`, {
+    headers: adminHeaders(token),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to fetch HR availability calendar');
+  return json;
+}
+
+export async function fetchHrNotifications(token) {
+  const res = await fetch(`${API_BASE}/admin/hr/notifications`, {
+    headers: adminHeaders(token),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to fetch HR notifications');
+  return json;
+}
+
+export async function fetchHrOverdueRecords(token, queryParams = {}) {
+  const params = new URLSearchParams();
+  if (queryParams.category) params.set('category', queryParams.category);
+  if (queryParams.resolved !== undefined) params.set('resolved', queryParams.resolved);
+  const qStr = params.toString() ? `?${params.toString()}` : '';
+
+  const res = await fetch(`${API_BASE}/admin/hr/overdue${qStr}`, {
+    headers: adminHeaders(token),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to fetch HR overdue records');
+  return json;
+}
+
+export async function triggerHrOverdueCheck(token, body = {}) {
+  const res = await fetch(`${API_BASE}/admin/hr/overdue/check`, {
+    method: 'POST',
+    headers: adminHeaders(token),
+    body: JSON.stringify(body),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to trigger overdue check');
+  return json;
+}
+
+/**
+ * Product Courier Workflow API Helpers
+ */
+export async function fetchCourierCompanies(token) {
+  const res = await fetch(`${API_BASE}/admin/courier/companies`, {
+    headers: adminHeaders(token),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to fetch courier companies');
+  return json.companies || [];
+}
+
+export async function fetchCourierDispatches(token, queryParams = {}) {
+  const params = new URLSearchParams();
+  if (queryParams.checklistId) params.set('checklistId', queryParams.checklistId);
+  if (queryParams.search) params.set('search', queryParams.search);
+  if (queryParams.status) params.set('status', queryParams.status);
+  if (queryParams.page) params.set('page', queryParams.page);
+  if (queryParams.limit) params.set('limit', queryParams.limit);
+  const qStr = params.toString() ? `?${params.toString()}` : '';
+
+  const res = await fetch(`${API_BASE}/admin/courier${qStr}`, {
+    headers: adminHeaders(token),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to fetch courier dispatches');
+  return json;
+}
+
+export async function fetchCourieredChecklists(token, queryParams = {}) {
+  const params = new URLSearchParams();
+  if (queryParams.search) params.set('search', queryParams.search);
+  if (queryParams.status) params.set('status', queryParams.status);
+  if (queryParams.page) params.set('page', queryParams.page);
+  if (queryParams.limit) params.set('limit', queryParams.limit);
+  const qStr = params.toString() ? `?${params.toString()}` : '';
+
+  const res = await fetch(`${API_BASE}/admin/courier/checklists${qStr}`, {
+    headers: adminHeaders(token),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to fetch couriered checklists');
+  return json;
+}
+
+export async function fetchCourierDispatchByChecklist(token, checklistId) {
+  const res = await fetch(`${API_BASE}/admin/courier/${checklistId}`, {
+    headers: adminHeaders(token),
+  });
+  if (res.status === 404) return null;
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to fetch courier dispatch detail');
+  return json;
+}
+
+export async function dispatchChecklistViaCourierApi(token, payload) {
+  const res = await fetch(`${API_BASE}/admin/courier/dispatch`, {
+    method: 'POST',
+    headers: adminHeaders(token),
+    body: JSON.stringify(payload),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to dispatch checklist via courier');
+  return json;
+}
+
+export async function updateCourierStatusApi(token, dispatchId, payload) {
+  const res = await fetch(`${API_BASE}/admin/courier/${dispatchId}/status`, {
+    method: 'PUT',
+    headers: adminHeaders(token),
+    body: JSON.stringify(payload),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to update courier delivery status');
+  return json;
+}
+
+export async function recordCourierReturnApi(token, dispatchId, payload) {
+  const res = await fetch(`${API_BASE}/admin/courier/${dispatchId}/return`, {
+    method: 'POST',
+    headers: adminHeaders(token),
+    body: JSON.stringify(payload),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to process courier return');
+  return json;
+}
+
 
 
 

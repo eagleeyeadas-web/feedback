@@ -19,10 +19,22 @@ import { notifyStoreManagerOnInstallationChecklist } from './notificationService
 import { getPendingExtensionForChecklist } from './scheduleExtensionService.js';
 import { logAudit } from './auditService.js';
 
+import config from '../config.js';
+
 // In-memory structured extra configurations cache for active runtime sessions
 export const inMemoryChecklistExtraConfigs = new Map();
 export const inMemoryChecklistBomSnapshots = new Map();
 export const inMemoryChecklistSchedules = new Map();
+
+/**
+ * Calculate tomorrow date string YYYY-MM-DD based on configured business timezone
+ */
+export function getBusinessTomorrow(timeZone = config?.timezone || 'Asia/Kolkata', date = new Date()) {
+  const todayStr = (date instanceof Date ? date : new Date(date)).toLocaleDateString('en-CA', { timeZone });
+  const [y, m, d] = todayStr.split('-').map(Number);
+  const tomorrowDate = new Date(Date.UTC(y, m - 1, d + 1));
+  return tomorrowDate.toISOString().split('T')[0];
+}
 
 const DEVICE_TYPES = [
   '2 Channel Live',
@@ -100,7 +112,18 @@ export async function generateInstallationChecklistNumber() {
 /**
  * Create a new Installation Checklist
  */
-export async function createChecklist(adminUserId, data) {
+export async function createChecklist(adminUserId, data, options = {}) {
+  // Strict next-day-only work-start booking rule
+  // Sales can create and submit a new installation or service checklist only when its work starting date is exactly tomorrow
+  if (options?.enforceNextDayBooking || data?.enforceNextDayBooking) {
+    const businessTomorrow = getBusinessTomorrow(config?.timezone);
+    if (data.expected_arrival_date !== businessTomorrow) {
+      const err = new Error('Jobs can only be scheduled to start tomorrow. Advance pre-booking is not allowed.');
+      err.statusCode = 400;
+      throw err;
+    }
+  }
+
   const checklistNumber = await generateInstallationChecklistNumber();
 
   const confirmedPrice = Number(data.confirmed_price) || 0;
@@ -234,7 +257,14 @@ export async function createChecklist(adminUserId, data) {
     service_engineer_id: resolvedEng ? resolvedEng.id : null,
     booking_end_date: bookingEndDate,
     service_assistant: data.service_assistant ? data.service_assistant.trim() : '',
-    installation_status: data.installation_status || 'Assigned',
+    delivery_method: data.delivery_method || 'Technician Carries',
+    courier_dispatch_status: data.delivery_method === 'Product Couriered' ? 'NOT_DISPATCHED' : 'NOT_APPLICABLE',
+    is_courier_dispatched: false,
+    installation_status: data.installation_status || (
+      data.delivery_method === 'Product Couriered' && (!startDate || !engineerName)
+        ? 'Awaiting Technician Assignment'
+        : 'Assigned'
+    ),
     payment_status: paymentStatus,
     bom_snapshot: bomSnapshot,
     material_issuance_status: isInstallationJob ? (data.material_issuance_status || 'PENDING') : 'NOT_APPLICABLE',
@@ -258,6 +288,7 @@ export async function createChecklist(adminUserId, data) {
     // If device_configurations / extra_device_configurations / service_engineer_id / booking_end_date / bom_snapshot / material_issuance_status / salesperson_name columns are not migrated yet in PostgreSQL, retry without optional columns
     if (
       error.code === 'PGRST204' ||
+      error.message?.includes('Could not find') ||
       error.message?.includes('device_configurations') ||
       error.message?.includes('extra_device_configurations') ||
       error.message?.includes('service_engineer_id') ||
@@ -266,7 +297,7 @@ export async function createChecklist(adminUserId, data) {
       error.message?.includes('material_issuance_status') ||
       error.message?.includes('salesperson_name')
     ) {
-      const fallbackPayload = { ...payload };
+      let fallbackPayload = { ...payload };
       delete fallbackPayload.device_configurations;
       delete fallbackPayload.extra_device_configurations;
       delete fallbackPayload.service_engineer_id;
@@ -284,25 +315,49 @@ export async function createChecklist(adminUserId, data) {
       delete fallbackPayload.current_booking_end_date;
       delete fallbackPayload.schedule_revision_number;
       delete fallbackPayload.schedule_last_updated_at;
-      const { data: res2, error: err2 } = await supabase
-        .from('installation_checklists')
-        .insert(fallbackPayload)
-        .select()
-        .single();
-      if (err2) throw err2;
-      inserted = { ...payload, ...res2, id: res2.id };
-      inMemoryChecklistSchedules.set(res2.id, {
-        original_expected_arrival_date: payload.original_expected_arrival_date,
-        original_expected_arrival_time: payload.original_expected_arrival_time,
-        original_installation_duration: payload.original_installation_duration,
-        original_booking_end_date: payload.original_booking_end_date,
-        current_expected_arrival_date: payload.current_expected_arrival_date,
-        current_expected_arrival_time: payload.current_expected_arrival_time,
-        current_installation_duration: payload.current_installation_duration,
-        current_booking_end_date: payload.current_booking_end_date,
-        schedule_revision_number: payload.schedule_revision_number,
-        schedule_last_updated_at: payload.schedule_last_updated_at,
-      });
+      delete fallbackPayload.courier_dispatch_status;
+      delete fallbackPayload.is_courier_dispatched;
+
+      let lastErr = error;
+      for (let attempt = 0; attempt < 5; attempt++) {
+        const { data: res2, error: err2 } = await supabase
+          .from('installation_checklists')
+          .insert(fallbackPayload)
+          .select()
+          .single();
+        if (!err2) {
+          inserted = {
+            ...payload,
+            ...res2,
+            booking_end_date: payload.booking_end_date,
+            original_booking_end_date: payload.original_booking_end_date,
+            current_booking_end_date: payload.current_booking_end_date,
+            id: res2.id,
+          };
+          inMemoryChecklistSchedules.set(res2.id, {
+            original_expected_arrival_date: payload.original_expected_arrival_date,
+            original_expected_arrival_time: payload.original_expected_arrival_time,
+            original_installation_duration: payload.original_installation_duration,
+            original_booking_end_date: payload.original_booking_end_date,
+            current_expected_arrival_date: payload.current_expected_arrival_date,
+            current_expected_arrival_time: payload.current_expected_arrival_time,
+            current_installation_duration: payload.current_installation_duration,
+            current_booking_end_date: payload.current_booking_end_date,
+            schedule_revision_number: payload.schedule_revision_number,
+            schedule_last_updated_at: payload.schedule_last_updated_at,
+          });
+          lastErr = null;
+          break;
+        }
+        lastErr = err2;
+        const colMatch = err2.message?.match(/Could not find the '([^']+)' column/);
+        if (colMatch && colMatch[1] && fallbackPayload[colMatch[1]] !== undefined) {
+          delete fallbackPayload[colMatch[1]];
+        } else {
+          break;
+        }
+      }
+      if (lastErr) throw lastErr;
     } else {
       console.error('Database insert error for checklist:', error);
       if (error.code === 'PGRST205' || error.message?.includes("Could not find the table 'public.installation_checklists'")) {
@@ -575,7 +630,22 @@ export async function updateChecklist(id, data) {
   const newEngName = data.service_engineer !== undefined ? (data.service_engineer ? data.service_engineer.trim() : '') : existing.service_engineer;
   const newStartDate = data.expected_arrival_date !== undefined ? data.expected_arrival_date : existing.expected_arrival_date;
   const newDuration = data.installation_duration !== undefined ? data.installation_duration : (existing.installation_duration || '1 Day');
-  const newStatus = data.installation_status !== undefined ? data.installation_status : existing.installation_status;
+  let newStatus = data.installation_status !== undefined ? data.installation_status : existing.installation_status;
+
+  // If work starting date is being scheduled or changed, enforce strict next-day-only work-start booking rule
+  if (newStartDate && newStartDate !== existing.expected_arrival_date) {
+    const businessTomorrow = getBusinessTomorrow(config?.timezone);
+    if (newStartDate !== businessTomorrow) {
+      const err = new Error('Jobs can only be scheduled to start tomorrow. Advance pre-booking is not allowed.');
+      err.statusCode = 400;
+      throw err;
+    }
+  }
+
+  // If previously awaiting assignment and now both engineer and date are provided, transition to Assigned
+  if (newEngName && newStartDate && ['Awaiting Technician Assignment', 'Awaiting Schedule', 'Courier Pending', 'Pending'].includes(newStatus)) {
+    newStatus = 'Assigned';
+  }
 
   let newBookingEndDate = existing.booking_end_date;
   let resolvedEng = existing.service_engineer_id ? { id: existing.service_engineer_id, name: existing.service_engineer } : resolveEngineer(newEngName);
@@ -697,10 +767,11 @@ export async function updateChecklist(id, data) {
     service_engineer: newEngName,
     service_engineer_id: resolvedEng ? resolvedEng.id : null,
     booking_end_date: newBookingEndDate,
-    service_assistant: data.service_assistant ? data.service_assistant.trim() : existing.service_assistant,
+    delivery_method: data.delivery_method !== undefined ? data.delivery_method : (existing.delivery_method || 'Technician Carries'),
+    courier_dispatch_status: data.courier_dispatch_status !== undefined ? data.courier_dispatch_status : (existing.courier_dispatch_status || 'NOT_APPLICABLE'),
     installation_status: ((existing.installation_status === 'Completed' || existing.installation_status === 'Site Work Completed') && (data.installation_status !== 'Completed'))
       ? 'Completed'
-      : (data.installation_status || existing.installation_status),
+      : (newStatus || existing.installation_status),
     payment_status: paymentStatus,
     bom_snapshot: updatedBomSnapshot,
     material_issuance_status: isInstallation
@@ -728,6 +799,7 @@ export async function updateChecklist(id, data) {
   } catch (error) {
     if (
       error.code === 'PGRST204' ||
+      error.message?.includes('Could not find') ||
       error.message?.includes('device_configurations') ||
       error.message?.includes('extra_device_configurations') ||
       error.message?.includes('service_engineer_id') ||
@@ -736,7 +808,7 @@ export async function updateChecklist(id, data) {
       error.message?.includes('material_issuance_status') ||
       error.message?.includes('salesperson_name')
     ) {
-      const fallbackPayload = { ...payload };
+      let fallbackPayload = { ...payload };
       delete fallbackPayload.device_configurations;
       delete fallbackPayload.extra_device_configurations;
       delete fallbackPayload.service_engineer_id;
@@ -754,29 +826,46 @@ export async function updateChecklist(id, data) {
       delete fallbackPayload.current_booking_end_date;
       delete fallbackPayload.schedule_revision_number;
       delete fallbackPayload.schedule_last_updated_at;
-      const { data: res2, error: err2 } = await supabase
-        .from('installation_checklists')
-        .update(fallbackPayload)
-        .eq('id', existing.id)
-        .select()
-        .single();
-      if (err2) throw err2;
-      updated = { ...existing, ...payload, ...res2, id: existing.id };
-      inMemoryChecklistSchedules.set(existing.id, {
-        original_expected_arrival_date: payload.original_expected_arrival_date,
-        original_expected_arrival_time: payload.original_expected_arrival_time,
-        original_installation_duration: payload.original_installation_duration,
-        original_booking_end_date: payload.original_booking_end_date,
-        current_expected_arrival_date: payload.current_expected_arrival_date,
-        current_expected_arrival_time: payload.current_expected_arrival_time,
-        current_installation_duration: payload.current_installation_duration,
-        current_booking_end_date: payload.current_booking_end_date,
-        schedule_revision_number: payload.schedule_revision_number,
-        schedule_last_updated_at: payload.schedule_last_updated_at,
-      });
-      if (extraConfigs && extraConfigs.length > 0) {
-        inMemoryChecklistExtraConfigs.set(existing.id, extraConfigs);
+      delete fallbackPayload.courier_dispatch_status;
+      delete fallbackPayload.is_courier_dispatched;
+
+      let lastErr = error;
+      for (let attempt = 0; attempt < 5; attempt++) {
+        const { data: res2, error: err2 } = await supabase
+          .from('installation_checklists')
+          .update(fallbackPayload)
+          .eq('id', existing.id)
+          .select()
+          .single();
+        if (!err2) {
+          updated = { ...existing, ...payload, ...res2, id: existing.id };
+          inMemoryChecklistSchedules.set(existing.id, {
+            original_expected_arrival_date: payload.original_expected_arrival_date,
+            original_expected_arrival_time: payload.original_expected_arrival_time,
+            original_installation_duration: payload.original_installation_duration,
+            original_booking_end_date: payload.original_booking_end_date,
+            current_expected_arrival_date: payload.current_expected_arrival_date,
+            current_expected_arrival_time: payload.current_expected_arrival_time,
+            current_installation_duration: payload.current_installation_duration,
+            current_booking_end_date: payload.current_booking_end_date,
+            schedule_revision_number: payload.schedule_revision_number,
+            schedule_last_updated_at: payload.schedule_last_updated_at,
+          });
+          if (extraConfigs && extraConfigs.length > 0) {
+            inMemoryChecklistExtraConfigs.set(existing.id, extraConfigs);
+          }
+          lastErr = null;
+          break;
+        }
+        lastErr = err2;
+        const colMatch = err2.message?.match(/Could not find the '([^']+)' column/);
+        if (colMatch && colMatch[1] && fallbackPayload[colMatch[1]] !== undefined) {
+          delete fallbackPayload[colMatch[1]];
+        } else {
+          break;
+        }
       }
+      if (lastErr) throw lastErr;
     } else {
       console.error('Database update error for checklist:', error);
       throw new Error(error.message || 'Failed to update installation checklist');

@@ -252,8 +252,9 @@ function readJsonFallback(filename) {
  */
 export async function getEngineerCommitments(engineerIdOrName) {
   const resolved = resolveEngineer(engineerIdOrName);
-  const engId = resolved ? resolved.id : engineerIdOrName;
-  const engName = resolved ? resolved.name : engineerIdOrName;
+  const engId = resolved ? resolved.id : (typeof engineerIdOrName === 'string' ? engineerIdOrName : null);
+  const engName = resolved ? resolved.name : (typeof engineerIdOrName === 'string' ? engineerIdOrName : '');
+  const isValidUuid = engId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(engId);
 
   const commitments = [];
   const seenIds = new Set();
@@ -268,15 +269,20 @@ export async function getEngineerCommitments(engineerIdOrName) {
   ] = await Promise.all([
     (async () => {
       try {
-        return await supabase
-          .from('engineer_bookings')
-          .select('*')
-          .or(`engineer_id.eq.${engId},engineer_name.ilike.%${engName}%`)
-          .in('status', ['ASSIGNED', 'IN_PROGRESS', 'COMPLETED']);
+        let q = supabase.from('engineer_bookings').select('*').in('status', ['ASSIGNED', 'IN_PROGRESS', 'COMPLETED']);
+        if (isValidUuid && engName) {
+          q = q.or(`engineer_id.eq.${engId},engineer_name.ilike.%${engName}%`);
+        } else if (isValidUuid) {
+          q = q.eq('engineer_id', engId);
+        } else if (engName) {
+          q = q.ilike('engineer_name', `%${engName}%`);
+        }
+        return await q;
       } catch (e) { return { data: null }; }
     })(),
     (async () => {
       try {
+        if (!engName) return { data: null };
         return await supabase
           .from('installation_checklists')
           .select('*')
@@ -285,20 +291,28 @@ export async function getEngineerCommitments(engineerIdOrName) {
     })(),
     (async () => {
       try {
-        return await supabase
-          .from('rest_day_requests')
-          .select('*')
-          .or(`engineer_id.eq.${engId},engineer_name.ilike.%${engName}%`)
-          .eq('status', 'APPROVED');
+        let q = supabase.from('rest_day_requests').select('*').eq('status', 'APPROVED');
+        if (isValidUuid && engName) {
+          q = q.or(`engineer_id.eq.${engId},engineer_name.ilike.%${engName}%`);
+        } else if (isValidUuid) {
+          q = q.eq('engineer_id', engId);
+        } else if (engName) {
+          q = q.ilike('engineer_name', `%${engName}%`);
+        }
+        return await q;
       } catch (e) { return { data: null }; }
     })(),
     (async () => {
       try {
-        return await supabase
-          .from('leave_requests')
-          .select('*')
-          .or(`engineer_id.eq.${engId},engineer_name.ilike.%${engName}%`)
-          .eq('status', 'APPROVED');
+        let q = supabase.from('leave_requests').select('*').eq('status', 'APPROVED');
+        if (isValidUuid && engName) {
+          q = q.or(`engineer_id.eq.${engId},engineer_name.ilike.%${engName}%`);
+        } else if (isValidUuid) {
+          q = q.eq('engineer_id', engId);
+        } else if (engName) {
+          q = q.ilike('engineer_name', `%${engName}%`);
+        }
+        return await q;
       } catch (e) { return { data: null }; }
     })(),
     (async () => {
@@ -334,7 +348,7 @@ export async function getEngineerCommitments(engineerIdOrName) {
   // In-memory bookings fallback
   inMemoryBookings.forEach((b) => {
     if (seenIds.has(b.id)) return;
-    const isMatching = (b.engineer_id === engId) || (b.engineer_name && b.engineer_name.toLowerCase() === engName.toLowerCase());
+    const isMatching = (engId && b.engineer_id === engId) || (b.engineer_name && engName && b.engineer_name.toLowerCase() === engName.toLowerCase());
     const bStatus = String(b.status || '').toUpperCase();
     const isActive = ['ASSIGNED', 'IN_PROGRESS', 'COMPLETED', 'SITE WORK COMPLETED'].includes(bStatus);
     if (isMatching && isActive) {
@@ -465,49 +479,102 @@ export async function getEngineerCommitments(engineerIdOrName) {
     });
   }
 
-  // Process 5: Recorded Travel Commitments
+  // Process 5: Recorded Travel Commitments (Outbound and Return)
   const dbCoord = dbCoordRes?.data;
   if (Array.isArray(dbCoord)) {
     dbCoord.forEach((cb) => {
       const assigned = (cb.assigned_engineer || '').toLowerCase();
-      if (assigned.includes(engName.toLowerCase()) && cb.travel_datetime) {
-        const travelDate = cb.travel_datetime.split('T')[0];
-        commitments.push({
-          id: `travel-${cb.id}`,
-          type: 'TRAVEL',
-          status: 'RECORDED',
-          checklist_id: cb.checklist_id,
-          start_date: travelDate,
-          end_date: travelDate,
-          destination: cb.destination,
-          departure_city: cb.departure_city,
-        });
-      }
-    });
-  }
-
-  const coordStorage = readJsonFallback('coordinator_bookings_storage.json');
-  if (coordStorage?.bookings) {
-    Object.values(coordStorage.bookings).forEach((cb) => {
-      if (cb.travel_required && cb.travel_datetime) {
-        const assigned = (cb.assigned_engineer || '').toLowerCase();
-        if (assigned.includes(engName.toLowerCase())) {
-          const travelDate = cb.travel_datetime.split('T')[0];
-          if (!commitments.some((c) => c.id === `travel-${cb.id || cb.checklist_id}`)) {
-            commitments.push({
-              id: `travel-${cb.id || cb.checklist_id}`,
-              type: 'TRAVEL',
-              status: 'RECORDED',
-              checklist_id: cb.checklist_id,
-              start_date: travelDate,
-              end_date: travelDate,
-              destination: cb.destination,
-            });
-          }
+      if (assigned.includes(engName.toLowerCase())) {
+        // Outbound Travel
+        const outTime = cb.outbound_departure_datetime || cb.travel_datetime;
+        if (outTime && cb.outbound_status !== 'Cancelled') {
+          const travelDate = outTime.split('T')[0];
+          commitments.push({
+            id: `travel-out-${cb.id}`,
+            type: 'TRAVEL',
+            travel_type: 'OUTBOUND',
+            status: cb.outbound_status || 'RECORDED',
+            checklist_id: cb.checklist_id,
+            start_date: travelDate,
+            end_date: travelDate,
+            destination: cb.outbound_destination || cb.destination,
+            departure_city: cb.outbound_origin || cb.departure_city,
+          });
+        }
+        // Return Travel
+        if (cb.return_departure_datetime && cb.return_status !== 'Cancelled') {
+          const retDate = cb.return_departure_datetime.split('T')[0];
+          commitments.push({
+            id: `travel-ret-${cb.id}`,
+            type: 'TRAVEL',
+            travel_type: 'RETURN',
+            status: cb.return_status || 'RECORDED',
+            checklist_id: cb.checklist_id,
+            start_date: retDate,
+            end_date: retDate,
+            destination: cb.return_destination || cb.departure_city,
+            departure_city: cb.return_origin || cb.destination,
+          });
         }
       }
     });
   }
+
+  // Fallback and in-memory coordinator bookings store
+  const coordStorage = readJsonFallback('coordinator_bookings_storage.json');
+  const fallbackCoordList = [];
+  if (coordStorage?.bookings) {
+    fallbackCoordList.push(...Object.values(coordStorage.bookings));
+  }
+  try {
+    const { inMemoryBookings: memCoord } = await import('./coordinatorBookingService.js');
+    if (memCoord) {
+      memCoord.forEach((cb) => fallbackCoordList.push(cb));
+    }
+  } catch (e) {}
+
+  fallbackCoordList.forEach((cb) => {
+    const assigned = (cb.assigned_engineer || '').toLowerCase();
+    if (assigned.includes(engName.toLowerCase())) {
+      // Outbound Travel
+      const outTime = cb.outbound_departure_datetime || cb.travel_datetime;
+      if (outTime && cb.outbound_status !== 'Cancelled') {
+        const travelDate = outTime.split('T')[0];
+        const outId = `travel-out-${cb.id || cb.checklist_id}`;
+        if (!commitments.some((c) => c.id === outId)) {
+          commitments.push({
+            id: outId,
+            type: 'TRAVEL',
+            travel_type: 'OUTBOUND',
+            status: cb.outbound_status || 'RECORDED',
+            checklist_id: cb.checklist_id,
+            start_date: travelDate,
+            end_date: travelDate,
+            destination: cb.outbound_destination || cb.destination,
+            departure_city: cb.outbound_origin || cb.departure_city,
+          });
+        }
+      }
+      // Return Travel
+      if (cb.return_departure_datetime && cb.return_status !== 'Cancelled') {
+        const retDate = cb.return_departure_datetime.split('T')[0];
+        const retId = `travel-ret-${cb.id || cb.checklist_id}`;
+        if (!commitments.some((c) => c.id === retId)) {
+          commitments.push({
+            id: retId,
+            type: 'TRAVEL',
+            travel_type: 'RETURN',
+            status: cb.return_status || 'RECORDED',
+            checklist_id: cb.checklist_id,
+            start_date: retDate,
+            end_date: retDate,
+            destination: cb.return_destination || cb.departure_city,
+            departure_city: cb.return_origin || cb.destination,
+          });
+        }
+      }
+    }
+  });
 
   // 6. Apply Early Completion and Incomplete Assignment rules:
   // - Scheduled end date is the final working day (inclusive). Earliest availability date is strictly next calendar day.
@@ -665,11 +732,13 @@ export async function getEngineerPendingWarnings(engineerIdOrName) {
  */
 export async function checkEngineerAvailability({
   engineerIdOrName,
+  engineerName,
   startDate,
   endDate,
   duration = '1 Day',
   excludeChecklistId = null,
 }) {
+  const targetEng = engineerIdOrName || engineerName;
   if (!startDate) {
     throw new Error('Start date is required to check availability.');
   }
@@ -679,12 +748,12 @@ export async function checkEngineerAvailability({
     throw new Error(`End date (${finalEndDate}) cannot be before start date (${startDate}).`);
   }
 
-  const resolved = resolveEngineer(engineerIdOrName);
-  const engId = resolved ? resolved.id : engineerIdOrName;
-  const engName = resolved ? resolved.name : engineerIdOrName;
+  const resolved = resolveEngineer(targetEng);
+  const engId = resolved ? resolved.id : targetEng;
+  const engName = resolved ? resolved.name : targetEng;
 
-  const commitments = await getEngineerCommitments(engId);
-  const warnings = await getEngineerPendingWarnings(engId);
+  const commitments = await getEngineerCommitments(targetEng);
+  const warnings = await getEngineerPendingWarnings(targetEng);
 
   // Find blocking commitment
   const conflicting = commitments.find((c) => {
@@ -729,11 +798,34 @@ export async function checkEngineerAvailability({
     return isDateRangeOverlapping(startDate, finalEndDate, propStart, propEnd);
   });
 
-  if (conflicting || conflictingPending) {
+  // 3. Check HR Manual Availability Overrides (Strictly blocks new conflicting assignments during override period)
+  let hrManualConflict = null;
+  try {
+    const { getActiveOverrideForEngineer } = await import('./hrAvailabilityService.js');
+    const hrOverride = await getActiveOverrideForEngineer(engId, startDate);
+    if (hrOverride && hrOverride.manual_status === 'Unavailable') {
+      const oStart = hrOverride.effective_start_datetime.split('T')[0];
+      const oEnd = hrOverride.effective_end_datetime ? hrOverride.effective_end_datetime.split('T')[0] : '2099-12-31';
+      if (isDateRangeOverlapping(startDate, finalEndDate, oStart, oEnd)) {
+        hrManualConflict = {
+          type: 'HR_MANUAL_OVERRIDE',
+          status: 'UNAVAILABLE',
+          reason: `Cannot Assign: Engineer ${engName} has been manually set to Unavailable by HR ("${hrOverride.reason}").`,
+          booking_start_date: oStart,
+          booking_end_date: oEnd,
+        };
+      }
+    }
+  } catch (hrErr) {}
+
+  if (conflicting || conflictingPending || hrManualConflict) {
     let reasonText = '';
     let conflictObj = null;
 
-    if (conflictingPending && !conflicting) {
+    if (hrManualConflict) {
+      reasonText = hrManualConflict.reason;
+      conflictObj = hrManualConflict;
+    } else if (conflictingPending && !conflicting) {
       reasonText = `Cannot Assign: Engineer ${engName} has a pending availability date request for ${conflictingPending.checklist_number} through ${conflictingPending.requested_completion_date} awaiting Coordinator approval. New assignments cannot be booked during this protected period.`;
       conflictObj = {
         type: 'PENDING_EXTENSION_PROTECTED',
@@ -763,7 +855,8 @@ export async function checkEngineerAvailability({
       } else if (conflicting.type === 'LEAVE') {
         reasonText = `Engineer ${engName} is on approved Leave (${conflicting.leave_type || 'Casual'}) from ${conflicting.start_date} to ${conflicting.end_date}.`;
       } else if (conflicting.type === 'TRAVEL') {
-        reasonText = `Engineer ${engName} has a scheduled travel commitment on ${conflicting.start_date} (Destination: ${conflicting.destination || 'Site'}).`;
+        const isRet = conflicting.travel_type === 'RETURN';
+        reasonText = `Engineer ${engName} has a scheduled ${isRet ? 'return ' : ''}travel commitment on ${conflicting.start_date} (${isRet ? 'Return travel from site' : 'Destination: ' + (conflicting.destination || 'Site')}).`;
       } else {
         reasonText = `Engineer ${engName} is booked for ${conflicting.checklist_number || 'an assigned job'} from ${conflicting.start_date} to ${conflicting.end_date}.`;
       }
@@ -833,6 +926,7 @@ export async function checkEngineerAvailability({
       warnings,
       suggested_engineers: suggestedEngineers,
       message: reasonText,
+      reasons: [reasonText],
     };
   }
 
@@ -1143,8 +1237,17 @@ function getEngineerEarliestAvailableDate(commitments, fromDateStr) {
 
 /**
  * Calculate meaningful status for an engineer on a single specific date
+ * Respects active HR manual availability overrides (Available / Unavailable)
  */
-function determineEngineerDateStatus(commitments, dateStr) {
+function determineEngineerDateStatus(commitments, dateStr, overrides = []) {
+  // Check active HR manual override covering this date
+  const activeOverride = overrides.find((o) => {
+    if (!o.is_active) return false;
+    const oStart = o.effective_start_datetime.split('T')[0];
+    const oEnd = o.effective_end_datetime ? o.effective_end_datetime.split('T')[0] : '2099-12-31';
+    return dateStr >= oStart && dateStr <= oEnd;
+  });
+
   const activeOnDate = commitments.filter((c) => {
     if (c.type === 'JOB' && (c.status === 'COMPLETED' || c.status === 'SITE WORK COMPLETED')) {
       const compDate = (c.actual_completion_datetime || '').split('T')[0];
@@ -1167,40 +1270,72 @@ function determineEngineerDateStatus(commitments, dateStr) {
     return start <= dateStr && end >= dateStr;
   });
 
+  // If HR manual override is Unavailable, technician is marked UNAVAILABLE
+  if (activeOverride && activeOverride.manual_status === 'Unavailable') {
+    return {
+      status: 'UNAVAILABLE',
+      label: 'HR Override: Unavailable',
+      commitment: activeOnDate[0] || null,
+      manual_override: activeOverride,
+    };
+  }
+
   if (activeOnDate.length === 0) {
+    if (activeOverride && activeOverride.manual_status === 'Available') {
+      return {
+        status: 'AVAILABLE',
+        label: 'Available (HR Override)',
+        commitment: null,
+        manual_override: activeOverride,
+      };
+    }
     return { status: 'AVAILABLE', label: 'Available', commitment: null };
   }
 
   // Conflict if multiple active overlapping commitments
   if (activeOnDate.length > 1) {
-    return { status: 'CONFLICT', label: 'Schedule Conflict', commitments: activeOnDate };
+    return {
+      status: 'CONFLICT',
+      label: 'Schedule Conflict',
+      commitments: activeOnDate,
+      manual_override: activeOverride || null,
+      discrepancy: Boolean(activeOverride && activeOverride.manual_status === 'Available'),
+    };
   }
 
   const primary = activeOnDate[0];
+  const overrideInfo = {
+    manual_override: activeOverride || null,
+    discrepancy: Boolean(activeOverride && activeOverride.manual_status === 'Available'),
+    discrepancy_warning: activeOverride && activeOverride.manual_status === 'Available'
+      ? `Manual override is Available, but active commitment (${primary.type}) exists.`
+      : null,
+  };
+
   if (primary.type === 'LEAVE') {
-    return { status: 'LEAVE', label: 'On Leave', commitment: primary };
+    return { ...overrideInfo, status: 'LEAVE', label: 'On Leave', commitment: primary };
   }
   if (primary.type === 'REST_DAY') {
-    return { status: 'REST', label: 'Rest Day', commitment: primary };
+    return { ...overrideInfo, status: 'REST', label: 'Rest Day', commitment: primary };
   }
   if (primary.type === 'TRAVEL') {
-    return { status: 'TRAVEL', label: 'Traveling', commitment: primary };
+    return { ...overrideInfo, status: 'TRAVEL', label: 'Traveling', commitment: primary };
   }
   if (primary.type === 'JOB') {
     if (primary.status === 'COMPLETED' || primary.status === 'SITE WORK COMPLETED') {
-      return { status: 'COMPLETED', label: 'Completed', commitment: primary };
+      return { ...overrideInfo, status: 'COMPLETED', label: 'Completed', commitment: primary };
     }
     const schedEnd = primary.original_scheduled_end_date || primary.end_date;
     if (primary.is_overdue && schedEnd && dateStr > schedEnd) {
-      return { status: 'OVERDUE', label: 'Overdue (Incomplete)', commitment: primary };
+      return { ...overrideInfo, status: 'OVERDUE', label: 'Overdue (Incomplete)', commitment: primary };
     }
     if (primary.status === 'IN_PROGRESS') {
-      return { status: 'IN_PROGRESS', label: 'On Installation/Service', commitment: primary };
+      return { ...overrideInfo, status: 'IN_PROGRESS', label: 'On Installation/Service', commitment: primary };
     }
-    return { status: 'ASSIGNED', label: 'Assigned', commitment: primary };
+    return { ...overrideInfo, status: 'ASSIGNED', label: 'Assigned', commitment: primary };
   }
 
-  return { status: 'UNAVAILABLE', label: 'Unavailable', commitment: primary };
+  return { ...overrideInfo, status: 'UNAVAILABLE', label: 'Unavailable', commitment: primary };
 }
 
 /**
@@ -1268,6 +1403,21 @@ export async function getAvailabilityCalendar({
     conflicts: 0,
   };
 
+  // Prefetch active HR manual overrides
+  let allOverrides = [];
+  try {
+    const { getAllOverrides } = await import('./hrAvailabilityService.js');
+    allOverrides = await getAllOverrides();
+  } catch (e) {}
+
+  const engineerOverrideMap = new Map();
+  allMainEngineers.forEach((eng) => {
+    const engOverrides = allOverrides.filter(
+      (o) => o.is_active && (o.engineer_id === eng.id || o.engineer_name.toLowerCase() === eng.name.toLowerCase())
+    );
+    engineerOverrideMap.set(eng.id, engOverrides);
+  });
+
   // Batch prefetch commitments and warnings once in parallel for all engineers
   const engineerCommitmentMap = new Map();
   const engineerWarningMap = new Map();
@@ -1285,7 +1435,8 @@ export async function getAvailabilityCalendar({
 
   for (const eng of allMainEngineers) {
     const comms = engineerCommitmentMap.get(eng.id) || [];
-    const dayStat = determineEngineerDateStatus(comms, start);
+    const engOverrides = engineerOverrideMap.get(eng.id) || [];
+    const dayStat = determineEngineerDateStatus(comms, start, engOverrides);
     if (dayStat.status === 'AVAILABLE') summary.available++;
     else if (dayStat.status === 'ASSIGNED') summary.assigned++;
     else if (dayStat.status === 'IN_PROGRESS') summary.in_progress++;
@@ -1299,9 +1450,10 @@ export async function getAvailabilityCalendar({
   const schedule = engineers.map((eng) => {
     const commitments = engineerCommitmentMap.get(eng.id) || [];
     const warnings = engineerWarningMap.get(eng.id) || [];
+    const engOverrides = engineerOverrideMap.get(eng.id) || [];
 
     const days = dateList.map((dateStr) => {
-      const dateStatus = determineEngineerDateStatus(commitments, dateStr);
+      const dateStatus = determineEngineerDateStatus(commitments, dateStr, engOverrides);
       const dayWarning = warnings.find((w) => {
         const wStart = w.start_date || w.requested_date;
         const wEnd = w.end_date || w.requested_date;

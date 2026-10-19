@@ -22,6 +22,7 @@ export default function StaffWorkspaceLayout({
     TECHNICAL: 'bg-teal-100 text-teal-800 border-teal-300',
     STORE_MANAGER: 'bg-amber-100 text-amber-800 border-amber-300',
     COORDINATOR: 'bg-indigo-100 text-indigo-800 border-indigo-300',
+    HR: 'bg-emerald-100 text-emerald-800 border-emerald-300',
     ADMIN: 'bg-purple-100 text-purple-800 border-purple-300',
   };
 

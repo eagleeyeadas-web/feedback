@@ -17,8 +17,11 @@ import auditRoutes from './routes/audit.js';
 import bomRoutes from './routes/bom.js';
 import materialRoutes from './routes/materials.js';
 import coordinatorRoutes from './routes/coordinator.js';
+import hrRoutes from './routes/hr.js';
+import courierRoutes from './routes/courier.js';
 import { runFullCleanup, handleCleanupEndpoint, handleCleanupStatusEndpoint, executeActivityTriggeredCleanup } from './services/quotationCleanupService.js';
 import { startDailyCleanupSchedule } from './services/inventoryCleanupService.js';
+import { startOverdueDetectionScheduler } from './services/overdueDetectionService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -97,6 +100,10 @@ app.use('/api/admin/materials', materialRoutes);
 app.use('/api/materials', materialRoutes);
 app.use('/api/admin/coordinator', coordinatorRoutes);
 app.use('/api/coordinator', coordinatorRoutes);
+app.use('/api/admin/hr', hrRoutes);
+app.use('/api/hr', hrRoutes);
+app.use('/api/admin/courier', courierRoutes);
+app.use('/api/courier', courierRoutes);
 app.use('/api/admin/customers', customerRoutes);
 app.use('/api/admin/users', userRoutes);
 app.use('/api/admin/audit-logs', auditRoutes);
@@ -145,6 +152,9 @@ app.listen(config.port, '0.0.0.0', () => {
 
   // Automatic 20-day inventory and returns history retention cleanup
   startDailyCleanupSchedule();
+
+  // Automatic 24/7 overdue detection and idempotent HR alerting scheduler
+  startOverdueDetectionScheduler();
 });
 
 export default app;

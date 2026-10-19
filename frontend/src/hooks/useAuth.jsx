@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 
 const AuthContext = createContext(null);
 
-const VALID_STAFF_ROLES = ['SALES', 'TECHNICAL', 'STORE_MANAGER', 'COORDINATOR', 'ADMIN'];
+const VALID_STAFF_ROLES = ['SALES', 'TECHNICAL', 'STORE_MANAGER', 'COORDINATOR', 'ADMIN', 'HR'];
 
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(null);
@@ -28,6 +28,7 @@ export function AuthProvider({ children }) {
         'tech@gmail.com': 'TECHNICAL',
         'store@gmail.com': 'STORE_MANAGER',
         'coordinator@gmail.com': 'COORDINATOR',
+        'hr@gmail.com': 'HR',
       };
 
       if (error || !data || data.is_active === false) {
@@ -54,7 +55,7 @@ export function AuthProvider({ children }) {
       // Authoritative role from trusted database record & server-signed auth identity
       let effectiveRole = null;
       const dbRole = data.role ? String(data.role).trim().toUpperCase() : '';
-      const DEPARTMENT_ROLES = ['SALES', 'TECHNICAL', 'STORE_MANAGER', 'COORDINATOR'];
+      const DEPARTMENT_ROLES = ['SALES', 'TECHNICAL', 'STORE_MANAGER', 'COORDINATOR', 'HR'];
       const appRole = (user.app_metadata?.role || '').toUpperCase();
       const userMetaRole = (user.user_metadata?.role || '').toUpperCase();
 
@@ -86,6 +87,7 @@ export function AuthProvider({ children }) {
         'tech@gmail.com': 'TECHNICAL',
         'store@gmail.com': 'STORE_MANAGER',
         'coordinator@gmail.com': 'COORDINATOR',
+        'hr@gmail.com': 'HR',
       };
       if (STAFF_EMAIL_ROLES[userEmail]) {
         const fallbackProfile = {

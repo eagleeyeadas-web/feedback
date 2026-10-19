@@ -178,7 +178,7 @@ export async function requestScheduleExtension({
   }
   if (existingPending) {
     const err = new Error(
-      `An extension request is already pending review for ${checklist.checklist_number}. Please wait for Coordinator review.`
+      `An extension request is already pending review for ${checklist.checklist_number}. Please wait for HR review.`
     );
     err.statusCode = 409;
     throw err;
@@ -277,9 +277,19 @@ export async function requestScheduleExtension({
   inMemoryExtensions.set(extensionRecord.id, extensionRecord);
   saveStorage();
 
-  // Create Coordinator notification
+  // Flag coordinator booking accommodation status as Extension Pending
+  try {
+    await flagBookingForReview({
+      checklistId,
+      reason: `Extension requested to ${requestedCompletionDate} (${extensionRecord.additional_working_days} extra days). Pending Coordinator approval.`,
+      accommodationAffected: true,
+      accommodationStatus: 'Extension Pending',
+    });
+  } catch (e) {}
+
+  // Create HR notification (Coordinator is NOT notified of pending extension requests)
   await createNotification({
-    targetRole: 'COORDINATOR',
+    targetRole: 'HR',
     title: `Extension Request: ${checklist.checklist_number}`,
     message: `${extensionRecord.technician_name} requested extension to ${requestedCompletionDate} (${extensionRecord.additional_working_days} extra days). Reason: ${extensionRecord.reason}`,
     type: 'EXTENSION_REQUEST',
@@ -313,11 +323,25 @@ export async function requestScheduleExtension({
 }
 
 /**
- * 2. Approve Schedule Extension (Strictly COORDINATOR or ADMIN)
+ * 2. Approve Schedule Extension (Strictly HR or ADMIN)
  */
-export async function approveScheduleExtension({ extensionId, user, decisionNotes = '' }) {
-  if (!user || !['COORDINATOR', 'ADMIN', 'SUPER_ADMIN'].includes(String(user.role).toUpperCase())) {
-    const err = new Error('Permission Denied: Only authorized Coordinator or Admin can approve schedule extensions.');
+export async function approveScheduleExtension(arg1, arg2, arg3) {
+  let extensionId;
+  let user;
+  let decisionNotes = '';
+
+  if (typeof arg1 === 'object' && arg1 !== null && !arg2) {
+    extensionId = arg1.extensionId || arg1.id;
+    user = arg1.user;
+    decisionNotes = arg1.decisionNotes || arg1.notes || '';
+  } else {
+    extensionId = arg1;
+    user = arg2;
+    decisionNotes = arg3 || '';
+  }
+
+  if (!user || !['HR', 'ADMIN', 'SUPER_ADMIN'].includes(String(user.role).toUpperCase())) {
+    const err = new Error('Permission Denied: Only authorized HR or Admin can approve schedule extensions.');
     err.statusCode = 403;
     throw err;
   }
@@ -432,6 +456,8 @@ export async function approveScheduleExtension({ extensionId, user, decisionNote
       current_installation_duration: newDurationStr,
       booking_end_date: newEndDate, // Maintain legacy synchronization
       installation_duration: newDurationStr,
+      extension_approved_end_date: newEndDate,
+      extension_decision_at: nowIso,
       schedule_revision_number: newRevisionNumber,
       schedule_last_updated_at: nowIso,
       updated_at: nowIso,
@@ -460,6 +486,8 @@ export async function approveScheduleExtension({ extensionId, user, decisionNote
       current_expected_arrival_time: updatePayload.current_expected_arrival_time,
       current_installation_duration: updatePayload.current_installation_duration,
       current_booking_end_date: updatePayload.current_booking_end_date,
+      extension_approved_end_date: newEndDate,
+      extension_decision_at: nowIso,
       schedule_revision_number: updatePayload.schedule_revision_number,
       schedule_last_updated_at: updatePayload.schedule_last_updated_at,
     });
@@ -515,6 +543,8 @@ export async function approveScheduleExtension({ extensionId, user, decisionNote
       revision_number: newRevisionNumber,
       previous_schedule: prevSchedule,
       new_schedule: newSchedule,
+      new_completion_date: newEndDate,
+      action: 'APPROVED',
       reason: `Extension Request Approved: ${ext.reason}${decisionNotes ? ' | Note: ' + decisionNotes : ''}`,
       changed_by: user.id,
       changed_by_email: user.email,
@@ -531,8 +561,12 @@ export async function approveScheduleExtension({ extensionId, user, decisionNote
     // 8. Update extension request status
     currentExt.status = 'APPROVED';
     currentExt.coordinator_decision_notes = decisionNotes ? decisionNotes.trim() : null;
+    currentExt.decision_notes = decisionNotes ? decisionNotes.trim() : null;
     currentExt.decided_by = user.id;
+    currentExt.reviewed_by = user.email || user.id;
+    currentExt.reviewer = user.email || user.id;
     currentExt.decided_at = nowIso;
+    currentExt.reviewed_at = nowIso;
     currentExt.updated_at = nowIso;
 
     try {
@@ -551,12 +585,31 @@ export async function approveScheduleExtension({ extensionId, user, decisionNote
     inMemoryExtensions.set(currentExt.id, currentExt);
     saveStorage();
 
-    // 9. Notify technician of decision
+    // 9. Notify Coordinator that date has been extended and room/travel bookings may require attention
+    await createNotification({
+      targetRole: 'COORDINATOR',
+      title: 'Date Extended — Review Room Booking and Travel Arrangements',
+      message: 'HR has approved an extension for this installation. Please review accommodation checkout dates and travel arrangements, and update any bookings that require changes.',
+      type: 'SCHEDULE_EXTENSION_APPROVED',
+      checklistId: ext.checklist_id,
+      checklistNumber: checklist.checklist_number,
+      metadata: {
+        extension_id: ext.id,
+        technician: checklist.service_engineer,
+        checklist_number: checklist.checklist_number,
+        original_date: prevSchedule.completion_date,
+        approved_date: newEndDate,
+        action_url: `/coordinator?view=${ext.checklist_id}&action=manage_logistics`,
+        booking_url: `/coordinator?view=${ext.checklist_id}&action=manage_logistics`,
+      },
+    });
+
+    // 10. Notify technician of decision
     await createNotification({
       targetRole: 'TECHNICAL',
       targetUserId: ext.technician_user_id,
       title: `Extension Approved: ${checklist.checklist_number}`,
-      message: `Your schedule extension for ${checklist.checklist_number} to ${newEndDate} was approved by the Coordinator.${decisionNotes ? ' Note: ' + decisionNotes : ''}`,
+      message: `Your schedule extension for ${checklist.checklist_number} to ${newEndDate} was approved by HR.${decisionNotes ? ' Note: ' + decisionNotes : ''}`,
       type: 'EXTENSION_APPROVED',
       checklistId: ext.checklist_id,
       checklistNumber: checklist.checklist_number,
@@ -584,6 +637,7 @@ export async function approveScheduleExtension({ extensionId, user, decisionNote
 
     return {
       success: true,
+      ...ext,
       extension: ext,
       schedule: newSchedule,
     };
@@ -591,11 +645,25 @@ export async function approveScheduleExtension({ extensionId, user, decisionNote
 }
 
 /**
- * 3. Reject Schedule Extension (Strictly COORDINATOR or ADMIN)
+ * 3. Reject Schedule Extension (Strictly HR or ADMIN)
  */
-export async function rejectScheduleExtension({ extensionId, user, decisionNotes = '' }) {
-  if (!user || !['COORDINATOR', 'ADMIN', 'SUPER_ADMIN'].includes(String(user.role).toUpperCase())) {
-    const err = new Error('Permission Denied: Only authorized Coordinator or Admin can reject schedule extensions.');
+export async function rejectScheduleExtension(arg1, arg2, arg3) {
+  let extensionId;
+  let user;
+  let decisionNotes = '';
+
+  if (typeof arg1 === 'object' && arg1 !== null && !arg2) {
+    extensionId = arg1.extensionId || arg1.id;
+    user = arg1.user;
+    decisionNotes = arg1.decisionNotes || arg1.notes || '';
+  } else {
+    extensionId = arg1;
+    user = arg2;
+    decisionNotes = arg3 || '';
+  }
+
+  if (!user || !['HR', 'ADMIN', 'SUPER_ADMIN'].includes(String(user.role).toUpperCase())) {
+    const err = new Error('Permission Denied: Only authorized HR or Admin can reject schedule extensions.');
     err.statusCode = 403;
     throw err;
   }
@@ -656,9 +724,13 @@ export async function rejectScheduleExtension({ extensionId, user, decisionNotes
 
     // Official schedule remains completely unchanged!
     currentExt.status = 'REJECTED';
-    currentExt.coordinator_decision_notes = decisionNotes ? decisionNotes.trim() : 'Availability date request declined by Coordinator';
+    currentExt.coordinator_decision_notes = decisionNotes ? decisionNotes.trim() : 'Availability date request declined by HR';
+    currentExt.decision_notes = decisionNotes ? decisionNotes.trim() : null;
     currentExt.decided_by = user.id;
+    currentExt.reviewed_by = user.email || user.id;
+    currentExt.reviewer = user.email || user.id;
     currentExt.decided_at = nowIso;
+    currentExt.reviewed_at = nowIso;
     currentExt.updated_at = nowIso;
 
     try {
@@ -677,17 +749,46 @@ export async function rejectScheduleExtension({ extensionId, user, decisionNotes
     inMemoryExtensions.set(currentExt.id, currentExt);
     saveStorage();
 
+    // Revert accommodation status and clear review flags on coordinator booking without changing official dates
+    try {
+      const { getBookingRecord, saveCoordinatorBooking } = await import('./coordinatorBookingService.js');
+      const b = await getBookingRecord(ext.checklist_id);
+      if (b && (b.accommodation_status === 'Extension Pending' || b.accommodation_status === 'Extension Required' || b.schedule_flagged_for_review)) {
+        const prevStatusBeforeRequest = (b.accommodation_history && b.accommodation_history.length > 0) || (b.extra_nights > 0)
+          ? 'Extended'
+          : (b.hotel_booking_reference ? 'Confirmed' : (b.accommodation_required ? 'Pending' : 'Required'));
+
+        await saveCoordinatorBooking({
+          checklistId: ext.checklist_id,
+          bookingData: {
+            ...b,
+            accommodation_status: prevStatusBeforeRequest,
+            schedule_flagged_for_review: false,
+            accommodation_dates_affected: false,
+            return_travel_date_affected: false,
+            coordinator_notes: b.coordinator_notes
+              ? `${b.coordinator_notes} | Extension rejected: ${decisionNotes || 'declined'}`
+              : `Extension rejected: ${decisionNotes || 'declined'}`,
+          },
+          user,
+        });
+      }
+    } catch (bErr) {
+      console.warn('Could not reset booking review on extension rejection:', bErr.message);
+    }
+
     // Notify technician of rejection
     await createNotification({
       targetRole: 'TECHNICAL',
       targetUserId: ext.technician_user_id,
-      title: `Availability Date Request Declined: ${checklist?.checklist_number || 'Job'}`,
-      message: `Your availability date request was not approved.${decisionNotes ? ' Reason: ' + decisionNotes : ''}`,
+      title: `Availability Date Request Rejected: ${checklist?.checklist_number || 'Job'}`,
+      message: `Your availability date extension request for ${checklist?.checklist_number || 'job'} was rejected.${decisionNotes ? ' Reason: ' + decisionNotes : ''}`,
       type: 'EXTENSION_REJECTED',
       checklistId: ext.checklist_id,
       checklistNumber: checklist?.checklist_number,
       metadata: {
         extension_id: ext.id,
+        checklist_number: checklist?.checklist_number,
         decision_notes: decisionNotes,
       },
     });
@@ -705,7 +806,7 @@ export async function rejectScheduleExtension({ extensionId, user, decisionNotes
       },
     });
 
-    return { success: true, extension: ext };
+    return { success: true, ...ext, extension: ext };
   });
 }
 

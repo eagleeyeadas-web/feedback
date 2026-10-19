@@ -5,6 +5,8 @@ import {
   getBookingDetails,
   saveCoordinatorBooking,
   getBookingAuditHistory,
+  extendRoomBooking,
+  updateReturnTicketBooking,
 } from '../services/coordinatorBookingService.js';
 import {
   getExtensionRequests,
@@ -243,6 +245,65 @@ router.get('/bookings/:checklistId/history', async (req, res) => {
   }
 });
 
+/**
+ * POST /api/admin/coordinator/bookings/:checklistId/extend-room
+ * Extend existing room booking following an approved extension
+ * Preserves original room dates, initial checkout date, and appends to audit trail
+ */
+router.post('/bookings/:checklistId/extend-room', async (req, res) => {
+  try {
+    const {
+      new_check_out_date,
+      extra_nights,
+      reference_details,
+      notes,
+      attachment_url,
+      attachment_name,
+    } = req.body;
+
+    if (!new_check_out_date) {
+      return res.status(400).json({ error: 'New checkout date is required' });
+    }
+
+    const saved = await extendRoomBooking({
+      checklistId: req.params.checklistId,
+      newCheckOutDate: new_check_out_date,
+      extraNights: extra_nights,
+      referenceDetails: reference_details,
+      notes,
+      attachmentUrl: attachment_url,
+      attachmentName: attachment_name,
+      user: req.profile || req.user || {},
+    });
+
+    return res.json({ success: true, booking: saved });
+  } catch (err) {
+    console.error('Error in POST /coordinator/bookings/:checklistId/extend-room:', err);
+    const status = err.statusCode || 400;
+    return res.status(status).json({ error: err.message || 'Failed to extend room booking' });
+  }
+});
+
+/**
+ * POST /api/admin/coordinator/bookings/:checklistId/return-ticket
+ * Record or update Return Ticket Booking
+ */
+router.post('/bookings/:checklistId/return-ticket', async (req, res) => {
+  try {
+    const saved = await updateReturnTicketBooking({
+      checklistId: req.params.checklistId,
+      returnData: req.body,
+      user: req.profile || req.user || {},
+    });
+
+    return res.json({ success: true, booking: saved });
+  } catch (err) {
+    console.error('Error in POST /coordinator/bookings/:checklistId/return-ticket:', err);
+    const status = err.statusCode || 400;
+    return res.status(status).json({ error: err.message || 'Failed to update return ticket booking' });
+  }
+});
+
 // ============================================================
 // SCHEDULE & AVAILABILITY MANAGEMENT APIS
 // ============================================================
@@ -264,10 +325,18 @@ router.get('/schedule/extensions', async (req, res) => {
 /**
  * POST /api/admin/coordinator/schedule/extensions/:id/approve
  * Atomically approve schedule extension, recalculate conflicts, update current expected schedule
+ * Permission: Only HR / ADMIN can approve. COORDINATOR role is strictly prohibited.
  */
-router.post('/schedule/extensions/:id/approve', async (req, res) => {
+router.post(['/schedule/extensions/:id/approve', '/schedule-extensions/:id/approve'], async (req, res) => {
   try {
     const user = req.profile || req.user || {};
+    const role = (user.role || '').toUpperCase();
+    if (role === 'COORDINATOR') {
+      return res.status(403).json({
+        error: 'Coordinators are not permitted to approve or reject HR extension requests. Extension approval authority is restricted to HR.',
+      });
+    }
+
     const { decision_notes } = req.body;
     const result = await approveScheduleExtension({
       extensionId: req.params.id,
@@ -288,10 +357,18 @@ router.post('/schedule/extensions/:id/approve', async (req, res) => {
 /**
  * POST /api/admin/coordinator/schedule/extensions/:id/reject
  * Reject schedule extension with optional decision notes
+ * Permission: Only HR / ADMIN can reject. COORDINATOR role is strictly prohibited.
  */
-router.post('/schedule/extensions/:id/reject', async (req, res) => {
+router.post(['/schedule/extensions/:id/reject', '/schedule-extensions/:id/reject'], async (req, res) => {
   try {
     const user = req.profile || req.user || {};
+    const role = (user.role || '').toUpperCase();
+    if (role === 'COORDINATOR') {
+      return res.status(403).json({
+        error: 'Coordinators are not permitted to approve or reject HR extension requests. Extension approval authority is restricted to HR.',
+      });
+    }
+
     const { decision_notes } = req.body;
     const result = await rejectScheduleExtension({
       extensionId: req.params.id,

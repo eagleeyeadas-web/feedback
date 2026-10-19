@@ -45,6 +45,7 @@ export default function StoreInstallationRequirements({ token, onSelectChecklist
     issuedCount: 0,
   });
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [syncing, setSyncing] = useState(false);
   const [search, setSearch] = useState('');
   const [jobTypeFilter, setJobTypeFilter] = useState('All');
@@ -77,6 +78,7 @@ export default function StoreInstallationRequirements({ token, onSelectChecklist
   const loadRequirements = useCallback(async () => {
     if (!token) return;
     setLoading(true);
+    setError(null);
     try {
       const data = await fetchStoreMaterialRequirements(token, {
         page,
@@ -98,6 +100,7 @@ export default function StoreInstallationRequirements({ token, onSelectChecklist
       setTotalPages(data.totalPages || 1);
     } catch (err) {
       console.error('Failed to load store material requirements:', err);
+      setError(err.message || 'Failed to load requirements. Please check network connection and retry.');
     } finally {
       setLoading(false);
     }
@@ -112,14 +115,23 @@ export default function StoreInstallationRequirements({ token, onSelectChecklist
     setTimeout(() => setToastMessage(''), 4000);
   };
 
+  const handleResetFilters = () => {
+    setSearch('');
+    setJobTypeFilter('All');
+    setStatusFilter('All');
+    setShortageOnly(false);
+    setPage(1);
+  };
+
   const handleSyncAll = async () => {
     setSyncing(true);
     try {
       const res = await syncStoreMaterialRequirements(token);
       showToast(`Synced ${res.synced_count || 0} checklist requirement records!`);
-      loadRequirements();
+      await loadRequirements();
     } catch (err) {
       console.error('Failed to sync requirements:', err);
+      showToast(`Sync failed: ${err.message || 'Please check server connection'}`);
     } finally {
       setSyncing(false);
     }
@@ -398,6 +410,22 @@ export default function StoreInstallationRequirements({ token, onSelectChecklist
           <RefreshCw className="w-8 h-8 text-amber-600 animate-spin mx-auto" />
           <p className="text-sm font-semibold text-gray-600">Loading installation & service requirements...</p>
         </div>
+      ) : error ? (
+        <div className="bg-white p-10 rounded-2xl border border-rose-200 text-center space-y-4">
+          <AlertTriangle className="w-10 h-10 text-rose-500 mx-auto" />
+          <div className="space-y-1">
+            <h3 className="text-sm font-bold text-gray-900">Unable to Load Requirements</h3>
+            <p className="text-xs text-rose-600 max-w-md mx-auto">{error}</p>
+          </div>
+          <button
+            type="button"
+            onClick={loadRequirements}
+            className="px-4 py-2 text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 rounded-xl transition-all shadow-xs inline-flex items-center gap-1.5 cursor-pointer"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span>Retry</span>
+          </button>
+        </div>
       ) : requirements.length === 0 ? (
         <div className="bg-white p-12 rounded-2xl border border-gray-200 text-center space-y-3">
           <Package className="w-10 h-10 text-gray-300 mx-auto" />
@@ -407,6 +435,26 @@ export default function StoreInstallationRequirements({ token, onSelectChecklist
               ? 'No checklist records match the current filter criteria.'
               : 'When Sales submits an Installation Initiation Checklist, its camera models, material requirements, and client details will automatically appear here.'}
           </p>
+          {search || jobTypeFilter !== 'All' || statusFilter !== 'All' || shortageOnly ? (
+            <button
+              type="button"
+              onClick={handleResetFilters}
+              className="mt-2 px-4 py-2 text-xs font-bold text-navy bg-gray-100 hover:bg-gray-200 rounded-xl transition-all inline-flex items-center gap-1.5 cursor-pointer border border-gray-200"
+            >
+              <X className="w-3.5 h-3.5" />
+              <span>Clear All Filters</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={handleSyncAll}
+              disabled={syncing}
+              className="mt-2 px-4 py-2 text-xs font-bold text-navy bg-amber-400 hover:bg-amber-300 rounded-xl transition-all inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${syncing ? 'animate-spin' : ''}`} />
+              <span>Sync All Jobs Now</span>
+            </button>
+          )}
         </div>
       ) : (
         <div className="space-y-4">

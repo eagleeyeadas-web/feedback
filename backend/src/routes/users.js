@@ -25,6 +25,7 @@ router.get('/', async (req, res) => {
       else if (emailLower === 'tech@gmail.com') role = 'TECHNICAL';
       else if (emailLower === 'store@gmail.com') role = 'STORE_MANAGER';
       else if (emailLower === 'coordinator@gmail.com') role = 'COORDINATOR';
+      else if (emailLower === 'hr@gmail.com') role = 'HR';
       else if (emailLower === 'eagleeye@gmail.com') role = 'SUPER_ADMIN';
       else if (emailLower === 'admin@eagleeyesafdrive.com') role = 'ADMIN';
       return { ...u, role };
@@ -47,7 +48,7 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'Email, password, and role are required' });
     }
 
-    const validRoles = ['ADMIN', 'SALES', 'TECHNICAL', 'STORE_MANAGER', 'COORDINATOR'];
+    const validRoles = ['ADMIN', 'SALES', 'TECHNICAL', 'STORE_MANAGER', 'COORDINATOR', 'HR'];
     const normalizedRole = String(role).toUpperCase();
     if (!validRoles.includes(normalizedRole)) {
       return res.status(400).json({ error: `Invalid role. Must be one of: ${validRoles.join(', ')}` });

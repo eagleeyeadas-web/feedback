@@ -12,6 +12,7 @@ const SalesWorkspacePage = lazy(() => import('./pages/staff/SalesWorkspacePage')
 const TechnicalWorkspacePage = lazy(() => import('./pages/staff/TechnicalWorkspacePage'));
 const StoreWorkspacePage = lazy(() => import('./pages/staff/StoreWorkspacePage'));
 const CoordinatorWorkspacePage = lazy(() => import('./pages/staff/CoordinatorWorkspacePage'));
+const HrWorkspacePage = lazy(() => import('./pages/staff/HrWorkspacePage'));
 
 function PageLoader() {
   return (
@@ -48,6 +49,9 @@ function DashboardRedirect() {
   }
   if (userRole === 'COORDINATOR') {
     return <Navigate to="/coordinator" replace />;
+  }
+  if (userRole === 'HR') {
+    return <Navigate to="/hr" replace />;
   }
 
   // Fallback for Admin
@@ -146,6 +150,19 @@ function AppRoutes() {
               targetResource="Coordinator Workspace"
             >
               <CoordinatorWorkspacePage />
+            </RoleProtectedRoute>
+          }
+        />
+
+        {/* HR Workspace: Accessible ONLY to HR and ADMIN */}
+        <Route
+          path="/hr"
+          element={
+            <RoleProtectedRoute
+              allowedRoles={['HR', 'ADMIN']}
+              targetResource="HR Workspace"
+            >
+              <HrWorkspacePage />
             </RoleProtectedRoute>
           }
         />

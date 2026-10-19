@@ -47,11 +47,22 @@ export async function requireAuth(req, res, next) {
     }
 
     // Query user profile from admin_users (trusted database source)
-    const { data: adminUser, error: dbError } = await supabase
+    let { data: adminUser, error: dbError } = await supabase
       .from('admin_users')
       .select('*')
       .eq('id', user.id)
       .maybeSingle();
+
+    if (!adminUser && user.email) {
+      const { data: byEmail } = await supabase
+        .from('admin_users')
+        .select('*')
+        .ilike('email', user.email)
+        .maybeSingle();
+      if (byEmail) {
+        adminUser = byEmail;
+      }
+    }
 
     if (!adminUser) {
       authCache.delete(token);
@@ -69,13 +80,14 @@ export async function requireAuth(req, res, next) {
       'tech@gmail.com': 'TECHNICAL',
       'store@gmail.com': 'STORE_MANAGER',
       'coordinator@gmail.com': 'COORDINATOR',
+      'hr@gmail.com': 'HR',
     };
 
     // Resolve authoritative role from trusted database record & server-signed auth identity
     let role = null;
     const userEmail = (user.email || '').toLowerCase().trim();
     const dbRole = adminUser.role ? String(adminUser.role).trim().toUpperCase() : '';
-    const DEPARTMENT_ROLES = ['SALES', 'TECHNICAL', 'STORE_MANAGER', 'COORDINATOR'];
+    const DEPARTMENT_ROLES = ['SALES', 'TECHNICAL', 'STORE_MANAGER', 'COORDINATOR', 'HR'];
     const appRole = (user.app_metadata?.role || '').toUpperCase();
     const userMetaRole = (user.user_metadata?.role || '').toUpperCase();
 

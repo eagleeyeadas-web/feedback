@@ -845,11 +845,39 @@ export default function InstallationChecklistDetails({ id: propId, onEdit, onBac
 
         {/* SECTION 4: 4. INSTALLATION DETAILS */}
         <div className="space-y-3">
-          <h3 className="text-xs font-black text-navy uppercase tracking-wider pb-1 border-b border-gray-200 flex items-center gap-2">
-            <Calendar size={15} className="text-blue-600" />
-            4. INSTALLATION DETAILS
-          </h3>
+          <div className="flex items-center justify-between pb-1 border-b border-gray-200">
+            <h3 className="text-xs font-black text-navy uppercase tracking-wider flex items-center gap-2">
+              <Calendar size={15} className="text-blue-600" />
+              4. INSTALLATION &amp; DELIVERY DETAILS
+            </h3>
+            <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border ${
+              checklist.delivery_method === 'Product Couriered'
+                ? 'bg-indigo-50 text-indigo-800 border-indigo-200'
+                : 'bg-blue-50 text-blue-800 border-blue-200'
+            }`}>
+              {checklist.delivery_method || 'Technician Carries'}
+            </span>
+          </div>
+
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-xs bg-gray-50/50 p-4 rounded-xl border border-gray-100">
+            <div>
+              <span className="text-gray-500 block text-[11px]">Delivery Method</span>
+              <span className="font-bold text-gray-900">{checklist.delivery_method || 'Technician Carries'}</span>
+            </div>
+            {checklist.delivery_method === 'Product Couriered' && (
+              <div>
+                <span className="text-gray-500 block text-[11px]">Courier Dispatch Status</span>
+                <span className={`font-bold ${
+                  checklist.courier_dispatch_status === 'Delivered'
+                    ? 'text-emerald-700'
+                    : checklist.courier_dispatch_status === 'In Transit' || checklist.courier_dispatch_status === 'Dispatched'
+                    ? 'text-blue-700'
+                    : 'text-amber-700'
+                }`}>
+                  {checklist.courier_dispatch_status || 'Not Dispatched'}
+                </span>
+              </div>
+            )}
             <div>
               <span className="text-gray-500 block text-[11px]">Installation Duration</span>
               <span className="font-bold text-gray-900">{checklist.installation_duration || '—'}</span>
@@ -864,7 +892,9 @@ export default function InstallationChecklistDetails({ id: propId, onEdit, onBac
             </div>
             <div>
               <span className="text-gray-500 block text-[11px]">Expected Date of Arrival at Client Place</span>
-              <span className="font-bold text-gray-900">{formatDate(checklist.expected_arrival_date)}</span>
+              <span className="font-bold text-gray-900">
+                {checklist.expected_arrival_date ? formatDate(checklist.expected_arrival_date) : 'Unscheduled (Couriered)'}
+              </span>
             </div>
             <div>
               <span className="text-gray-500 block text-[11px]">Expected Time of Arrival at Client Place</span>

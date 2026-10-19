@@ -216,7 +216,47 @@ export async function syncStoreRequirementForChecklist(checklistOrId) {
     reqStatus = 'READY_FOR_ISSUANCE';
   }
 
-  const payload = {
+  // Strictly persist only supported columns in store_material_requirements
+  const DB_COLUMNS = new Set([
+    'checklist_id',
+    'checklist_number',
+    'client_name',
+    'client_mobile',
+    'client_location',
+    'google_maps_location',
+    'job_type',
+    'device_type',
+    'number_of_devices',
+    'number_of_vehicles',
+    'device_configurations',
+    'bom_snapshot',
+    'material_items',
+    'material_issuance_status',
+    'status',
+    'has_shortage',
+    'shortage_count',
+    'shortage_details',
+    'material_issued_at',
+    'material_issued_by',
+    'salesperson_name',
+    'service_engineer',
+    'service_assistant',
+    'expected_arrival_date',
+    'expected_arrival_time',
+    'installation_duration',
+    'submission_date',
+    'notes',
+    'updated_at',
+    'delivery_method',
+    'courier_dispatch_status',
+    'is_courier_dispatched',
+  ]);
+
+  const isValidUuid = (val) =>
+    typeof val === 'string' &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(val);
+
+  const rawDbPayload = {
     checklist_id: checklistId,
     checklist_number: checklistNumber,
     client_name: (checklist.client_name || '').trim(),
@@ -228,20 +268,15 @@ export async function syncStoreRequirementForChecklist(checklistOrId) {
     number_of_devices: combinedAllocation.reduce((s, c) => s + (Number(c.quantity_carried) || 0), 0) || Number(checklist.number_of_devices) || 1,
     number_of_vehicles: Number(checklist.number_of_vehicles) || Number(checklist.number_of_devices) || 1,
     device_configurations: deviceConfigs,
-    extra_device_configurations: extraConfigs,
-    device_items: deviceItems,
-    required_device_items: requiredDeviceItems,
-    extra_device_items: extraDeviceItems,
     bom_snapshot: isInstallation ? bomSnapshot : null,
     material_items: isInstallation ? materialItems : [],
     material_issuance_status: materialIssuanceStatus,
-    devices_issuance_status: devicesIssuanceStatus,
     status: reqStatus,
     has_shortage: hasShortage,
     shortage_count: shortageCount,
     shortage_details: shortageDetails.length > 0 ? shortageDetails : null,
     material_issued_at: checklist.material_issued_at || null,
-    material_issued_by: checklist.material_issued_by || null,
+    material_issued_by: isValidUuid(checklist.material_issued_by) ? checklist.material_issued_by : null,
     salesperson_name: checklist.salesperson_name || null,
     service_engineer: checklist.service_engineer || null,
     service_assistant: checklist.service_assistant || null,
@@ -250,95 +285,56 @@ export async function syncStoreRequirementForChecklist(checklistOrId) {
     installation_duration: checklist.installation_duration || null,
     submission_date: checklist.created_at || new Date().toISOString(),
     notes: checklist.remarks || null,
+    delivery_method: checklist.delivery_method || 'Technician Carries',
+    courier_dispatch_status: checklist.courier_dispatch_status || (checklist.delivery_method === 'Product Couriered' ? 'NOT_DISPATCHED' : 'NOT_APPLICABLE'),
+    is_courier_dispatched: Boolean(checklist.is_courier_dispatched),
     updated_at: new Date().toISOString(),
   };
 
-  // Upsert to Supabase
+  const dbPayload = {};
+  for (const [key, val] of Object.entries(rawDbPayload)) {
+    if (DB_COLUMNS.has(key) && val !== undefined) {
+      dbPayload[key] = val;
+    }
+  }
+
+  // Upsert to Supabase store_material_requirements
+  let savedRecord = null;
   try {
     const { data: res, error } = await supabase
       .from('store_material_requirements')
-      .upsert(payload, { onConflict: 'checklist_id' })
+      .upsert(dbPayload, { onConflict: 'checklist_id' })
       .select()
       .maybeSingle();
 
-    const totalCarried = combinedAllocation.reduce((s, c) => s + (Number(c.quantity_carried) || 0), 0) || Number(payload.number_of_devices) || 1;
-    const totalReq = deviceConfigs.reduce((s, c) => s + (Number(c.number_of_devices) || 1), 0);
-    const totalExtra = extraConfigs.reduce((s, c) => s + (Number(c.extra_quantity) || 1), 0);
-
     if (!error && res) {
-      const full = {
-        ...res,
-        total_devices_carried: totalCarried,
-        total_devices_required: totalReq,
-        total_extra_devices: totalExtra,
-        required_device_items: requiredDeviceItems,
-        extra_device_items: extraDeviceItems,
-        extra_device_configurations: extraConfigs,
-      };
-      inMemoryStoreRequirements.set(checklistId, full);
-      return full;
-    }
-
-    if (
-      error &&
-      (error.code === 'PGRST204' ||
-        error.message?.includes('salesperson_name') ||
-        error.message?.includes('service_engineer') ||
-        error.message?.includes('service_assistant') ||
-        error.message?.includes('expected_arrival_date') ||
-        error.message?.includes('expected_arrival_time') ||
-        error.message?.includes('installation_duration') ||
-        error.message?.includes('device_items') ||
-        error.message?.includes('required_device_items') ||
-        error.message?.includes('extra_device_items') ||
-        error.message?.includes('extra_device_configurations'))
-    ) {
-      const strippedPayload = { ...payload };
-      delete strippedPayload.salesperson_name;
-      delete strippedPayload.service_engineer;
-      delete strippedPayload.service_assistant;
-      delete strippedPayload.expected_arrival_date;
-      delete strippedPayload.expected_arrival_time;
-      delete strippedPayload.installation_duration;
-      delete strippedPayload.device_items;
-      delete strippedPayload.required_device_items;
-      delete strippedPayload.extra_device_items;
-      delete strippedPayload.extra_device_configurations;
-      const { data: res2, error: err2 } = await supabase
-        .from('store_material_requirements')
-        .upsert(strippedPayload, { onConflict: 'checklist_id' })
-        .select()
-        .maybeSingle();
-      if (!err2 && res2) {
-        const merged = {
-          ...res2,
-          ...payload,
-          total_devices_carried: totalCarried,
-          total_devices_required: totalReq,
-          total_extra_devices: totalExtra,
-        };
-        inMemoryStoreRequirements.set(checklistId, merged);
-        return merged;
-      }
+      savedRecord = res;
+    } else if (error) {
+      console.warn(`Upsert store_material_requirements warning for ${checklistNumber}:`, error.message || error);
     }
   } catch (err) {
-    console.warn('Upsert store_material_requirements exception:', err.message);
+    console.warn(`Upsert store_material_requirements exception for ${checklistNumber}:`, err.message);
   }
 
-  const totalCarried = combinedAllocation.reduce((s, c) => s + (Number(c.quantity_carried) || 0), 0) || Number(payload.number_of_devices) || 1;
+  const totalCarried = combinedAllocation.reduce((s, c) => s + (Number(c.quantity_carried) || 0), 0) || Number(rawDbPayload.number_of_devices) || 1;
   const totalReq = deviceConfigs.reduce((s, c) => s + (Number(c.number_of_devices) || 1), 0);
   const totalExtra = extraConfigs.reduce((s, c) => s + (Number(c.extra_quantity) || 1), 0);
 
-  const fallbackRecord = {
-    id: `req-${checklistId}`,
-    ...payload,
+  const fullRecord = {
+    ...(savedRecord || { id: `req-${checklistId}`, ...rawDbPayload }),
+    device_items: deviceItems,
+    devices_issuance_status: devicesIssuanceStatus,
+    required_device_items: requiredDeviceItems,
+    extra_device_items: extraDeviceItems,
+    extra_device_configurations: extraConfigs,
     total_devices_carried: totalCarried,
     total_devices_required: totalReq,
     total_extra_devices: totalExtra,
-    created_at: payload.submission_date,
+    created_at: rawDbPayload.submission_date,
   };
-  inMemoryStoreRequirements.set(checklistId, fallbackRecord);
-  return fallbackRecord;
+
+  inMemoryStoreRequirements.set(checklistId, fullRecord);
+  return fullRecord;
 }
 
 /**
@@ -373,6 +369,29 @@ export async function getStoreMaterialRequirements(params = {}) {
     console.warn('Could not load inventory maps in getStoreMaterialRequirements:', e.message);
   }
 
+  // Self-heal: ensure checklists from installation_checklists are populated in store_material_requirements
+  try {
+    const { count: storeReqTotal, error: countErr } = await supabase
+      .from('store_material_requirements')
+      .select('id', { count: 'exact', head: true });
+
+    if (!countErr && (storeReqTotal === 0 || storeReqTotal === null)) {
+      const { data: allChecklists, error: chkErr } = await supabase
+        .from('installation_checklists')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (!chkErr && Array.isArray(allChecklists) && allChecklists.length > 0) {
+        console.log(`Auto-syncing ${allChecklists.length} installation checklists into store_material_requirements...`);
+        for (const chk of allChecklists) {
+          await syncStoreRequirementForChecklist(chk);
+        }
+      }
+    }
+  } catch (autoSyncErr) {
+    console.warn('Auto-sync store requirements error:', autoSyncErr.message);
+  }
+
   let dbRecords = null;
   let totalCount = 0;
 
@@ -403,13 +422,13 @@ export async function getStoreMaterialRequirements(params = {}) {
 
     if (!error && Array.isArray(data)) {
       dbRecords = data;
-      totalCount = count || data.length;
+      totalCount = count !== null ? count : data.length;
     }
   } catch (err) {
     console.warn('Could not query store_material_requirements table:', err.message);
   }
 
-  if (!dbRecords) {
+  if (dbRecords === null) {
     try {
       const { data: chkList, count: chkCount } = await supabase
         .from('installation_checklists')
@@ -422,8 +441,8 @@ export async function getStoreMaterialRequirements(params = {}) {
         totalCount = chkCount || chkList.length;
       }
     } catch (e) {
-      dbRecords = Array.from(inMemoryStoreRequirements.values());
-      totalCount = dbRecords.length;
+      dbRecords = Array.from(inMemoryStoreRequirements.values()).slice(offset, offset + limitNum);
+      totalCount = inMemoryStoreRequirements.size;
     }
   }
 
@@ -450,7 +469,7 @@ export async function getStoreMaterialRequirements(params = {}) {
       }
 
       if (Array.isArray(chkRows)) {
-        const enrichedChk = enrichChecklistsWithWorkflowStatus(chkRows);
+        const enrichedChk = await enrichChecklistsWithWorkflowStatus(chkRows);
         const chkMap = new Map(enrichedChk.map((c) => [c.id, c]));
         (dbRecords || []).forEach((r) => {
           const matched = chkMap.get(r.checklist_id || r.id);
@@ -487,6 +506,41 @@ export async function getStoreMaterialRequirements(params = {}) {
 
     // Parse and normalize device items
     const parsedDevices = parseDeviceConfigurations(rec);
+    const extraConfigs = parseExtraDeviceConfigurations(rec);
+
+    const requiredDeviceItems = parsedDevices.map((cfg) => {
+      const dType = (cfg.device_type || '').trim();
+      const reqQty = Number(cfg.number_of_devices) || 1;
+      const dev = deviceMap.get(dType);
+      return {
+        product_id: dev?.id || null,
+        sku: dev?.sku || null,
+        device_type: dType,
+        required_quantity: reqQty,
+        quantity: reqQty,
+        number_of_devices: reqQty,
+        unit: 'Nos.',
+        available_stock: dev ? Number(dev.usable_stock) || 0 : 0,
+      };
+    });
+
+    const extraDeviceItems = extraConfigs.map((cfg) => {
+      const dType = (cfg.device_type || '').trim();
+      const extraQty = Number(cfg.extra_quantity) || 1;
+      const dev = deviceMap.get(dType);
+      return {
+        product_id: dev?.id || null,
+        sku: dev?.sku || null,
+        device_type: dType,
+        extra_quantity: extraQty,
+        required_quantity: extraQty,
+        quantity: extraQty,
+        number_of_devices: extraQty,
+        unit: 'Nos.',
+        available_stock: dev ? Number(dev.usable_stock) || 0 : 0,
+      };
+    });
+
     const enrichedDevices = (parsedDevices.length > 0 ? parsedDevices : (Array.isArray(rec.device_items) && rec.device_items.length > 0 ? rec.device_items : [])).map((dItem) => {
       const dType = dItem.device_type || '';
       const dev = deviceMap.get(dType);
@@ -621,6 +675,9 @@ export async function getStoreMaterialRequirements(params = {}) {
     return {
       ...rec,
       device_items: enrichedDevices,
+      required_device_items: rec.required_device_items || requiredDeviceItems,
+      extra_device_items: rec.extra_device_items || extraDeviceItems,
+      extra_device_configurations: rec.extra_device_configurations || extraConfigs,
       material_items: enrichedMaterials,
       backup_declaration: backupDecl,
       has_shortage: liveHasShortage,
@@ -631,25 +688,60 @@ export async function getStoreMaterialRequirements(params = {}) {
     };
   }));
 
-  // Calculate counters
+  // Store-wide summary counts across the entire requirements table
+  let totalAll = 0;
+  let installationCount = 0;
+  let serviceCount = 0;
   let pendingCount = 0;
   let shortageCounter = 0;
   let issuedCount = 0;
-  let installationCount = 0;
-  let serviceCount = 0;
 
-  enrichedRecords.forEach((r) => {
-    if (r.job_type === 'Installation') installationCount++;
-    if (r.job_type === 'Service') serviceCount++;
-    if (r.material_issuance_status === 'ISSUED') issuedCount++;
-    else if (r.job_type === 'Installation') pendingCount++;
-    if (r.has_shortage) shortageCounter++;
-  });
+  try {
+    let summaryQuery = supabase
+      .from('store_material_requirements')
+      .select('job_type, material_issuance_status, has_shortage');
+
+    if (search && search.trim()) {
+      const s = search.trim();
+      summaryQuery = summaryQuery.or(
+        `checklist_number.ilike.%${s}%,client_name.ilike.%${s}%,client_mobile.ilike.%${s}%,client_location.ilike.%${s}%`
+      );
+    }
+
+    const { data: sumRows, error: sumErr } = await summaryQuery;
+    if (!sumErr && Array.isArray(sumRows) && sumRows.length > 0) {
+      totalAll = sumRows.length;
+      sumRows.forEach((r) => {
+        if (r.job_type === 'Installation') installationCount++;
+        if (r.job_type === 'Service') serviceCount++;
+        if (r.material_issuance_status === 'ISSUED') {
+          issuedCount++;
+        } else if (r.job_type === 'Installation') {
+          pendingCount++;
+        }
+        if (r.has_shortage) shortageCounter++;
+      });
+    }
+  } catch (e) {
+    console.warn('Could not query store summary counts:', e.message);
+  }
+
+  // Fallback to counting over enrichedRecords if summary query returned 0 rows
+  if (totalAll === 0 && enrichedRecords.length > 0) {
+    totalAll = totalCount || enrichedRecords.length;
+    enrichedRecords.forEach((r) => {
+      if (r.job_type === 'Installation') installationCount++;
+      if (r.job_type === 'Service') serviceCount++;
+      if (r.material_issuance_status === 'ISSUED') issuedCount++;
+      else if (r.job_type === 'Installation') pendingCount++;
+      if (r.has_shortage) shortageCounter++;
+    });
+  }
 
   return {
     requirements: enrichedRecords,
     summary: {
-      total: totalCount,
+      total: totalAll || totalCount,
       installationCount,
       serviceCount,
       pendingCount,
@@ -657,7 +749,7 @@ export async function getStoreMaterialRequirements(params = {}) {
       issuedCount,
     },
     page: pageNum,
-    totalPages: Math.ceil(totalCount / limitNum) || 1,
+    totalPages: Math.ceil((totalCount || totalAll || 1) / limitNum) || 1,
   };
 }
 
@@ -764,6 +856,10 @@ export async function issueFullJobStock({
 
   if (req.job_type === 'Service') {
     throw new Error(`Job ${req.checklist_number} is a Service job. Installation BOM issuance does not apply.`);
+  }
+
+  if (req.delivery_method === 'Product Couriered' && req.is_courier_dispatched) {
+    throw new Error(`Job ${req.checklist_number} has already been dispatched via Courier. Normal technician carry stock issuance is not applicable.`);
   }
 
   const results = {};

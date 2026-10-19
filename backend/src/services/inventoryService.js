@@ -1194,6 +1194,20 @@ export async function issueStockForJob({
     throw new Error('Issued quantity must be greater than 0');
   }
 
+  try {
+    const { data: chk } = await supabase
+      .from('installation_checklists')
+      .select('delivery_method, is_courier_dispatched, checklist_number')
+      .eq('id', checklist_id)
+      .maybeSingle();
+
+    if (chk?.delivery_method === 'Product Couriered' && chk?.is_courier_dispatched) {
+      throw new Error(`Job ${chk.checklist_number} was dispatched via Courier. Normal technician carry stock deduction is not applicable.`);
+    }
+  } catch (chkErr) {
+    if (chkErr.message?.includes('dispatched via Courier')) throw chkErr;
+  }
+
   await deductStockForCarryRecord({
     checklist_id,
     technician_user_id: user?.id,

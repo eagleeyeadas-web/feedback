@@ -55,7 +55,9 @@ async function runTestSuite() {
     // --------------------------------------------------------------------------
     console.log('-> Criterion 1 & 2: Sales creates checklist -> appears in Coordinator workspace...');
     const timestamp = Date.now();
-    const testDate = '2026-11-20';
+    const daysAhead = Math.floor(Math.random() * 500) + 100;
+    const futureDateObj = new Date(Date.now() + daysAhead * 86400000);
+    const testDate = futureDateObj.toISOString().split('T')[0];
 
     testChecklist = await createChecklist(testUserSales.id, {
       salesperson_name: 'Ranjith',

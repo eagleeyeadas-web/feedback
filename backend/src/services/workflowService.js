@@ -937,6 +937,21 @@ export async function submitInstallationCompletionReport(param1, param2) {
   }
 
   const now = opts.actual_completion_datetime || opts.actual_completion_date || new Date().toISOString();
+  const submissionTime = opts.submission_datetime || opts.post_installation_submitted_at || new Date().toISOString();
+
+  // Scenario E: Check for late completion and notify HR if completed after scheduled end date
+  try {
+    const { recordLateCompletion } = await import('./overdueDetectionService.js');
+    await recordLateCompletion({
+      checklist,
+      actualCompletionDatetime: now,
+      submissionDatetime: submissionTime,
+      user,
+    });
+  } catch (lateErr) {
+    console.warn('Late completion recording warning:', lateErr.message);
+  }
+
   try {
     const { error: updErr } = await supabase
       .from('installation_checklists')
@@ -948,7 +963,9 @@ export async function submitInstallationCompletionReport(param1, param2) {
         actual_materials_returned: returnedMaterialItems,
         material_return_status: returnedMaterialItems.length > 0 ? 'PENDING_STORE_VERIFICATION' : 'NOT_APPLICABLE',
         actual_completion_datetime: now,
-        updated_at: now,
+        actual_completion_at: now,
+        post_installation_submitted_at: submissionTime,
+        updated_at: submissionTime,
       })
       .eq('id', checklist_id);
 
@@ -960,7 +977,7 @@ export async function submitInstallationCompletionReport(param1, param2) {
           installation_status: finalInstStatus,
           reconciliation_status: finalReconStatus,
           actual_completion_datetime: now,
-          updated_at: now,
+          updated_at: submissionTime,
         })
         .eq('id', checklist_id);
 
@@ -969,7 +986,7 @@ export async function submitInstallationCompletionReport(param1, param2) {
           .from('installation_checklists')
           .update({
             installation_status: finalInstStatus,
-            updated_at: now,
+            updated_at: submissionTime,
           })
           .eq('id', checklist_id);
       }
@@ -978,6 +995,8 @@ export async function submitInstallationCompletionReport(param1, param2) {
     // Update in-memory schedule store
     const compSched = inMemoryChecklistSchedules.get(checklist_id) || {};
     compSched.actual_completion_datetime = now;
+    compSched.actual_completion_at = now;
+    compSched.post_installation_submitted_at = submissionTime;
     compSched.installation_status = finalInstStatus;
     inMemoryChecklistSchedules.set(checklist_id, compSched);
 
@@ -987,7 +1006,7 @@ export async function submitInstallationCompletionReport(param1, param2) {
       .update({
         status: 'COMPLETED',
         actual_completion_datetime: now,
-        updated_at: now,
+        updated_at: submissionTime,
       })
       .eq('checklist_id', checklist_id);
   } catch (err) {
@@ -998,6 +1017,19 @@ export async function submitInstallationCompletionReport(param1, param2) {
   try {
     completeEngineerBookingByChecklistId(checklist_id, now);
   } catch (e) {}
+
+  // Requirement 4: Trigger Return Ticket Booking Task for Coordinator
+  try {
+    const { triggerReturnTicketBookingTask } = await import('./coordinatorBookingService.js');
+    await triggerReturnTicketBookingTask({
+      checklist,
+      user,
+      actualCompletionDatetime: now,
+      submissionDatetime: submissionTime,
+    });
+  } catch (ticketErr) {
+    console.warn('Could not trigger return ticket booking task for coordinator:', ticketErr.message);
+  }
 
   await logAudit({
     actor_id: user.id,

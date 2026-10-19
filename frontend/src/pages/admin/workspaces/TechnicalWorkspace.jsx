@@ -690,6 +690,18 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
                                     {carryExtra ? 'EXPECTED' : 'NONE'}
                                   </span>
                                 </div>
+
+                                {/* Product Couriered Dispatch Status */}
+                                {item.delivery_method === 'Product Couriered' && (
+                                  <div className="pt-1 border-t border-indigo-100 flex items-center justify-between text-[10px]">
+                                    <span className="font-bold text-indigo-700 flex items-center gap-1">
+                                      <Package className="w-3 h-3 text-indigo-600" /> Courier:
+                                    </span>
+                                    <span className="px-1.5 py-0.2 rounded font-extrabold bg-indigo-50 text-indigo-800 border border-indigo-200">
+                                      {item.courier_dispatch_status || 'Couriered'}
+                                    </span>
+                                  </div>
+                                )}
                               </div>
                             );
                           })()}
@@ -1237,7 +1249,7 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
           token={token}
           onClose={() => setExtensionModalJob(null)}
           onSuccess={() => {
-            showToast(`Availability date request submitted for ${extensionModalJob.checklist_number}! Coordinator will review.`);
+            showToast(`Availability date request submitted for ${extensionModalJob.checklist_number}! HR will review.`);
             loadData();
           }}
         />

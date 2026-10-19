@@ -204,7 +204,7 @@ export default function TechnicianScheduleExtensionModal({
                 <span>Availability Date Request Pending Review</span>
               </div>
               <p className="text-[11px] text-amber-700">
-                An availability date update request has already been submitted for this checklist and is awaiting Coordinator review. Duplicate submissions are not permitted.
+                An availability date update request has already been submitted for this checklist and is awaiting HR review. Duplicate submissions are not permitted.
               </p>
             </div>
 
@@ -375,7 +375,7 @@ export default function TechnicianScheduleExtensionModal({
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
                     rows={3}
-                    placeholder="Add any specific context or details for the Coordinator..."
+                    placeholder="Add any specific context or details for HR..."
                     className="w-full px-3 py-2 bg-white border border-gray-300 rounded-xl font-medium text-gray-900 focus:outline-hidden focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition resize-none text-xs"
                   />
                 </div>

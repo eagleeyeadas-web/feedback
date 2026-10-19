@@ -28,6 +28,8 @@ import {
   Plus,
   Trash2,
   Info,
+  Package,
+  Truck,
 } from 'lucide-react';
 
 const DEVICE_OPTIONS = [
@@ -42,7 +44,14 @@ const DEVICE_OPTIONS = [
 
 const VEHICLE_OPTIONS = ['Lorry', 'Truck', 'Bus', 'Heavy Vehicle', 'Other'];
 const PAYMENT_METHODS = ['Cash', 'UPI', 'Bank Transfer', 'Credit', 'Other'];
-const INSTALLATION_STATUSES = ['Assigned', 'Completed'];
+const INSTALLATION_STATUSES = [
+  'Assigned',
+  'Awaiting Technician Assignment',
+  'Awaiting Schedule',
+  'Courier Pending',
+  'Ready for Installation',
+  'Completed',
+];
 const PAYMENT_STATUSES = ['Paid', 'Partially Paid', 'Pending'];
 const DURATION_PRESETS = ['1 Day', '2 Days', '3 Days', '4 Days', '5 Days', 'Custom'];
 
@@ -69,6 +78,14 @@ function computeEndDate(startDate, durationStr) {
   const [y, m, d] = startDate.split('-').map(Number);
   const dt = new Date(Date.UTC(y, m - 1, d));
   dt.setUTCDate(dt.getUTCDate() + (days - 1));
+  return dt.toISOString().split('T')[0];
+}
+
+// Helper to compute tomorrow's date string YYYY-MM-DD based on business timezone (Asia/Kolkata)
+export function getBusinessTomorrow(timeZone = 'Asia/Kolkata') {
+  const todayStr = new Date().toLocaleDateString('en-CA', { timeZone });
+  const [y, m, d] = todayStr.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d + 1));
   return dt.toISOString().split('T')[0];
 }
 
@@ -107,6 +124,7 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
     client_mobile: '',
     client_location: '',
     google_maps_location: '',
+    delivery_method: 'Technician Carries', // 'Technician Carries' | 'Product Couriered'
     device_type: DEVICE_OPTIONS[0],
     number_of_devices: 1,
     number_of_vehicles: 1,
@@ -119,7 +137,7 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
     installation_duration: '1 Day',
     vehicle_type: 'Truck',
     custom_vehicle_type: '',
-    expected_arrival_date: new Date().toISOString().split('T')[0],
+    expected_arrival_date: getBusinessTomorrow(),
     expected_arrival_time: '10:00',
     installation_or_service: 'Installation',
     service_engineer: '',
@@ -141,7 +159,7 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
           const isCustomVehicle = data.vehicle_type && !VEHICLE_OPTIONS.includes(data.vehicle_type);
           const isCompleted = data.installation_status === 'Completed' || data.installation_status === 'Site Work Completed';
           setIsAuthoritativeCompleted(isCompleted);
-          const safeStatus = isCompleted ? 'Completed' : 'Assigned';
+          const safeStatus = isCompleted ? 'Completed' : (data.installation_status || 'Assigned');
           const jobType = data.installation_or_service || 'Installation';
           if (jobType === 'Installation' && data.bom_snapshot) {
             setBomSnapshot(data.bom_snapshot);
@@ -182,6 +200,7 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
             client_mobile: data.client_mobile || '',
             client_location: data.client_location || '',
             google_maps_location: data.google_maps_location || '',
+            delivery_method: data.delivery_method || 'Technician Carries',
             device_type: data.device_type || DEVICE_OPTIONS[0],
             number_of_devices: data.number_of_devices || 1,
             number_of_vehicles: data.number_of_vehicles || 1,
@@ -377,27 +396,59 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
       return 'Custom vehicle type is required when "Other" vehicle type is selected';
     }
 
-    if (!formData.expected_arrival_date) return 'Expected Date of Arrival is required';
-    if (!formData.expected_arrival_time) return 'Expected Time of Arrival is required';
+    const isCouriered = formData.delivery_method === 'Product Couriered';
 
-    if (!formData.service_engineer.trim()) {
-      return 'Service Engineer is required. Please select one of the authorized engineers: Mathi, Guna, Sakthivel, or Kamalesh.';
-    }
-    if (!SERVICE_ENGINEER_OPTIONS.includes(formData.service_engineer.trim())) {
-      return 'Please select a valid Service Engineer: Mathi, Guna, Sakthivel, or Kamalesh.';
-    }
+    if (!isCouriered) {
+      if (!formData.expected_arrival_date) return 'Expected Date of Arrival is required for Technician Carries';
+      if (!isEditMode) {
+        const tomorrowDate = getBusinessTomorrow();
+        if (formData.expected_arrival_date !== tomorrowDate) {
+          return 'Jobs can only be scheduled to start tomorrow. Advance pre-booking is not allowed.';
+        }
+      }
+      if (!formData.expected_arrival_time) return 'Expected Time of Arrival is required for Technician Carries';
 
-    // Availability validation: check if chosen Service Engineer has a conflicting booking
-    const selectedEngStatus = engineersAvailability.find(
-      (e) => e.name.toLowerCase() === formData.service_engineer.trim().toLowerCase()
-    );
-    if (selectedEngStatus && !selectedEngStatus.available) {
-      const c = selectedEngStatus.conflict;
-      return `Booking Conflict: ${formData.service_engineer} is already booked for checklist ${c?.checklist_number || 'another job'} from ${c?.booking_start_date} to ${c?.booking_end_date}. Please select an available engineer.`;
+      if (!formData.service_engineer || !formData.service_engineer.trim()) {
+        return 'Service Engineer is required. Please select one of the authorized engineers: Mathi, Guna, Sakthivel, or Kamalesh.';
+      }
+      if (!SERVICE_ENGINEER_OPTIONS.includes(formData.service_engineer.trim())) {
+        return 'Please select a valid Service Engineer: Mathi, Guna, Sakthivel, or Kamalesh.';
+      }
+
+      // Availability validation: check if chosen Service Engineer has a conflicting booking
+      const selectedEngStatus = engineersAvailability.find(
+        (e) => e.name.toLowerCase() === formData.service_engineer.trim().toLowerCase()
+      );
+      if (selectedEngStatus && !selectedEngStatus.available) {
+        const c = selectedEngStatus.conflict;
+        return `Booking Conflict: ${formData.service_engineer} is already booked for checklist ${c?.checklist_number || 'another job'} from ${c?.booking_start_date} to ${c?.booking_end_date}. Please select an available engineer.`;
+      }
+    } else {
+      // Couriered: date & engineer can be completed later!
+      if (formData.expected_arrival_date && !isEditMode) {
+        const tomorrowDate = getBusinessTomorrow();
+        if (formData.expected_arrival_date !== tomorrowDate) {
+          return 'Jobs can only be scheduled to start tomorrow. Advance pre-booking is not allowed.';
+        }
+      }
+      if (formData.service_engineer && formData.service_engineer.trim()) {
+        if (!SERVICE_ENGINEER_OPTIONS.includes(formData.service_engineer.trim())) {
+          return 'Please select a valid Service Engineer: Mathi, Guna, Sakthivel, or Kamalesh.';
+        }
+        if (formData.expected_arrival_date) {
+          const selectedEngStatus = engineersAvailability.find(
+            (e) => e.name.toLowerCase() === formData.service_engineer.trim().toLowerCase()
+          );
+          if (selectedEngStatus && !selectedEngStatus.available) {
+            const c = selectedEngStatus.conflict;
+            return `Booking Conflict: ${formData.service_engineer} is already booked for checklist ${c?.checklist_number || 'another job'} from ${c?.booking_start_date} to ${c?.booking_end_date}. Please select an available engineer.`;
+          }
+        }
+      }
     }
 
     if (!formData.installation_status || !INSTALLATION_STATUSES.includes(formData.installation_status)) {
-      return 'Installation Status is required and must be either Assigned or Completed';
+      return 'Installation Status is required';
     }
 
     return null;
@@ -438,12 +489,24 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
         ? normalizedReqConfigs[0].device_type
         : normalizedReqConfigs.map((c) => `${c.device_type} (${c.number_of_devices})`).join(', ');
 
+      let resolvedStatus = formData.installation_status;
+      if (formData.delivery_method === 'Product Couriered') {
+        if (!formData.service_engineer) {
+          resolvedStatus = 'Awaiting Technician Assignment';
+        } else if (!formData.expected_arrival_date) {
+          resolvedStatus = 'Awaiting Schedule';
+        } else if (!isEditMode) {
+          resolvedStatus = 'Courier Pending';
+        }
+      }
+
       const payload = {
         salesperson_name: formData.salesperson_name,
         client_name: formData.client_name.trim(),
         client_mobile: formData.client_mobile.trim(),
         client_location: formData.client_location.trim(),
         google_maps_location: formData.google_maps_location.trim() || null,
+        delivery_method: formData.delivery_method || 'Technician Carries',
         device_type: summaryDeviceType,
         number_of_devices: totalReq, // Customer installation requirements
         total_devices_carried: totalReq, // Calculated strictly from required installation devices
@@ -468,12 +531,12 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
         pending_amount: formData.pending_payment ? (Number(formData.pending_amount) || 0) : 0,
         installation_duration: formData.installation_duration.trim(),
         vehicle_type: formData.vehicle_type === 'Other' ? formData.custom_vehicle_type.trim() : formData.vehicle_type,
-        expected_arrival_date: formData.expected_arrival_date,
-        expected_arrival_time: formData.expected_arrival_time,
+        expected_arrival_date: formData.expected_arrival_date || null,
+        expected_arrival_time: formData.expected_arrival_time || null,
         installation_or_service: formData.installation_or_service,
-        service_engineer: formData.service_engineer.trim(),
+        service_engineer: formData.service_engineer ? formData.service_engineer.trim() : null,
         service_assistant: null,
-        installation_status: isAuthoritativeCompleted ? 'Completed' : formData.installation_status,
+        installation_status: isAuthoritativeCompleted ? 'Completed' : resolvedStatus,
         payment_status: formData.payment_status,
         bom_snapshot: formData.installation_or_service === 'Installation' ? (bomSnapshot || null) : null,
         material_issuance_status: formData.installation_or_service === 'Installation' ? (formData.material_issuance_status || 'PENDING') : 'NOT_APPLICABLE',
@@ -1019,34 +1082,164 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
           </div>
         </div>
 
+        {/* SECTION — PRODUCT DELIVERY METHOD */}
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-gray-100">
+            <h3 className="text-sm font-bold text-navy flex items-center gap-2">
+              <Truck className="text-blue-600" size={18} />
+              PRODUCT DELIVERY METHOD
+            </h3>
+            <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+              {formData.delivery_method}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Option 1: Technician Carries */}
+            <div
+              onClick={() => {
+                handleChange('delivery_method', 'Technician Carries');
+                if (!formData.expected_arrival_date) {
+                  handleChange('expected_arrival_date', getBusinessTomorrow());
+                }
+              }}
+              className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                formData.delivery_method === 'Technician Carries'
+                  ? 'border-blue-600 bg-blue-50/40 shadow-xs'
+                  : 'border-gray-200 bg-white hover:border-gray-300'
+              }`}
+            >
+              <div className="flex items-start gap-3">
+                <input
+                  type="radio"
+                  name="delivery_method"
+                  checked={formData.delivery_method === 'Technician Carries'}
+                  onChange={() => {}}
+                  className="mt-1"
+                />
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-gray-900">Technician Carries</span>
+                    <span className="text-[10px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded font-medium">Standard</span>
+                  </div>
+                  <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">
+                    Technician physically carries devices and installation materials to the site on the scheduled day. Requires immediate next-day scheduling and engineer assignment.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Option 2: Product Couriered */}
+            <div
+              onClick={() => handleChange('delivery_method', 'Product Couriered')}
+              className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                formData.delivery_method === 'Product Couriered'
+                  ? 'border-indigo-600 bg-indigo-50/40 shadow-xs'
+                  : 'border-gray-200 bg-white hover:border-gray-300'
+              }`}
+            >
+              <div className="flex items-start gap-3">
+                <input
+                  type="radio"
+                  name="delivery_method"
+                  checked={formData.delivery_method === 'Product Couriered'}
+                  onChange={() => {}}
+                  className="mt-1"
+                />
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-indigo-900">Product Couriered</span>
+                    <span className="text-[10px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded font-bold">Courier Dispatch</span>
+                  </div>
+                  <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">
+                    Products and materials are dispatched in advance via courier service directly to customer location. Can be saved now; technician and installation date can be assigned later.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {formData.delivery_method === 'Product Couriered' && (
+            <div className="p-3 bg-indigo-50/70 border border-indigo-200 rounded-xl flex items-start gap-2.5 text-xs text-indigo-900">
+              <Package className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-bold">Flexible Couriered Scheduling Active</p>
+                <p className="text-[11px] text-indigo-700 mt-0.5">
+                  Store Manager will verify stock and record courier dispatch. You can leave technician assignment and schedule date blank for now and schedule later upon delivery.
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+
         {/* SECTION 9 — 4. INSTALLATION DETAILS */}
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-5">
           <div className="flex items-center justify-between pb-3 border-b border-gray-100">
             <h3 className="text-sm font-bold text-navy flex items-center gap-2">
               <Calendar className="text-blue-600" size={18} />
-              4. INSTALLATION DETAILS & SCHEDULE
+              4. INSTALLATION DETAILS &amp; SCHEDULE
             </h3>
-            {formData.expected_arrival_date && (
+            {formData.expected_arrival_date ? (
               <span className="text-[11px] font-semibold text-blue-700 bg-blue-50 px-2.5 py-1 rounded-full border border-blue-100">
                 Inclusive Range: {formData.expected_arrival_date} &rarr; {computeEndDate(formData.expected_arrival_date, formData.installation_duration)}
               </span>
-            )}
+            ) : formData.delivery_method === 'Product Couriered' ? (
+              <span className="text-[11px] font-semibold text-amber-700 bg-amber-50 px-2.5 py-1 rounded-full border border-amber-200">
+                Awaiting Schedule (Couriered)
+              </span>
+            ) : null}
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             {/* Arrival Date (Start Date) */}
             <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">
-                Expected Arrival Date (Start Date) <span className="text-rose-500">*</span>
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-semibold text-gray-700">
+                  Expected Arrival Date {formData.delivery_method === 'Product Couriered' ? '(Optional)' : <span className="text-rose-500">*</span>}
+                </label>
+                {formData.delivery_method === 'Product Couriered' && formData.expected_arrival_date && (
+                  <button
+                    type="button"
+                    onClick={() => handleChange('expected_arrival_date', '')}
+                    className="text-[10px] text-rose-600 hover:underline font-semibold"
+                  >
+                    Clear (Schedule Later)
+                  </button>
+                )}
+                {formData.delivery_method === 'Product Couriered' && !formData.expected_arrival_date && (
+                  <button
+                    type="button"
+                    onClick={() => handleChange('expected_arrival_date', getBusinessTomorrow())}
+                    className="text-[10px] text-blue-600 hover:underline font-semibold"
+                  >
+                    Set Tomorrow
+                  </button>
+                )}
+              </div>
               <input
                 type="date"
-                required
+                required={formData.delivery_method !== 'Product Couriered'}
+                min={!isEditMode ? getBusinessTomorrow() : undefined}
+                max={!isEditMode ? getBusinessTomorrow() : undefined}
                 value={formData.expected_arrival_date}
                 onChange={(e) => handleChange('expected_arrival_date', e.target.value)}
-                className="w-full text-xs p-2.5 border border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 font-medium"
+                className={`w-full text-xs p-2.5 border rounded-xl focus:outline-none font-medium ${
+                  !isEditMode
+                    ? 'border-blue-300 bg-blue-50/20 focus:border-blue-500'
+                    : 'border-gray-200 focus:border-blue-500'
+                }`}
               />
-              <span className="text-[10px] text-gray-400 mt-1 block">Full-day inclusive arrival date</span>
+              <span className="text-[10px] text-gray-400 mt-1 block">
+                {formData.delivery_method === 'Product Couriered' && !formData.expected_arrival_date
+                  ? 'Unscheduled — Will be set once courier delivers'
+                  : 'Full-day inclusive arrival date'}
+              </span>
+              {!isEditMode && formData.expected_arrival_date && (
+                <div className="mt-2 p-2.5 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-2 text-xs font-semibold text-amber-900 shadow-2xs">
+                  <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                  <span>Jobs can only be scheduled to start tomorrow. Advance pre-booking is not allowed.</span>
+                </div>
+              )}
             </div>
 
             {/* Duration Selector & Presets */}
@@ -1198,17 +1391,37 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
           <div className="space-y-4 max-w-xl">
             {/* Service Engineer with Availability-Aware Select */}
             <div className="space-y-2">
-              <label className="block text-xs font-semibold text-gray-700">
-                Service Engineer <span className="text-rose-500">*</span>
-              </label>
+              <div className="flex items-center justify-between">
+                <label className="block text-xs font-semibold text-gray-700">
+                  Service Engineer{' '}
+                  {formData.delivery_method === 'Product Couriered' ? (
+                    <span className="text-indigo-600 font-bold">(Optional for Couriered Jobs)</span>
+                  ) : (
+                    <span className="text-rose-500">*</span>
+                  )}
+                </label>
+                {formData.delivery_method === 'Product Couriered' && formData.service_engineer && (
+                  <button
+                    type="button"
+                    onClick={() => handleChange('service_engineer', '')}
+                    className="text-[10px] text-rose-600 hover:underline font-semibold"
+                  >
+                    Clear (Assign Later)
+                  </button>
+                )}
+              </div>
 
               <select
-                required
+                required={formData.delivery_method !== 'Product Couriered'}
                 value={formData.service_engineer}
                 onChange={(e) => handleChange('service_engineer', e.target.value)}
                 className="w-full text-xs p-2.5 border border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 font-semibold bg-white"
               >
-                <option value="">-- Select Service Engineer --</option>
+                <option value="">
+                  {formData.delivery_method === 'Product Couriered'
+                    ? '-- Leave Unassigned (Assign Later) --'
+                    : '-- Select Service Engineer --'}
+                </option>
                 {SERVICE_ENGINEER_OPTIONS.map((name) => {
                   const eng = engineersAvailability?.find(
                     (e) => e.name.toLowerCase() === name.toLowerCase()
