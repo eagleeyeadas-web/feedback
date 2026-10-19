@@ -261,6 +261,29 @@ export default function HrWorkspace() {
       // Refresh calendar & summary counts
       await Promise.all([loadCalendarData(), loadSummaryData()]);
 
+      // Broadcast update across windows & tabs for Sales and Scheduling synchrony
+      try {
+        window.dispatchEvent(
+          new CustomEvent('ee_technician_availability_updated', {
+            detail: {
+              engineer_id: selectedCell.engineer.id,
+              engineer_name: selectedCell.engineer.name,
+              date: selectedCell.date,
+              status: editorStatus,
+            },
+          })
+        );
+        localStorage.setItem(
+          'ee_technician_availability_sync',
+          JSON.stringify({
+            timestamp: Date.now(),
+            engineer_name: selectedCell.engineer.name,
+            date: selectedCell.date,
+            status: editorStatus,
+          })
+        );
+      } catch (syncErr) {}
+
       // Update current selected cell's dayData status label and manual_override
       setSelectedCell((prev) => {
         if (!prev) return null;

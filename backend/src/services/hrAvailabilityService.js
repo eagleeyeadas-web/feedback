@@ -118,30 +118,50 @@ export async function getActiveOverrideForEngineer(engineerIdOrName, referenceDa
   const resolved = validateAuthorizedServiceEngineer(engineerIdOrName);
   const all = await getAllOverrides();
 
-  const refTime = new Date(referenceDatetime).getTime();
+  const refDateStr = String(referenceDatetime).split('T')[0];
 
-  // Find most recent active override that encompasses the reference time
+  // Find most recent active override that encompasses the reference date
   const matches = all.filter((o) => {
     if (!o.is_active) return false;
     const isMatchingEng = o.engineer_id === resolved.id || o.engineer_name.toLowerCase() === resolved.name.toLowerCase();
     if (!isMatchingEng) return false;
 
-    const start = new Date(o.effective_start_datetime).getTime();
-    const end = o.effective_end_datetime ? new Date(o.effective_end_datetime).getTime() : Infinity;
+    const oStartStr = o.effective_start_datetime ? o.effective_start_datetime.split('T')[0] : '';
+    const oEndStr = o.effective_end_datetime ? o.effective_end_datetime.split('T')[0] : (oStartStr || '2099-12-31');
 
-    // Check expiry
-    if (end < refTime) {
-      o.is_active = false; // Expired
-      return false;
-    }
-
-    return refTime >= start && refTime <= end;
+    return refDateStr >= oStartStr && refDateStr <= oEndStr;
   });
 
   if (matches.length === 0) return null;
   // Sort descending by created_at to return latest override
-  matches.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  matches.sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
   return matches[0];
+}
+
+/**
+ * Get all active overrides for an engineer overlapping a date range [startDate, endDate]
+ */
+export async function getManualOverridesForEngineerRange(engineerIdOrName, startDatetimeOrDate, endDatetimeOrDate = null) {
+  const resolved = validateAuthorizedServiceEngineer(engineerIdOrName);
+  const all = await getAllOverrides();
+
+  const startDateStr = String(startDatetimeOrDate).split('T')[0];
+  const endDateStr = endDatetimeOrDate ? String(endDatetimeOrDate).split('T')[0] : startDateStr;
+
+  const matches = all.filter((o) => {
+    if (!o.is_active) return false;
+    const isMatchingEng = o.engineer_id === resolved.id || o.engineer_name.toLowerCase() === resolved.name.toLowerCase();
+    if (!isMatchingEng) return false;
+
+    const oStartStr = o.effective_start_datetime ? o.effective_start_datetime.split('T')[0] : '';
+    const oEndStr = o.effective_end_datetime ? o.effective_end_datetime.split('T')[0] : (oStartStr || '2099-12-31');
+
+    return oStartStr <= endDateStr && oEndStr >= startDateStr;
+  });
+
+  // Sort descending by created_at to return latest overrides first
+  matches.sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
+  return matches;
 }
 
 /**
@@ -313,8 +333,14 @@ export async function setTechnicianManualAvailability(params) {
   const rawStatus = params.manualStatus || params.manual_status || params.status;
   const reason = params.reason || params.notes || '';
   const date = params.date || params.selected_date;
-  const effectiveStartDatetime = params.effectiveStartDatetime || params.effective_start_datetime || (date ? `${String(date).split('T')[0]}T00:00:00.000Z` : null);
-  const effectiveEndDatetime = params.effectiveEndDatetime || params.effective_end_datetime || (date ? `${String(date).split('T')[0]}T23:59:59.999Z` : null);
+  const rawStart = params.effectiveStartDatetime || params.effective_start_datetime || params.startDate || params.start_date || date;
+  const rawEnd = params.effectiveEndDatetime || params.effective_end_datetime || params.endDate || params.end_date || date;
+
+  const startDay = rawStart ? String(rawStart).split('T')[0] : null;
+  const endDay = rawEnd ? String(rawEnd).split('T')[0] : startDay;
+
+  const effectiveStartDatetime = startDay ? `${startDay}T00:00:00.000Z` : null;
+  const effectiveEndDatetime = endDay ? `${endDay}T23:59:59.999Z` : null;
   const confirmed = params.confirmed ?? params.confirmation ?? true;
   const user = params.user || {};
 
@@ -341,15 +367,12 @@ export async function setTechnicianManualAvailability(params) {
     throw err;
   }
 
-  const startIso = new Date(effectiveStartDatetime).toISOString();
-  let endIso = null;
-  if (effectiveEndDatetime) {
-    endIso = new Date(effectiveEndDatetime).toISOString();
-    if (new Date(endIso).getTime() < new Date(startIso).getTime()) {
-      const err = new Error('Effective end date/time cannot be before effective start date/time.');
-      err.statusCode = 400;
-      throw err;
-    }
+  const startIso = effectiveStartDatetime;
+  const endIso = effectiveEndDatetime;
+  if (endDay && startDay && endDay < startDay) {
+    const err = new Error('Effective end date/time cannot be before effective start date/time.');
+    err.statusCode = 400;
+    throw err;
   }
 
   // Check hard conflicts

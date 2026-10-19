@@ -801,43 +801,44 @@ export async function checkEngineerAvailability({
   // 3. Check HR Manual Availability Overrides (Strictly blocks new conflicting assignments during override period)
   let hrManualConflict = null;
   try {
-    const { getActiveOverrideForEngineer } = await import('./hrAvailabilityService.js');
-    const hrOverride = await getActiveOverrideForEngineer(engId, startDate);
-    if (hrOverride && hrOverride.manual_status === 'Unavailable') {
-      const oStart = hrOverride.effective_start_datetime.split('T')[0];
-      const oEnd = hrOverride.effective_end_datetime ? hrOverride.effective_end_datetime.split('T')[0] : '2099-12-31';
-      if (isDateRangeOverlapping(startDate, finalEndDate, oStart, oEnd)) {
-        hrManualConflict = {
-          type: 'HR_MANUAL_OVERRIDE',
-          status: 'UNAVAILABLE',
-          reason: `Cannot Assign: Engineer ${engName} has been manually set to Unavailable by HR ("${hrOverride.reason}").`,
-          booking_start_date: oStart,
-          booking_end_date: oEnd,
-        };
+    const { getManualOverridesForEngineerRange } = await import('./hrAvailabilityService.js');
+    const overrides = await getManualOverridesForEngineerRange(engId, startDate, finalEndDate);
+    const blockingOverride = overrides.find((o) =>
+      ['Not Available', 'Unavailable', 'Rest Day', 'On Leave'].includes(o.manual_status)
+    );
+
+    if (blockingOverride) {
+      const oStart = blockingOverride.effective_start_datetime.split('T')[0];
+      const oEnd = blockingOverride.effective_end_datetime ? blockingOverride.effective_end_datetime.split('T')[0] : oStart;
+
+      let statusKey = 'UNAVAILABLE';
+      let statusLabel = 'Not Available';
+      if (blockingOverride.manual_status === 'Rest Day') {
+        statusKey = 'REST';
+        statusLabel = 'Rest Day';
+      } else if (blockingOverride.manual_status === 'On Leave') {
+        statusKey = 'LEAVE';
+        statusLabel = 'On Leave';
       }
+
+      hrManualConflict = {
+        type: 'HR_MANUAL_OVERRIDE',
+        status: statusKey,
+        manual_status: blockingOverride.manual_status,
+        reason: `Cannot Assign: Engineer ${engName} has been manually set to ${statusLabel} by HR ("${blockingOverride.reason}").`,
+        booking_start_date: oStart,
+        booking_end_date: oEnd,
+      };
     }
-  } catch (hrErr) {}
+  } catch (hrErr) {
+    console.warn('Error checking HR manual overrides in checkEngineerAvailability:', hrErr.message);
+  }
 
   if (conflicting || conflictingPending || hrManualConflict) {
     let reasonText = '';
     let conflictObj = null;
 
-    if (hrManualConflict) {
-      reasonText = hrManualConflict.reason;
-      conflictObj = hrManualConflict;
-    } else if (conflictingPending && !conflicting) {
-      reasonText = `Cannot Assign: Engineer ${engName} has a pending availability date request for ${conflictingPending.checklist_number} through ${conflictingPending.requested_completion_date} awaiting Coordinator approval. New assignments cannot be booked during this protected period.`;
-      conflictObj = {
-        type: 'PENDING_EXTENSION_PROTECTED',
-        checklist_id: conflictingPending.checklist_id || null,
-        checklist_number: conflictingPending.checklist_number || null,
-        client_name: conflictingPending.client_name || null,
-        booking_start_date: conflictingPending.current_dates?.arrival_date || conflictingPending.original_dates?.arrival_date || conflictingPending.current_completion_date,
-        booking_end_date: conflictingPending.requested_completion_date,
-        status: 'PENDING_APPROVAL',
-        reason: reasonText,
-      };
-    } else {
+    if (conflicting) {
       if (conflicting.is_overdue) {
         reasonText = `Cannot Assign: Engineer ${engName} has an overdue incomplete installation (${conflicting.checklist_number || 'assignment'}) scheduled to finish on ${conflicting.original_scheduled_end_date || conflicting.end_date}. Technician remains unavailable until completion or an approved schedule update.`;
         conflictObj = {
@@ -873,6 +874,21 @@ export async function checkEngineerAvailability({
           reason: reasonText,
         };
       }
+    } else if (conflictingPending) {
+      reasonText = `Cannot Assign: Engineer ${engName} has a pending availability date request for ${conflictingPending.checklist_number} through ${conflictingPending.requested_completion_date} awaiting Coordinator approval. New assignments cannot be booked during this protected period.`;
+      conflictObj = {
+        type: 'PENDING_EXTENSION_PROTECTED',
+        checklist_id: conflictingPending.checklist_id || null,
+        checklist_number: conflictingPending.checklist_number || null,
+        client_name: conflictingPending.client_name || null,
+        booking_start_date: conflictingPending.current_dates?.arrival_date || conflictingPending.original_dates?.arrival_date || conflictingPending.current_completion_date,
+        booking_end_date: conflictingPending.requested_completion_date,
+        status: 'PENDING_APPROVAL',
+        reason: reasonText,
+      };
+    } else if (hrManualConflict) {
+      reasonText = hrManualConflict.reason;
+      conflictObj = hrManualConflict;
     }
 
     // Find suggested available alternatives among the other authorized engineers
@@ -907,11 +923,23 @@ export async function checkEngineerAvailability({
         });
 
         if (!otherHasPending) {
-          suggestedEngineers.push({
-            id: other.id,
-            name: other.name,
-            phone: other.phone,
-          });
+          // Also ensure suggested engineer does not have a conflicting HR manual override
+          let otherBlockedByHr = false;
+          try {
+            const { getManualOverridesForEngineerRange } = await import('./hrAvailabilityService.js');
+            const otherOverrides = await getManualOverridesForEngineerRange(other.id, startDate, finalEndDate);
+            otherBlockedByHr = otherOverrides.some((o) =>
+              ['Not Available', 'Unavailable', 'Rest Day', 'On Leave'].includes(o.manual_status)
+            );
+          } catch (e) {}
+
+          if (!otherBlockedByHr) {
+            suggestedEngineers.push({
+              id: other.id,
+              name: other.name,
+              phone: other.phone,
+            });
+          }
         }
       }
     }
@@ -1220,13 +1248,13 @@ export async function updateEngineerBookingEndDate({ checklistId, newEndDate }) 
 /**
  * Helper to calculate the earliest available date for an engineer starting from reference date
  */
-function getEngineerEarliestAvailableDate(commitments, fromDateStr) {
+function getEngineerEarliestAvailableDate(commitments, fromDateStr, overrides = []) {
   if (!fromDateStr) return null;
   const [y, m, d] = fromDateStr.split('-').map(Number);
   const cur = new Date(Date.UTC(y, m - 1, d));
   for (let i = 0; i < 90; i++) {
     const dStr = cur.toISOString().split('T')[0];
-    const stat = determineEngineerDateStatus(commitments, dStr);
+    const stat = determineEngineerDateStatus(commitments, dStr, overrides);
     if (stat.status === 'AVAILABLE') {
       return dStr;
     }
@@ -1507,7 +1535,7 @@ export async function getAvailabilityCalendar({
       days,
       warnings,
       total_booked_days: days.filter((d) => !d.is_available).length,
-      earliest_availability_date: getEngineerEarliestAvailableDate(commitments, start),
+      earliest_availability_date: getEngineerEarliestAvailableDate(commitments, start, engOverrides),
     };
   });
 

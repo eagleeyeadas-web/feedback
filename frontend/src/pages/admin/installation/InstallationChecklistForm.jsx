@@ -111,6 +111,7 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
   const [engineersList, setEngineersList] = useState([]);
   const [engineersAvailability, setEngineersAvailability] = useState([]);
   const [checkingAvailability, setCheckingAvailability] = useState(false);
+  const [availabilityError, setAvailabilityError] = useState(null);
 
   // Multi-Device Configurations (Required for Customer Installation)
   const [deviceConfigs, setDeviceConfigs] = useState([
@@ -245,11 +246,15 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
   }, [token]);
 
   // Fetch real-time engineer availability whenever expected_arrival_date or duration changes
-  useEffect(() => {
-    if (!token || !formData.expected_arrival_date) return;
+  const recheckAvailability = useCallback(() => {
+    if (!token || !formData.expected_arrival_date) {
+      setEngineersAvailability([]);
+      return;
+    }
     const calculatedEnd = computeEndDate(formData.expected_arrival_date, formData.installation_duration);
 
     setCheckingAvailability(true);
+    setAvailabilityError(null);
     fetchEngineersAvailability(token, {
       startDate: formData.expected_arrival_date,
       endDate: calculatedEnd,
@@ -261,9 +266,32 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
       })
       .catch((err) => {
         console.warn('Could not fetch engineers availability:', err);
+        setAvailabilityError(err.message || 'Failed to verify technician availability');
       })
       .finally(() => setCheckingAvailability(false));
   }, [token, formData.expected_arrival_date, formData.installation_duration, isEditMode, checklistId]);
+
+  useEffect(() => {
+    recheckAvailability();
+  }, [recheckAvailability]);
+
+  // Real-time synchronization with HR updates across tabs/windows
+  useEffect(() => {
+    const handleSync = () => {
+      recheckAvailability();
+    };
+    window.addEventListener('ee_technician_availability_updated', handleSync);
+    const handleStorage = (e) => {
+      if (e.key === 'ee_technician_availability_sync') {
+        recheckAvailability();
+      }
+    };
+    window.addEventListener('storage', handleStorage);
+    return () => {
+      window.removeEventListener('ee_technician_availability_updated', handleSync);
+      window.removeEventListener('storage', handleStorage);
+    };
+  }, [recheckAvailability]);
 
   const handleChange = (field, val) => {
     setFormData((prev) => {
@@ -412,12 +440,23 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
       }
 
       // Availability validation: check if chosen Service Engineer has a conflicting booking
+      if (checkingAvailability) {
+        return 'Verifying technician availability with server... Please wait a moment.';
+      }
+
+      if (availabilityError) {
+        return `Unable to verify technician availability: ${availabilityError}. Please retry.`;
+      }
+
       const selectedEngStatus = engineersAvailability.find(
         (e) => e.name.toLowerCase() === formData.service_engineer.trim().toLowerCase()
       );
       if (selectedEngStatus && !selectedEngStatus.available) {
         const c = selectedEngStatus.conflict;
-        return `Booking Conflict: ${formData.service_engineer} is already booked for checklist ${c?.checklist_number || 'another job'} from ${c?.booking_start_date} to ${c?.booking_end_date}. Please select an available engineer.`;
+        if (c?.reason) {
+          return c.reason;
+        }
+        return `Booking Conflict: ${formData.service_engineer} is unavailable from ${c?.booking_start_date || formData.expected_arrival_date} to ${c?.booking_end_date || formData.expected_arrival_date}. Please select an available engineer.`;
       }
     }
 
@@ -1466,7 +1505,31 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
                   const eng = engineersAvailability?.find(
                     (e) => e.name.toLowerCase() === name.toLowerCase()
                   );
-                  const isAvailable = eng ? eng.available : true;
+                  const isAvailable = (!formData.expected_arrival_date || checkingAvailability) ? true : (eng ? eng.available : false);
+
+                  let unavailLabel = 'Booked';
+                  if (eng?.conflict?.type === 'HR_MANUAL_OVERRIDE') {
+                    if (eng.conflict.status === 'REST') unavailLabel = 'Rest Day (HR)';
+                    else if (eng.conflict.status === 'LEAVE') unavailLabel = 'On Leave (HR)';
+                    else unavailLabel = 'Not Available (HR)';
+                  } else if (eng?.conflict?.type === 'REST_DAY') {
+                    unavailLabel = 'Rest Day';
+                  } else if (eng?.conflict?.type === 'LEAVE') {
+                    unavailLabel = 'On Leave';
+                  } else if (eng?.conflict?.type === 'TRAVEL') {
+                    unavailLabel = 'Traveling';
+                  } else if (eng?.conflict?.type === 'OVERDUE_INCOMPLETE') {
+                    unavailLabel = 'Overdue Job';
+                  } else if (eng?.conflict?.checklist_number) {
+                    unavailLabel = `Booked (Job #${eng.conflict.checklist_number})`;
+                  }
+
+                  const dateRangeText = eng?.conflict?.booking_start_date
+                    ? (eng.conflict.booking_end_date && eng.conflict.booking_end_date !== eng.conflict.booking_start_date
+                        ? `${eng.conflict.booking_start_date} to ${eng.conflict.booking_end_date}`
+                        : `${eng.conflict.booking_start_date}`)
+                    : '';
+
                   return (
                     <option
                       key={name}
@@ -1476,7 +1539,7 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
                     >
                       {isAvailable
                         ? `✓ ${name} — Available`
-                        : `🚫 ${name} — Booked (${eng?.conflict?.booking_start_date} to ${eng?.conflict?.booking_end_date}, Job #${eng?.conflict?.checklist_number || 'Reserved'})`}
+                        : `🚫 ${name} — ${unavailLabel}${dateRangeText ? ` (${dateRangeText})` : ''}`}
                     </option>
                   );
                 })}
@@ -1492,8 +1555,28 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
                     const eng = engineersAvailability?.find(
                       (e) => e.name.toLowerCase() === name.toLowerCase()
                     );
-                    const isAvailable = eng ? eng.available : true;
+                    const isAvailable = (!formData.expected_arrival_date || checkingAvailability) ? true : (eng ? eng.available : false);
                     const isSelected = formData.service_engineer.toLowerCase() === name.toLowerCase();
+
+                    let chipBadge = 'Avail';
+                    if (!isAvailable) {
+                      if (eng?.conflict?.type === 'HR_MANUAL_OVERRIDE') {
+                        chipBadge = eng.conflict.status === 'REST' ? 'Rest' : eng.conflict.status === 'LEAVE' ? 'Leave' : 'Unavail';
+                      } else if (eng?.conflict?.type === 'REST_DAY') {
+                        chipBadge = 'Rest';
+                      } else if (eng?.conflict?.type === 'LEAVE') {
+                        chipBadge = 'Leave';
+                      } else if (eng?.conflict?.type === 'TRAVEL') {
+                        chipBadge = 'Travel';
+                      } else {
+                        chipBadge = 'Booked';
+                      }
+                    }
+
+                    const chipTooltip = isAvailable
+                      ? `${name} is available for this period`
+                      : eng?.conflict?.reason || `${name} is unavailable for this period`;
+
                     return (
                       <button
                         key={name}
@@ -1504,11 +1587,7 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
                             handleChange('service_engineer', name);
                           }
                         }}
-                        title={
-                          isAvailable
-                            ? `${name} is available for this period`
-                            : `${name} is booked for Job #${eng?.conflict?.checklist_number || 'Busy'} (${eng?.conflict?.booking_start_date} to ${eng?.conflict?.booking_end_date})`
-                        }
+                        title={chipTooltip}
                         className={`text-[11px] px-3 py-1.5 rounded-lg font-medium border flex items-center gap-1.5 transition-all ${
                           !isAvailable
                             ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed opacity-75 line-through'
@@ -1524,7 +1603,7 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
                         />
                         {name}
                         <span className="text-[9px] font-bold">
-                          {isAvailable ? 'Avail' : 'Booked'}
+                          {chipBadge}
                         </span>
                       </button>
                     );
