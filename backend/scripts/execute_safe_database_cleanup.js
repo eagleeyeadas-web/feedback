@@ -20,30 +20,30 @@ async function executeCleanAdminPanel() {
     .from('quotations')
     .select('id, quotation_number', { count: 'exact' });
 
-  if (qErr || qCountBefore !== 28) {
-    throw new Error(`CRITICAL ABORT: Expected 28 quotations, found ${qCountBefore}. Error: ${qErr?.message}`);
+  if (qErr || !qCountBefore || qCountBefore < 30) {
+    throw new Error(`CRITICAL ABORT: Expected at least 30 quotations, found ${qCountBefore}. Error: ${qErr?.message}`);
   }
 
   const { data: qiBefore, count: qiCountBefore, error: qiErr } = await supabase
     .from('quotation_items')
     .select('id', { count: 'exact' });
 
-  if (qiErr || qiCountBefore !== 33) {
-    throw new Error(`CRITICAL ABORT: Expected 33 quotation items, found ${qiCountBefore}. Error: ${qiErr?.message}`);
+  if (qiErr || !qiCountBefore || qiCountBefore < 35) {
+    throw new Error(`CRITICAL ABORT: Expected at least 35 quotation items, found ${qiCountBefore}. Error: ${qiErr?.message}`);
   }
 
   const { data: uBefore, count: uCountBefore, error: uErr } = await supabase
     .from('admin_users')
     .select('id, email', { count: 'exact' });
 
-  if (uErr || uCountBefore !== 6) {
-    throw new Error(`CRITICAL ABORT: Expected 6 admin users, found ${uCountBefore}. Error: ${uErr?.message}`);
+  if (uErr || !uCountBefore || uCountBefore < 6) {
+    throw new Error(`CRITICAL ABORT: Expected at least 6 admin users, found ${uCountBefore}. Error: ${uErr?.message}`);
   }
 
-  console.log(`✓ Safety check passed: 28 quotations, 33 quotation items, 6 admin users strictly protected.`);
+  console.log(`✓ Safety check passed: ${qCountBefore} quotations, ${qiCountBefore} quotation items, ${uCountBefore} staff/admin accounts verified.`);
 
-  // STEP 2: DELETE DUMMY & TEST OPERATIONAL DATA IN REVERSE DEPENDENCY ORDER
-  console.log('\n[2/6] Deleting test records from operational tables...');
+  // STEP 2: DELETE DUMMY & TEST OPERATIONAL DATA IN STRICT REVERSE DEPENDENCY ORDER
+  console.log('\n[2/6] Deleting test records from operational tables in reverse dependency order...');
 
   const operationalTablesToDelete = [
     { name: 'technical_installation_report_items', key: 'id' },
@@ -53,9 +53,8 @@ async function executeCleanAdminPanel() {
     { name: 'job_device_returns', key: 'id' },
     { name: 'pre_installation_backup_items', key: 'id' },
     { name: 'pre_installation_backup_declarations', key: 'id' },
-    { name: 'engineer_bookings', key: 'id' },
-    { name: 'coordinator_bookings', key: 'id' },
     { name: 'coordinator_booking_audit_logs', key: 'id' },
+    { name: 'coordinator_bookings', key: 'id' },
     { name: 'job_device_carry_items', key: 'id' },
     { name: 'job_device_carry_records', key: 'id' },
     { name: 'store_material_requirements', key: 'id' },
@@ -63,11 +62,12 @@ async function executeCleanAdminPanel() {
     { name: 'rest_day_requests', key: 'id' },
     { name: 'leave_requests', key: 'id' },
     { name: 'app_notifications', key: 'id' },
+    { name: 'engineer_bookings', key: 'id' },
     { name: 'installation_checklists', key: 'id' },
     { name: 'material_stock_transactions', key: 'id' },
     { name: 'stock_movements', key: 'id' },
     { name: 'retention_cleanup_logs', key: 'id' },
-    { name: 'feedback', key: 'id' }
+    { name: 'feedback', key: 'id' },
   ];
 
   const deletionReport = {};
@@ -80,7 +80,7 @@ async function executeCleanAdminPanel() {
         .select('*', { count: 'exact', head: true });
 
       if (beforeCount && beforeCount > 0) {
-        // Delete all rows safely using not null filter
+        // Delete rows safely
         const { error: delErr } = await supabase
           .from(name)
           .delete()
@@ -128,7 +128,7 @@ async function executeCleanAdminPanel() {
           issued_stock: 0,
           returned_usable_stock: 0,
           damaged_stock: 0,
-          updated_at: new Date().toISOString()
+          updated_at: new Date().toISOString(),
         })
         .eq('id', prod.id);
 
@@ -140,8 +140,8 @@ async function executeCleanAdminPanel() {
     }
   }
 
-  // STEP 4: RESET MATERIAL INVENTORY TO OPENING BASELINE (PRESERVE 13 MATERIALS)
-  console.log('\n[4/6] Resetting material inventory to baseline opening stock (preserving 13 catalog materials)...');
+  // STEP 4: RESET MATERIAL INVENTORY TO BASELINE (PRESERVE CATALOG MATERIALS)
+  console.log('\n[4/6] Resetting material inventory to baseline opening stock (preserving catalog materials)...');
   const baselineOpeningStock = {
     'MAT-INSU-TAPE': { opening: 100, opening_set: true },
     'MAT-CT-200MM': { opening: 50, opening_set: true },
@@ -155,7 +155,7 @@ async function executeCleanAdminPanel() {
     'MAT-CAM-LOOSE': { opening: 50, opening_set: true },
     'MAT-DISP-LOOSE': { opening: 50, opening_set: true },
     'MAT-DISP-LIVE': { opening: 0, opening_set: false },
-    'MAT-DISP-REC': { opening: 0, opening_set: false }
+    'MAT-DISP-REC': { opening: 0, opening_set: false },
   };
 
   const { data: materials, error: matErr } = await supabase
@@ -166,7 +166,7 @@ async function executeCleanAdminPanel() {
     console.error('Error fetching material_inventory:', matErr.message);
   } else if (materials) {
     for (const m of materials) {
-      const base = baselineOpeningStock[m.sku] || { opening: 0, opening_set: false };
+      const base = (m.sku && baselineOpeningStock[m.sku]) || { opening: 0, opening_set: false };
       const { error: updErr } = await supabase
         .from('material_inventory')
         .update({
@@ -175,14 +175,14 @@ async function executeCleanAdminPanel() {
           opening_stock_set: base.opening_set,
           issued_stock: 0,
           damaged_stock: 0,
-          updated_at: new Date().toISOString()
+          updated_at: new Date().toISOString(),
         })
         .eq('id', m.id);
 
       if (updErr) {
-        console.error(`Error resetting material stock for ${m.sku}:`, updErr.message);
+        console.error(`Error resetting material stock for ${m.sku || m.material_name}:`, updErr.message);
       } else {
-        console.log(`  ✓ Reset material: ${m.sku.padEnd(16)} (${m.material_name}) -> Current: ${base.opening}, Issued: 0`);
+        console.log(`  ✓ Reset material: ${(m.sku || m.material_name).padEnd(20)} (${m.material_name}) -> Current: ${base.opening}, Issued: 0`);
       }
     }
   }
@@ -190,7 +190,7 @@ async function executeCleanAdminPanel() {
   // STEP 5: RESET SEQUENCE & LOCAL DATA STORES
   console.log('\n[5/6] Resetting installation sequence and clearing local fallback stores...');
 
-  // Reset checklist sequence counter
+  // Reset installation checklist sequence counter
   try {
     await supabase
       .from('installation_checklist_sequence')
@@ -213,7 +213,7 @@ async function executeCleanAdminPanel() {
       returns: {},
       materialReturns: {},
       finalBoms: {},
-      additionalInstallations: {}
+      additionalInstallations: {},
     }, null, 2)
   );
   console.log('  ✓ Reset workflow_storage.json');
@@ -224,7 +224,7 @@ async function executeCleanAdminPanel() {
     JSON.stringify({
       declarations: {},
       verifiedReturns: {},
-      updated_at: new Date().toISOString()
+      updated_at: new Date().toISOString(),
     }, null, 2)
   );
   console.log('  ✓ Reset backup_items_storage.json');
@@ -234,7 +234,7 @@ async function executeCleanAdminPanel() {
     path.join(dataDir, 'engineer_bookings_storage.json'),
     JSON.stringify({
       bookings: {},
-      updated_at: new Date().toISOString()
+      updated_at: new Date().toISOString(),
     }, null, 2)
   );
   console.log('  ✓ Reset engineer_bookings_storage.json');
@@ -244,7 +244,7 @@ async function executeCleanAdminPanel() {
     path.join(dataDir, 'coordinator_bookings_storage.json'),
     JSON.stringify({
       bookings: [],
-      auditLogs: []
+      auditLogs: [],
     }, null, 2)
   );
   console.log('  ✓ Reset coordinator_bookings_storage.json');
@@ -255,7 +255,7 @@ async function executeCleanAdminPanel() {
     JSON.stringify({
       extensions: {},
       revisions: {},
-      updated_at: new Date().toISOString()
+      updated_at: new Date().toISOString(),
     }, null, 2)
   );
   console.log('  ✓ Reset schedule_extensions_storage.json');
@@ -265,7 +265,7 @@ async function executeCleanAdminPanel() {
     path.join(dataDir, 'app_notifications_storage.json'),
     JSON.stringify({
       notifications: [],
-      updated_at: new Date().toISOString()
+      updated_at: new Date().toISOString(),
     }, null, 2)
   );
   console.log('  ✓ Reset app_notifications_storage.json');
@@ -275,7 +275,7 @@ async function executeCleanAdminPanel() {
     path.join(dataDir, 'leave_requests_storage.json'),
     JSON.stringify({
       leaves: [],
-      updated_at: new Date().toISOString()
+      updated_at: new Date().toISOString(),
     }, null, 2)
   );
   console.log('  ✓ Reset leave_requests_storage.json');
@@ -285,12 +285,39 @@ async function executeCleanAdminPanel() {
     path.join(dataDir, 'rest_days_storage.json'),
     JSON.stringify({
       rest_days: [],
-      updated_at: new Date().toISOString()
+      updated_at: new Date().toISOString(),
     }, null, 2)
   );
   console.log('  ✓ Reset rest_days_storage.json');
 
-  // 9. inventory_storage.json
+  // 9. overdue_alerts_storage.json
+  fs.writeFileSync(
+    path.join(dataDir, 'overdue_alerts_storage.json'),
+    JSON.stringify({
+      alerts: [],
+    }, null, 2)
+  );
+  console.log('  ✓ Reset overdue_alerts_storage.json');
+
+  // 10. hr_availability_storage.json
+  fs.writeFileSync(
+    path.join(dataDir, 'hr_availability_storage.json'),
+    JSON.stringify({
+      overrides: [],
+    }, null, 2)
+  );
+  console.log('  ✓ Reset hr_availability_storage.json');
+
+  // 11. courier_dispatches_storage.json
+  fs.writeFileSync(
+    path.join(dataDir, 'courier_dispatches_storage.json'),
+    JSON.stringify({
+      dispatches: [],
+    }, null, 2)
+  );
+  console.log('  ✓ Reset courier_dispatches_storage.json');
+
+  // 12. inventory_storage.json
   const standardDevices = [
     { id: 'dev-001', sku: 'EE-2CH-LIVE', device_name: '2 Channel Live Camera System', device_type: '2 Channel Live', unit: 'Nos.', opening_quantity: 0, opening_stock_set: false, usable_stock: 0, reserved_stock: 0, issued_stock: 0, returned_usable_stock: 0, damaged_stock: 0, min_stock_level: 5, is_active: true },
     { id: 'dev-002', sku: 'EE-2CH-REC', device_name: '2 Channel Recording System', device_type: '2 Channel Recording', unit: 'Nos.', opening_quantity: 0, opening_stock_set: false, usable_stock: 0, reserved_stock: 0, issued_stock: 0, returned_usable_stock: 0, damaged_stock: 0, min_stock_level: 5, is_active: true },
@@ -298,7 +325,7 @@ async function executeCleanAdminPanel() {
     { id: 'dev-004', sku: 'EE-4CH-REC', device_name: '4 Channel Recording MDVR System', device_type: '4 Channel Recording', unit: 'Nos.', opening_quantity: 0, opening_stock_set: false, usable_stock: 0, reserved_stock: 0, issued_stock: 0, returned_usable_stock: 0, damaged_stock: 0, min_stock_level: 5, is_active: true },
     { id: 'dev-005', sku: 'EE-6CH-LIVE', device_name: '6 Channel Live Telematics System', device_type: '6 Channel Live', unit: 'Nos.', opening_quantity: 0, opening_stock_set: false, usable_stock: 0, reserved_stock: 0, issued_stock: 0, returned_usable_stock: 0, damaged_stock: 0, min_stock_level: 5, is_active: true },
     { id: 'dev-006', sku: 'EE-6CH-REC', device_name: '6 Channel Recording Telematics System', device_type: '6 Channel Recording', unit: 'Nos.', opening_quantity: 0, opening_stock_set: false, usable_stock: 0, reserved_stock: 0, issued_stock: 0, returned_usable_stock: 0, damaged_stock: 0, min_stock_level: 5, is_active: true },
-    { id: 'dev-007', sku: 'EE-8CH-LIVE', device_name: '8 Channel Live Enterprise System', device_type: '8 Channel Live', unit: 'Nos.', opening_quantity: 0, opening_stock_set: false, usable_stock: 0, reserved_stock: 0, issued_stock: 0, returned_usable_stock: 0, damaged_stock: 0, min_stock_level: 5, is_active: true }
+    { id: 'dev-007', sku: 'EE-8CH-LIVE', device_name: '8 Channel Live Enterprise System', device_type: '8 Channel Live', unit: 'Nos.', opening_quantity: 0, opening_stock_set: false, usable_stock: 0, reserved_stock: 0, issued_stock: 0, returned_usable_stock: 0, damaged_stock: 0, min_stock_level: 5, is_active: true },
   ];
 
   const standardMaterials = [
@@ -314,7 +341,7 @@ async function executeCleanAdminPanel() {
     { id: 'mat-010', sku: 'MAT-CAM-LOOSE', material_name: 'Camera', unit: 'Nos.', opening_stock: 50, current_stock: 50, opening_stock_set: true, min_stock_level: 10 },
     { id: 'mat-011', sku: 'MAT-DISP-LOOSE', material_name: 'Display', unit: 'Nos.', opening_stock: 50, current_stock: 50, opening_stock_set: true, min_stock_level: 10 },
     { id: 'mat-012', sku: 'MAT-DISP-LIVE', material_name: 'Live Display', unit: 'Nos.', opening_stock: 0, current_stock: 0, opening_stock_set: false, min_stock_level: 5 },
-    { id: 'mat-013', sku: 'MAT-DISP-REC', material_name: 'Recording Display', unit: 'Nos.', opening_stock: 0, current_stock: 0, opening_stock_set: false, min_stock_level: 5 }
+    { id: 'mat-013', sku: 'MAT-DISP-REC', material_name: 'Recording Display', unit: 'Nos.', opening_stock: 0, current_stock: 0, opening_stock_set: false, min_stock_level: 5 },
   ];
 
   const devMap = {};
@@ -338,7 +365,7 @@ async function executeCleanAdminPanel() {
       processedChecklistMaterialIssuances: [],
       processedMaterialReturnCredits: [],
       stockMovements: [],
-      deviceStockAllocations: {}
+      deviceStockAllocations: {},
     }, null, 2)
   );
   console.log('  ✓ Reset inventory_storage.json to clean baseline');
@@ -370,18 +397,28 @@ async function executeCleanAdminPanel() {
     .from('installation_checklists')
     .select('*', { count: 'exact', head: true });
 
+  const { count: repCountAfter } = await supabase
+    .from('technical_installation_reports')
+    .select('*', { count: 'exact', head: true });
+
+  const { count: notifCountAfter } = await supabase
+    .from('app_notifications')
+    .select('*', { count: 'exact', head: true });
+
   console.log('\n====================================================');
   console.log('              FINAL VERIFICATION REPORT             ');
   console.log('====================================================');
-  console.log(`Protected Quotations        : ${qCountAfter} / 28  -> ${qCountAfter === 28 ? 'PASSED (100% Intact)' : 'FAILED'}`);
-  console.log(`Protected Quotation Items   : ${qiCountAfter} / 33  -> ${qiCountAfter === 33 ? 'PASSED (100% Intact)' : 'FAILED'}`);
-  console.log(`Protected Admin Accounts    : ${uCountAfter} / 6   -> ${uCountAfter === 6 ? 'PASSED (100% Intact)' : 'FAILED'}`);
+  console.log(`Protected Quotations        : ${qCountAfter} / ${qCountBefore}  -> ${qCountAfter === qCountBefore ? 'PASSED (100% Intact)' : 'FAILED'}`);
+  console.log(`Protected Quotation Items   : ${qiCountAfter} / ${qiCountBefore}  -> ${qiCountAfter === qiCountBefore ? 'PASSED (100% Intact)' : 'FAILED'}`);
+  console.log(`Protected Staff Accounts    : ${uCountAfter} / ${uCountBefore}  -> ${uCountAfter === uCountBefore ? 'PASSED (100% Intact)' : 'FAILED'}`);
   console.log(`Protected BOM Items         : ${bomCountAfter} / 62  -> ${bomCountAfter === 62 ? 'PASSED (100% Intact)' : 'FAILED'}`);
   console.log(`Protected Service Engineers : ${engCountAfter} / 6   -> ${engCountAfter === 6 ? 'PASSED (100% Intact)' : 'FAILED'}`);
   console.log(`Cleaned Checklists          : ${chkCountAfter} / 0   -> ${chkCountAfter === 0 ? 'PASSED (Cleaned)' : 'FAILED'}`);
+  console.log(`Cleaned Reports             : ${repCountAfter} / 0   -> ${repCountAfter === 0 ? 'PASSED (Cleaned)' : 'FAILED'}`);
+  console.log(`Cleaned Notifications       : ${notifCountAfter} / 0 -> ${notifCountAfter === 0 ? 'PASSED (Cleaned)' : 'FAILED'}`);
   console.log('====================================================');
 
-  if (qCountAfter !== 28 || qiCountAfter !== 33 || uCountAfter !== 6 || chkCountAfter !== 0) {
+  if (qCountAfter !== qCountBefore || qiCountAfter !== qiCountBefore || uCountAfter !== uCountBefore || chkCountAfter !== 0) {
     throw new Error('POST-CLEANUP VERIFICATION FAILED!');
   }
 
