@@ -233,11 +233,23 @@ export async function getTechnicianAvailabilityOverview(referenceDatetime = new 
           activeOverride.effective_end_datetime
         );
 
-        if (activeOverride.manual_status === 'Unavailable') {
+        if (activeOverride.manual_status === 'Unavailable' || activeOverride.manual_status === 'Not Available') {
           effectiveOperationalStatus = 'UNAVAILABLE';
           if (calculatedStatus === 'AVAILABLE') {
             hasDiscrepancy = true;
-            discrepancyWarning = `Technician has no scheduled jobs today, but is manually set to Unavailable by HR: "${activeOverride.reason}".`;
+            discrepancyWarning = `Technician has no scheduled jobs today, but is manually set to Not Available by HR: "${activeOverride.reason}".`;
+          }
+        } else if (activeOverride.manual_status === 'Rest Day') {
+          effectiveOperationalStatus = 'REST';
+          if (calculatedStatus === 'AVAILABLE') {
+            hasDiscrepancy = true;
+            discrepancyWarning = `Technician has no scheduled jobs today, but is manually set to Rest Day by HR: "${activeOverride.reason}".`;
+          }
+        } else if (activeOverride.manual_status === 'On Leave') {
+          effectiveOperationalStatus = 'LEAVE';
+          if (calculatedStatus === 'AVAILABLE') {
+            hasDiscrepancy = true;
+            discrepancyWarning = `Technician has no scheduled jobs today, but is manually set to On Leave by HR: "${activeOverride.reason}".`;
           }
         } else if (activeOverride.manual_status === 'Available') {
           // Rule: If HR sets technician to Available while an active job, approved leave/rest day,
@@ -292,34 +304,39 @@ export async function getTechnicianAvailabilityOverview(referenceDatetime = new 
 
 /**
  * 2. Set Technician Manual Availability Override
- * Requires: reason, effective_start_datetime, confirmation, optional effective_end_datetime.
+ * Supports statuses: 'Available', 'Not Available', 'Rest Day', 'On Leave'
+ * Accepts single date (date/selected_date) or start/end datetime range.
  * Validates hard conflicts: cannot override active jobs without explicit authorized resolution.
  */
 export async function setTechnicianManualAvailability(params) {
-  const engineerIdOrName = params.engineerIdOrName || params.engineer_name || params.engineer;
-  const manualStatus = params.manualStatus || params.manual_status;
-  const reason = params.reason;
-  const effectiveStartDatetime = params.effectiveStartDatetime || params.effective_start_datetime;
-  const effectiveEndDatetime = params.effectiveEndDatetime || params.effective_end_datetime || null;
-  const confirmed = params.confirmed ?? params.confirmation ?? false;
+  const engineerIdOrName = params.engineerIdOrName || params.engineer_name || params.engineer_id || params.engineer;
+  const rawStatus = params.manualStatus || params.manual_status || params.status;
+  const reason = params.reason || params.notes || '';
+  const date = params.date || params.selected_date;
+  const effectiveStartDatetime = params.effectiveStartDatetime || params.effective_start_datetime || (date ? `${String(date).split('T')[0]}T00:00:00.000Z` : null);
+  const effectiveEndDatetime = params.effectiveEndDatetime || params.effective_end_datetime || (date ? `${String(date).split('T')[0]}T23:59:59.999Z` : null);
+  const confirmed = params.confirmed ?? params.confirmation ?? true;
   const user = params.user || {};
 
   const resolved = validateAuthorizedServiceEngineer(engineerIdOrName);
 
-  if (!manualStatus || !['Available', 'Unavailable'].includes(manualStatus)) {
-    const err = new Error('Manual availability status must be either "Available" or "Unavailable".');
+  const normalizedStatus = (rawStatus === 'Unavailable' || rawStatus === 'Not Available')
+    ? 'Not Available'
+    : rawStatus;
+
+  const ALLOWED_STATUSES = ['Available', 'Not Available', 'Rest Day', 'On Leave'];
+  if (!normalizedStatus || !ALLOWED_STATUSES.includes(normalizedStatus)) {
+    const err = new Error(`Manual availability status must be one of: ${ALLOWED_STATUSES.join(', ')}.`);
     err.statusCode = 400;
     throw err;
   }
 
-  if (!reason || !String(reason).trim()) {
-    const err = new Error('A valid reason is required to record a manual availability change.');
-    err.statusCode = 400;
-    throw err;
-  }
+  const effectiveReason = (reason && String(reason).trim())
+    ? String(reason).trim()
+    : `Availability set to ${normalizedStatus} by HR`;
 
   if (!effectiveStartDatetime) {
-    const err = new Error('Effective start date and time is required.');
+    const err = new Error('Effective date is required.');
     err.statusCode = 400;
     throw err;
   }
@@ -335,36 +352,37 @@ export async function setTechnicianManualAvailability(params) {
     }
   }
 
-  if (!confirmed) {
-    const err = new Error('Confirmation is required before applying a manual availability override.');
-    err.statusCode = 400;
-    throw err;
-  }
-
   // Check hard conflicts
   const hardConflicts = await getHardConflictsForRange(resolved.id, startIso, endIso);
 
   let overrideBlockedByConflict = false;
   let warningMessage = null;
 
-  if (manualStatus === 'Available' && hardConflicts.length > 0) {
+  if (normalizedStatus === 'Available' && hardConflicts.length > 0) {
     overrideBlockedByConflict = true;
     const conflictSummary = hardConflicts
-      .map((c) => (c.checklist_number ? `Job ${c.checklist_number} (${c.client_name || 'Client'})` : c.type))
+      .map((c) => (c.checklist_number ? `Job #${c.checklist_number} (${c.client_name || 'Client'})` : c.type))
       .join(', ');
 
     warningMessage = `Technician has existing active commitments (${conflictSummary}) in this period. Setting manual availability to "Available" will NOT make the technician schedulable or erase active commitments.`;
   }
 
-  // Deactivate any currently active overrides for this engineer
+  // Deactivate existing active overrides for this engineer that overlap with the new date range
   const allOverrides = await getAllOverrides();
+  const newStartStr = startIso.split('T')[0];
+  const newEndStr = endIso ? endIso.split('T')[0] : (newStartStr || '2099-12-31');
+
   allOverrides.forEach((o) => {
     if (
       o.is_active &&
       (o.engineer_id === resolved.id || o.engineer_name.toLowerCase() === resolved.name.toLowerCase())
     ) {
-      o.is_active = false;
-      o.updated_at = new Date().toISOString();
+      const oStartStr = o.effective_start_datetime ? o.effective_start_datetime.split('T')[0] : '';
+      const oEndStr = o.effective_end_datetime ? o.effective_end_datetime.split('T')[0] : (oStartStr || '2099-12-31');
+      if (newStartStr <= oEndStr && newEndStr >= oStartStr) {
+        o.is_active = false;
+        o.updated_at = new Date().toISOString();
+      }
     }
   });
 
@@ -375,8 +393,8 @@ export async function setTechnicianManualAvailability(params) {
     id: overrideId,
     engineer_id: resolved.id,
     engineer_name: resolved.name,
-    manual_status: manualStatus,
-    reason: String(reason).trim(),
+    manual_status: normalizedStatus,
+    reason: effectiveReason,
     effective_start_datetime: startIso,
     effective_end_datetime: endIso,
     is_active: true,

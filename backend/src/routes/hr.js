@@ -56,6 +56,9 @@ router.post('/availability/override', async (req, res) => {
       engineer_id,
       manual_status,
       reason,
+      notes,
+      date,
+      selected_date,
       effective_start_datetime,
       effective_end_datetime,
       confirmed,
@@ -64,10 +67,11 @@ router.post('/availability/override', async (req, res) => {
     const result = await setTechnicianManualAvailability({
       engineerIdOrName: engineer_id || engineer_name,
       manualStatus: manual_status,
-      reason,
+      reason: reason || notes,
+      date: date || selected_date,
       effectiveStartDatetime: effective_start_datetime,
       effectiveEndDatetime: effective_end_datetime || null,
-      confirmed: Boolean(confirmed),
+      confirmed: confirmed !== undefined ? Boolean(confirmed) : true,
       user,
     });
 

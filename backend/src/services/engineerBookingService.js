@@ -1270,14 +1270,33 @@ function determineEngineerDateStatus(commitments, dateStr, overrides = []) {
     return start <= dateStr && end >= dateStr;
   });
 
-  // If HR manual override is Unavailable, technician is marked UNAVAILABLE
-  if (activeOverride && activeOverride.manual_status === 'Unavailable') {
-    return {
-      status: 'UNAVAILABLE',
-      label: 'HR Override: Unavailable',
-      commitment: activeOnDate[0] || null,
-      manual_override: activeOverride,
-    };
+  // Handle HR manual overrides: 'Not Available', 'Unavailable', 'Rest Day', 'On Leave'
+  if (activeOverride) {
+    const mStat = activeOverride.manual_status;
+    if (mStat === 'Not Available' || mStat === 'Unavailable') {
+      return {
+        status: 'UNAVAILABLE',
+        label: 'Not Available (HR)',
+        commitment: activeOnDate[0] || null,
+        manual_override: activeOverride,
+      };
+    }
+    if (mStat === 'Rest Day') {
+      return {
+        status: 'REST',
+        label: 'Rest Day (HR)',
+        commitment: activeOnDate[0] || null,
+        manual_override: activeOverride,
+      };
+    }
+    if (mStat === 'On Leave') {
+      return {
+        status: 'LEAVE',
+        label: 'On Leave (HR)',
+        commitment: activeOnDate[0] || null,
+        manual_override: activeOverride,
+      };
+    }
   }
 
   if (activeOnDate.length === 0) {
@@ -1289,7 +1308,7 @@ function determineEngineerDateStatus(commitments, dateStr, overrides = []) {
         manual_override: activeOverride,
       };
     }
-    return { status: 'AVAILABLE', label: 'Available', commitment: null };
+    return { status: 'AVAILABLE', label: 'Available', commitment: null, manual_override: activeOverride || null };
   }
 
   // Conflict if multiple active overlapping commitments
@@ -1308,7 +1327,7 @@ function determineEngineerDateStatus(commitments, dateStr, overrides = []) {
     manual_override: activeOverride || null,
     discrepancy: Boolean(activeOverride && activeOverride.manual_status === 'Available'),
     discrepancy_warning: activeOverride && activeOverride.manual_status === 'Available'
-      ? `Manual override is Available, but active commitment (${primary.type}) exists.`
+      ? `Manual override is set to Available, but active commitment (${primary.checklist_number ? `Job #${primary.checklist_number}` : primary.type}) exists. Active assignments prevail.`
       : null,
   };
 
@@ -1364,12 +1383,19 @@ export async function getAvailabilityCalendar({
     if (view === 'day') {
       end = start;
     } else if (view === 'month') {
-      dObj.setUTCDate(dObj.getUTCDate() + 29); // 30 days
-      end = dObj.toISOString().split('T')[0];
+      const monthStart = new Date(Date.UTC(y, m - 1, 1));
+      const monthEnd = new Date(Date.UTC(y, m, 0));
+      start = monthStart.toISOString().split('T')[0];
+      end = monthEnd.toISOString().split('T')[0];
     } else {
-      // Default: week (7 days)
-      dObj.setUTCDate(dObj.getUTCDate() + 6);
-      end = dObj.toISOString().split('T')[0];
+      // Default: week (7 dates, Monday through Sunday)
+      const dayOfWeek = dObj.getUTCDay(); // 0 is Sunday, 1 is Monday...
+      const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+      dObj.setUTCDate(dObj.getUTCDate() + diffToMonday);
+      start = dObj.toISOString().split('T')[0];
+      const endObj = new Date(dObj.getTime());
+      endObj.setUTCDate(endObj.getUTCDate() + 6);
+      end = endObj.toISOString().split('T')[0];
     }
   }
 
