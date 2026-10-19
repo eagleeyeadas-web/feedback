@@ -19,6 +19,10 @@ const DEFAULT_WORKSPACE_BY_ROLE = {
     path: '/coordinator',
     name: 'Coordinator Workspace',
   },
+  HR: {
+    path: '/hr',
+    name: 'HR Workspace',
+  },
   ADMIN: {
     path: '/sales',
     name: 'Sales Workspace',
@@ -30,6 +34,7 @@ const ROLE_PERMITTED_DESCRIPTIONS = {
   TECHNICAL: 'Technical Workspace, device carry recording, installation reports, and return declarations.',
   STORE_MANAGER: 'Store Manager Workspace, device inventory receipts, adjustments, and return verification.',
   COORDINATOR: 'Coordinator Workspace, travel and accommodation bookings for technical jobs.',
+  HR: 'HR Technician Availability Calendar, extension approvals, and manual overdue management.',
   ADMIN: 'System-wide administration, user management, and operational oversight.',
 };
 

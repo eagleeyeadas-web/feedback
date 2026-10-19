@@ -174,6 +174,7 @@ export default function Login() {
     else if (userRole === 'TECHNICAL') navigate('/technical', { replace: true });
     else if (userRole === 'STORE_MANAGER') navigate('/store-manager', { replace: true });
     else if (userRole === 'COORDINATOR') navigate('/coordinator', { replace: true });
+    else if (userRole === 'HR') navigate('/hr', { replace: true });
     else navigate('/sales', { replace: true });
   };
 
@@ -207,6 +208,8 @@ export default function Login() {
         navigate('/store-manager', { replace: true });
       } else if (userRole === 'COORDINATOR') {
         navigate('/coordinator', { replace: true });
+      } else if (userRole === 'HR') {
+        navigate('/hr', { replace: true });
       } else if (userRole === 'ADMIN') {
         // Admin gets directed to the workspace for the selected portal
         navigate(portalConfig.targetPath || '/sales', { replace: true });

@@ -82,6 +82,9 @@ function ChecklistDetailRedirect() {
   if (userRole === 'COORDINATOR') {
     return <Navigate to={`/coordinator?view=${id}${actionQuery}`} replace />;
   }
+  if (userRole === 'HR') {
+    return <Navigate to={`/hr?view=${id}${actionQuery}`} replace />;
+  }
   return <Navigate to={`/sales?view=${id}${actionQuery}`} replace />;
 }
 
