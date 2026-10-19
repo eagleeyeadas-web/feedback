@@ -6,6 +6,9 @@ import {
   recordCourierReturnToStore,
   getCourierDispatches,
   getCourierDispatchByChecklistId,
+  markChecklistCustomerInstalled,
+  requestTechnicianForCourieredChecklist,
+  scheduleTechnicianForCourieredChecklist,
 } from '../services/courierService.js';
 import { getBusinessTomorrow } from '../services/installationService.js';
 
@@ -529,6 +532,160 @@ async function runTestSuite() {
     assert.strictEqual(latestMovement.movement_type, 'COURIER_RETURN');
     assert.strictEqual(latestMovement.quantity, 2);
     assert.strictEqual(latestMovement.balance_after, 10);
+  });
+
+  // ============================================================================
+  // TEST GROUP 8: Outcome A — Customer Installed Independently
+  // ============================================================================
+  console.log('\n[Test Group 8] Outcome A — Customer Installed Independently');
+
+  await itAsync('Completes order with CUSTOMER_INSTALLED when customer installs independently', async () => {
+    // Seed delivered couriered checklist
+    mockDbWithStock._tables.installation_checklists.push({
+      id: 'chk-courier-outcome-a',
+      checklist_number: 'EES-2026-COURIER-A',
+      client_name: 'Delta Logistics Coimbatore',
+      client_mobile: '9876543222',
+      delivery_method: 'Product Couriered',
+      is_courier_dispatched: true,
+      courier_dispatch_status: 'Delivered',
+      installation_status: 'Awaiting Customer Confirmation',
+      service_engineer: null,
+      expected_arrival_date: null,
+    });
+
+    const movementsCountBefore = mockDbWithStock._tables.stock_movements.length;
+
+    const result = await markChecklistCustomerInstalled({
+      checklist_id: 'chk-courier-outcome-a',
+      notes: 'Customer confirmed independent installation completed on site.',
+      user: { id: 'sales-user-001', email: 'sales@eagleeyesafdrive.com', role: 'SALES' },
+      dbClient: mockDbWithStock,
+    });
+
+    assert.strictEqual(result.success, true);
+    assert.strictEqual(result.checklist.installation_status, 'Completed');
+    assert.strictEqual(result.completion.completion_type, 'CUSTOMER_INSTALLED');
+    assert.strictEqual(result.checklist.id, 'chk-courier-outcome-a');
+    assert.strictEqual(result.checklist.checklist_number, 'EES-2026-COURIER-A');
+
+    // Verify no additional inventory movements occurred (stock was already deducted upon courier dispatch)
+    assert.strictEqual(
+      mockDbWithStock._tables.stock_movements.length,
+      movementsCountBefore,
+      'No new stock movements should be written when customer installs independently'
+    );
+  });
+
+  await itAsync('Rejects customer-installed completion if order is not Product Couriered', async () => {
+    mockDbWithStock._tables.installation_checklists.push({
+      id: 'chk-direct-tech-001',
+      checklist_number: 'EES-2026-DIRECT-01',
+      client_name: 'Direct Client',
+      delivery_method: 'Technician Direct',
+      installation_status: 'Assigned',
+    });
+
+    await assert.rejects(
+      async () => {
+        await markChecklistCustomerInstalled({
+          checklist_id: 'chk-direct-tech-001',
+          dbClient: mockDbWithStock,
+        });
+      },
+      /only applicable for "Product Couriered" orders/
+    );
+  });
+
+  // ============================================================================
+  // TEST GROUP 9: Outcome B — Customer Requires Technician Scheduling
+  // ============================================================================
+  console.log('\n[Test Group 9] Outcome B — Customer Requires Technician & Same-Checklist Scheduling');
+
+  await itAsync('Requests technician and transitions status to "Installation Required"', async () => {
+    mockDbWithStock._tables.installation_checklists.push({
+      id: 'chk-courier-outcome-b',
+      checklist_number: 'EES-2026-COURIER-B',
+      client_name: 'Echo Freight Services',
+      client_mobile: '9876543333',
+      delivery_method: 'Product Couriered',
+      is_courier_dispatched: true,
+      courier_dispatch_status: 'Delivered',
+      installation_status: 'Awaiting Customer Confirmation',
+      service_engineer: null,
+      expected_arrival_date: null,
+    });
+
+    const result = await requestTechnicianForCourieredChecklist({
+      checklist_id: 'chk-courier-outcome-b',
+      notes: 'Customer requested on-site technician calibration.',
+      user: { id: 'sales-user-001', email: 'sales@eagleeyesafdrive.com', role: 'SALES' },
+      dbClient: mockDbWithStock,
+    });
+
+    assert.strictEqual(result.success, true);
+    assert.strictEqual(result.checklist.installation_status, 'Installation Required');
+    assert.strictEqual(result.checklist.id, 'chk-courier-outcome-b', 'Checklist ID must remain unchanged');
+  });
+
+  await itAsync('Enforces authorized engineers when scheduling couriered technician', async () => {
+    const businessTomorrow = getBusinessTomorrow();
+
+    await assert.rejects(
+      async () => {
+        await scheduleTechnicianForCourieredChecklist({
+          checklist_id: 'chk-courier-outcome-b',
+          service_engineer: 'Unauthorized Third Party',
+          expected_arrival_date: businessTomorrow,
+          dbClient: mockDbWithStock,
+        });
+      },
+      /authorized service engineers/
+    );
+  });
+
+  await itAsync('Enforces next-day rule when scheduling couriered technician', async () => {
+    await assert.rejects(
+      async () => {
+        await scheduleTechnicianForCourieredChecklist({
+          checklist_id: 'chk-courier-outcome-b',
+          service_engineer: 'Mathi',
+          expected_arrival_date: '2026-01-01',
+          dbClient: mockDbWithStock,
+        });
+      },
+      /Jobs must start tomorrow or later/
+    );
+  });
+
+  await itAsync('Successfully schedules authorized engineer on SAME checklist without stock re-deduction', async () => {
+    const businessTomorrow = getBusinessTomorrow();
+    const movementsBefore = mockDbWithStock._tables.stock_movements.length;
+
+    const result = await scheduleTechnicianForCourieredChecklist({
+      checklist_id: 'chk-courier-outcome-b',
+      service_engineer: 'Guna',
+      expected_arrival_date: businessTomorrow,
+      expected_arrival_time: '11:00 AM',
+      installation_duration: '1 Day',
+      notes: 'Client has vehicles ready at depot.',
+      user: { id: 'sales-user-001', email: 'sales@eagleeyesafdrive.com', role: 'SALES' },
+      dbClient: mockDbWithStock,
+    });
+
+    assert.strictEqual(result.success, true);
+    assert.strictEqual(result.checklist.id, 'chk-courier-outcome-b', 'Checklist ID must remain identical');
+    assert.strictEqual(result.checklist.checklist_number, 'EES-2026-COURIER-B', 'Checklist Number must remain identical');
+    assert.strictEqual(result.checklist.service_engineer, 'Guna');
+    assert.strictEqual(result.checklist.expected_arrival_date, businessTomorrow);
+    assert.strictEqual(result.checklist.installation_status, 'Assigned');
+
+    // Confirm that stock was NOT deducted again
+    assert.strictEqual(
+      mockDbWithStock._tables.stock_movements.length,
+      movementsBefore,
+      'Scheduling an engineer for a couriered order must NOT deduct device or material stock again'
+    );
   });
 
   // ============================================================================

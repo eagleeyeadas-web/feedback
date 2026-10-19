@@ -391,14 +391,10 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
       return `Advance Amount (₹${advAmt}) + Pending Amount (₹${pendAmt}) cannot exceed Confirmed Price (₹${confPrice})`;
     }
 
-    if (!formData.installation_duration.trim()) return 'Installation Duration is required';
-    if (formData.vehicle_type === 'Other' && !formData.custom_vehicle_type.trim()) {
-      return 'Custom vehicle type is required when "Other" vehicle type is selected';
-    }
-
     const isCouriered = formData.delivery_method === 'Product Couriered';
 
     if (!isCouriered) {
+      if (!formData.installation_duration.trim()) return 'Installation Duration is required';
       if (!formData.expected_arrival_date) return 'Expected Date of Arrival is required for Technician Carries';
       if (!isEditMode) {
         const tomorrowDate = getBusinessTomorrow();
@@ -423,28 +419,10 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
         const c = selectedEngStatus.conflict;
         return `Booking Conflict: ${formData.service_engineer} is already booked for checklist ${c?.checklist_number || 'another job'} from ${c?.booking_start_date} to ${c?.booking_end_date}. Please select an available engineer.`;
       }
-    } else {
-      // Couriered: date & engineer can be completed later!
-      if (formData.expected_arrival_date && !isEditMode) {
-        const tomorrowDate = getBusinessTomorrow();
-        if (formData.expected_arrival_date !== tomorrowDate) {
-          return 'Jobs can only be scheduled to start tomorrow. Advance pre-booking is not allowed.';
-        }
-      }
-      if (formData.service_engineer && formData.service_engineer.trim()) {
-        if (!SERVICE_ENGINEER_OPTIONS.includes(formData.service_engineer.trim())) {
-          return 'Please select a valid Service Engineer: Mathi, Guna, Sakthivel, or Kamalesh.';
-        }
-        if (formData.expected_arrival_date) {
-          const selectedEngStatus = engineersAvailability.find(
-            (e) => e.name.toLowerCase() === formData.service_engineer.trim().toLowerCase()
-          );
-          if (selectedEngStatus && !selectedEngStatus.available) {
-            const c = selectedEngStatus.conflict;
-            return `Booking Conflict: ${formData.service_engineer} is already booked for checklist ${c?.checklist_number || 'another job'} from ${c?.booking_start_date} to ${c?.booking_end_date}. Please select an available engineer.`;
-          }
-        }
-      }
+    }
+
+    if (formData.vehicle_type === 'Other' && !formData.custom_vehicle_type.trim()) {
+      return 'Custom vehicle type is required when "Other" vehicle type is selected';
     }
 
     if (!formData.installation_status || !INSTALLATION_STATUSES.includes(formData.installation_status)) {
@@ -491,13 +469,7 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
 
       let resolvedStatus = formData.installation_status;
       if (formData.delivery_method === 'Product Couriered') {
-        if (!formData.service_engineer) {
-          resolvedStatus = 'Awaiting Technician Assignment';
-        } else if (!formData.expected_arrival_date) {
-          resolvedStatus = 'Awaiting Schedule';
-        } else if (!isEditMode) {
-          resolvedStatus = 'Courier Pending';
-        }
+        resolvedStatus = isEditMode ? (formData.installation_status || 'Courier Pending') : 'Courier Pending';
       }
 
       const payload = {
@@ -529,12 +501,12 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
         advance_amount: formData.advance_received ? (Number(formData.advance_amount) || 0) : 0,
         pending_payment: formData.pending_payment,
         pending_amount: formData.pending_payment ? (Number(formData.pending_amount) || 0) : 0,
-        installation_duration: formData.installation_duration.trim(),
+        installation_duration: formData.delivery_method === 'Product Couriered' ? (formData.installation_duration?.trim() || '1 Day') : formData.installation_duration.trim(),
         vehicle_type: formData.vehicle_type === 'Other' ? formData.custom_vehicle_type.trim() : formData.vehicle_type,
-        expected_arrival_date: formData.expected_arrival_date || null,
-        expected_arrival_time: formData.expected_arrival_time || null,
+        expected_arrival_date: formData.delivery_method === 'Product Couriered' ? null : (formData.expected_arrival_date || null),
+        expected_arrival_time: formData.delivery_method === 'Product Couriered' ? null : (formData.expected_arrival_time || null),
         installation_or_service: formData.installation_or_service,
-        service_engineer: formData.service_engineer ? formData.service_engineer.trim() : null,
+        service_engineer: formData.delivery_method === 'Product Couriered' ? null : (formData.service_engineer ? formData.service_engineer.trim() : null),
         service_assistant: null,
         installation_status: isAuthoritativeCompleted ? 'Completed' : resolvedStatus,
         payment_status: formData.payment_status,
@@ -1160,20 +1132,88 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
           </div>
 
           {formData.delivery_method === 'Product Couriered' && (
-            <div className="p-3 bg-indigo-50/70 border border-indigo-200 rounded-xl flex items-start gap-2.5 text-xs text-indigo-900">
-              <Package className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
-              <div>
-                <p className="font-bold">Flexible Couriered Scheduling Active</p>
-                <p className="text-[11px] text-indigo-700 mt-0.5">
-                  Store Manager will verify stock and record courier dispatch. You can leave technician assignment and schedule date blank for now and schedule later upon delivery.
-                </p>
+            <div className="p-4 bg-indigo-50 border border-indigo-200 rounded-xl space-y-1.5">
+              <div className="flex items-center gap-2 text-indigo-900 font-bold text-sm">
+                <Package className="w-5 h-5 text-indigo-600" />
+                <span>Product Couriered</span>
               </div>
+              <p className="text-xs text-indigo-800 leading-relaxed font-medium">
+                Products will be dispatched directly to the customer. The customer can install the product independently. If technical assistance is required, a technician can be assigned later.
+              </p>
             </div>
           )}
         </div>
 
-        {/* SECTION 9 — 4. INSTALLATION DETAILS */}
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-5">
+        {/* ORDER & VEHICLE DETAILS FOR PRODUCT COURIERED */}
+        {formData.delivery_method === 'Product Couriered' && (
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4">
+            <h3 className="text-sm font-bold text-navy flex items-center gap-2 pb-3 border-b border-gray-100">
+              <Truck className="text-blue-600" size={18} />
+              4. VEHICLE &amp; ORDER TYPE
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                  Vehicle Type <span className="text-rose-500">*</span>
+                </label>
+                <select
+                  value={formData.vehicle_type}
+                  onChange={(e) => handleChange('vehicle_type', e.target.value)}
+                  className="w-full text-xs p-2.5 border border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 font-medium bg-white"
+                >
+                  {VEHICLE_OPTIONS.map((v) => (
+                    <option key={v} value={v}>
+                      {v}
+                    </option>
+                  ))}
+                </select>
+                {formData.vehicle_type === 'Other' && (
+                  <div className="mt-2">
+                    <input
+                      type="text"
+                      required
+                      value={formData.custom_vehicle_type}
+                      onChange={(e) => handleChange('custom_vehicle_type', e.target.value)}
+                      placeholder="e.g. Crane / Tractor / Ambulance"
+                      className="w-full text-xs p-2.5 border border-gray-200 rounded-xl focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                  Job Type <span className="text-rose-500">*</span>
+                </label>
+                <div className="flex items-center gap-6 pt-2">
+                  <label className="flex items-center gap-2 text-xs font-medium cursor-pointer">
+                    <input
+                      type="radio"
+                      name="installation_or_service_courier"
+                      checked={formData.installation_or_service === 'Installation'}
+                      onChange={() => handleChange('installation_or_service', 'Installation')}
+                    />
+                    <span>Installation</span>
+                  </label>
+                  <label className="flex items-center gap-2 text-xs font-medium cursor-pointer">
+                    <input
+                      type="radio"
+                      name="installation_or_service_courier"
+                      checked={formData.installation_or_service === 'Service'}
+                      onChange={() => handleChange('installation_or_service', 'Service')}
+                    />
+                    <span>Service</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* SECTION 9 & 10 — 4. INSTALLATION DETAILS & 5. SERVICE ENGINEER */}
+        {formData.delivery_method !== 'Product Couriered' && (
+          <>
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-5">
           <div className="flex items-center justify-between pb-3 border-b border-gray-100">
             <h3 className="text-sm font-bold text-navy flex items-center gap-2">
               <Calendar className="text-blue-600" size={18} />
@@ -1545,6 +1585,8 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
             </div>
           </div>
         </div>
+        </>
+        )}
 
         {/* SECTION 11 — 6. FINAL CONFIRMATION */}
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4">

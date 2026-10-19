@@ -1091,6 +1091,22 @@ export async function deductStockForCarryRecord({ checklist_id, technician_user_
 
   if (processedCarryDeductions.has(checklist_id)) return;
 
+  if (checklist_id) {
+    try {
+      const { data: chk } = await supabase
+        .from('installation_checklists')
+        .select('delivery_method, is_courier_dispatched, checklist_number')
+        .eq('id', checklist_id)
+        .maybeSingle();
+
+      if (chk?.delivery_method === 'Product Couriered' && chk?.is_courier_dispatched) {
+        // Products were already issued and dispatched via courier; do not deduct stock again
+        processedCarryDeductions.add(checklist_id);
+        return;
+      }
+    } catch (e) {}
+  }
+
   const products = await getInventoryProducts();
   const productMap = new Map(products.map((p) => [p.device_type, p]));
 

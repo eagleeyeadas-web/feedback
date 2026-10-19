@@ -76,6 +76,11 @@ import {
   saveBackupDeclaration,
   verifyStoreBackupItemReturn,
 } from '../services/backupItemService.js';
+import {
+  markChecklistCustomerInstalled,
+  requestTechnicianForCourieredChecklist,
+  scheduleTechnicianForCourieredChecklist,
+} from '../services/courierService.js';
 
 const uploadReceipt = multer({
   storage: multer.memoryStorage(),
@@ -164,7 +169,7 @@ export const checklistValidationSchema = z.object({
   pending_amount: z.number().gte(0, 'Pending amount cannot be negative').default(0),
   delivery_method: z.enum(['Technician Carries', 'Product Couriered']).optional().default('Technician Carries'),
   courier_dispatch_status: z.string().optional().default('NOT_APPLICABLE'),
-  installation_duration: z.string().min(1, 'Installation duration is required'),
+  installation_duration: z.string().optional().default('1 Day'),
   vehicle_type: z.string().min(1, 'Vehicle type is required'),
   custom_vehicle_type: z.string().nullable().optional(),
   expected_arrival_date: z.string().nullable().optional(),
@@ -186,6 +191,8 @@ export const checklistValidationSchema = z.object({
     'Awaiting Schedule',
     'Ready for Installation',
     'Courier Pending',
+    'Awaiting Customer Confirmation',
+    'Installation Required',
     'Site Work Completed',
   ], {
     errorMap: () => ({ message: 'Invalid installation status' }),
@@ -199,6 +206,13 @@ export const checklistValidationSchema = z.object({
   const isCouriered = data.delivery_method === 'Product Couriered';
 
   if (!isCouriered) {
+    if (!data.installation_duration || !data.installation_duration.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['installation_duration'],
+        message: 'Installation duration is required',
+      });
+    }
     if (!data.expected_arrival_date || !data.expected_arrival_date.trim()) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -678,6 +692,82 @@ router.put('/:id', requireRole('SALES', 'ADMIN'), async (req, res) => {
     const status = isConflict ? 409 : 500;
     return res.status(status).json({
       error: err.message || 'Failed to update installation checklist',
+      conflict: err.conflict || null,
+    });
+  }
+});
+
+/**
+ * POST /api/admin/installations/:id/courier-customer-installed
+ * Outcome A: Customer installed independently. Sales confirms and completes the order.
+ * Accessible to SALES and ADMIN.
+ */
+router.post('/:id/courier-customer-installed', requireRole('SALES', 'ADMIN'), async (req, res) => {
+  try {
+    const { notes } = req.body;
+    const result = await markChecklistCustomerInstalled({
+      checklist_id: req.params.id,
+      notes: notes || '',
+      user: req.profile || req.user,
+    });
+    return res.json(result);
+  } catch (err) {
+    console.error('Error in POST /:id/courier-customer-installed:', err);
+    return res.status(400).json({ error: err.message || 'Failed to record customer independent installation' });
+  }
+});
+
+/**
+ * POST /api/admin/installations/:id/courier-request-technician
+ * Outcome B - Step 1: Customer Requires Technician. Sales updates status to Installation Required.
+ * Accessible to SALES and ADMIN.
+ */
+router.post('/:id/courier-request-technician', requireRole('SALES', 'ADMIN'), async (req, res) => {
+  try {
+    const { notes } = req.body;
+    const result = await requestTechnicianForCourieredChecklist({
+      checklist_id: req.params.id,
+      notes: notes || '',
+      user: req.profile || req.user,
+    });
+    return res.json(result);
+  } catch (err) {
+    console.error('Error in POST /:id/courier-request-technician:', err);
+    return res.status(400).json({ error: err.message || 'Failed to request technician for couriered order' });
+  }
+});
+
+/**
+ * POST /api/admin/installations/:id/courier-schedule-technician
+ * Outcome B - Step 2: Assign Technician & Schedule Installation on the SAME checklist.
+ * Accessible to SALES and ADMIN.
+ */
+router.post('/:id/courier-schedule-technician', requireRole('SALES', 'ADMIN'), async (req, res) => {
+  try {
+    const {
+      service_engineer,
+      expected_arrival_date,
+      expected_arrival_time,
+      installation_duration,
+      remarks,
+    } = req.body;
+
+    const result = await scheduleTechnicianForCourieredChecklist({
+      checklist_id: req.params.id,
+      service_engineer,
+      expected_arrival_date,
+      expected_arrival_time,
+      installation_duration,
+      remarks,
+      user: req.profile || req.user,
+    });
+    return res.json(result);
+  } catch (err) {
+    console.error('Error in POST /:id/courier-schedule-technician:', err);
+    const isConflict = err.statusCode === 409 || err.message?.includes('Booking Conflict') || err.message?.includes('already booked');
+    const status = isConflict ? 409 : 400;
+    return res.status(status).json({
+      error: err.message || 'Failed to schedule technician for couriered order',
       conflict: err.conflict || null,
     });
   }

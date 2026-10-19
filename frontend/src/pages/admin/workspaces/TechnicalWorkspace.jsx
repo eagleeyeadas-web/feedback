@@ -281,7 +281,13 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
 
   const isJobAssigned = (item) => {
     const status = (item.installation_status || '').trim().toLowerCase();
-    return !isJobCompleted(item) && status !== 'cancelled';
+    if (isJobCompleted(item) || status === 'cancelled') return false;
+    // Couriered orders without an assigned technician must not appear in the Technical Team workspace
+    if (item.delivery_method === 'Product Couriered' && (!item.service_engineer || status === 'courier pending' || status === 'awaiting customer confirmation' || status === 'installation required' || status === 'awaiting technician assignment' || status === 'awaiting schedule')) {
+      return false;
+    }
+    // Must have a designated service engineer or be an active assigned job
+    return Boolean(item.service_engineer) || status === 'assigned' || status === 'in progress';
   };
 
   // Base partitions (mutual exclusivity strictly enforced)

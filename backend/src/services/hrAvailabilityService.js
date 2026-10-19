@@ -372,6 +372,14 @@ export async function setTechnicianManualAvailability(params) {
   const newStartStr = startIso.split('T')[0];
   const newEndStr = endIso ? endIso.split('T')[0] : (newStartStr || '2099-12-31');
 
+  // Track previous status for audit history
+  const previousOverride = allOverrides.find((o) =>
+    o.is_active &&
+    (o.engineer_id === resolved.id || o.engineer_name.toLowerCase() === resolved.name.toLowerCase()) &&
+    isRangeOverlapping(o.effective_start_datetime, o.effective_end_datetime, startIso, endIso)
+  );
+  const previousStatus = previousOverride ? previousOverride.manual_status : 'Calculated';
+
   allOverrides.forEach((o) => {
     if (
       o.is_active &&
@@ -388,18 +396,20 @@ export async function setTechnicianManualAvailability(params) {
 
   const nowIso = new Date().toISOString();
   const overrideId = uuidv4();
+  const manualStatus = normalizedStatus;
 
   const record = {
     id: overrideId,
     engineer_id: resolved.id,
     engineer_name: resolved.name,
+    previous_status: previousStatus,
     manual_status: normalizedStatus,
     reason: effectiveReason,
     effective_start_datetime: startIso,
     effective_end_datetime: endIso,
     is_active: true,
     created_by: user.id || null,
-    created_by_email: user.email || 'hr@gmail.com',
+    created_by_email: user.email || 'hr@eagleeyesafdrive.com',
     created_by_role: user.role || 'HR',
     reversal_reason: null,
     reversed_at: null,
@@ -420,18 +430,23 @@ export async function setTechnicianManualAvailability(params) {
   saveStorage();
 
   await logAudit({
-    actor_id: user.id,
-    actor_email: user.email || 'hr@gmail.com',
+    actor_id: user.id || '00000000-0000-0000-0000-000000000001',
+    actor_email: user.email || 'hr@eagleeyesafdrive.com',
     actor_role: user.role || 'HR',
     action: 'SET_TECHNICIAN_MANUAL_AVAILABILITY',
     target_table: 'technician_availability_overrides',
     target_id: overrideId,
     details: {
+      engineer_id: resolved.id,
       engineer_name: resolved.name,
-      manual_status: manualStatus,
+      previous_status: previousStatus,
+      new_status: normalizedStatus,
+      manual_status: normalizedStatus,
+      effective_date: date || startIso.split('T')[0],
       reason: record.reason,
       start: startIso,
       end: endIso,
+      timestamp: nowIso,
       override_blocked_by_conflict: overrideBlockedByConflict,
       hard_conflicts_count: hardConflicts.length,
     },
@@ -439,10 +454,11 @@ export async function setTechnicianManualAvailability(params) {
 
   return {
     success: true,
+    message: warningMessage || `Availability for ${resolved.name} on ${date || startIso.split('T')[0]} updated to "${normalizedStatus}".`,
     override: record,
     ...record,
-    schedulable: manualStatus === 'Available' && !overrideBlockedByConflict,
-    is_schedulable: manualStatus === 'Available' && !overrideBlockedByConflict,
+    schedulable: normalizedStatus === 'Available' && !overrideBlockedByConflict,
+    is_schedulable: normalizedStatus === 'Available' && !overrideBlockedByConflict,
     override_blocked_by_conflict: overrideBlockedByConflict,
     hard_conflicts: hardConflicts,
     active_conflicts: hardConflicts,

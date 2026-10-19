@@ -18,6 +18,7 @@ import {
   Loader2,
   ShieldCheck,
   Check,
+  Package,
 } from 'lucide-react';
 import {
   fetchInstallationChecklists,
@@ -30,10 +31,12 @@ import {
   cancelChecklistApi,
 } from '../../../lib/api';
 import EngineerAvailabilityCalendar from '../../../components/workspaces/EngineerAvailabilityCalendar';
+import SalesCourieredOrders from '../../../components/workspaces/SalesCourieredOrders';
 
 export default function SalesWorkspace({ onSelectChecklist, onCreateChecklist, onNavigateTab }) {
   const { token } = useAuth();
   const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState('checklists'); // 'checklists' | 'courier'
   const [checklists, setChecklists] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [quotationsCount, setQuotationsCount] = useState(0);
@@ -259,7 +262,7 @@ export default function SalesWorkspace({ onSelectChecklist, onCreateChecklist, o
       </div>
 
       {/* Quick Summary Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
         <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-xs flex items-center gap-3">
           <div className="w-9 h-9 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600">
             <Wrench className="w-4 h-4" />
@@ -294,6 +297,30 @@ export default function SalesWorkspace({ onSelectChecklist, onCreateChecklist, o
           </div>
         </div>
 
+        {/* Couriered Orders Card */}
+        <div
+          onClick={() => setActiveTab('courier')}
+          className="bg-white p-4 rounded-xl border border-gray-200 hover:border-indigo-300 shadow-xs flex items-center gap-3 cursor-pointer transition"
+          title="Click to view Couriered Orders & Customer Tracking"
+        >
+          <div className="w-9 h-9 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600">
+            <Package className="w-4 h-4" />
+          </div>
+          <div>
+            <p className="text-[11px] text-gray-500 font-medium">Couriered Orders</p>
+            <div className="flex items-center gap-1.5">
+              <p className="text-xl font-bold text-gray-900">
+                {checklists.filter((c) => c.delivery_method === 'Product Couriered').length}
+              </p>
+              {checklists.filter((c) => c.delivery_method === 'Product Couriered' && c.installation_status === 'Awaiting Customer Confirmation').length > 0 && (
+                <span className="text-[9px] bg-amber-100 text-amber-800 border border-amber-300 px-1 py-0.2 rounded font-bold animate-pulse">
+                  {checklists.filter((c) => c.delivery_method === 'Product Couriered' && c.installation_status === 'Awaiting Customer Confirmation').length} Awaiting
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+
         <div
           onClick={() => onNavigateTab ? onNavigateTab('quotation-history') : navigate('/sales?tab=quotation-history')}
           className="bg-white p-4 rounded-xl border border-gray-200 hover:border-blue-300 shadow-xs flex items-center gap-3 cursor-pointer transition"
@@ -319,42 +346,98 @@ export default function SalesWorkspace({ onSelectChecklist, onCreateChecklist, o
         </div>
       </div>
 
-      {/* FIELD ENGINEER AVAILABILITY CALENDAR */}
-      <EngineerAvailabilityCalendar
-        token={token}
-        onSelectChecklist={onSelectChecklist}
-        onCreateWithEngineer={(engName) => {
-          if (onCreateChecklist) onCreateChecklist();
-          else navigate('/admin/installation-checklists/create');
-        }}
-      />
+      {/* Workspace Tabs */}
+      <div className="flex flex-wrap items-center gap-2 p-1.5 bg-gray-100 rounded-2xl border border-gray-200">
+        <button
+          type="button"
+          onClick={() => setActiveTab('checklists')}
+          className={`py-2 px-4 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+            activeTab === 'checklists'
+              ? 'bg-blue-600 text-white shadow-xs'
+              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200/60'
+          }`}
+        >
+          <Calendar className="w-4 h-4" />
+          <span>Standard Checklists & Field Calendar</span>
+          <span className="text-[10px] bg-black/10 px-1.5 py-0.5 rounded-full font-mono">
+            {checklists.filter((c) => c.delivery_method !== 'Product Couriered').length}
+          </span>
+        </button>
 
-      {/* Search & Actions */}
-      <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-xs flex items-center gap-3">
-        <Search className="w-5 h-5 text-gray-400 shrink-0" />
-        <input
-          type="text"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Filter Sales checklists by client name, checklist number, or location..."
-          className="w-full text-xs bg-transparent border-none outline-none text-gray-800 placeholder-gray-400"
-        />
+        <button
+          type="button"
+          id="sales-couriered-orders-tab"
+          onClick={() => setActiveTab('courier')}
+          className={`py-2 px-4 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+            activeTab === 'courier'
+              ? 'bg-indigo-600 text-white shadow-xs'
+              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200/60'
+          }`}
+        >
+          <Package className="w-4 h-4" />
+          <span>Couriered Orders & Customer Tracking</span>
+          <span className={`text-[10px] px-2 py-0.5 rounded-full font-mono font-bold ${
+            checklists.filter((c) => c.delivery_method === 'Product Couriered' && c.installation_status === 'Awaiting Customer Confirmation').length > 0
+              ? 'bg-amber-400 text-amber-950 animate-pulse'
+              : 'bg-black/10 text-inherit'
+          }`}>
+            {checklists.filter((c) => c.delivery_method === 'Product Couriered').length}
+          </span>
+          {checklists.filter((c) => c.delivery_method === 'Product Couriered' && c.installation_status === 'Awaiting Customer Confirmation').length > 0 && (
+            <span className="text-[10px] bg-amber-100 text-amber-800 border border-amber-300 px-1.5 py-0.5 rounded-full font-semibold">
+              {checklists.filter((c) => c.delivery_method === 'Product Couriered' && c.installation_status === 'Awaiting Customer Confirmation').length} Awaiting Customer Confirmation
+            </span>
+          )}
+        </button>
       </div>
 
-      {/* Sales Job Checklists Table */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden">
-        <div className="p-4 border-b border-gray-200 bg-gray-50/50 flex items-center justify-between">
-          <h3 className="text-sm font-bold text-gray-900">Sales Initiated Installation Checklists</h3>
-          <span className="text-xs text-gray-500 font-medium">Showing {filteredChecklists.length} jobs</span>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-xs">
-            <thead>
-              <tr className="bg-gray-50 border-b border-gray-200 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                <th className="py-3 px-4">Checklist No.</th>
-                <th className="py-3 px-4">Client Name & Mobile</th>
-                <th className="py-3 px-4">Device Requested</th>
-                <th className="py-3 px-4">Vehicles</th>
+      {/* Tab Content: Couriered Orders */}
+      {activeTab === 'courier' && (
+        <SalesCourieredOrders
+          token={token}
+          onSelectChecklist={onSelectChecklist}
+        />
+      )}
+
+      {/* Tab Content: Standard Checklists & Calendar */}
+      {activeTab === 'checklists' && (
+        <>
+          {/* FIELD ENGINEER AVAILABILITY CALENDAR */}
+          <EngineerAvailabilityCalendar
+            token={token}
+            onSelectChecklist={onSelectChecklist}
+            onCreateWithEngineer={(engName) => {
+              if (onCreateChecklist) onCreateChecklist();
+              else navigate('/admin/installation-checklists/create');
+            }}
+          />
+
+          {/* Search & Actions */}
+          <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-xs flex items-center gap-3">
+            <Search className="w-5 h-5 text-gray-400 shrink-0" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Filter Sales checklists by client name, checklist number, or location..."
+              className="w-full text-xs bg-transparent border-none outline-none text-gray-800 placeholder-gray-400"
+            />
+          </div>
+
+          {/* Sales Job Checklists Table */}
+          <div className="bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden">
+            <div className="p-4 border-b border-gray-200 bg-gray-50/50 flex items-center justify-between">
+              <h3 className="text-sm font-bold text-gray-900">Sales Initiated Installation Checklists</h3>
+              <span className="text-xs text-gray-500 font-medium">Showing {filteredChecklists.length} jobs</span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="bg-gray-50 border-b border-gray-200 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                    <th className="py-3 px-4">Checklist No.</th>
+                    <th className="py-3 px-4">Client Name & Mobile</th>
+                    <th className="py-3 px-4">Device Requested</th>
+                    <th className="py-3 px-4">Vehicles</th>
                 <th className="py-3 px-4">Confirmed Price</th>
                 <th className="py-3 px-4">Expected Arrival</th>
                 <th className="py-3 px-4">Status</th>
@@ -470,6 +553,8 @@ export default function SalesWorkspace({ onSelectChecklist, onCreateChecklist, o
           </table>
         </div>
       </div>
+    </>
+  )}
 
       {/* Toast Notification */}
       {toastMsg && (

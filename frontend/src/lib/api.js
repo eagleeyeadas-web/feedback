@@ -329,6 +329,7 @@ export async function fetchEngineersAvailability(token, { startDate, endDate, du
   }
   return res.json();
 }
+export const fetchEngineersAvailabilityApi = fetchEngineersAvailability;
 
 export async function fetchEngineersCalendar(token, { startDate, endDate } = {}) {
   const params = new URLSearchParams();
@@ -1835,6 +1836,44 @@ export async function recordCourierReturnApi(token, dispatchId, payload) {
   if (!res.ok) throw new Error(json.error || 'Failed to process courier return');
   return json;
 }
+
+export async function confirmCourierCustomerInstalledApi(token, checklistId, payload = {}) {
+  const res = await fetch(`${API_BASE}/admin/installations/${checklistId}/courier-customer-installed`, {
+    method: 'POST',
+    headers: adminHeaders(token),
+    body: JSON.stringify(payload),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to confirm customer independent installation');
+  return json;
+}
+
+export async function requestCourierTechnicianApi(token, checklistId, payload = {}) {
+  const res = await fetch(`${API_BASE}/admin/installations/${checklistId}/courier-request-technician`, {
+    method: 'POST',
+    headers: adminHeaders(token),
+    body: JSON.stringify(payload),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to request technician for couriered order');
+  return json;
+}
+
+export async function scheduleCourierTechnicianApi(token, checklistId, payload = {}) {
+  const res = await fetch(`${API_BASE}/admin/installations/${checklistId}/courier-schedule-technician`, {
+    method: 'POST',
+    headers: adminHeaders(token),
+    body: JSON.stringify(payload),
+  });
+  const json = await res.json();
+  if (!res.ok) {
+    const err = new Error(json.error || 'Failed to schedule technician for couriered order');
+    err.conflict = json.conflict;
+    throw err;
+  }
+  return json;
+}
+
 
 
 

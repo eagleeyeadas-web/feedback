@@ -711,9 +711,9 @@ export async function updateCourierDeliveryStatus(
       updated_at: new Date().toISOString(),
     };
 
-    // If delivered and job was awaiting delivery / unassigned, transition status to Ready for Scheduling / Awaiting Technician Assignment
+    // If delivered and job was awaiting delivery / unassigned, transition status to 'Awaiting Customer Confirmation'
     if (isDelivered) {
-      checklistUpdate.installation_status = 'Awaiting Technician Assignment';
+      checklistUpdate.installation_status = 'Awaiting Customer Confirmation';
     }
 
     await dbClient
@@ -980,3 +980,377 @@ export async function recordCourierReturnToStore(
     returned_items: itemsToReturn,
   };
 }
+
+export const inMemoryCourierCompletions = new Map();
+
+/**
+ * Outcome A: Customer installed independently
+ * Sales confirms that the customer has installed the product independently.
+ * - Validates checklist delivery_method === 'Product Couriered'
+ * - Validates courier status is Delivered (or delivery confirmed)
+ * - Sets installation_status = 'Completed'
+ * - Sets completion_type = 'CUSTOMER_INSTALLED'
+ * - Records completed_by_user_id, completed_by_name, completed_at, completion_notes
+ * - Does NOT create technician booking or calendar reservation
+ * - Does NOT create technical installation report or post-installation form
+ * - Does NOT create Coordinator return-ticket task
+ * - Does NOT deduct or restore inventory
+ */
+export async function markChecklistCustomerInstalled({
+  checklist_id,
+  notes = '',
+  user = null,
+  dbClient = supabase,
+}) {
+  if (!checklist_id) {
+    throw new Error('Checklist ID is required.');
+  }
+
+  // 1. Fetch checklist
+  let checklist = null;
+  try {
+    const { data: dbChk } = await dbClient
+      .from('installation_checklists')
+      .select('*')
+      .eq('id', checklist_id)
+      .single();
+    if (dbChk) checklist = dbChk;
+  } catch (e) {}
+
+  if (!checklist) {
+    const { getChecklistById } = await import('./installationService.js');
+    checklist = await getChecklistById(checklist_id);
+  }
+
+  if (!checklist) {
+    throw new Error(`Checklist with ID "${checklist_id}" not found.`);
+  }
+
+  if (checklist.delivery_method !== 'Product Couriered') {
+    throw new Error(`Checklist ${checklist.checklist_number} delivery method is "${checklist.delivery_method}". Independent customer installation is only applicable for "Product Couriered" orders.`);
+  }
+
+  if (checklist.installation_status === 'Completed' || checklist.completion_type === 'CUSTOMER_INSTALLED') {
+    throw new Error(`Checklist ${checklist.checklist_number} is already marked completed.`);
+  }
+
+  // Verify courier was delivered
+  const dispatch = await getCourierDispatchByChecklistId(checklist_id, dbClient);
+  const isDelivered =
+    checklist.courier_dispatch_status === 'Delivered' ||
+    (dispatch && dispatch.delivery_status === 'Delivered');
+
+  if (!isDelivered) {
+    throw new Error(`Cannot complete order: Courier status is "${checklist.courier_dispatch_status || dispatch?.delivery_status || 'Pending'}". Products must be delivered before confirming independent customer installation.`);
+  }
+
+  const completionTimestamp = new Date().toISOString();
+  const userName = user?.full_name || user?.email || 'Sales';
+  const userId = user?.id || null;
+
+  const completionData = {
+    checklist_id,
+    checklist_number: checklist.checklist_number,
+    completion_type: 'CUSTOMER_INSTALLED',
+    completed_by_user_id: userId,
+    completed_by_name: userName,
+    completed_at: completionTimestamp,
+    completion_notes: (notes || '').trim(),
+    created_at: completionTimestamp,
+  };
+
+  inMemoryCourierCompletions.set(checklist_id, completionData);
+
+  // Update installation_checklists in DB
+  const updatePayload = {
+    installation_status: 'Completed',
+    completion_type: 'CUSTOMER_INSTALLED',
+    completed_by_user_id: userId,
+    completed_by_name: userName,
+    actual_completion_at: completionTimestamp,
+    completion_notes: (notes || '').trim(),
+    updated_at: completionTimestamp,
+  };
+
+  try {
+    const { error: updErr } = await dbClient
+      .from('installation_checklists')
+      .update(updatePayload)
+      .eq('id', checklist_id);
+
+    if (updErr) {
+      // Fallback if custom completion columns are not in schema cache
+      await dbClient
+        .from('installation_checklists')
+        .update({
+          installation_status: 'Completed',
+          actual_completion_at: completionTimestamp,
+          updated_at: completionTimestamp,
+        })
+        .eq('id', checklist_id);
+    }
+  } catch (e) {
+    console.warn('DB checklist update for customer installation fallback:', e.message);
+  }
+
+  // Update in-memory schedule store so checklist queries immediately reflect completion
+  const { inMemoryChecklistSchedules } = await import('./installationService.js');
+  if (inMemoryChecklistSchedules) {
+    const existingSched = inMemoryChecklistSchedules.get(checklist_id) || {};
+    inMemoryChecklistSchedules.set(checklist_id, {
+      ...existingSched,
+      ...updatePayload,
+    });
+  }
+
+  // Log Audit
+  await logAudit({
+    actor_id: userId || '00000000-0000-0000-0000-000000000001',
+    actor_email: user?.email || 'sales@eagleeyesafdrive.com',
+    actor_role: user?.role || 'SALES',
+    action: 'CUSTOMER_INSTALLED_COMPLETION',
+    target_table: 'installation_checklists',
+    target_id: checklist_id,
+    details: {
+      checklist_number: checklist.checklist_number,
+      client_name: checklist.client_name,
+      completion_type: 'CUSTOMER_INSTALLED',
+      notes,
+    },
+  });
+
+  return {
+    success: true,
+    message: 'Order completed — Customer installed independently.',
+    completion: completionData,
+    checklist: {
+      ...checklist,
+      ...updatePayload,
+    },
+  };
+}
+
+/**
+ * Outcome B - Step 1: Customer Requires Technician
+ * Sets order to 'Installation Required' awaiting engineer scheduling
+ */
+export async function requestTechnicianForCourieredChecklist({
+  checklist_id,
+  notes = '',
+  user = null,
+  dbClient = supabase,
+}) {
+  if (!checklist_id) {
+    throw new Error('Checklist ID is required.');
+  }
+
+  let checklist = null;
+  try {
+    const { data: dbChk } = await dbClient
+      .from('installation_checklists')
+      .select('*')
+      .eq('id', checklist_id)
+      .single();
+    if (dbChk) checklist = dbChk;
+  } catch (e) {}
+
+  if (!checklist) {
+    const { getChecklistById } = await import('./installationService.js');
+    checklist = await getChecklistById(checklist_id);
+  }
+
+  if (!checklist) {
+    throw new Error(`Checklist with ID "${checklist_id}" not found.`);
+  }
+
+  if (checklist.installation_status === 'Completed') {
+    throw new Error(`Checklist ${checklist.checklist_number} is already completed.`);
+  }
+
+  const updatePayload = {
+    installation_status: 'Installation Required',
+    updated_at: new Date().toISOString(),
+  };
+
+  try {
+    await dbClient
+      .from('installation_checklists')
+      .update(updatePayload)
+      .eq('id', checklist_id);
+  } catch (e) {}
+
+  const { inMemoryChecklistSchedules } = await import('./installationService.js');
+  if (inMemoryChecklistSchedules) {
+    const existingSched = inMemoryChecklistSchedules.get(checklist_id) || {};
+    inMemoryChecklistSchedules.set(checklist_id, {
+      ...existingSched,
+      ...updatePayload,
+    });
+  }
+
+  await logAudit({
+    actor_id: user?.id || '00000000-0000-0000-0000-000000000001',
+    actor_email: user?.email || 'sales@eagleeyesafdrive.com',
+    actor_role: user?.role || 'SALES',
+    action: 'COURIER_REQUEST_TECHNICIAN',
+    target_table: 'installation_checklists',
+    target_id: checklist_id,
+    details: {
+      checklist_number: checklist.checklist_number,
+      client_name: checklist.client_name,
+      notes,
+    },
+  });
+
+  return {
+    success: true,
+    message: 'Technician installation requested. Complete the scheduling details to assign an engineer.',
+    checklist: {
+      ...checklist,
+      ...updatePayload,
+    },
+  };
+}
+
+/**
+ * Outcome B - Step 2: Assign Technician and Schedule Installation on the SAME checklist
+ * - Validates engineer: Mathi, Guna, Sakthivel, Kamalesh
+ * - Validates next-day rule: start date must be tomorrow or later
+ * - Validates availability and prevents double booking
+ * - Does NOT duplicate checklist
+ * - Does NOT deduct stock again
+ * - Does NOT duplicate BOM
+ */
+export async function scheduleTechnicianForCourieredChecklist({
+  checklist_id,
+  service_engineer,
+  expected_arrival_date,
+  expected_arrival_time = '10:00 AM',
+  installation_duration = '1 Day',
+  remarks = '',
+  user = null,
+  dbClient = supabase,
+}) {
+  if (!checklist_id) {
+    throw new Error('Checklist ID is required.');
+  }
+
+  const { SERVICE_ENGINEER_OPTIONS, resolveEngineer, reserveEngineerAtomic, calculateBookingEndDate } = await import('./engineerBookingService.js');
+  const { getBusinessTomorrow } = await import('./installationService.js');
+
+  if (!service_engineer || !SERVICE_ENGINEER_OPTIONS.includes(service_engineer.trim())) {
+    throw new Error('Please select one of the authorized service engineers: Mathi, Guna, Sakthivel, or Kamalesh.');
+  }
+
+  const engName = service_engineer.trim();
+  const resolvedEng = resolveEngineer(engName);
+
+  if (!expected_arrival_date) {
+    throw new Error('Installation start date (Expected Arrival Date) is required.');
+  }
+
+  // Next-day scheduling rule enforcement
+  const businessTomorrow = getBusinessTomorrow();
+  if (expected_arrival_date < businessTomorrow) {
+    throw new Error('Installation jobs cannot be scheduled in the past or today. Jobs must start tomorrow or later.');
+  }
+
+  let checklist = null;
+  try {
+    const { data: dbChk } = await dbClient
+      .from('installation_checklists')
+      .select('*')
+      .eq('id', checklist_id)
+      .single();
+    if (dbChk) checklist = dbChk;
+  } catch (e) {}
+
+  if (!checklist) {
+    const { getChecklistById } = await import('./installationService.js');
+    checklist = await getChecklistById(checklist_id);
+  }
+
+  if (!checklist) {
+    throw new Error(`Checklist with ID "${checklist_id}" not found.`);
+  }
+
+  if (checklist.installation_status === 'Completed') {
+    throw new Error(`Checklist ${checklist.checklist_number} is already completed.`);
+  }
+
+  const duration = (installation_duration || checklist.installation_duration || '1 Day').trim();
+  const arrivalTime = (expected_arrival_time || checklist.expected_arrival_time || '10:00 AM').trim();
+  const bookingEndDate = calculateBookingEndDate(expected_arrival_date, duration);
+
+  // Atomically reserve the engineer and verify availability
+  await reserveEngineerAtomic({
+    engineerIdOrName: resolvedEng ? resolvedEng.id : engName,
+    checklistId: checklist.id,
+    checklistNumber: checklist.checklist_number,
+    startDate: expected_arrival_date,
+    endDate: bookingEndDate,
+    duration,
+    user,
+    status: 'ASSIGNED',
+  });
+
+  const updatePayload = {
+    service_engineer: engName,
+    service_engineer_id: resolvedEng ? resolvedEng.id : null,
+    expected_arrival_date,
+    expected_arrival_time: arrivalTime,
+    installation_duration: duration,
+    booking_end_date: bookingEndDate,
+    current_expected_arrival_date: expected_arrival_date,
+    current_expected_arrival_time: arrivalTime,
+    current_installation_duration: duration,
+    current_booking_end_date: bookingEndDate,
+    installation_status: 'Assigned',
+    remarks: remarks ? (checklist.remarks ? `${checklist.remarks}; ${remarks}` : remarks) : checklist.remarks,
+    updated_at: new Date().toISOString(),
+  };
+
+  try {
+    await dbClient
+      .from('installation_checklists')
+      .update(updatePayload)
+      .eq('id', checklist.id);
+  } catch (e) {
+    console.warn('DB update for couriered technician scheduling fallback:', e.message);
+  }
+
+  const { inMemoryChecklistSchedules } = await import('./installationService.js');
+  if (inMemoryChecklistSchedules) {
+    const existingSched = inMemoryChecklistSchedules.get(checklist.id) || {};
+    inMemoryChecklistSchedules.set(checklist.id, {
+      ...existingSched,
+      ...updatePayload,
+    });
+  }
+
+  await logAudit({
+    actor_id: user?.id || '00000000-0000-0000-0000-000000000001',
+    actor_email: user?.email || 'sales@eagleeyesafdrive.com',
+    actor_role: user?.role || 'SALES',
+    action: 'COURIER_TECHNICIAN_SCHEDULED',
+    target_table: 'installation_checklists',
+    target_id: checklist.id,
+    details: {
+      checklist_number: checklist.checklist_number,
+      service_engineer: engName,
+      expected_arrival_date,
+      expected_arrival_time: arrivalTime,
+      installation_duration: duration,
+    },
+  });
+
+  return {
+    success: true,
+    message: 'Technician installation successfully scheduled.',
+    checklist: {
+      ...checklist,
+      ...updatePayload,
+    },
+  };
+}
+

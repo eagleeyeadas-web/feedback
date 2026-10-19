@@ -1240,13 +1240,16 @@ function getEngineerEarliestAvailableDate(commitments, fromDateStr) {
  * Respects active HR manual availability overrides (Available / Unavailable)
  */
 function determineEngineerDateStatus(commitments, dateStr, overrides = []) {
-  // Check active HR manual override covering this date
-  const activeOverride = overrides.find((o) => {
+  // Check active HR manual override covering this date (pick most recent if multiple)
+  const activeOverrides = overrides.filter((o) => {
     if (!o.is_active) return false;
-    const oStart = o.effective_start_datetime.split('T')[0];
-    const oEnd = o.effective_end_datetime ? o.effective_end_datetime.split('T')[0] : '2099-12-31';
+    const oStart = (o.effective_start_datetime || '').split('T')[0];
+    const oEnd = o.effective_end_datetime ? o.effective_end_datetime.split('T')[0] : (oStart || '2099-12-31');
     return dateStr >= oStart && dateStr <= oEnd;
   });
+  const activeOverride = activeOverrides.length > 0
+    ? activeOverrides.sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime())[0]
+    : null;
 
   const activeOnDate = commitments.filter((c) => {
     if (c.type === 'JOB' && (c.status === 'COMPLETED' || c.status === 'SITE WORK COMPLETED')) {
@@ -1495,6 +1498,7 @@ export async function getAvailabilityCalendar({
         commitments: dateStatus.commitments,
         has_pending_warning: Boolean(dayWarning),
         warning: dayWarning || null,
+        manual_override: dateStatus.manual_override || null,
       };
     });
 

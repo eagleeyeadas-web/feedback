@@ -2090,6 +2090,7 @@ export async function enrichChecklistsWithWorkflowStatus(checklists) {
 
     if (isCompleted) {
       copy.installation_status = 'Completed';
+      copy.completion_type = item.completion_type || (hasCompletionReport ? 'TECHNICIAN_INSTALLED' : (item.delivery_method === 'Product Couriered' ? 'CUSTOMER_INSTALLED' : 'TECHNICIAN_INSTALLED'));
     } else if (instStatusNormalized === 'in progress') {
       copy.installation_status = 'In Progress';
     } else if (instStatusNormalized === 'cancelled') {

@@ -109,6 +109,7 @@ export default function HrWorkspace() {
   const [editorSaving, setEditorSaving] = useState(false);
   const [editorSuccess, setEditorSuccess] = useState(null);
   const [editorError, setEditorError] = useState(null);
+  const [initialEditorState, setInitialEditorState] = useState({ status: 'Available', notes: '' });
 
   // Extension Requests tab state
   const [extensionFilter, setExtensionFilter] = useState('PENDING'); // 'PENDING' | 'APPROVED' | 'REJECTED' | 'ALL'
@@ -198,10 +199,19 @@ export default function HrWorkspace() {
   };
 
   // Helper to map calendar cell status to default editor manual status
-  const mapStatusToEditorOption = (cellStatus) => {
-    if (cellStatus === 'UNAVAILABLE') return 'Not Available';
-    if (cellStatus === 'REST') return 'Rest Day';
-    if (cellStatus === 'LEAVE') return 'On Leave';
+  const mapStatusToEditorOption = (day) => {
+    if (!day) return 'Available';
+    if (typeof day === 'object' && day.manual_override?.manual_status) {
+      const ms = day.manual_override.manual_status;
+      if (['Available', 'Not Available', 'Rest Day', 'On Leave'].includes(ms)) {
+        return ms;
+      }
+      if (ms === 'Unavailable') return 'Not Available';
+    }
+    const cellStatus = typeof day === 'string' ? day : day.status;
+    if (cellStatus === 'UNAVAILABLE' || cellStatus === 'Not Available') return 'Not Available';
+    if (cellStatus === 'REST' || cellStatus === 'Rest Day') return 'Rest Day';
+    if (cellStatus === 'LEAVE' || cellStatus === 'On Leave') return 'On Leave';
     return 'Available';
   };
 
@@ -212,8 +222,11 @@ export default function HrWorkspace() {
       date: day.date,
       dayData: day,
     });
-    setEditorStatus(mapStatusToEditorOption(day.status));
-    setEditorNotes('');
+    const currentOpt = mapStatusToEditorOption(day);
+    const currentNotes = day.manual_override?.reason || '';
+    setEditorStatus(currentOpt);
+    setEditorNotes(currentNotes);
+    setInitialEditorState({ status: currentOpt, notes: currentNotes });
     setEditorSuccess(null);
     setEditorError(null);
   };
@@ -248,7 +261,7 @@ export default function HrWorkspace() {
       // Refresh calendar & summary counts
       await Promise.all([loadCalendarData(), loadSummaryData()]);
 
-      // Update current selected cell's dayData status label
+      // Update current selected cell's dayData status label and manual_override
       setSelectedCell((prev) => {
         if (!prev) return null;
         return {
@@ -257,9 +270,15 @@ export default function HrWorkspace() {
             ...prev.dayData,
             status: editorStatus === 'Available' ? 'AVAILABLE' : editorStatus === 'Not Available' ? 'UNAVAILABLE' : editorStatus === 'Rest Day' ? 'REST' : 'LEAVE',
             status_label: `${editorStatus} (HR)`,
+            manual_override: res.override || {
+              manual_status: editorStatus,
+              reason: editorNotes,
+              is_active: true,
+            },
           },
         };
       });
+      setInitialEditorState({ status: editorStatus, notes: editorNotes });
     } catch (err) {
       console.error('Failed to update availability:', err);
       setEditorError(err.message || 'Failed to update technician availability.');
@@ -951,33 +970,51 @@ export default function HrWorkspace() {
                 )}
 
                 {/* Submit & Close Buttons */}
-                <div className="flex items-center gap-2 pt-2">
-                  <button
-                    type="submit"
-                    disabled={editorSaving}
-                    className="flex-1 py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition shadow-xs flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-                  >
-                    {editorSaving ? (
-                      <>
-                        <RefreshCw size={14} className="animate-spin" />
-                        <span>Updating...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Check size={14} />
-                        <span>Update Availability</span>
-                      </>
-                    )}
-                  </button>
+                {(() => {
+                  const isSelectionChanged = Boolean(
+                    selectedCell && (
+                      editorStatus !== initialEditorState.status ||
+                      editorNotes.trim() !== initialEditorState.notes.trim() ||
+                      !selectedCell.dayData?.manual_override
+                    )
+                  );
+                  const isSelectionValid = Boolean(
+                    selectedCell &&
+                    editorStatus &&
+                    ['Available', 'Not Available', 'Rest Day', 'On Leave'].includes(editorStatus)
+                  );
 
-                  <button
-                    type="button"
-                    onClick={() => setSelectedCell(null)}
-                    className="py-2.5 px-3 border border-gray-200 hover:bg-gray-100 text-gray-700 rounded-xl text-xs font-bold transition cursor-pointer"
-                  >
-                    Close
-                  </button>
-                </div>
+                  return (
+                    <div className="flex items-center gap-2 pt-2">
+                      <button
+                        type="submit"
+                        disabled={editorSaving || !isSelectionValid || !isSelectionChanged}
+                        title={!isSelectionChanged ? 'Change status or notes to update availability' : 'Save availability update'}
+                        className="flex-1 py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition shadow-xs flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {editorSaving ? (
+                          <>
+                            <RefreshCw size={14} className="animate-spin" />
+                            <span>Updating...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Check size={14} />
+                            <span>Update Availability</span>
+                          </>
+                        )}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setSelectedCell(null)}
+                        className="py-2.5 px-3 border border-gray-200 hover:bg-gray-100 text-gray-700 rounded-xl text-xs font-bold transition cursor-pointer"
+                      >
+                        Close
+                      </button>
+                    </div>
+                  );
+                })()}
               </form>
             ) : (
               <div className="text-center py-12 px-2 text-gray-400 space-y-3">
