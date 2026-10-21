@@ -19,6 +19,7 @@ import {
   ShieldCheck,
   Check,
   Package,
+  Clock,
 } from 'lucide-react';
 import {
   fetchInstallationChecklists,
