@@ -947,6 +947,46 @@ export async function fetchAllMovements(token, params = {}) {
 }
 
 /**
+ * Weekly Stock Maintenance Report API
+ */
+export async function fetchWeeklyStockReportApi(token, params = {}) {
+  const query = new URLSearchParams();
+  if (params.startDate) query.append('startDate', params.startDate);
+  if (params.endDate) query.append('endDate', params.endDate);
+  const queryString = query.toString() ? `?${query.toString()}` : '';
+  const res = await fetch(`${API_BASE}/admin/inventory/weekly-report${queryString}`, {
+    headers: adminHeaders(token),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to fetch weekly stock report');
+  return json;
+}
+
+export async function downloadWeeklyStockReportPdfApi(token, params = {}) {
+  const query = new URLSearchParams();
+  if (params.startDate) query.append('startDate', params.startDate);
+  if (params.endDate) query.append('endDate', params.endDate);
+  const queryString = query.toString() ? `?${query.toString()}` : '';
+  const res = await fetch(`${API_BASE}/admin/inventory/weekly-report/pdf${queryString}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  if (!res.ok) {
+    let errorMsg = 'Failed to download weekly stock report PDF';
+    try {
+      const errJson = await res.json();
+      errorMsg = errJson.error || errorMsg;
+    } catch {
+      // not json
+    }
+    throw new Error(errorMsg);
+  }
+  return res.blob();
+}
+
+
+/**
  * Technician Job Expenses API
  */
 export async function fetchJobExpenses(token, checklistId) {

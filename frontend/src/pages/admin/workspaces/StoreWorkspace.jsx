@@ -28,11 +28,13 @@ import {
   Trash2,
   ChevronDown,
   ChevronUp,
+  FileSpreadsheet,
 } from 'lucide-react';
 import StoreBomManager from '../../../components/bom/StoreBomManager';
 import StoreInstallationRequirements from '../../../components/bom/StoreInstallationRequirements';
 import IssueMaterialsModal from '../../../components/bom/IssueMaterialsModal';
 import StoreCourierDispatch from '../../../components/bom/StoreCourierDispatch';
+import WeeklyStockReportTab from './WeeklyStockReportTab';
 import {
   fetchInventoryProducts,
   fetchInventorySummary,
@@ -67,9 +69,9 @@ const STANDARD_DEVICE_TYPES = [
 ];
 
 export default function StoreWorkspace({ onSelectChecklist }) {
-  const { token } = useAuth();
+  const { token, user, profile } = useAuth();
 
-  // 8 Workspace Tabs
+  // 10 Workspace Tabs
   const [activeTab, setActiveTab] = useState('overview');
 
   // State
@@ -807,6 +809,16 @@ export default function StoreWorkspace({ onSelectChecklist }) {
           <Clock className="w-4 h-4" />
           <span>Stock Movements</span>
           <span className="text-[10px] bg-black/10 px-1.5 py-0.2 rounded-full font-mono">{movements.length}</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('weekly-report')}
+          className={`flex-1 min-w-[130px] py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+            activeTab === 'weekly-report' ? 'bg-amber-600 text-white shadow-xs' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+          }`}
+        >
+          <FileSpreadsheet className="w-4 h-4" />
+          <span>Weekly Stock Report</span>
         </button>
       </div>
 
@@ -1609,6 +1621,13 @@ export default function StoreWorkspace({ onSelectChecklist }) {
             </button>
           </div>
         </div>
+      )}
+
+      {/* ============================================================
+          TAB 10: WEEKLY STOCK MAINTENANCE REPORT
+          ============================================================ */}
+      {activeTab === 'weekly-report' && (
+        <WeeklyStockReportTab token={token} user={profile || user} />
       )}
 
       {/* ============================================================

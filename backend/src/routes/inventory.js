@@ -35,9 +35,63 @@ import {
   executeInventoryCleanup,
   getCleanupLogs,
 } from '../services/inventoryCleanupService.js';
+import {
+  generateWeeklyStockReport,
+  getPreviousCompletedWeek,
+} from '../services/weeklyStockReportService.js';
+import {
+  generateWeeklyStockReportPdf,
+} from '../services/weeklyStockReportPdfGenerator.js';
 import supabase from '../services/supabase.js';
 
 const router = Router();
+
+/**
+ * GET /api/admin/inventory/weekly-report
+ * Generate authoritative weekly stock maintenance report (physical stock only)
+ * Accessible to STORE_MANAGER, ADMIN
+ */
+router.get('/weekly-report', requireRole('STORE_MANAGER', 'ADMIN'), async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+    const report = await generateWeeklyStockReport({
+      startDate,
+      endDate,
+      user: req.profile,
+    });
+    return res.json(report);
+  } catch (err) {
+    console.error('Error generating weekly stock report:', err);
+    return res.status(500).json({ error: err.message || 'Failed to generate weekly stock report' });
+  }
+});
+
+/**
+ * GET /api/admin/inventory/weekly-report/pdf
+ * Download weekly stock maintenance report as a multi-page PDF
+ * Accessible to STORE_MANAGER, ADMIN
+ */
+router.get('/weekly-report/pdf', requireRole('STORE_MANAGER', 'ADMIN'), async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+    const report = await generateWeeklyStockReport({
+      startDate,
+      endDate,
+      user: req.profile,
+    });
+    const pdfBuffer = await generateWeeklyStockReportPdf(report);
+
+    const filename = `SafDrive_Weekly_Stock_Report_${report.reportPeriod.startDate}_to_${report.reportPeriod.endDate}.pdf`;
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Length', pdfBuffer.length);
+    return res.send(pdfBuffer);
+  } catch (err) {
+    console.error('Error generating weekly stock report PDF:', err);
+    return res.status(500).json({ error: err.message || 'Failed to generate weekly stock report PDF' });
+  }
+});
+
 
 /**
  * GET /api/admin/inventory
