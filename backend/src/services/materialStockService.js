@@ -831,6 +831,14 @@ export async function issueMaterialsForChecklist({
     console.warn('Could not update requirement issuance status:', reqErr.message);
   }
 
+  // Fulfill any reserved device stock allocations for this checklist
+  try {
+    const { fulfillDeviceAllocationsForChecklist } = await import('./deviceSetService.js');
+    await fulfillDeviceAllocationsForChecklist({ checklist_id, user });
+  } catch (allocErr) {
+    console.warn('Could not fulfill device allocations on material issuance:', allocErr.message);
+  }
+
   processedChecklistMaterialIssuances.add(checklist_id);
   saveMaterialFallbackStorage();
 

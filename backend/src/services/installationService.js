@@ -304,6 +304,14 @@ export async function createChecklist(adminUserId, data, options = {}) {
     updated_at: new Date().toISOString(),
   };
 
+  // Atomic loose component stock validation & concurrent mutex lock for Installation jobs
+  let reservationLock = null;
+  const shouldEnforceStock = options?.skipStockValidation !== true && data?.skipStockValidation !== true;
+  if (isInstallationJob && deviceConfigs.length > 0 && shouldEnforceStock) {
+    const { lockAndValidateDeviceComponents } = await import('./deviceSetService.js');
+    reservationLock = await lockAndValidateDeviceComponents(deviceConfigs);
+  }
+
   let inserted;
   try {
     const { data: res, error } = await supabase
@@ -314,6 +322,13 @@ export async function createChecklist(adminUserId, data, options = {}) {
 
     if (error) throw error;
     inserted = { ...payload, ...res, id: res.id, carry_status: res.carry_status || 'NOT_RECORDED' };
+    if (reservationLock && inserted?.id) {
+      await reservationLock.commit({
+        checklist_id: inserted.id,
+        checklist_number: checklistNumber,
+        user: { id: adminUserId },
+      });
+    }
   } catch (error) {
     // If device_configurations / extra_device_configurations / service_engineer_id / booking_end_date / bom_snapshot / material_issuance_status / salesperson_name columns are not migrated yet in PostgreSQL, retry without optional columns
     if (
@@ -390,12 +405,23 @@ export async function createChecklist(adminUserId, data, options = {}) {
         }
       }
       if (lastErr) throw lastErr;
+      if (reservationLock && inserted?.id) {
+        await reservationLock.commit({
+          checklist_id: inserted.id,
+          checklist_number: checklistNumber,
+          user: { id: adminUserId },
+        });
+      }
     } else {
       console.error('Database insert error for checklist:', error);
       if (error.code === 'PGRST205' || error.message?.includes("Could not find the table 'public.installation_checklists'")) {
         throw new Error("Table 'installation_checklists' does not exist in Supabase database yet. Please execute the SQL migration script (supabase/migrations/008_installation_checklists_schema.sql) in the Supabase SQL Editor.");
       }
       throw new Error(error.message || 'Failed to insert installation checklist');
+    }
+  } finally {
+    if (reservationLock) {
+      reservationLock.release();
     }
   }
 

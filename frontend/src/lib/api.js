@@ -1567,6 +1567,29 @@ export async function releaseDeviceAllocationApi(token, allocationId, reason = '
 }
 
 /**
+ * Checklist Creation: Real-time Device Component Availability & Shortage Check APIs
+ */
+export async function fetchDeviceAvailabilityApi(token) {
+  const res = await fetch(`${API_BASE}/admin/installations/device-availability`, {
+    headers: adminHeaders(token),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to fetch device availability');
+  return json;
+}
+
+export async function checkComponentAvailabilityApi(token, deviceConfigurations) {
+  const res = await fetch(`${API_BASE}/admin/installations/check-component-availability`, {
+    method: 'POST',
+    headers: adminHeaders(token),
+    body: JSON.stringify({ device_configurations: deviceConfigurations }),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to check component availability');
+  return json;
+}
+
+/**
  * Customer Feedback Deletion APIs
  */
 export async function fetchFeedbackDeletionPreview(token, params = {}) {

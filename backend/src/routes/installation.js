@@ -43,8 +43,11 @@ import {
   getAllStoreReturns,
   getAllStoreMaterialReturns,
   enrichChecklistsWithWorkflowStatus,
-} from '../services/workflowService.js';
-import { STANDARD_DEVICE_CONFIGURATIONS } from '../services/deviceSetService.js';
+import {
+  STANDARD_DEVICE_CONFIGURATIONS,
+  getCalculatedDeviceAvailability,
+  calculateChecklistComponentAvailability,
+} from '../services/deviceSetService.js';
 import multer from 'multer';
 import {
   getExpensesForChecklist,
@@ -416,6 +419,36 @@ router.get('/device-configurations', requireRole('TECHNICAL', 'COORDINATOR', 'AD
   } catch (err) {
     console.error('Error fetching device configurations:', err);
     return res.status(500).json({ error: 'Failed to fetch device configurations' });
+  }
+});
+
+/**
+ * GET /api/admin/installations/device-availability
+ * Real-time loose component stock availability and configuration fulfillability
+ * Exclusively for Sales Checklist Creation workflow
+ */
+router.get('/device-availability', requireRole('TECHNICAL', 'COORDINATOR', 'ADMIN', 'SUPER_ADMIN', 'SALES', 'STORE_MANAGER'), async (req, res) => {
+  try {
+    const availability = await getCalculatedDeviceAvailability();
+    return res.json(availability);
+  } catch (err) {
+    console.error('Error fetching device availability for checklist creation:', err);
+    return res.status(500).json({ error: 'Failed to calculate device availability: ' + err.message });
+  }
+});
+
+/**
+ * POST /api/admin/installations/check-component-availability
+ * Validate whether specific requested device configurations can be fulfilled from store stock
+ */
+router.post('/check-component-availability', requireRole('TECHNICAL', 'COORDINATOR', 'ADMIN', 'SUPER_ADMIN', 'SALES', 'STORE_MANAGER'), async (req, res) => {
+  try {
+    const { device_configurations } = req.body;
+    const result = await calculateChecklistComponentAvailability(device_configurations || []);
+    return res.json(result);
+  } catch (err) {
+    console.error('Error checking component availability:', err);
+    return res.status(500).json({ error: 'Failed to check component availability: ' + err.message });
   }
 });
 

@@ -655,34 +655,7 @@
       "created_by": "00000000-0000-0000-0000-000000000001",
       "created_at": "2026-10-21T09:56:55.456Z",
       "updated_at": "2026-10-21T09:56:55.456Z"
-    },
-    {
-      "id": "bb0e3246-51e9-4290-8c0b-9277d53e9abe",
-      "engineer_id": "e1000000-0000-0000-0000-000000000006",
-      "engineer_name": "Guna",
-      "checklist_id": "70f91e8a-5cc9-4d14-a6eb-69606c662fb5",
-      "checklist_number": "EE-INST-20261021-0085",
-      "booking_start_date": "2049-08-18",
-      "booking_end_date": "2049-08-18",
-      "status": "ASSIGNED",
-      "created_by": "00000000-0000-0000-0000-000000000001",
-      "created_at": "2026-10-21T09:56:55.456Z",
-      "updated_at": "2026-10-21T09:56:55.456Z"
-    },
-    {
-      "id": "8a3eb8b7-ff9f-42cc-bcbd-b505bced00cd",
-      "engineer_id": "e1000000-0000-0000-0000-000000000001",
-      "engineer_name": "Mathi",
-      "checklist_id": "6c7eacb9-4c8f-4da3-b14a-62ef4d6eaa5b",
-      "checklist_number": "EE-INST-20261021-0084",
-      "booking_start_date": "2049-08-18",
-      "booking_end_date": "2049-08-19",
-      "status": "COMPLETED",
-      "created_by": null,
-      "created_at": "2026-10-21T09:57:18.074Z",
-      "updated_at": "2026-10-21T09:57:23.878Z",
-      "actual_completion_datetime": "2026-10-21T09:57:23.878Z"
     }
   ],
-  "updated_at": "2026-10-21T09:57:24.500Z"
+  "updated_at": "2026-10-21T10:48:39.403Z"
 }

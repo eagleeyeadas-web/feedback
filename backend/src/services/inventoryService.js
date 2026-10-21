@@ -10,10 +10,13 @@ import {
   allocateDeviceSets,
   releaseDeviceAllocation,
   fulfillDeviceAllocation,
+  fulfillDeviceAllocationsForChecklist,
   getDeviceStockAllocations,
   getActiveDeviceAllocations,
   getComponentRequirementsForDevice,
   STANDARD_DEVICE_CONFIGURATIONS,
+  lockAndValidateDeviceComponents,
+  calculateChecklistComponentAvailability,
 } from './deviceSetService.js';
 
 export {
@@ -21,10 +24,13 @@ export {
   allocateDeviceSets,
   releaseDeviceAllocation,
   fulfillDeviceAllocation,
+  fulfillDeviceAllocationsForChecklist,
   getDeviceStockAllocations,
   getActiveDeviceAllocations,
   getComponentRequirementsForDevice,
   STANDARD_DEVICE_CONFIGURATIONS,
+  lockAndValidateDeviceComponents,
+  calculateChecklistComponentAvailability,
 };
 
 const __filename = fileURLToPath(import.meta.url);
@@ -1053,6 +1059,13 @@ export async function issueDevicesForChecklist({
       previous_balance: previousBalance,
       remaining_usable: newUsable,
     });
+  }
+
+  // Fulfill any reserved device stock allocations for this checklist
+  try {
+    await fulfillDeviceAllocationsForChecklist({ checklist_id, user });
+  } catch (allocErr) {
+    console.warn('Could not fulfill device allocations on device issuance:', allocErr.message);
   }
 
   processedChecklistDeviceIssuances.add(checklist_id);

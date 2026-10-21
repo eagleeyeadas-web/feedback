@@ -602,3 +602,283 @@ export async function fulfillDeviceAllocation({
   saveAllocationsStorage();
   return allocation;
 }
+
+/**
+ * Fulfill all active allocations associated with a checklist upon material or device issuance
+ */
+export async function fulfillDeviceAllocationsForChecklist({ checklist_id, user } = {}) {
+  if (!checklist_id) return [];
+  const allAllocations = await getDeviceStockAllocations();
+  const matched = allAllocations.filter(
+    (a) => String(a.checklist_id) === String(checklist_id) && a.status === 'ALLOCATED'
+  );
+  const fulfilledAt = new Date().toISOString();
+
+  for (const alloc of matched) {
+    alloc.status = 'FULFILLED';
+    alloc.updated_at = fulfilledAt;
+    try {
+      await supabase
+        .from('device_stock_allocations')
+        .update({
+          status: 'FULFILLED',
+          updated_at: fulfilledAt,
+        })
+        .eq('id', alloc.id);
+    } catch (e) {
+      // Ignore
+    }
+  }
+
+  saveAllocationsStorage();
+  return matched;
+}
+
+/**
+ * Preview component availability and missing components for a list of device configurations.
+ * Read-only helper for Sales Checklist Creation interface.
+ */
+export async function calculateChecklistComponentAvailability(device_configurations = []) {
+  const currentAvailability = await getCalculatedDeviceAvailability();
+  const looseCompMap = new Map(
+    currentAvailability.loose_components.map((c) => [c.name.toLowerCase(), c])
+  );
+
+  const aggregatedRequirements = new Map();
+  for (const cfg of device_configurations) {
+    const dType = (cfg.device_type || '').trim();
+    const numSets = Math.max(1, parseInt(cfg.number_of_devices, 10) || 1);
+    const comps = getComponentRequirementsForDevice(dType);
+    for (const comp of comps) {
+      const key = comp.component_name.toLowerCase();
+      const existing = aggregatedRequirements.get(key) || {
+        component_name: comp.component_name,
+        quantity_required: 0,
+        unit: comp.unit || 'Nos.',
+      };
+      existing.quantity_required += comp.quantity_required * numSets;
+      aggregatedRequirements.set(key, existing);
+    }
+  }
+
+  const components = [];
+  let hasShortage = false;
+
+  for (const [key, req] of aggregatedRequirements.entries()) {
+    const stock = looseCompMap.get(key);
+    const available = stock ? stock.unallocated_stock : 0;
+    const shortage = Math.max(0, req.quantity_required - available);
+    if (shortage > 0) hasShortage = true;
+
+    components.push({
+      component_name: req.component_name,
+      quantity_required: req.quantity_required,
+      required_qty: req.quantity_required,
+      available_stock: available,
+      free_stock: available,
+      total_physical_stock: stock ? stock.total_stock : 0,
+      reserved_stock: stock ? stock.allocated_stock : 0,
+      shortage,
+      is_available: shortage === 0,
+      unit: req.unit,
+    });
+  }
+
+  const shortages = components
+    .filter((c) => !c.is_available)
+    .map((c) => ({
+      component_name: c.component_name,
+      required_qty: c.quantity_required,
+      available_stock: c.available_stock,
+      free_stock: c.available_stock,
+      shortage: c.shortage,
+      unit: c.unit,
+    }));
+
+  const message = hasShortage
+    ? `Component shortage detected: ${shortages.map((s) => `${s.component_name} (Missing: ${s.shortage} ${s.unit || 'Nos.'})`).join(', ')}`
+    : 'All required physical components are available in store.';
+
+  return {
+    fulfillable: !hasShortage,
+    is_fulfillable: !hasShortage,
+    has_shortage: hasShortage,
+    components,
+    shortages,
+    message,
+    calculated_at: new Date().toISOString(),
+  };
+}
+
+/**
+ * Atomically validates loose device component availability for checklist creation
+ * and provides a commit hook to record reservations upon checklist insertion.
+ * Serialized via allocation FIFO mutex to guarantee concurrent requests cannot over-reserve stock.
+ */
+export async function lockAndValidateDeviceComponents(device_configurations = []) {
+  const unlock = await acquireAllocationMutex();
+  let committed = false;
+
+  try {
+    if (!Array.isArray(device_configurations) || device_configurations.length === 0) {
+      return {
+        valid: true,
+        fulfillable: true,
+        shortages: [],
+        release: () => {
+          if (!committed) {
+            committed = true;
+            unlock();
+          }
+        },
+        commit: async () => [],
+      };
+    }
+
+    // 1. Calculate aggregated component requirements across all device configs
+    const aggregatedRequirements = new Map();
+    for (const cfg of device_configurations) {
+      const dType = (cfg.device_type || '').trim();
+      const numSets = Math.max(1, parseInt(cfg.number_of_devices, 10) || 1);
+      const comps = getComponentRequirementsForDevice(dType);
+      for (const comp of comps) {
+        const key = comp.component_name.toLowerCase();
+        const existing = aggregatedRequirements.get(key) || {
+          name: comp.component_name,
+          quantity: 0,
+          unit: comp.unit || 'Nos.',
+        };
+        existing.quantity += comp.quantity_required * numSets;
+        aggregatedRequirements.set(key, existing);
+      }
+    }
+
+    // 2. Load current availability to validate unallocated component stock
+    const currentAvailability = await getCalculatedDeviceAvailability();
+    const looseCompMap = new Map(
+      currentAvailability.loose_components.map((c) => [c.name.toLowerCase(), c])
+    );
+
+    const shortages = [];
+    for (const [key, req] of aggregatedRequirements.entries()) {
+      const stock = looseCompMap.get(key);
+      const available = stock ? stock.unallocated_stock : 0;
+      if (req.quantity > available) {
+        shortages.push({
+          component: req.name,
+          required: req.quantity,
+          available,
+          shortage: req.quantity - available,
+          unit: req.unit,
+        });
+      }
+    }
+
+    if (shortages.length > 0) {
+      const details = shortages
+        .map((s) => `${s.shortage} ${s.component}s (Required: ${s.required}, Available: ${s.available})`)
+        .join(', ');
+      const err = new Error(
+        `Cannot fulfill installation: Insufficient physical stock in store. Missing components: ${details}. Please replenish store stock before creating this checklist.`
+      );
+      err.statusCode = 400;
+      err.shortages = shortages;
+      throw err;
+    }
+
+    // 3. Return object with release and commit methods
+    return {
+      valid: true,
+      fulfillable: true,
+      shortages: [],
+      release: () => {
+        if (!committed) {
+          committed = true;
+          unlock();
+        }
+      },
+      commit: async ({ checklist_id, checklist_number = '', user } = {}) => {
+        if (committed) return [];
+        committed = true;
+        try {
+          const createdAllocations = [];
+          for (const cfg of device_configurations) {
+            const dType = (cfg.device_type || '').trim();
+            const numSets = Math.max(1, parseInt(cfg.number_of_devices, 10) || 1);
+            const comps = getComponentRequirementsForDevice(dType);
+
+            const componentsToReserve = comps.map((comp) => {
+              const stock = looseCompMap.get(comp.component_name.toLowerCase());
+              return {
+                component_name: comp.component_name,
+                quantity_required_per_set: comp.quantity_required,
+                quantity: comp.quantity_required * numSets,
+                unit: comp.unit || 'Nos.',
+                component_id: stock?.id || null,
+              };
+            });
+
+            const allocationId = `alloc-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+            const allocationRecord = {
+              id: allocationId,
+              device_type: dType,
+              allocated_sets: numSets,
+              components_reserved: componentsToReserve,
+              status: 'ALLOCATED',
+              checklist_id: checklist_id || null,
+              allocated_by: user?.id || null,
+              allocator_name: user?.full_name || user?.email || 'Sales',
+              notes: `Automatic reservation for checklist ${checklist_number || checklist_id}`,
+              created_at: new Date().toISOString(),
+            };
+
+            try {
+              const { data: dbCreated } = await supabase
+                .from('device_stock_allocations')
+                .insert([allocationRecord])
+                .select()
+                .maybeSingle();
+              if (dbCreated) allocationRecord.id = dbCreated.id;
+            } catch (e) {
+              // Local fallback
+            }
+
+            inMemoryAllocations.unshift(allocationRecord);
+            createdAllocations.push(allocationRecord);
+
+            for (const comp of componentsToReserve) {
+              const stock = looseCompMap.get(comp.component_name.toLowerCase());
+              await recordStockMovement({
+                item_id: comp.component_id,
+                item_name: comp.component_name,
+                category: 'Camera Device',
+                movement_type: 'STOCK_ADJUSTMENT',
+                quantity: comp.quantity,
+                unit: comp.unit || 'Nos.',
+                checklist_id,
+                balance_before: stock?.unallocated_stock,
+                balance_after: Math.max(0, (stock?.unallocated_stock || 0) - comp.quantity),
+                performed_by: user?.id,
+                performer_name: user?.full_name || user?.email || 'Sales',
+                performer_email: user?.email,
+                reason_or_remarks: `[Checklist Reservation] Reserved ${comp.quantity} ${comp.component_name}s for ${numSets} sets of "${dType}" (Checklist ${checklist_number || checklist_id})`,
+              }).catch(() => {});
+            }
+          }
+
+          saveAllocationsStorage();
+          return createdAllocations;
+        } finally {
+          unlock();
+        }
+      },
+    };
+  } catch (err) {
+    if (!committed) {
+      committed = true;
+      unlock();
+    }
+    throw err;
+  }
+}
+

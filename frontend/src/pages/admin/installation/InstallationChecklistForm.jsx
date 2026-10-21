@@ -7,6 +7,7 @@ import {
   fetchInstallationChecklistDetail,
   fetchEngineersAvailability,
   fetchServiceEngineers,
+  checkComponentAvailabilityApi,
 } from '../../../lib/api';
 import BomRequirementSummary from '../../../components/bom/BomRequirementSummary';
 import {
@@ -108,6 +109,11 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
   const [engineersAvailability, setEngineersAvailability] = useState([]);
   const [checkingAvailability, setCheckingAvailability] = useState(false);
   const [availabilityError, setAvailabilityError] = useState(null);
+
+  // Loose Physical Components Availability State
+  const [compAvailability, setCompAvailability] = useState(null);
+  const [checkingCompAvailability, setCheckingCompAvailability] = useState(false);
+  const [compAvailabilityError, setCompAvailabilityError] = useState(null);
 
   // Multi-Device Configurations (Required for Customer Installation)
   const [deviceConfigs, setDeviceConfigs] = useState([
@@ -289,6 +295,41 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
     };
   }, [recheckAvailability]);
 
+  // Real-time Loose Component Stock Availability Check (Installation only)
+  useEffect(() => {
+    if (!token || formData.installation_or_service !== 'Installation') {
+      setCompAvailability(null);
+      setCheckingCompAvailability(false);
+      setCompAvailabilityError(null);
+      return;
+    }
+
+    let isMounted = true;
+    const timer = setTimeout(async () => {
+      setCheckingCompAvailability(true);
+      setCompAvailabilityError(null);
+      try {
+        const res = await checkComponentAvailabilityApi(token, deviceConfigs);
+        if (isMounted) {
+          setCompAvailability(res);
+        }
+      } catch (err) {
+        if (isMounted) {
+          setCompAvailabilityError(err.message || 'Failed to verify component stock in store');
+        }
+      } finally {
+        if (isMounted) {
+          setCheckingCompAvailability(false);
+        }
+      }
+    }, 250);
+
+    return () => {
+      isMounted = false;
+      clearTimeout(timer);
+    };
+  }, [token, formData.installation_or_service, deviceConfigs]);
+
   const handleChange = (field, val) => {
     setFormData((prev) => {
       const next = { ...prev, [field]: val };
@@ -391,6 +432,22 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
       const numDev = Number(c.number_of_devices);
       if (isNaN(numDev) || numDev <= 0 || !Number.isInteger(numDev)) {
         return `Device Configuration #${i + 1} (${c.device_type}): Number of Devices must be a positive whole number greater than 0 (no zero, negative, or decimal quantities).`;
+      }
+    }
+
+    // Real-time Loose Component Stock Availability Check (Installation only)
+    if (formData.installation_or_service === 'Installation') {
+      if (checkingCompAvailability) {
+        return 'Verifying component stock availability in store... Please wait a moment.';
+      }
+      if (compAvailability && !compAvailability.fulfillable) {
+        const missingDetails = (compAvailability.shortages || [])
+          .map((s) => `${s.component_name} (Missing: ${s.shortage} Nos., Free in Store: ${s.free_stock})`)
+          .join(', ');
+        return `Cannot fulfill installation: Insufficient physical components in store. ${missingDetails}. Please replenish loose-product stock in Store Manager workspace before creating checklist.`;
+      }
+      if (compAvailabilityError) {
+        return `Component stock validation error: ${compAvailabilityError}. Please retry.`;
       }
     }
 
@@ -948,6 +1005,110 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
                   <strong>Service Job Selected:</strong> Bill of Materials (BOM) calculation and automatic material issuance are applicable only for Installation jobs.
                 </span>
               </div>
+            </div>
+          )}
+
+          {/* Loose Physical Components Availability & Fulfillability Card (Installation Only) */}
+          {formData.installation_or_service === 'Installation' && (
+            <div className="pt-2">
+              {checkingCompAvailability ? (
+                <div className="p-4 bg-gray-50 border border-gray-200 rounded-2xl flex items-center justify-center gap-2 text-xs text-gray-500">
+                  <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                  <span>Checking loose component stock in store...</span>
+                </div>
+              ) : compAvailabilityError ? (
+                <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 flex items-center gap-2">
+                  <AlertTriangle size={15} className="shrink-0 text-amber-600" />
+                  <span>Stock check notice: {compAvailabilityError}</span>
+                </div>
+              ) : compAvailability ? (
+                <div
+                  className={`p-4 rounded-2xl border transition-all ${
+                    compAvailability.fulfillable
+                      ? 'bg-emerald-50/60 border-emerald-200/80 text-emerald-950'
+                      : 'bg-rose-50/80 border-rose-200 text-rose-950'
+                  }`}
+                >
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-2.5 mb-3 border-b border-black/5 gap-2">
+                    <div className="flex items-center gap-2">
+                      {compAvailability.fulfillable ? (
+                        <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+                      ) : (
+                        <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0" />
+                      )}
+                      <div>
+                        <h4 className="text-xs font-bold uppercase tracking-wider">
+                          {compAvailability.fulfillable
+                            ? 'Physical Components Available in Store'
+                            : 'Component Shortage — Cannot Fulfill Checklist'}
+                        </h4>
+                        <p className="text-[11px] opacity-80">
+                          {compAvailability.fulfillable
+                            ? 'All required physical loose products (Cameras & Displays) are currently free in store inventory.'
+                            : compAvailability.message || 'One or more required components are out of stock or reserved.'}
+                        </p>
+                      </div>
+                    </div>
+                    <span
+                      className={`text-[11px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider font-mono self-start sm:self-auto ${
+                        compAvailability.fulfillable
+                          ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                          : 'bg-rose-100 text-rose-800 border border-rose-300'
+                      }`}
+                    >
+                      {compAvailability.fulfillable ? 'Fulfillable' : 'Shortage'}
+                    </span>
+                  </div>
+
+                  {/* Component breakdown grid */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                    {(compAvailability.components || []).map((comp) => {
+                      const hasShortage = !comp.is_available;
+                      return (
+                        <div
+                          key={comp.component_name}
+                          className={`p-3 rounded-xl border text-xs flex flex-col justify-between ${
+                            hasShortage
+                              ? 'bg-white border-rose-300 shadow-xs ring-1 ring-rose-200'
+                              : 'bg-white/80 border-emerald-200'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="font-bold text-gray-900">{comp.component_name}</span>
+                            {hasShortage ? (
+                              <span className="text-[10px] font-bold bg-rose-100 text-rose-700 px-1.5 py-0.5 rounded font-mono">
+                                -{comp.shortage} Short
+                              </span>
+                            ) : (
+                              <span className="text-[10px] font-bold bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded font-mono">
+                                OK
+                              </span>
+                            )}
+                          </div>
+                          <div className="mt-2 space-y-0.5 text-[11px] text-gray-600 font-mono">
+                            <div className="flex justify-between">
+                              <span>Required:</span>
+                              <span className="font-bold text-gray-900">{comp.required_qty} Nos.</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span>Free in Store:</span>
+                              <span className={`font-bold ${hasShortage ? 'text-rose-600' : 'text-emerald-700'}`}>
+                                {comp.free_stock} Nos.
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {!compAvailability.fulfillable && (
+                    <div className="mt-3 p-2.5 bg-rose-100/70 border border-rose-200 rounded-xl text-[11px] text-rose-900 font-medium">
+                      <strong>Action Required:</strong> Loose-product stock must be replenished via Store Manager workspace before this checklist can be reserved or created.
+                    </div>
+                  )}
+                </div>
+              ) : null}
             </div>
           )}
 
