@@ -14,7 +14,7 @@ import {
   updateEngineerBookingEndDate,
 } from './engineerBookingService.js';
 import { inMemoryChecklistSchedules } from './installationService.js';
-import { flagBookingForReview } from './coordinatorBookingService.js';
+import { flagBookingForReview, handleInstallationDateChange } from './coordinatorBookingService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -523,13 +523,23 @@ export async function approveScheduleExtension(arg1, arg2, arg3) {
       }
     }
 
-    // 6. Flag related coordinator travel & room bookings for review
+    // 6. Critical Rule 1: Automatically update affected room booking to Pending Review and preserve dates
     try {
+      await handleInstallationDateChange({
+        checklistId: ext.checklist_id,
+        oldStartDate: prevSchedule.arrival_date,
+        newStartDate: startDate,
+        oldEndDate: prevSchedule.completion_date,
+        newEndDate: newEndDate,
+        reason: `Schedule extended to ${newEndDate} (${ext.additional_working_days} extra working days).`,
+        user,
+      });
       await flagBookingForReview({
         checklistId: ext.checklist_id,
         reason: `Schedule extended to ${newEndDate} (${ext.additional_working_days} extra working days). Return travel / hotel dates may need manual adjustment.`,
         returnTravelAffected: true,
         accommodationAffected: true,
+        accommodationStatus: 'Pending Review',
       });
     } catch (e) {
       console.warn('Booking flag error during extension approval:', e.message);

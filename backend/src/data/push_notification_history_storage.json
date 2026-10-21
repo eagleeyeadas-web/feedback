@@ -1,0 +1,237 @@
+{
+  "history": [
+    {
+      "id": "8789bc13-9a42-415f-aa86-56790dbd027b",
+      "event_id": "checklist-created-chk-test-1792576460247",
+      "checklist_id": "chk-test-1792576460247",
+      "checklist_number": "EE-INST-20261021-9999",
+      "title": "Eagle Eye SafDrive — New Installation Checklist",
+      "body": "A new installation checklist has been created.\nJob #EE-INST-20261021-9999 • Tech: Mathi • Loc: Coimbatore Airport Road Hub • Time: 03:24 pm",
+      "url": "/admin/installation-checklists/chk-test-1792576460247",
+      "recipients_attempted": 1,
+      "recipients_succeeded": 0,
+      "recipients_failed": 1,
+      "delivery_details": [
+        {
+          "userId": "00000000-0000-0000-0000-000000000001",
+          "userEmail": "sales@eagleeyesafdrive.com",
+          "status": "FAILED",
+          "error": "Received unexpected response code",
+          "statusCode": 410
+        }
+      ],
+      "created_at": "2026-10-21T09:54:21.068Z"
+    },
+    {
+      "id": "fee62950-2292-40bd-8d5a-f150f9897129",
+      "event_id": "checklist-created-chk-test-1792576523731",
+      "checklist_id": "chk-test-1792576523731",
+      "checklist_number": "EE-INST-20261021-9999",
+      "title": "Eagle Eye SafDrive — New Installation Checklist",
+      "body": "A new installation checklist has been created.\nJob #EE-INST-20261021-9999 • Tech: Mathi • Loc: Coimbatore Airport Road Hub • Time: 03:25 pm",
+      "url": "/admin/installation-checklists/chk-test-1792576523731",
+      "recipients_attempted": 1,
+      "recipients_succeeded": 0,
+      "recipients_failed": 1,
+      "delivery_details": [
+        {
+          "userId": "00000000-0000-0000-0000-000000000001",
+          "userEmail": "sales@eagleeyesafdrive.com",
+          "status": "FAILED",
+          "error": "Received unexpected response code",
+          "statusCode": 410
+        }
+      ],
+      "created_at": "2026-10-21T09:55:24.370Z"
+    },
+    {
+      "id": "a0940ede-abc0-4dc4-a192-b0e6626ab571",
+      "event_id": "checklist-created-740b6aa4-e48d-48e5-afd0-dbdded752caa",
+      "checklist_id": "740b6aa4-e48d-48e5-afd0-dbdded752caa",
+      "checklist_number": "EE-INST-20261021-0082",
+      "title": "Eagle Eye SafDrive — New Installation Checklist",
+      "body": "A new installation checklist has been created.\nJob #EE-INST-20261021-0082 • Tech: Kamalesh • Loc: Salem Bypass Transport Hub • Time: 03:25 pm",
+      "url": "/admin/installation-checklists/740b6aa4-e48d-48e5-afd0-dbdded752caa",
+      "recipients_attempted": 1,
+      "recipients_succeeded": 0,
+      "recipients_failed": 1,
+      "delivery_details": [
+        {
+          "userId": "00000000-0000-0000-0000-000000000001",
+          "userEmail": "sales@eagleeyesafdrive.com",
+          "status": "FAILED",
+          "error": "The subscription auth key should be at least 16 bytes long",
+          "statusCode": 0
+        }
+      ],
+      "created_at": "2026-10-21T09:55:32.194Z"
+    },
+    {
+      "id": "9377e7ac-8f33-4a3d-885c-d99001c83ef9",
+      "event_id": "checklist-created-chk-test-1792576576270",
+      "checklist_id": "chk-test-1792576576270",
+      "checklist_number": "EE-INST-20261021-9999",
+      "title": "Eagle Eye SafDrive — New Installation Checklist",
+      "body": "A new installation checklist has been created.\nJob #EE-INST-20261021-9999 • Tech: Mathi • Loc: Coimbatore Airport Road Hub • Time: 03:26 pm",
+      "url": "/admin/installation-checklists/chk-test-1792576576270",
+      "recipients_attempted": 2,
+      "recipients_succeeded": 0,
+      "recipients_failed": 2,
+      "delivery_details": [
+        {
+          "userId": "00000000-0000-0000-0000-000000000001",
+          "userEmail": "sales@eagleeyesafdrive.com",
+          "status": "FAILED",
+          "error": "The subscription auth key should be at least 16 bytes long",
+          "statusCode": 0
+        },
+        {
+          "userId": "00000000-0000-0000-0000-000000000001",
+          "userEmail": "sales@eagleeyesafdrive.com",
+          "status": "FAILED",
+          "error": "Received unexpected response code",
+          "statusCode": 410
+        }
+      ],
+      "created_at": "2026-10-21T09:56:17.124Z"
+    },
+    {
+      "id": "987b1e4f-3b91-405b-a191-4c8faa9f1205",
+      "event_id": "checklist-created-chk-idemp-1792576577896",
+      "checklist_id": "chk-idemp-1792576577896",
+      "checklist_number": "EE-INST-IDEMP-001",
+      "title": "Eagle Eye SafDrive — New Installation Checklist",
+      "body": "A new installation checklist has been created.\nJob #EE-INST-IDEMP-001 • Tech: Guna • Loc: Madurai Ring Road • Time: 03:26 pm",
+      "url": "/admin/installation-checklists/chk-idemp-1792576577896",
+      "recipients_attempted": 2,
+      "recipients_succeeded": 0,
+      "recipients_failed": 2,
+      "delivery_details": [
+        {
+          "userId": "00000000-0000-0000-0000-000000000001",
+          "userEmail": "sales@eagleeyesafdrive.com",
+          "status": "FAILED",
+          "error": "The subscription auth key should be at least 16 bytes long",
+          "statusCode": 0
+        },
+        {
+          "userId": "00000000-0000-0000-0000-000000000001",
+          "userEmail": "sales@eagleeyesafdrive.com",
+          "status": "FAILED",
+          "error": "The subscription auth key should be at least 16 bytes long",
+          "statusCode": 0
+        }
+      ],
+      "created_at": "2026-10-21T09:56:18.057Z"
+    },
+    {
+      "id": "3a71ed7b-314c-46ef-9313-252cd20db182",
+      "event_id": "checklist-created-6b5660ab-248f-454a-92ec-d6e977b8f4f1",
+      "checklist_id": "6b5660ab-248f-454a-92ec-d6e977b8f4f1",
+      "checklist_number": "EE-INST-20261021-0083",
+      "title": "Eagle Eye SafDrive — New Installation Checklist",
+      "body": "A new installation checklist has been created.\nJob #EE-INST-20261021-0083 • Tech: Kamalesh • Loc: Salem Bypass Transport Hub • Time: 03:26 pm",
+      "url": "/admin/installation-checklists/6b5660ab-248f-454a-92ec-d6e977b8f4f1",
+      "recipients_attempted": 3,
+      "recipients_succeeded": 0,
+      "recipients_failed": 3,
+      "delivery_details": [
+        {
+          "userId": "00000000-0000-0000-0000-000000000001",
+          "userEmail": "sales@eagleeyesafdrive.com",
+          "status": "FAILED",
+          "error": "The subscription auth key should be at least 16 bytes long",
+          "statusCode": 0
+        },
+        {
+          "userId": "00000000-0000-0000-0000-000000000001",
+          "userEmail": "sales@eagleeyesafdrive.com",
+          "status": "FAILED",
+          "error": "The subscription auth key should be at least 16 bytes long",
+          "statusCode": 0
+        },
+        {
+          "userId": "00000000-0000-0000-0000-000000000001",
+          "userEmail": "sales@eagleeyesafdrive.com",
+          "status": "FAILED",
+          "error": "The subscription auth key should be at least 16 bytes long",
+          "statusCode": 0
+        }
+      ],
+      "created_at": "2026-10-21T09:56:25.144Z"
+    },
+    {
+      "id": "331bfe70-bf9a-44e0-bf66-4a9e9d8dbdcb",
+      "event_id": "checklist-created-6c7eacb9-4c8f-4da3-b14a-62ef4d6eaa5b",
+      "checklist_id": "6c7eacb9-4c8f-4da3-b14a-62ef4d6eaa5b",
+      "checklist_number": "EE-INST-20261021-0084",
+      "title": "Eagle Eye SafDrive — New Installation Checklist",
+      "body": "A new installation checklist has been created.\nJob #EE-INST-20261021-0084 • Tech: Mathi • Loc: Coimbatore Airport Road • Time: 03:26 pm",
+      "url": "/admin/installation-checklists/6c7eacb9-4c8f-4da3-b14a-62ef4d6eaa5b",
+      "recipients_attempted": 3,
+      "recipients_succeeded": 0,
+      "recipients_failed": 3,
+      "delivery_details": [
+        {
+          "userId": "00000000-0000-0000-0000-000000000001",
+          "userEmail": "sales@eagleeyesafdrive.com",
+          "status": "FAILED",
+          "error": "The subscription auth key should be at least 16 bytes long",
+          "statusCode": 0
+        },
+        {
+          "userId": "00000000-0000-0000-0000-000000000001",
+          "userEmail": "sales@eagleeyesafdrive.com",
+          "status": "FAILED",
+          "error": "The subscription auth key should be at least 16 bytes long",
+          "statusCode": 0
+        },
+        {
+          "userId": "00000000-0000-0000-0000-000000000001",
+          "userEmail": "sales@eagleeyesafdrive.com",
+          "status": "FAILED",
+          "error": "The subscription auth key should be at least 16 bytes long",
+          "statusCode": 0
+        }
+      ],
+      "created_at": "2026-10-21T09:56:51.876Z"
+    },
+    {
+      "id": "282d40af-ccba-492c-abb1-0281a949a74b",
+      "event_id": "checklist-created-70f91e8a-5cc9-4d14-a6eb-69606c662fb5",
+      "checklist_id": "70f91e8a-5cc9-4d14-a6eb-69606c662fb5",
+      "checklist_number": "EE-INST-20261021-0085",
+      "title": "Eagle Eye SafDrive — New Installation Checklist",
+      "body": "A new installation checklist has been created.\nJob #EE-INST-20261021-0085 • Tech: Guna • Loc: Madurai Bypass • Time: 03:26 pm",
+      "url": "/admin/installation-checklists/70f91e8a-5cc9-4d14-a6eb-69606c662fb5",
+      "recipients_attempted": 3,
+      "recipients_succeeded": 0,
+      "recipients_failed": 3,
+      "delivery_details": [
+        {
+          "userId": "00000000-0000-0000-0000-000000000001",
+          "userEmail": "sales@eagleeyesafdrive.com",
+          "status": "FAILED",
+          "error": "The subscription auth key should be at least 16 bytes long",
+          "statusCode": 0
+        },
+        {
+          "userId": "00000000-0000-0000-0000-000000000001",
+          "userEmail": "sales@eagleeyesafdrive.com",
+          "status": "FAILED",
+          "error": "The subscription auth key should be at least 16 bytes long",
+          "statusCode": 0
+        },
+        {
+          "userId": "00000000-0000-0000-0000-000000000001",
+          "userEmail": "sales@eagleeyesafdrive.com",
+          "status": "FAILED",
+          "error": "The subscription auth key should be at least 16 bytes long",
+          "statusCode": 0
+        }
+      ],
+      "created_at": "2026-10-21T09:56:58.286Z"
+    }
+  ],
+  "updated_at": "2026-10-21T09:56:58.287Z"
+}

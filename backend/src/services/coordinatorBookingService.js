@@ -19,6 +19,10 @@ export const TRAVEL_METHODS = ['Government bus', 'Private travels'];
 export const ROOM_BOOKING_METHODS = ['Online booking', 'Offline booking'];
 export const RETURN_TASK_STATUSES = [
   'Not Required Yet',
+  'Awaiting Technician Booking',
+  'Submitted for Verification',
+  'Needs Correction',
+  'Verified/Completed',
   'Booking Required',
   'In Progress',
   'Booking Confirmed',
@@ -26,26 +30,27 @@ export const RETURN_TASK_STATUSES = [
   'Cancelled',
 ];
 
-// Requirement 5 separate statuses
-export const OUTBOUND_STATUSES = ['Required', 'Pending', 'Confirmed', 'Cancelled'];
+export const RETURN_WORKFLOW_STATUSES = {
+  NOT_REQUIRED: 'Not Required Yet',
+  AWAITING_BOOKING: 'Awaiting Technician Booking',
+  SUBMITTED_FOR_VERIFICATION: 'Submitted for Verification',
+  NEEDS_CORRECTION: 'Needs Correction',
+  VERIFIED_COMPLETED: 'Verified/Completed',
+};
+
+// Standardized Coordinator Status Options
+export const OUTBOUND_STATUSES = ['Pending', 'Booked', 'Confirmed', 'Cancelled'];
 export const ACCOMMODATION_STATUSES = [
-  'Required',
   'Pending',
+  'Pending Review',
+  'Booked',
   'Confirmed',
-  'Extension Required',
-  'Extension Pending',
-  'Extended',
   'Cancelled',
 ];
 export const RETURN_STATUSES = [
-  'Not Required Yet',
-  'Not Yet Required',
-  'Booking Required',
-  'In Progress',
   'Pending',
-  'Booking Confirmed',
+  'Booked',
   'Confirmed',
-  'Booking Issue',
   'Cancelled',
 ];
 
@@ -120,83 +125,24 @@ export function deleteCoordinatorBookingForChecklist(checklistId) {
 }
 
 /**
- * Validate that all required booking details are present before allowing COMPLETED status.
- * Prevent accidental completion when an arranged booking is still outstanding.
+ * Validate booking status updates.
+ * The coordinator's primary responsibility is to manage booking statuses without entering
+ * bus names, hotel names, room numbers, ticket numbers, booking references, or unnecessary details.
  */
 export function validateBookingCompletion(bookingData) {
   const errors = [];
+  const validOutbound = ['Pending', 'Booked', 'Confirmed', 'Cancelled', 'Required'];
+  const validAccom = ['Pending', 'Pending Review', 'Booked', 'Confirmed', 'Cancelled', 'Required', 'Extension Required', 'Extension Pending', 'Extended'];
+  const validReturn = ['Pending', 'Booked', 'Confirmed', 'Cancelled', 'Not Required Yet', 'Not Yet Required', 'Awaiting Technician Booking', 'Submitted for Verification', 'Needs Correction', 'Verified/Completed', 'Booking Required', 'In Progress', 'Booking Confirmed'];
 
-  const isOutboundConfirmed = bookingData.outbound_status === 'Confirmed';
-  const isAccomConfirmed = bookingData.accommodation_status === 'Confirmed';
-  const isReturnConfirmed = ['Booking Confirmed', 'Confirmed'].includes(bookingData.return_status);
-  const isOverallCompleted = bookingData.booking_status === 'COMPLETED';
-
-  if (isOutboundConfirmed || (isOverallCompleted && bookingData.travel_required)) {
-    const depCity = bookingData.outbound_origin || bookingData.departure_city;
-    const dest = bookingData.outbound_destination || bookingData.destination;
-    const depTime = bookingData.outbound_departure_datetime || bookingData.travel_datetime;
-
-    if (!depCity || !depCity.trim()) {
-      errors.push('Departure city / origin is required for travel booking.');
-    }
-    if (!dest || !dest.trim()) {
-      errors.push('Destination is required for travel booking.');
-    }
-    if (!depTime) {
-      errors.push('Travel date and time are required for travel booking.');
-    }
-
-    // Must not mark confirmed without actual confirmation details
-    if (isOutboundConfirmed) {
-      const ref = bookingData.outbound_ticket_reference || bookingData.ticket_reference;
-      const att = bookingData.outbound_attachment_url;
-      if (!ref && !att) {
-        errors.push('Cannot mark outbound travel as Confirmed without recording the ticket reference or receipt attachment.');
-      }
-    }
+  if (bookingData.outbound_status && !validOutbound.includes(bookingData.outbound_status)) {
+    errors.push(`Invalid outbound status: ${bookingData.outbound_status}. Must be one of: Pending, Booked, Confirmed, Cancelled.`);
   }
-
-  if (isAccomConfirmed || (isOverallCompleted && bookingData.accommodation_required)) {
-    if (!bookingData.hotel_name || !bookingData.hotel_name.trim()) {
-      errors.push('Hotel / room booking name is required for accommodation booking.');
-    }
-    if (!bookingData.check_in_date) {
-      errors.push('Check-in date is required for accommodation booking.');
-    }
-    if (!bookingData.check_out_date) {
-      errors.push('Check-out date is required for accommodation booking.');
-    }
-    if (bookingData.number_of_rooms !== undefined && Number(bookingData.number_of_rooms) < 1) {
-      errors.push('Number of rooms must be at least 1.');
-    }
-
-    // Must not mark confirmed without actual confirmation details
-    if (bookingData.accommodation_status === 'Confirmed') {
-      const type = bookingData.accommodation_type || 'Online booking';
-      if (type === 'Online booking') {
-        const ref = bookingData.hotel_booking_reference;
-        const att = bookingData.accommodation_attachment_url;
-        if (!ref && !att) {
-          errors.push('Cannot mark online room booking as Confirmed without recording the booking confirmation number.');
-        }
-      } else if (type === 'Offline booking') {
-        const hasCost = Number(bookingData.total_cost) > 0 || Number(bookingData.price_per_night) > 0;
-        const hasContact = Boolean(bookingData.offline_contact_person || bookingData.hotel_contact);
-        const hasProof = Boolean(bookingData.accommodation_attachment_url);
-        if (!hasCost && !hasContact && !hasProof) {
-          errors.push('Cannot mark offline room booking as Confirmed without recording contact person, agreed cost, or proof.');
-        }
-      }
-    }
+  if (bookingData.accommodation_status && !validAccom.includes(bookingData.accommodation_status)) {
+    errors.push(`Invalid room booking status: ${bookingData.accommodation_status}. Must be one of: Pending, Pending Review, Booked, Confirmed, Cancelled.`);
   }
-
-  // Return ticket confirmation validation
-  if (['Booking Confirmed', 'Confirmed'].includes(bookingData.return_status)) {
-    const ref = bookingData.return_ticket_reference;
-    const att = bookingData.return_attachment_url;
-    if (!ref && !att) {
-      errors.push('Cannot mark return ticket as Booking Confirmed without recording the ticket reference or receipt attachment.');
-    }
+  if (bookingData.return_status && !validReturn.includes(bookingData.return_status)) {
+    errors.push(`Invalid return ticket status: ${bookingData.return_status}. Must be one of: Pending, Booked, Confirmed, Cancelled.`);
   }
 
   return {
@@ -276,7 +222,7 @@ export function buildDefaultCoordinatorBooking(chk) {
 
     // Requirement 4 & 5: Return Ticket
     return_task_id: `RET-TASK-${chk.checklist_number || chk.id}`,
-    return_status: isCompleted ? 'Booking Required' : 'Not Required Yet',
+    return_status: 'Not Required Yet',
     return_mode: 'Bus',
     return_method: 'Government bus',
     return_operator: '',
@@ -294,13 +240,24 @@ export function buildDefaultCoordinatorBooking(chk) {
     return_attachment_name: '',
     return_booked_by: null,
     return_booked_by_name: '',
+    return_booking_date: null,
+    return_submitted_at: null,
+    return_submitted_by: null,
+    return_submitted_by_name: '',
+    return_correction_reason: '',
+    return_correction_requested_at: null,
+    return_correction_requested_by: null,
+    return_correction_requested_by_name: '',
+    return_verified_at: null,
+    return_verified_by: null,
+    return_verified_by_name: '',
     return_urgency: 'Normal',
     actual_completion_datetime: chk.actual_completion_datetime || null,
     report_submission_datetime: null,
     booking_issue_reason: '',
     return_notes: '',
-    return_task_created: isCompleted,
-    return_task_created_at: isCompleted ? (chk.actual_completion_datetime || new Date().toISOString()) : null,
+    return_task_created: false,
+    return_task_created_at: null,
     return_task_completed: false,
 
     assigned_engineer: chk.service_engineer || '',
@@ -325,21 +282,23 @@ export function normalizeBookingData(booking, chk) {
 
   const start = chk.current_expected_arrival_date || chk.expected_arrival_date || null;
   const end = chk.current_booking_end_date || chk.booking_end_date || start;
-  const isCompleted = chk.installation_status === 'Completed' || Boolean(chk.actual_completion_datetime);
+  const isPostInstalled = chk.installation_status === 'Completed' && (chk.completion_type === 'TECHNICIAN_INSTALLED' || Boolean(chk.actual_completion_datetime));
 
   const normalized = { ...booking };
 
-  // Outbound
-  if (normalized.travel_required === false) {
-    normalized.outbound_status = normalized.outbound_status || 'Cancelled';
-  } else if (!normalized.outbound_status) {
-    if (normalized.ticket_reference || normalized.travel_datetime || normalized.outbound_ticket_reference) normalized.outbound_status = 'Confirmed';
-    else if (normalized.travel_required) normalized.outbound_status = 'Pending';
-    else normalized.outbound_status = 'Required';
+  // Outbound: Map to Pending, Booked, Confirmed, Cancelled
+  let outSt = normalized.outbound_status;
+  if (normalized.travel_required === false || outSt === 'Cancelled' || outSt === 'NOT_REQUIRED') {
+    outSt = 'Cancelled';
+  } else if (['Confirmed', 'COMPLETED', 'Completed'].includes(outSt)) {
+    outSt = 'Confirmed';
+  } else if (outSt === 'Booked') {
+    outSt = 'Booked';
+  } else {
+    outSt = 'Pending';
   }
-  normalized.travel_required = normalized.travel_required !== undefined
-    ? Boolean(normalized.travel_required)
-    : (normalized.outbound_status !== 'Cancelled');
+  normalized.outbound_status = outSt;
+  normalized.travel_required = (outSt !== 'Cancelled');
   normalized.outbound_mode = normalized.outbound_mode || normalized.travel_type || 'Bus';
   normalized.outbound_method = normalized.outbound_method || 'Government bus';
   normalized.outbound_operator = normalized.outbound_operator || '';
@@ -359,21 +318,21 @@ export function normalizeBookingData(booking, chk) {
   normalized.outbound_booked_by_name = normalized.outbound_booked_by_name || '';
   normalized.outbound_notes = normalized.outbound_notes || normalized.travel_notes || '';
 
-  // Accommodation
-  if (normalized.accommodation_required === false) {
-    normalized.accommodation_status = normalized.accommodation_status || 'Cancelled';
-  } else if (!normalized.accommodation_status) {
-    if (normalized.hotel_booking_reference || (normalized.hotel_name && normalized.check_out_date)) {
-      normalized.accommodation_status = 'Confirmed';
-    } else if (normalized.accommodation_required) {
-      normalized.accommodation_status = 'Pending';
-    } else {
-      normalized.accommodation_status = 'Required';
-    }
+  // Accommodation: Map to Pending, Pending Review, Booked, Confirmed, Cancelled
+  let accSt = normalized.accommodation_status;
+  if (normalized.accommodation_required === false || accSt === 'Cancelled' || accSt === 'NOT_REQUIRED') {
+    accSt = 'Cancelled';
+  } else if (['Pending Review', 'Extension Required', 'Extension Pending'].includes(accSt) || normalized.accommodation_dates_affected) {
+    accSt = 'Pending Review';
+  } else if (['Confirmed', 'COMPLETED', 'Completed'].includes(accSt)) {
+    accSt = 'Confirmed';
+  } else if (['Booked', 'Extended'].includes(accSt)) {
+    accSt = 'Booked';
+  } else {
+    accSt = 'Pending';
   }
-  normalized.accommodation_required = normalized.accommodation_required !== undefined
-    ? Boolean(normalized.accommodation_required)
-    : (normalized.accommodation_status !== 'Cancelled');
+  normalized.accommodation_status = accSt;
+  normalized.accommodation_required = (accSt !== 'Cancelled');
   normalized.accommodation_type = normalized.accommodation_type || 'Online booking';
   normalized.hotel_name = normalized.hotel_name || '';
   normalized.hotel_platform = normalized.hotel_platform || '';
@@ -397,27 +356,36 @@ export function normalizeBookingData(booking, chk) {
   normalized.accommodation_notes = normalized.accommodation_notes || '';
   normalized.accommodation_history = Array.isArray(normalized.accommodation_history) ? normalized.accommodation_history : [];
 
-  // Return Ticket
-  let rawReturnSt = normalized.return_status;
-  if (!rawReturnSt) {
-    if (normalized.return_ticket_reference) {
-      rawReturnSt = 'Booking Confirmed';
-    } else if (isCompleted) {
-      rawReturnSt = 'Booking Required';
-    } else {
-      rawReturnSt = 'Not Required Yet';
-    }
-  } else if (rawReturnSt === 'Not Yet Required') {
-    rawReturnSt = isCompleted ? 'Booking Required' : 'Not Required Yet';
-  } else if (rawReturnSt === 'Confirmed') {
-    rawReturnSt = 'Booking Confirmed';
-  } else if (rawReturnSt === 'Pending') {
-    rawReturnSt = 'In Progress';
-  } else if (isCompleted && rawReturnSt === 'Not Required Yet') {
-    rawReturnSt = 'Booking Required';
-  }
-  normalized.return_status = rawReturnSt;
+  // Track original and revised installation dates for Room Bookings
+  const origDate = normalized.original_installation_date || chk.original_expected_arrival_date || chk.expected_arrival_date || start;
+  normalized.original_installation_date = origDate;
 
+  const hasExtension = Boolean(
+    (chk.schedule_revision_number && chk.schedule_revision_number > 0) ||
+    (chk.current_booking_end_date && chk.original_booking_end_date && chk.current_booking_end_date !== chk.original_booking_end_date) ||
+    normalized.revised_installation_date ||
+    accSt === 'Pending Review'
+  );
+  normalized.revised_installation_date = hasExtension ? (normalized.revised_installation_date || chk.current_booking_end_date || end) : null;
+
+  // Return Ticket: ONLY exists if post-installation form submitted or return_task_created
+  const returnTaskExists = Boolean(normalized.return_task_created || isPostInstalled);
+  let retSt = normalized.return_status;
+  if (!returnTaskExists) {
+    retSt = 'Not Required Yet';
+  } else {
+    if (['Confirmed', 'Verified/Completed', 'Booking Confirmed', 'Completed'].includes(retSt)) {
+      retSt = 'Confirmed';
+    } else if (['Booked'].includes(retSt)) {
+      retSt = 'Booked';
+    } else if (['Cancelled'].includes(retSt)) {
+      retSt = 'Cancelled';
+    } else {
+      retSt = 'Pending';
+    }
+  }
+  normalized.return_status = retSt;
+  normalized.return_task_created = returnTaskExists;
   normalized.return_task_id = normalized.return_task_id || `RET-TASK-${chk.checklist_number || chk.id}`;
   normalized.return_mode = normalized.return_mode || 'Bus';
   normalized.return_method = normalized.return_method || 'Government bus';
@@ -436,13 +404,23 @@ export function normalizeBookingData(booking, chk) {
   normalized.return_attachment_name = normalized.return_attachment_name || '';
   normalized.return_booked_by = normalized.return_booked_by || null;
   normalized.return_booked_by_name = normalized.return_booked_by_name || '';
+  normalized.return_booking_date = normalized.return_booking_date || null;
+  normalized.return_submitted_at = normalized.return_submitted_at || null;
+  normalized.return_submitted_by = normalized.return_submitted_by || null;
+  normalized.return_submitted_by_name = normalized.return_submitted_by_name || '';
+  normalized.return_correction_reason = normalized.return_correction_reason || '';
+  normalized.return_correction_requested_at = normalized.return_correction_requested_at || null;
+  normalized.return_correction_requested_by = normalized.return_correction_requested_by || null;
+  normalized.return_correction_requested_by_name = normalized.return_correction_requested_by_name || '';
+  normalized.return_verified_at = normalized.return_verified_at || null;
+  normalized.return_verified_by = normalized.return_verified_by || null;
+  normalized.return_verified_by_name = normalized.return_verified_by_name || '';
   normalized.return_urgency = normalized.return_urgency || 'Normal';
   normalized.actual_completion_datetime = normalized.actual_completion_datetime || chk.actual_completion_datetime || null;
-  normalized.report_submission_datetime = normalized.report_submission_datetime || null;
+  normalized.report_submission_datetime = normalized.report_submission_datetime || normalized.actual_completion_datetime || null;
   normalized.booking_issue_reason = normalized.booking_issue_reason || '';
   normalized.return_notes = normalized.return_notes || '';
-  normalized.return_task_created = Boolean(normalized.return_task_created || (isCompleted && normalized.return_status !== 'Not Required Yet' && normalized.return_status !== 'Not Yet Required'));
-  normalized.return_task_completed = Boolean(normalized.return_task_completed || normalized.return_status === 'Booking Confirmed' || normalized.return_status === 'Confirmed');
+  normalized.return_task_completed = Boolean(retSt === 'Confirmed');
 
   return normalized;
 }
@@ -540,6 +518,31 @@ export async function getCoordinatorChecklists(arg1 = {}, arg2 = {}) {
     total: enriched.length,
     return_ticket_required: 0,
     extension_required: 0,
+
+    // Outbound Travel stats
+    outbound_pending: 0,
+    outbound_booked: 0,
+    outbound_confirmed: 0,
+    outbound_cancelled: 0,
+    outbound_total: enriched.length,
+
+    // Room Bookings stats
+    room_pending: 0,
+    room_pending_review: 0,
+    room_booked: 0,
+    room_confirmed: 0,
+    room_cancelled: 0,
+    room_total: enriched.length,
+
+    // Return Tickets stats (only created return ticket requests)
+    return_pending: 0,
+    return_booked: 0,
+    return_confirmed: 0,
+    return_cancelled: 0,
+    return_total: 0,
+
+    // Extension Reviews count (records genuinely awaiting review)
+    extension_reviews: 0,
   };
 
   enriched.forEach((item) => {
@@ -550,9 +553,35 @@ export async function getCoordinatorChecklists(arg1 = {}, arg2 = {}) {
     else if (st === 'NOT_REQUIRED') stats.not_required++;
 
     const cb = item.coordinator_booking;
-    if (cb?.return_status === 'Booking Required') stats.return_ticket_required++;
-    if (cb?.accommodation_status === 'Extension Required') stats.extension_required++;
+    if (!cb) return;
+
+    // Outbound
+    if (cb.outbound_status === 'Pending') stats.outbound_pending++;
+    else if (cb.outbound_status === 'Booked') stats.outbound_booked++;
+    else if (cb.outbound_status === 'Confirmed') stats.outbound_confirmed++;
+    else if (cb.outbound_status === 'Cancelled') stats.outbound_cancelled++;
+
+    // Room Bookings
+    if (cb.accommodation_status === 'Pending') stats.room_pending++;
+    else if (cb.accommodation_status === 'Pending Review') {
+      stats.room_pending_review++;
+      stats.extension_reviews++;
+    } else if (cb.accommodation_status === 'Booked') stats.room_booked++;
+    else if (cb.accommodation_status === 'Confirmed') stats.room_confirmed++;
+    else if (cb.accommodation_status === 'Cancelled') stats.room_cancelled++;
+
+    // Return Tickets (only created return tickets)
+    if (cb.return_task_created && cb.return_status && cb.return_status !== 'Not Required Yet') {
+      stats.return_total++;
+      if (cb.return_status === 'Pending') stats.return_pending++;
+      else if (cb.return_status === 'Booked') stats.return_booked++;
+      else if (cb.return_status === 'Confirmed') stats.return_confirmed++;
+      else if (cb.return_status === 'Cancelled') stats.return_cancelled++;
+    }
   });
+
+  stats.return_ticket_required = stats.return_pending;
+  stats.extension_required = stats.room_pending_review;
 
   // 5. Apply Tab & Filters
   let filtered = enriched.filter((item) => {
@@ -564,6 +593,12 @@ export async function getCoordinatorChecklists(arg1 = {}, arg2 = {}) {
       if (st !== 'PENDING' && st !== 'IN_PROGRESS') return false;
     } else if (tab === 'completed') {
       if (st !== 'COMPLETED' && st !== 'NOT_REQUIRED') return false;
+    } else if (tab === 'return' || tab === 'returns' || tab === 'pending_returns') {
+      // Return Tickets view: ONLY show jobs where return-ticket request was actually created
+      if (!cb?.return_task_created || cb?.return_status === 'Not Required Yet') return false;
+    } else if (tab === 'extension_reviews' || tab === 'pending_reviews') {
+      // Extension Reviews view: ONLY show jobs requiring review
+      if (cb?.accommodation_status !== 'Pending Review') return false;
     }
 
     // Specific legacy status filter
@@ -713,7 +748,8 @@ export async function saveCoordinatorBooking({ checklistId, bookingData = {}, us
     : (newStatus === 'NOT_REQUIRED' || bookingData.accommodation_status === 'Cancelled' ? false : (existing?.accommodation_required !== undefined ? existing.accommodation_required : true));
 
   // Resolve Outbound fields
-  const outboundStatus = bookingData.outbound_status || (!travelReq ? 'Cancelled' : (bookingData.travel_required ? 'Pending' : (existing?.outbound_status || 'Required')));
+  let outboundStatus = bookingData.outbound_status || (!travelReq ? 'Cancelled' : (existing?.outbound_status || 'Pending'));
+  if (outboundStatus === 'Required') outboundStatus = 'Pending';
   const outboundMode = bookingData.outbound_mode || bookingData.travel_type || 'Bus';
   const outboundMethod = bookingData.outbound_method || existing?.outbound_method || 'Government bus';
   const outboundOperator = bookingData.outbound_operator !== undefined ? (bookingData.outbound_operator ? String(bookingData.outbound_operator).trim() : null) : (existing?.outbound_operator || null);
@@ -734,7 +770,9 @@ export async function saveCoordinatorBooking({ checklistId, bookingData = {}, us
   const outboundNotes = bookingData.outbound_notes !== undefined ? (bookingData.outbound_notes ? String(bookingData.outbound_notes).trim() : null) : (existing?.outbound_notes || bookingData.travel_notes || null);
 
   // Resolve Accommodation fields
-  const accomStatus = bookingData.accommodation_status || (!accomReq ? 'Cancelled' : (existing?.accommodation_status || 'Required'));
+  let accomStatus = bookingData.accommodation_status || (!accomReq ? 'Cancelled' : (existing?.accommodation_status || 'Pending'));
+  if (accomStatus === 'Required') accomStatus = 'Pending';
+  if (['Extension Required', 'Extension Pending'].includes(accomStatus)) accomStatus = 'Pending Review';
   const accomType = bookingData.accommodation_type || existing?.accommodation_type || 'Online booking';
   const hotelName = bookingData.hotel_name !== undefined ? bookingData.hotel_name : (existing?.hotel_name || '');
   const hotelPlatform = bookingData.hotel_platform !== undefined ? (bookingData.hotel_platform ? String(bookingData.hotel_platform).trim() : null) : (existing?.hotel_platform || null);
@@ -760,8 +798,8 @@ export async function saveCoordinatorBooking({ checklistId, bookingData = {}, us
   // Resolve Return fields
   let returnStatus = bookingData.return_status || (existing?.return_status || 'Not Required Yet');
   if (returnStatus === 'Not Yet Required') returnStatus = 'Not Required Yet';
-  if (returnStatus === 'Confirmed') returnStatus = 'Booking Confirmed';
-  if (returnStatus === 'Pending') returnStatus = 'In Progress';
+  if (['Verified/Completed', 'Booking Confirmed'].includes(returnStatus)) returnStatus = 'Confirmed';
+  if (['Awaiting Technician Booking', 'Submitted for Verification', 'Needs Correction', 'Booking Required', 'In Progress'].includes(returnStatus)) returnStatus = 'Pending';
 
   const returnTaskId = bookingData.return_task_id || existing?.return_task_id || (bookingData.return_task_created ? `RET-TASK-${checklist.checklist_number || checklistId}` : null);
   const returnMethod = bookingData.return_method || existing?.return_method || 'Government bus';
@@ -787,7 +825,8 @@ export async function saveCoordinatorBooking({ checklistId, bookingData = {}, us
   const bookingIssueReason = bookingData.booking_issue_reason !== undefined ? (bookingData.booking_issue_reason ? String(bookingData.booking_issue_reason).trim() : null) : (existing?.booking_issue_reason || null);
   const returnNotes = bookingData.return_notes !== undefined ? (bookingData.return_notes ? String(bookingData.return_notes).trim() : null) : (existing?.return_notes || null);
   const returnTaskCreated = Boolean(bookingData.return_task_created || existing?.return_task_created);
-  const returnTaskCompleted = Boolean(bookingData.return_task_completed || returnStatus === 'Booking Confirmed' || returnStatus === 'Confirmed');
+  const isCompletedVerified = returnStatus === 'Verified/Completed' || returnStatus === 'Booking Confirmed' || returnStatus === 'Confirmed';
+  const returnTaskCompleted = Boolean(bookingData.return_task_completed || isCompletedVerified);
 
   const payload = {
     id: existing ? existing.id : uuidv4(),
@@ -870,6 +909,17 @@ export async function saveCoordinatorBooking({ checklistId, bookingData = {}, us
     return_attachment_name: returnAttachmentName || null,
     return_booked_by: returnBookedBy,
     return_booked_by_name: returnBookedByName,
+    return_booking_date: bookingData.return_booking_date !== undefined ? bookingData.return_booking_date : (existing?.return_booking_date || null),
+    return_submitted_at: bookingData.return_submitted_at !== undefined ? bookingData.return_submitted_at : (existing?.return_submitted_at || null),
+    return_submitted_by: bookingData.return_submitted_by !== undefined ? bookingData.return_submitted_by : (existing?.return_submitted_by || null),
+    return_submitted_by_name: bookingData.return_submitted_by_name !== undefined ? bookingData.return_submitted_by_name : (existing?.return_submitted_by_name || null),
+    return_correction_reason: bookingData.return_correction_reason !== undefined ? bookingData.return_correction_reason : (existing?.return_correction_reason || null),
+    return_correction_requested_at: bookingData.return_correction_requested_at !== undefined ? bookingData.return_correction_requested_at : (existing?.return_correction_requested_at || null),
+    return_correction_requested_by: bookingData.return_correction_requested_by !== undefined ? bookingData.return_correction_requested_by : (existing?.return_correction_requested_by || null),
+    return_correction_requested_by_name: bookingData.return_correction_requested_by_name !== undefined ? bookingData.return_correction_requested_by_name : (existing?.return_correction_requested_by_name || null),
+    return_verified_at: bookingData.return_verified_at !== undefined ? bookingData.return_verified_at : (existing?.return_verified_at || null),
+    return_verified_by: bookingData.return_verified_by !== undefined ? bookingData.return_verified_by : (existing?.return_verified_by || null),
+    return_verified_by_name: bookingData.return_verified_by_name !== undefined ? bookingData.return_verified_by_name : (existing?.return_verified_by_name || null),
     return_urgency: returnUrgency,
     actual_completion_datetime: actualCompTime,
     report_submission_datetime: reportSubTime,
@@ -885,13 +935,28 @@ export async function saveCoordinatorBooking({ checklistId, bookingData = {}, us
     created_by: existing ? existing.created_by : (user.id || null),
     updated_by: user.id || null,
     completed_at: completedAt,
-    schedule_flagged_for_review: bookingData.schedule_flagged_for_review !== undefined ? Boolean(bookingData.schedule_flagged_for_review) : Boolean(existing?.schedule_flagged_for_review),
+    schedule_flagged_for_review: bookingData.schedule_flagged_for_review !== undefined
+      ? Boolean(bookingData.schedule_flagged_for_review)
+      : (accomStatus === 'Pending Review' ? true : (bookingData.accommodation_status ? false : Boolean(existing?.schedule_flagged_for_review))),
     schedule_review_reason: bookingData.schedule_review_reason !== undefined ? bookingData.schedule_review_reason : (existing?.schedule_review_reason || null),
     return_travel_date_affected: Boolean(bookingData.return_travel_date_affected ?? existing?.return_travel_date_affected),
-    accommodation_dates_affected: Boolean(bookingData.accommodation_dates_affected ?? existing?.accommodation_dates_affected),
+    accommodation_dates_affected: bookingData.accommodation_dates_affected !== undefined
+      ? Boolean(bookingData.accommodation_dates_affected)
+      : (accomStatus === 'Pending Review' ? true : (bookingData.accommodation_status ? false : Boolean(existing?.accommodation_dates_affected))),
+    original_installation_date: bookingData.original_installation_date || existing?.original_installation_date || checklist.original_expected_arrival_date || checklist.expected_arrival_date || null,
+    revised_installation_date: bookingData.revised_installation_date || existing?.revised_installation_date || (accomStatus === 'Pending Review' ? (checklist.current_booking_end_date || checklist.expected_arrival_date) : null),
     created_at: existing ? existing.created_at : now,
     updated_at: now,
   };
+
+  const isUuid = (val) => Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val));
+  if (!isUuid(payload.created_by)) payload.created_by = null;
+  if (!isUuid(payload.updated_by)) payload.updated_by = null;
+  if (!isUuid(payload.outbound_booked_by)) payload.outbound_booked_by = null;
+  if (!isUuid(payload.return_booked_by)) payload.return_booked_by = null;
+  if (!isUuid(payload.return_submitted_by)) payload.return_submitted_by = null;
+  if (!isUuid(payload.return_correction_requested_by)) payload.return_correction_requested_by = null;
+  if (!isUuid(payload.return_verified_by)) payload.return_verified_by = null;
 
   let savedRecord = null;
 
@@ -912,6 +977,9 @@ export async function saveCoordinatorBooking({ checklistId, bookingData = {}, us
         currentPayload.updated_by = null;
         currentPayload.outbound_booked_by = null;
         currentPayload.return_booked_by = null;
+        currentPayload.return_submitted_by = null;
+        currentPayload.return_correction_requested_by = null;
+        currentPayload.return_verified_by = null;
       }
 
       // 2. Loop to strip any column not found in schema cache
@@ -1131,7 +1199,8 @@ export async function triggerReturnTicketBookingTask(arg1, arg2) {
   const existing = normalizeBookingData(existingRaw, checklist);
 
   // Strictly prevent duplicate notifications/tasks on refreshes, retries, or repeated triggers
-  if (existing.return_task_created && existing.return_status && !['Not Required Yet', 'Not Yet Required'].includes(existing.return_status)) {
+  const hasAlreadyTriggered = Boolean(existingRaw && existingRaw.return_task_created);
+  if (hasAlreadyTriggered && existing.return_status && !['Not Required Yet', 'Not Yet Required'].includes(existing.return_status)) {
     return existing;
   }
 
@@ -1158,7 +1227,7 @@ export async function triggerReturnTicketBookingTask(arg1, arg2) {
   const updatedData = {
     ...existing,
     return_task_id: taskId,
-    return_status: 'Booking Required',
+    return_status: 'Pending',
     return_urgency: urgency,
     return_task_created: true,
     return_task_created_at: submissionTime,
@@ -1181,9 +1250,9 @@ export async function triggerReturnTicketBookingTask(arg1, arg2) {
     checklistId,
     action: 'RETURN_TICKET_TASK_CREATED',
     previousStatus: existing.return_status,
-    newStatus: 'Booking Required',
+    newStatus: 'Pending',
     user: user || { id: 'system', email: 'system@eagleeye.com', role: 'TECHNICAL' },
-    notes: `Installation completed — return ticket booking required. Actual completion: ${completionTime}, Submitted: ${submissionTime}, Urgency: ${urgency}`,
+    notes: `Installation completed — return ticket booking task created. Actual completion: ${completionTime}, Submitted: ${submissionTime}, Urgency: ${urgency}`,
     snapshot: saved,
   });
 
@@ -1191,9 +1260,9 @@ export async function triggerReturnTicketBookingTask(arg1, arg2) {
   try {
     await createNotification({
       targetRole: 'COORDINATOR',
-      title: 'Installation completed — return ticket booking required.',
-      message: `Installation completed — return ticket booking required. Checklist: ${checklist.checklist_number}, Customer: ${checklist.client_name}, Location: ${location}, Technician: ${techName}, Completed: ${completionTime}`,
-      type: 'RETURN_TICKET_REQUIRED',
+      title: 'Return ticket task created — awaiting technician booking',
+      message: `Installation completed for checklist ${checklist.checklist_number} (${checklist.client_name}). Return-ticket booking task created and awaiting technician booking & verification. Completed: ${completionTime}`,
+      type: 'RETURN_TICKET_AWAITING_BOOKING',
       checklistId,
       checklistNumber: checklist.checklist_number,
       metadata: {
@@ -1210,10 +1279,483 @@ export async function triggerReturnTicketBookingTask(arg1, arg2) {
       },
     });
   } catch (notifErr) {
-    console.warn('Notification delivery failed for return ticket task (task safely saved):', notifErr.message);
+    console.warn('Coordinator notification delivery failed for return ticket task (task safely saved):', notifErr.message);
+  }
+
+  // 3. Create Technician Notification
+  try {
+    const targetTechId = checklist.assigned_technician_id || checklist.service_engineer_id || (user?.role === 'TECHNICAL' ? user?.id : null);
+    await createNotification({
+      targetRole: 'TECHNICAL',
+      targetUserId: targetTechId,
+      title: 'Return ticket booking required',
+      message: `Installation completed for checklist ${checklist.checklist_number} (${checklist.client_name}). Please book your return ticket and submit details for coordinator verification.`,
+      type: 'RETURN_TICKET_BOOKING_REQUIRED',
+      checklistId,
+      checklistNumber: checklist.checklist_number,
+      metadata: {
+        task_id: taskId,
+        checklist_id: checklistId,
+        checklist_number: checklist.checklist_number,
+        client_name: checklist.client_name,
+        location,
+        actual_completion_datetime: completionTime,
+      },
+    });
+  } catch (techNotifErr) {
+    console.warn('Technician notification delivery failed for return ticket task (task safely saved):', techNotifErr.message);
   }
 
   return saved;
+}
+
+/**
+ * Technician submits return journey booking details for Coordinator verification
+ */
+export async function submitTechnicianReturnTicket({ checklistId, bookingData = {}, user = {} }) {
+  if (!checklistId) {
+    const err = new Error('Checklist ID is required.');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const checklist = await getChecklistById(checklistId);
+  if (!checklist) {
+    const err = new Error('Installation checklist not found.');
+    err.statusCode = 404;
+    throw err;
+  }
+
+  // Strict RBAC: if caller is a technician, ensure they are assigned to this job
+  const userRole = (user?.role || '').toUpperCase();
+  if (userRole === 'TECHNICAL') {
+    const isAssigned =
+      checklist.assigned_technician_id === user.id ||
+      checklist.service_engineer_id === user.id ||
+      (checklist.service_engineer && user.full_name && checklist.service_engineer.toLowerCase() === user.full_name.toLowerCase()) ||
+      (checklist.service_engineer && user.name && checklist.service_engineer.toLowerCase() === user.name.toLowerCase()) ||
+      (checklist.service_engineer_email && user.email && checklist.service_engineer_email.toLowerCase() === user.email.toLowerCase()) ||
+      !checklist.service_engineer;
+    if (!isAssigned) {
+      const err = new Error('Unauthorized: You can only submit return ticket bookings for jobs assigned to you.');
+      err.statusCode = 403;
+      throw err;
+    }
+  }
+
+  const existingRaw = await getBookingRecord(checklistId);
+  const existing = normalizeBookingData(existingRaw, checklist);
+
+  if (existing.return_status === 'Verified/Completed' && userRole === 'TECHNICAL') {
+    const err = new Error('Cannot modify a return ticket that has already been verified and completed.');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  // Validate travel method
+  const method = bookingData.return_method || existing.return_method || 'Government bus';
+  if (!['Government bus', 'Private travels'].includes(method)) {
+    const err = new Error('Return travel method must be either "Government bus" or "Private travels".');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  // Validate required booking fields
+  const bookingDate = bookingData.return_booking_date || new Date().toISOString().split('T')[0];
+  const travelDatetime = bookingData.return_departure_datetime || bookingData.return_travel_datetime;
+  if (!travelDatetime) {
+    const err = new Error('Travel date and time are required.');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const boardingPoint = (bookingData.return_boarding_point || bookingData.return_origin || '').trim();
+  if (!boardingPoint) {
+    const err = new Error('Boarding point is required.');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const destination = (bookingData.return_destination || '').trim();
+  if (!destination) {
+    const err = new Error('Destination is required.');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const operator = (bookingData.return_operator || '').trim();
+  if (!operator) {
+    const err = new Error('Operator or service name is required.');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const nowIso = new Date().toISOString();
+  const prevStatus = existing.return_status;
+  const isResubmission = prevStatus === 'Needs Correction';
+
+  const updatedData = {
+    ...existing,
+    return_status: 'Submitted for Verification',
+    return_method: method,
+    return_booking_date: bookingDate,
+    return_departure_datetime: travelDatetime,
+    return_departure_time: bookingData.return_departure_time || (travelDatetime.includes('T') ? travelDatetime.split('T')[1]?.slice(0, 5) : null),
+    return_boarding_point: boardingPoint,
+    return_origin: boardingPoint,
+    return_destination: destination,
+    return_operator: operator,
+    return_ticket_reference: (bookingData.return_ticket_reference || '').trim() || null,
+    return_attachment_url: bookingData.return_attachment_url || existing.return_attachment_url || null,
+    return_attachment_name: bookingData.return_attachment_name || existing.return_attachment_name || null,
+    return_notes: (bookingData.return_notes || '').trim() || null,
+    return_submitted_at: nowIso,
+    return_submitted_by: user.id || null,
+    return_submitted_by_name: user.full_name || user.name || user.email || 'Technician',
+    return_task_completed: false,
+    return_task_created: true,
+  };
+
+  const saved = await saveCoordinatorBooking({
+    checklistId,
+    bookingData: updatedData,
+    user,
+  });
+
+  const auditAction = isResubmission ? 'RETURN_TICKET_RESUBMITTED' : 'RETURN_TICKET_SUBMITTED';
+  await recordBookingAudit({
+    bookingId: saved.id,
+    checklistId,
+    action: auditAction,
+    previousStatus: prevStatus,
+    newStatus: 'Submitted for Verification',
+    user,
+    notes: `${isResubmission ? 'Resubmitted corrected' : 'Submitted'} return ticket by Technician: ${operator} (${method}), Departure: ${travelDatetime}, Ref: ${updatedData.return_ticket_reference || 'N/A'}${updatedData.return_notes ? ' | Notes: ' + updatedData.return_notes : ''}`,
+    snapshot: saved,
+    beforeState: existing || null,
+  });
+
+  // Notify Coordinator
+  try {
+    await createNotification({
+      targetRole: 'COORDINATOR',
+      title: isResubmission
+        ? 'Technician resubmitted corrected return-ticket details'
+        : 'Technician submitted return-ticket details for verification',
+      message: `Technician ${user.full_name || user.email || 'Technician'} ${isResubmission ? 'resubmitted corrected' : 'submitted'} return-ticket booking details for checklist ${checklist.checklist_number} (${checklist.client_name}). Please review and verify.`,
+      type: 'RETURN_TICKET_SUBMITTED_FOR_VERIFICATION',
+      checklistId,
+      checklistNumber: checklist.checklist_number,
+      metadata: {
+        checklist_id: checklistId,
+        checklist_number: checklist.checklist_number,
+        technician_name: user.full_name || user.email || 'Technician',
+        operator,
+        travel_datetime: travelDatetime,
+        ticket_reference: updatedData.return_ticket_reference,
+        booking_link: `/coordinator?view=${checklistId}&action=return_ticket`,
+      },
+    });
+  } catch (notifErr) {
+    console.warn('Coordinator notification delivery failed for return ticket submission:', notifErr.message);
+  }
+
+  return { checklist, booking: saved };
+}
+
+/**
+ * Coordinator reviews and marks Return Ticket Task as Verified / Completed
+ */
+export async function verifyReturnTicketBooking({ checklistId, user = {} }) {
+  if (!checklistId) {
+    const err = new Error('Checklist ID is required.');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  // Strict RBAC: Only Coordinator or Admin can verify
+  const role = (user?.role || '').toUpperCase();
+  if (role !== 'COORDINATOR' && role !== 'ADMIN' && role !== 'SUPER_ADMIN') {
+    const err = new Error('Forbidden: Only an authorized Coordinator or Admin can verify and mark a return ticket task complete.');
+    err.statusCode = 403;
+    throw err;
+  }
+
+  const checklist = await getChecklistById(checklistId);
+  if (!checklist) {
+    const err = new Error('Installation checklist not found.');
+    err.statusCode = 404;
+    throw err;
+  }
+
+  const existingRaw = await getBookingRecord(checklistId);
+  const existing = normalizeBookingData(existingRaw, checklist);
+
+  const nowIso = new Date().toISOString();
+  const prevStatus = existing.return_status;
+
+  const updatedData = {
+    ...existing,
+    return_status: 'Verified/Completed',
+    return_verified_at: nowIso,
+    return_verified_by: user.id || null,
+    return_verified_by_name: user.full_name || user.name || user.email || 'Coordinator',
+    return_task_completed: true,
+  };
+
+  const saved = await saveCoordinatorBooking({
+    checklistId,
+    bookingData: updatedData,
+    user,
+  });
+
+  await recordBookingAudit({
+    bookingId: saved.id,
+    checklistId,
+    action: 'RETURN_TICKET_VERIFIED_COMPLETED',
+    previousStatus: prevStatus,
+    newStatus: 'Verified/Completed',
+    user,
+    notes: `Return ticket verified and completed by Coordinator (${user.full_name || user.email || 'Coordinator'}). Operator: ${saved.return_operator || 'N/A'}, Method: ${saved.return_method || 'Bus'}, Ref: ${saved.return_ticket_reference || 'N/A'}`,
+    snapshot: saved,
+    beforeState: existing || null,
+  });
+
+  // Notify Technician
+  try {
+    const targetTechId = checklist.assigned_technician_id || checklist.service_engineer_id || null;
+    await createNotification({
+      targetRole: 'TECHNICAL',
+      targetUserId: targetTechId,
+      title: 'Return ticket verified & completed',
+      message: `Coordinator has verified and completed your return ticket task for checklist ${checklist.checklist_number} (${checklist.client_name}).`,
+      type: 'RETURN_TICKET_VERIFIED',
+      checklistId,
+      checklistNumber: checklist.checklist_number,
+      metadata: {
+        checklist_id: checklistId,
+        checklist_number: checklist.checklist_number,
+        verified_by: user.full_name || user.email || 'Coordinator',
+        verified_at: nowIso,
+      },
+    });
+  } catch (notifErr) {
+    console.warn('Technician notification delivery failed for return ticket verification:', notifErr.message);
+  }
+
+  return { checklist, booking: saved };
+}
+
+/**
+ * Coordinator requests correction on submitted return ticket details
+ */
+export async function requestReturnTicketCorrection({ checklistId, reason, user = {} }) {
+  if (!checklistId) {
+    const err = new Error('Checklist ID is required.');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  // Strict RBAC: Only Coordinator or Admin can request correction
+  const role = (user?.role || '').toUpperCase();
+  if (role !== 'COORDINATOR' && role !== 'ADMIN' && role !== 'SUPER_ADMIN') {
+    const err = new Error('Forbidden: Only an authorized Coordinator or Admin can request corrections on return ticket bookings.');
+    err.statusCode = 403;
+    throw err;
+  }
+
+  const trimmedReason = (reason || '').trim();
+  if (!trimmedReason) {
+    const err = new Error('Correction reason is required.');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const checklist = await getChecklistById(checklistId);
+  if (!checklist) {
+    const err = new Error('Installation checklist not found.');
+    err.statusCode = 404;
+    throw err;
+  }
+
+  const existingRaw = await getBookingRecord(checklistId);
+  const existing = normalizeBookingData(existingRaw, checklist);
+
+  const nowIso = new Date().toISOString();
+  const prevStatus = existing.return_status;
+
+  const updatedData = {
+    ...existing,
+    return_status: 'Needs Correction',
+    return_correction_reason: trimmedReason,
+    return_correction_requested_at: nowIso,
+    return_correction_requested_by: user.id || null,
+    return_correction_requested_by_name: user.full_name || user.name || user.email || 'Coordinator',
+    return_task_completed: false,
+  };
+
+  const saved = await saveCoordinatorBooking({
+    checklistId,
+    bookingData: updatedData,
+    user,
+  });
+
+  await recordBookingAudit({
+    bookingId: saved.id,
+    checklistId,
+    action: 'RETURN_TICKET_CORRECTION_REQUESTED',
+    previousStatus: prevStatus,
+    newStatus: 'Needs Correction',
+    user,
+    notes: `Coordinator requested correction for return ticket: "${trimmedReason}"`,
+    snapshot: saved,
+    beforeState: existing || null,
+  });
+
+  // Notify Technician
+  try {
+    const targetTechId = checklist.assigned_technician_id || checklist.service_engineer_id || null;
+    await createNotification({
+      targetRole: 'TECHNICAL',
+      targetUserId: targetTechId,
+      title: 'Return ticket details need correction',
+      message: `Coordinator requested corrections for return ticket on checklist ${checklist.checklist_number} (${checklist.client_name}): "${trimmedReason}". Please update and resubmit.`,
+      type: 'RETURN_TICKET_CORRECTION_REQUESTED',
+      checklistId,
+      checklistNumber: checklist.checklist_number,
+      metadata: {
+        checklist_id: checklistId,
+        checklist_number: checklist.checklist_number,
+        correction_reason: trimmedReason,
+        requested_by: user.full_name || user.email || 'Coordinator',
+        requested_at: nowIso,
+      },
+    });
+  } catch (notifErr) {
+    console.warn('Technician notification delivery failed for return ticket correction request:', notifErr.message);
+  }
+
+  return { checklist, booking: saved };
+}
+
+/**
+ * Fetch Return Ticket Tasks with RBAC filtering (Technicians see only assigned jobs, Coordinators see all)
+ */
+export async function getReturnTicketTasks({ user = {}, status = null, search = '' }) {
+  const checklistResult = await getChecklists({
+    limit: 500,
+    search: search ? search.trim() : '',
+  });
+
+  const rawChecklists = checklistResult?.checklists || [];
+
+  try {
+    const { data, error } = await supabase.from('coordinator_bookings').select('*');
+    if (!error && Array.isArray(data)) {
+      data.forEach((b) => {
+        const existing = inMemoryBookings.get(b.checklist_id) || {};
+        inMemoryBookings.set(b.checklist_id, { ...b, ...existing });
+      });
+    }
+  } catch (e) {}
+
+  const tasks = [];
+  const searchLower = (search || '').trim().toLowerCase();
+  const userRole = (user?.role || '').toUpperCase();
+
+  for (const chk of rawChecklists) {
+    const rawBooking = inMemoryBookings.get(chk.id) || null;
+    const b = normalizeBookingData(rawBooking, chk);
+
+    const hasReturnTask = b.return_task_created || chk.installation_status === 'Completed' || Boolean(chk.actual_completion_datetime);
+    if (!hasReturnTask) continue;
+
+    // RBAC: Technicians can only view tasks assigned to them
+    if (userRole === 'TECHNICAL') {
+      const isAssigned =
+        chk.assigned_technician_id === user.id ||
+        chk.service_engineer_id === user.id ||
+        (chk.service_engineer && user.full_name && chk.service_engineer.toLowerCase() === user.full_name.toLowerCase()) ||
+        (chk.service_engineer && user.name && chk.service_engineer.toLowerCase() === user.name.toLowerCase()) ||
+        (chk.service_engineer_email && user.email && chk.service_engineer_email.toLowerCase() === user.email.toLowerCase()) ||
+        !chk.service_engineer;
+      if (!isAssigned) continue;
+    }
+
+    if (status && status !== 'ALL') {
+      if (b.return_status !== status) continue;
+    }
+
+    if (searchLower) {
+      const match =
+        (chk.checklist_number || '').toLowerCase().includes(searchLower) ||
+        (chk.client_name || '').toLowerCase().includes(searchLower) ||
+        (chk.client_location || '').toLowerCase().includes(searchLower) ||
+        (chk.service_engineer || '').toLowerCase().includes(searchLower) ||
+        (b.return_operator || '').toLowerCase().includes(searchLower) ||
+        (b.return_ticket_reference || '').toLowerCase().includes(searchLower);
+      if (!match) continue;
+    }
+
+    tasks.push({
+      id: chk.id,
+      task_id: b.return_task_id || `RET-TASK-${chk.checklist_number || chk.id}`,
+      checklist_id: chk.id,
+      checklist_number: chk.checklist_number,
+      client_name: chk.client_name,
+      client_location: chk.client_location,
+      service_engineer: chk.service_engineer,
+      assigned_technician_id: chk.assigned_technician_id,
+      actual_completion_datetime: chk.actual_completion_datetime || b.actual_completion_datetime,
+      installation_status: chk.installation_status,
+      return_task_id: b.return_task_id,
+      return_status: b.return_status,
+      return_method: b.return_method,
+      return_booking_date: b.return_booking_date,
+      return_departure_datetime: b.return_departure_datetime,
+      return_departure_time: b.return_departure_time,
+      return_boarding_point: b.return_boarding_point,
+      return_destination: b.return_destination,
+      return_operator: b.return_operator,
+      return_ticket_reference: b.return_ticket_reference,
+      return_attachment_url: b.return_attachment_url,
+      return_attachment_name: b.return_attachment_name,
+      return_notes: b.return_notes,
+      return_submitted_at: b.return_submitted_at,
+      return_submitted_by: b.return_submitted_by,
+      return_submitted_by_name: b.return_submitted_by_name,
+      return_correction_reason: b.return_correction_reason,
+      return_correction_requested_at: b.return_correction_requested_at,
+      return_correction_requested_by: b.return_correction_requested_by,
+      return_correction_requested_by_name: b.return_correction_requested_by_name,
+      return_verified_at: b.return_verified_at,
+      return_verified_by: b.return_verified_by,
+      return_verified_by_name: b.return_verified_by_name,
+      return_urgency: b.return_urgency,
+      return_task_completed: b.return_task_completed,
+      created_at: b.return_task_created_at || b.created_at || chk.created_at,
+      coordinator_booking: b,
+      checklist: chk,
+    });
+  }
+
+  const statusPriority = {
+    'Submitted for Verification': 4,
+    'Needs Correction': 3,
+    'Awaiting Technician Booking': 2,
+    'Verified/Completed': 1,
+  };
+
+  tasks.sort((a, b) => {
+    const pA = statusPriority[a.return_status] || 0;
+    const pB = statusPriority[b.return_status] || 0;
+    if (pB !== pA) return pB - pA;
+    const tA = new Date(a.return_submitted_at || a.actual_completion_datetime || a.created_at || 0).getTime();
+    const tB = new Date(b.return_submitted_at || b.actual_completion_datetime || b.created_at || 0).getTime();
+    return tB - tA;
+  });
+
+  return tasks;
 }
 
 /**
@@ -1386,12 +1928,15 @@ export async function getBookingAuditHistory(checklistId) {
 /**
  * Flag a booking for review when a schedule extension or change occurs
  */
+/**
+ * Flag a booking for review when a schedule extension or change occurs
+ */
 export async function flagBookingForReview({
   checklistId,
   reason,
   returnTravelAffected = false,
   accommodationAffected = false,
-  accommodationStatus = 'Extension Required',
+  accommodationStatus = 'Pending Review',
 }) {
   if (!checklistId) return;
   const nowIso = new Date().toISOString();
@@ -1437,3 +1982,131 @@ export async function flagBookingForReview({
   inMemoryBookings.set(checklistId, mem);
   saveFallbackStorage();
 }
+
+/**
+ * Critical Business Rule 1 & Safeguards:
+ * When an installation date is extended or changed, the affected room booking must automatically change to Pending Review.
+ * Preserves previous and revised dates in history/audit.
+ * Safeguards:
+ * - Does not change unrelated room bookings.
+ * - Does not create duplicate room bookings.
+ * - Does not automatically mark as Booked or Confirmed.
+ * - Does not reset room booking when date has not actually changed.
+ * - If room booking does not exist, does not silently create one unless workflow requires it.
+ * - Does not create a return-ticket request.
+ */
+export async function handleInstallationDateChange({
+  checklistId,
+  oldStartDate = null,
+  newStartDate = null,
+  oldEndDate = null,
+  newEndDate = null,
+  reason = '',
+  user = {},
+}) {
+  if (!checklistId) return;
+
+  const startChanged = Boolean(newStartDate && oldStartDate && newStartDate !== oldStartDate);
+  const endChanged = Boolean(newEndDate && oldEndDate && newEndDate !== oldEndDate);
+  const isExtension = String(reason).toLowerCase().includes('extension');
+
+  if (!startChanged && !endChanged && !isExtension) {
+    // Dates did not actually change: do not touch room booking!
+    return;
+  }
+
+  const existingRaw = await getBookingRecord(checklistId);
+  if (!existingRaw && !inMemoryBookings.has(checklistId)) {
+    // Safeguard: If a room booking does not exist, do not silently create one
+    return;
+  }
+
+  const checklist = await getChecklistById(checklistId);
+  if (!checklist) return;
+
+  const existing = normalizeBookingData(existingRaw, checklist);
+
+  const prevOriginalDate = existing.original_installation_date || oldEndDate || oldStartDate || checklist.original_booking_end_date || checklist.expected_arrival_date;
+  const revisedDate = newEndDate || newStartDate || checklist.current_booking_end_date || checklist.expected_arrival_date;
+
+  const historyEntry = {
+    id: uuidv4(),
+    previous_date: prevOriginalDate,
+    revised_date: revisedDate,
+    reason: reason || `Installation date changed to ${revisedDate}`,
+    changed_at: new Date().toISOString(),
+    changed_by: user?.email || user?.id || 'System',
+  };
+
+  const currentHistory = Array.isArray(existing.accommodation_history) ? [...existing.accommodation_history] : [];
+  currentHistory.push(historyEntry);
+
+  const updatedData = {
+    ...existing,
+    accommodation_status: 'Pending Review',
+    original_installation_date: prevOriginalDate,
+    revised_installation_date: revisedDate,
+    accommodation_dates_affected: true,
+    schedule_flagged_for_review: true,
+    schedule_review_reason: reason || `Installation date changed/extended to ${revisedDate}`,
+    accommodation_history: currentHistory,
+  };
+
+  const saved = await saveCoordinatorBooking({
+    checklistId,
+    bookingData: updatedData,
+    user: user || { id: 'system', email: 'system@eagleeyesafdrive.com', role: 'ADMIN' },
+  });
+
+  return saved;
+}
+
+/**
+ * Upload ticket or receipt image/PDF for return travel
+ */
+export async function uploadTicketReceiptService({ file, checklistId = 'return' }) {
+  if (!file) throw new Error('No receipt or ticket file uploaded.');
+  const { originalname, mimetype, buffer } = file;
+  const allowed = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+  if (!allowed.includes(mimetype)) {
+    const err = new Error('Invalid file format. Only JPEG, PNG, WebP, and PDF receipts are accepted.');
+    err.statusCode = 400;
+    throw err;
+  }
+  if (buffer.length > 10 * 1024 * 1024) {
+    const err = new Error('File exceeds the 10MB maximum receipt file size limit.');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const ext = path.extname(originalname) || (mimetype === 'application/pdf' ? '.pdf' : '.jpg');
+  const filename = `ticket_${checklistId || 'job'}_${Date.now()}_${uuidv4().slice(0, 8)}${ext}`;
+  const filePath = `tickets/${filename}`;
+
+  try {
+    const { data, error } = await supabase.storage
+      .from('receipts')
+      .upload(filePath, buffer, {
+        contentType: mimetype,
+        upsert: true,
+      });
+
+    if (!error && data) {
+      const { data: urlData } = supabase.storage.from('receipts').getPublicUrl(filePath);
+      return {
+        attachment_url: urlData?.publicUrl || filePath,
+        attachment_name: originalname,
+      };
+    }
+  } catch (err) {
+    console.warn('Could not upload ticket receipt to Supabase storage, falling back to data URL:', err.message);
+  }
+
+  const base64 = buffer.toString('base64');
+  const dataUrl = `data:${mimetype};base64,${base64}`;
+  return {
+    attachment_url: dataUrl,
+    attachment_name: originalname,
+  };
+}
+

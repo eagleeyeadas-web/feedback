@@ -1,6 +1,7 @@
 import { Link, useLocation } from 'react-router-dom';
 import { LayoutGrid, LogOut } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
+import PushNotificationManager from './notifications/PushNotificationManager';
 
 export default function Navbar({ showBackToPortals = false }) {
   const location = useLocation();
@@ -48,6 +49,7 @@ export default function Navbar({ showBackToPortals = false }) {
           {/* Authenticated Staff in Workspace */}
           {session && isAdminWorkspace && (
             <div className="flex items-center gap-2">
+              <PushNotificationManager compact />
               <span className="hidden sm:inline-block text-[11px] font-bold text-navy bg-navy/5 px-2.5 py-1 rounded-md border border-navy/10 uppercase tracking-wider">
                 {role || 'STAFF'}
               </span>

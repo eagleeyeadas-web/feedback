@@ -46,13 +46,9 @@ const VEHICLE_OPTIONS = ['Lorry', 'Truck', 'Bus', 'Heavy Vehicle', 'Other'];
 const PAYMENT_METHODS = ['Cash', 'UPI', 'Bank Transfer', 'Credit', 'Other'];
 const INSTALLATION_STATUSES = [
   'Assigned',
-  'Awaiting Technician Assignment',
-  'Awaiting Schedule',
-  'Courier Pending',
-  'Ready for Installation',
+  'Assign Later',
   'Completed',
 ];
-const PAYMENT_STATUSES = ['Paid', 'Partially Paid', 'Pending'];
 const DURATION_PRESETS = ['1 Day', '2 Days', '3 Days', '4 Days', '5 Days', 'Custom'];
 
 export const SALESPERSON_OPTIONS = [
@@ -420,43 +416,68 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
     }
 
     const isCouriered = formData.delivery_method === 'Product Couriered';
+    const isAssignLater = formData.installation_status === 'Assign Later';
 
-    if (!isCouriered) {
-      if (!formData.installation_duration.trim()) return 'Installation Duration is required';
-      if (!formData.expected_arrival_date) return 'Expected Date of Arrival is required for Technician Carries';
-      if (!isEditMode) {
-        const tomorrowDate = getBusinessTomorrow();
-        if (formData.expected_arrival_date !== tomorrowDate) {
-          return 'Jobs can only be scheduled to start tomorrow. Advance pre-booking is not allowed.';
+    // If Assign Later, technician and schedule fields are deferred and not required
+    if (!isAssignLater) {
+      if (!isCouriered) {
+        if (!formData.installation_duration?.trim()) return 'Installation Duration is required';
+        if (!formData.expected_arrival_date) return 'Expected Date of Arrival is required for Technician Carries';
+        if (!isEditMode) {
+          const tomorrowDate = getBusinessTomorrow();
+          if (formData.expected_arrival_date !== tomorrowDate) {
+            return 'Jobs can only be scheduled to start tomorrow. Advance pre-booking is not allowed.';
+          }
         }
-      }
-      if (!formData.expected_arrival_time) return 'Expected Time of Arrival is required for Technician Carries';
+        if (!formData.expected_arrival_time) return 'Expected Time of Arrival is required for Technician Carries';
 
-      if (!formData.service_engineer || !formData.service_engineer.trim()) {
-        return 'Service Engineer is required. Please select one of the authorized engineers: Mathi, Guna, Sakthivel, or Kamalesh.';
-      }
-      if (!SERVICE_ENGINEER_OPTIONS.includes(formData.service_engineer.trim())) {
-        return 'Please select a valid Service Engineer: Mathi, Guna, Sakthivel, or Kamalesh.';
-      }
-
-      // Availability validation: check if chosen Service Engineer has a conflicting booking
-      if (checkingAvailability) {
-        return 'Verifying technician availability with server... Please wait a moment.';
-      }
-
-      if (availabilityError) {
-        return `Unable to verify technician availability: ${availabilityError}. Please retry.`;
-      }
-
-      const selectedEngStatus = engineersAvailability.find(
-        (e) => e.name.toLowerCase() === formData.service_engineer.trim().toLowerCase()
-      );
-      if (selectedEngStatus && !selectedEngStatus.available) {
-        const c = selectedEngStatus.conflict;
-        if (c?.reason) {
-          return c.reason;
+        if (!formData.service_engineer || !formData.service_engineer.trim()) {
+          return 'Service Engineer is required. Please select one of the authorized engineers: Mathi, Guna, Sakthivel, or Kamalesh.';
         }
-        return `Booking Conflict: ${formData.service_engineer} is unavailable from ${c?.booking_start_date || formData.expected_arrival_date} to ${c?.booking_end_date || formData.expected_arrival_date}. Please select an available engineer.`;
+        if (!SERVICE_ENGINEER_OPTIONS.includes(formData.service_engineer.trim())) {
+          return 'Please select a valid Service Engineer: Mathi, Guna, Sakthivel, or Kamalesh.';
+        }
+
+        // Availability validation: check if chosen Service Engineer has a conflicting booking
+        if (checkingAvailability) {
+          return 'Verifying technician availability with server... Please wait a moment.';
+        }
+
+        if (availabilityError) {
+          return `Unable to verify technician availability: ${availabilityError}. Please retry.`;
+        }
+
+        const selectedEngStatus = engineersAvailability.find(
+          (e) => e.name.toLowerCase() === formData.service_engineer.trim().toLowerCase()
+        );
+        if (selectedEngStatus && !selectedEngStatus.available) {
+          const c = selectedEngStatus.conflict;
+          if (c?.reason) {
+            return c.reason;
+          }
+          return `Booking Conflict: ${formData.service_engineer} is unavailable from ${c?.booking_start_date || formData.expected_arrival_date} to ${c?.booking_end_date || formData.expected_arrival_date}. Please select an available engineer.`;
+        }
+      } else {
+        // Product Couriered with technician assigned
+        if (formData.service_engineer && formData.service_engineer.trim()) {
+          if (!SERVICE_ENGINEER_OPTIONS.includes(formData.service_engineer.trim())) {
+            return 'Please select a valid Service Engineer: Mathi, Guna, Sakthivel, or Kamalesh.';
+          }
+          if (!formData.expected_arrival_date) {
+            return 'Expected Arrival Date is required when assigning a technician to a couriered order';
+          }
+          if (!formData.expected_arrival_time) {
+            return 'Expected Arrival Time is required when assigning a technician to a couriered order';
+          }
+          const selectedEngStatus = engineersAvailability.find(
+            (e) => e.name.toLowerCase() === formData.service_engineer.trim().toLowerCase()
+          );
+          if (selectedEngStatus && !selectedEngStatus.available) {
+            const c = selectedEngStatus.conflict;
+            if (c?.reason) return c.reason;
+            return `Booking Conflict: ${formData.service_engineer} is unavailable. Please select an available engineer.`;
+          }
+        }
       }
     }
 
@@ -465,7 +486,20 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
     }
 
     if (!formData.installation_status || !INSTALLATION_STATUSES.includes(formData.installation_status)) {
-      return 'Installation Status is required';
+      return 'Installation Status is required (Assigned, Assign Later, or Completed)';
+    }
+
+    // Completion authorization checks
+    if (formData.installation_status === 'Completed' && !isAuthoritativeCompleted) {
+      if (!isCouriered) {
+        return 'Technician Carries installations can only be completed via the technician Post-Installation Form.';
+      }
+      if (isCouriered && formData.service_engineer && formData.service_engineer.trim()) {
+        return 'Technician-assigned couriered installations can only be completed via the technician Post-Installation Form.';
+      }
+      if (isCouriered && !formData.remarks?.trim()) {
+        return 'Customer confirmation note in Notes is required before marking an independently installed couriered order Completed.';
+      }
     }
 
     return null;
@@ -506,9 +540,14 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
         ? normalizedReqConfigs[0].device_type
         : normalizedReqConfigs.map((c) => `${c.device_type} (${c.number_of_devices})`).join(', ');
 
-      let resolvedStatus = formData.installation_status;
+      const isAssignLater = formData.installation_status === 'Assign Later';
+      let resolvedStatus = formData.installation_status || 'Assigned';
+
       if (formData.delivery_method === 'Product Couriered') {
-        resolvedStatus = isEditMode ? (formData.installation_status || 'Courier Pending') : 'Courier Pending';
+        const hasTech = Boolean(formData.service_engineer && formData.service_engineer.trim() && formData.expected_arrival_date);
+        if (hasTech && resolvedStatus !== 'Completed') {
+          resolvedStatus = 'Assigned';
+        }
       }
 
       const payload = {
@@ -540,18 +579,18 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
         advance_amount: formData.advance_received ? (Number(formData.advance_amount) || 0) : 0,
         pending_payment: formData.pending_payment,
         pending_amount: formData.pending_payment ? (Number(formData.pending_amount) || 0) : 0,
-        installation_duration: formData.delivery_method === 'Product Couriered' ? (formData.installation_duration?.trim() || '1 Day') : formData.installation_duration.trim(),
+        installation_duration: isAssignLater ? null : (formData.delivery_method === 'Product Couriered' ? (formData.installation_duration?.trim() || null) : formData.installation_duration?.trim() || null),
         vehicle_type: formData.vehicle_type === 'Other' ? formData.custom_vehicle_type.trim() : formData.vehicle_type,
-        expected_arrival_date: formData.delivery_method === 'Product Couriered' ? null : (formData.expected_arrival_date || null),
-        expected_arrival_time: formData.delivery_method === 'Product Couriered' ? null : (formData.expected_arrival_time || null),
+        expected_arrival_date: isAssignLater ? null : (formData.expected_arrival_date || null),
+        expected_arrival_time: isAssignLater ? null : (formData.expected_arrival_time ? formData.expected_arrival_time.trim() : null),
         installation_or_service: formData.installation_or_service,
-        service_engineer: formData.delivery_method === 'Product Couriered' ? null : (formData.service_engineer ? formData.service_engineer.trim() : null),
+        service_engineer: isAssignLater ? null : (formData.service_engineer ? formData.service_engineer.trim() : null),
         service_assistant: null,
         installation_status: isAuthoritativeCompleted ? 'Completed' : resolvedStatus,
         payment_status: formData.payment_status,
         bom_snapshot: formData.installation_or_service === 'Installation' ? (bomSnapshot || null) : null,
         material_issuance_status: formData.installation_or_service === 'Installation' ? (formData.material_issuance_status || 'PENDING') : 'NOT_APPLICABLE',
-        remarks: formData.remarks.trim() || null,
+        remarks: formData.remarks?.trim() || null,
         client_confirmation: formData.client_confirmation,
       };
 
@@ -1269,14 +1308,21 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
             ) : null}
           </div>
 
+          {formData.installation_status === 'Assign Later' && (
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 text-xs flex items-center gap-2">
+              <Info className="w-4 h-4 text-amber-600 shrink-0" />
+              <span>Status is set to <strong>Assign Later</strong>. Scheduling arrival details is deferred and can be configured later.</span>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             {/* Arrival Date (Start Date) */}
             <div>
               <div className="flex items-center justify-between mb-1">
                 <label className="block text-xs font-semibold text-gray-700">
-                  Expected Arrival Date {formData.delivery_method === 'Product Couriered' ? '(Optional)' : <span className="text-rose-500">*</span>}
+                  Expected Arrival Date {formData.delivery_method === 'Product Couriered' || formData.installation_status === 'Assign Later' ? '(Optional)' : <span className="text-rose-500">*</span>}
                 </label>
-                {formData.delivery_method === 'Product Couriered' && formData.expected_arrival_date && (
+                {(formData.delivery_method === 'Product Couriered' || formData.installation_status === 'Assign Later') && formData.expected_arrival_date && (
                   <button
                     type="button"
                     onClick={() => handleChange('expected_arrival_date', '')}
@@ -1285,7 +1331,7 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
                     Clear (Schedule Later)
                   </button>
                 )}
-                {formData.delivery_method === 'Product Couriered' && !formData.expected_arrival_date && (
+                {(formData.delivery_method === 'Product Couriered' || formData.installation_status === 'Assign Later') && !formData.expected_arrival_date && (
                   <button
                     type="button"
                     onClick={() => handleChange('expected_arrival_date', getBusinessTomorrow())}
@@ -1297,7 +1343,7 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
               </div>
               <input
                 type="date"
-                required={formData.delivery_method !== 'Product Couriered'}
+                required={formData.delivery_method !== 'Product Couriered' && formData.installation_status !== 'Assign Later'}
                 min={!isEditMode ? getBusinessTomorrow() : undefined}
                 max={!isEditMode ? getBusinessTomorrow() : undefined}
                 value={formData.expected_arrival_date}
@@ -1309,11 +1355,11 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
                 }`}
               />
               <span className="text-[10px] text-gray-400 mt-1 block">
-                {formData.delivery_method === 'Product Couriered' && !formData.expected_arrival_date
-                  ? 'Unscheduled — Will be set once courier delivers'
+                {(formData.delivery_method === 'Product Couriered' || formData.installation_status === 'Assign Later') && !formData.expected_arrival_date
+                  ? 'Unscheduled — Will be configured upon assignment'
                   : 'Full-day inclusive arrival date'}
               </span>
-              {!isEditMode && formData.expected_arrival_date && (
+              {!isEditMode && formData.expected_arrival_date && formData.installation_status !== 'Assign Later' && (
                 <div className="mt-2 p-2.5 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-2 text-xs font-semibold text-amber-900 shadow-2xs">
                   <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                   <span>Jobs can only be scheduled to start tomorrow. Advance pre-booking is not allowed.</span>
@@ -1324,12 +1370,12 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
             {/* Duration Selector & Presets */}
             <div>
               <label className="block text-xs font-semibold text-gray-700 mb-1">
-                Installation Duration <span className="text-rose-500">*</span>
+                Installation Duration {formData.installation_status === 'Assign Later' ? '(Optional)' : <span className="text-rose-500">*</span>}
               </label>
               <div className="space-y-1.5">
                 <input
                   type="text"
-                  required
+                  required={formData.installation_status !== 'Assign Later'}
                   value={formData.installation_duration}
                   onChange={(e) => handleChange('installation_duration', e.target.value)}
                   placeholder="e.g. 1 Day, 2 Days, 3 Days"
@@ -1467,19 +1513,28 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
             )}
           </div>
 
+          {formData.installation_status === 'Assign Later' && (
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 text-xs flex items-center gap-2">
+              <Info className="w-4 h-4 text-amber-600 shrink-0" />
+              <span>Status is set to <strong>Assign Later</strong>. Engineer assignment is deferred. You can assign an available technician later without creating a duplicate checklist.</span>
+            </div>
+          )}
+
           <div className="space-y-4 max-w-xl">
             {/* Service Engineer with Availability-Aware Select */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <label className="block text-xs font-semibold text-gray-700">
                   Service Engineer{' '}
-                  {formData.delivery_method === 'Product Couriered' ? (
+                  {formData.installation_status === 'Assign Later' ? (
+                    <span className="text-amber-700 font-bold">(Optional — Assign Later)</span>
+                  ) : formData.delivery_method === 'Product Couriered' ? (
                     <span className="text-indigo-600 font-bold">(Optional for Couriered Jobs)</span>
                   ) : (
                     <span className="text-rose-500">*</span>
                   )}
                 </label>
-                {formData.delivery_method === 'Product Couriered' && formData.service_engineer && (
+                {(formData.delivery_method === 'Product Couriered' || formData.installation_status === 'Assign Later') && formData.service_engineer && (
                   <button
                     type="button"
                     onClick={() => handleChange('service_engineer', '')}
@@ -1491,13 +1546,13 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
               </div>
 
               <select
-                required={formData.delivery_method !== 'Product Couriered'}
+                required={formData.delivery_method !== 'Product Couriered' && formData.installation_status !== 'Assign Later'}
                 value={formData.service_engineer}
                 onChange={(e) => handleChange('service_engineer', e.target.value)}
                 className="w-full text-xs p-2.5 border border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 font-semibold bg-white"
               >
                 <option value="">
-                  {formData.delivery_method === 'Product Couriered'
+                  {formData.delivery_method === 'Product Couriered' || formData.installation_status === 'Assign Later'
                     ? '-- Leave Unassigned (Assign Later) --'
                     : '-- Select Service Engineer --'}
                 </option>
@@ -1667,91 +1722,92 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
         </>
         )}
 
-        {/* SECTION 11 — 6. FINAL CONFIRMATION */}
+        {/* SECTION 6 — FINAL CONFIRMATION */}
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4">
           <h3 className="text-sm font-bold text-navy flex items-center gap-2 pb-3 border-b border-gray-100">
             <CheckSquare className="text-blue-600" size={18} />
             6. FINAL CONFIRMATION
           </h3>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="max-w-md">
+            {/* 1. Installation Status */}
             <div>
               <label className="block text-xs font-semibold text-gray-700 mb-1">
                 Installation Status <span className="text-rose-500">*</span>
               </label>
-              <select
-                value={formData.installation_status}
-                onChange={(e) => handleChange('installation_status', e.target.value)}
-                disabled={isEditMode && isAuthoritativeCompleted}
-                required
-                className={`w-full text-xs p-2.5 border border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 font-semibold ${
-                  isEditMode && isAuthoritativeCompleted ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''
-                }`}
-              >
-                {INSTALLATION_STATUSES.map((st) => (
-                  <option key={st} value={st}>
-                    {st}
-                  </option>
-                ))}
-              </select>
-              {isEditMode && isAuthoritativeCompleted && (
-                <p className="text-[10px] text-emerald-600 font-medium mt-1">
-                  Completed via technical report (cannot be reverted).
-                </p>
-              )}
-            </div>
+              {(() => {
+                const isTechJob = formData.delivery_method === 'Technician Carries' || Boolean(formData.service_engineer && formData.service_engineer.trim());
+                const isCourieredSelfInstall = formData.delivery_method === 'Product Couriered' && !formData.service_engineer;
 
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">
-                Payment Status <span className="text-rose-500">*</span>
-              </label>
-              <select
-                value={formData.payment_status}
-                onChange={(e) => handleChange('payment_status', e.target.value)}
-                className="w-full text-xs p-2.5 border border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 font-semibold"
-              >
-                {PAYMENT_STATUSES.map((pst) => (
-                  <option key={pst} value={pst}>
-                    {pst}
-                  </option>
-                ))}
-              </select>
-            </div>
+                return (
+                  <div>
+                    <select
+                      id="installation_status"
+                      name="installation_status"
+                      value={formData.installation_status}
+                      onChange={(e) => {
+                        const newStatus = e.target.value;
+                        if (newStatus === 'Completed' && isCourieredSelfInstall && formData.client_confirmation !== 'Confirmed') {
+                          handleChange('client_confirmation', 'Confirmed');
+                        }
+                        if (newStatus === 'Assign Later') {
+                          handleChange('service_engineer', '');
+                        }
+                        handleChange('installation_status', newStatus);
+                      }}
+                      disabled={isAuthoritativeCompleted}
+                      required
+                      className={`w-full text-xs p-2.5 border border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 font-semibold ${
+                        isAuthoritativeCompleted ? 'bg-gray-100 text-gray-700 cursor-not-allowed' : 'bg-white'
+                      }`}
+                    >
+                      <option value="Assigned">Assigned</option>
+                      <option value="Assign Later">Assign Later</option>
+                      <option
+                        value="Completed"
+                        disabled={
+                          (!isAuthoritativeCompleted && formData.delivery_method === 'Technician Carries') ||
+                          (!isAuthoritativeCompleted && formData.delivery_method === 'Product Couriered' && Boolean(formData.service_engineer && formData.service_engineer.trim()))
+                        }
+                      >
+                        Completed
+                      </option>
+                    </select>
 
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">
-                Client Confirmation <span className="text-rose-500">*</span>
-              </label>
-              <div className="flex items-center gap-6 pt-2">
-                <label className="flex items-center gap-2 text-xs font-medium cursor-pointer">
-                  <input
-                    type="radio"
-                    name="client_confirmation"
-                    checked={formData.client_confirmation === 'Confirmed'}
-                    onChange={() => handleChange('client_confirmation', 'Confirmed')}
-                  />
-                  <span>Confirmed</span>
-                </label>
-                <label className="flex items-center gap-2 text-xs font-medium cursor-pointer">
-                  <input
-                    type="radio"
-                    name="client_confirmation"
-                    checked={formData.client_confirmation === 'Not Confirmed'}
-                    onChange={() => handleChange('client_confirmation', 'Not Confirmed')}
-                  />
-                  <span>Not Confirmed</span>
-                </label>
-              </div>
+                    {/* Contextual workflow guidance */}
+                    {isAuthoritativeCompleted ? (
+                      <p className="text-[10px] text-emerald-700 font-medium mt-1">
+                        ✓ Completed automatically via technician Post-Installation Form.
+                      </p>
+                    ) : formData.installation_status === 'Assign Later' ? (
+                      <p className="text-[10px] text-amber-700 font-medium mt-1">
+                        Checklist will be saved without technician or schedule. You can assign an available technician later.
+                      </p>
+                    ) : formData.installation_status === 'Assigned' ? (
+                      <p className="text-[10px] text-blue-700 font-medium mt-1">
+                        {formData.delivery_method === 'Product Couriered'
+                          ? 'Technician assigned for installation following courier delivery.'
+                          : 'Technician assigned and scheduled through standard installation workflow.'}
+                      </p>
+                    ) : (
+                      <p className="text-[10px] text-emerald-700 font-medium mt-1">
+                        Customer self-installation confirmed (requires confirmation note in Notes).
+                      </p>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           </div>
 
+          {/* 4. Notes */}
           <div>
-            <label className="block text-xs font-semibold text-gray-700 mb-1">Remarks</label>
+            <label className="block text-xs font-semibold text-gray-700 mb-1">Notes</label>
             <textarea
               rows={3}
               value={formData.remarks}
               onChange={(e) => handleChange('remarks', e.target.value)}
-              placeholder="Enter any additional notes, location instructions, accessories details, or technician comments..."
+              placeholder="Enter any additional notes, customer confirmation details, location instructions, or remarks..."
               className="w-full text-xs p-3 border border-gray-200 rounded-xl focus:outline-none focus:border-blue-500"
             />
           </div>

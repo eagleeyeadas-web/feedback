@@ -1042,14 +1042,50 @@ export async function saveCoordinatorBookingApi(token, checklistId, data) {
   return json;
 }
 
-export async function updateCoordinatorBookingStatusApi(token, checklistId, status, notes) {
+export async function updateCoordinatorBookingStatusApi(token, checklistId, statusOrPayload, notes) {
+  const bodyPayload = typeof statusOrPayload === 'object' && statusOrPayload !== null
+    ? statusOrPayload
+    : { status: statusOrPayload, notes };
   const res = await fetch(`${API_BASE}/admin/coordinator/bookings/${checklistId}/status`, {
+    method: 'POST',
+    headers: adminHeaders(token),
+    body: JSON.stringify(bodyPayload),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to update booking status');
+  return json;
+}
+
+export async function updateCoordinatorOutboundStatusApi(token, checklistId, status, notes) {
+  const res = await fetch(`${API_BASE}/admin/coordinator/bookings/${checklistId}/outbound-status`, {
     method: 'POST',
     headers: adminHeaders(token),
     body: JSON.stringify({ status, notes }),
   });
   const json = await res.json();
-  if (!res.ok) throw new Error(json.error || 'Failed to update booking status');
+  if (!res.ok) throw new Error(json.error || 'Failed to update outbound travel status');
+  return json;
+}
+
+export async function updateCoordinatorRoomStatusApi(token, checklistId, status, notes) {
+  const res = await fetch(`${API_BASE}/admin/coordinator/bookings/${checklistId}/room-status`, {
+    method: 'POST',
+    headers: adminHeaders(token),
+    body: JSON.stringify({ status, notes }),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to update room booking status');
+  return json;
+}
+
+export async function updateCoordinatorReturnStatusApi(token, checklistId, status, notes) {
+  const res = await fetch(`${API_BASE}/admin/coordinator/bookings/${checklistId}/return-status`, {
+    method: 'POST',
+    headers: adminHeaders(token),
+    body: JSON.stringify({ status, notes }),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to update return ticket status');
   return json;
 }
 
@@ -1081,6 +1117,80 @@ export async function updateCoordinatorReturnTicketApi(token, checklistId, data)
   });
   const json = await res.json();
   if (!res.ok) throw new Error(json.error || 'Failed to update return ticket booking');
+  return json;
+}
+
+/**
+ * Fetch Return Ticket Tasks (filtered by technician for TECHNICAL role, all for COORDINATOR/ADMIN)
+ */
+export async function fetchReturnTicketTasksApi(token, params = {}) {
+  const query = new URLSearchParams(params).toString();
+  const res = await fetch(`${API_BASE}/admin/coordinator/return-ticket-tasks${query ? '?' + query : ''}`, {
+    headers: adminHeaders(token),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to fetch return ticket tasks');
+  return json.tasks || [];
+}
+
+/**
+ * Technician submits return ticket booking details for Coordinator verification
+ */
+export async function submitTechnicianReturnTicketApi(token, checklistId, data) {
+  const res = await fetch(`${API_BASE}/admin/coordinator/bookings/${checklistId}/technician-return-ticket`, {
+    method: 'POST',
+    headers: adminHeaders(token),
+    body: JSON.stringify(data),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to submit return ticket details');
+  return json;
+}
+
+/**
+ * Coordinator marks Return Ticket Task as Verified / Completed
+ */
+export async function verifyReturnTicketApi(token, checklistId) {
+  const res = await fetch(`${API_BASE}/admin/coordinator/bookings/${checklistId}/verify-return-ticket`, {
+    method: 'POST',
+    headers: adminHeaders(token),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to verify return ticket task');
+  return json;
+}
+
+/**
+ * Coordinator requests correction on return ticket details
+ */
+export async function requestReturnTicketCorrectionApi(token, checklistId, reason) {
+  const res = await fetch(`${API_BASE}/admin/coordinator/bookings/${checklistId}/request-return-ticket-correction`, {
+    method: 'POST',
+    headers: adminHeaders(token),
+    body: JSON.stringify({ reason }),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to request return ticket correction');
+  return json;
+}
+
+/**
+ * Upload ticket or receipt file (image/PDF)
+ */
+export async function uploadTicketReceiptApi(token, file, checklistId) {
+  const formData = new FormData();
+  formData.append('file', file);
+  if (checklistId) formData.append('checklistId', checklistId);
+
+  const res = await fetch(`${API_BASE}/admin/coordinator/upload-ticket-receipt`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: formData,
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to upload ticket receipt');
   return json;
 }
 
@@ -1873,6 +1983,62 @@ export async function scheduleCourierTechnicianApi(token, checklistId, payload =
   }
   return json;
 }
+
+// ==========================================
+// Web Push Notifications API Endpoints
+// ==========================================
+
+export async function getVapidPublicKeyApi() {
+  const res = await fetch(`${API_BASE}/notifications/vapid-public-key`);
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to retrieve VAPID public key');
+  return json.publicKey;
+}
+
+export async function subscribePushApi(token, payload) {
+  const res = await fetch(`${API_BASE}/notifications/subscribe`, {
+    method: 'POST',
+    headers: adminHeaders(token),
+    body: JSON.stringify(payload),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to register push subscription');
+  return json;
+}
+
+export async function unsubscribePushApi(token, endpoint) {
+  const res = await fetch(`${API_BASE}/notifications/unsubscribe`, {
+    method: 'POST',
+    headers: adminHeaders(token),
+    body: JSON.stringify({ endpoint }),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to remove push subscription');
+  return json;
+}
+
+export async function getPushSubscriptionStatusApi(token, endpoint) {
+  const url = endpoint
+    ? `${API_BASE}/notifications/subscription-status?endpoint=${encodeURIComponent(endpoint)}`
+    : `${API_BASE}/notifications/subscription-status`;
+  const res = await fetch(url, {
+    headers: adminHeaders(token),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to check subscription status');
+  return json;
+}
+
+export async function sendTestPushNotificationApi(token) {
+  const res = await fetch(`${API_BASE}/notifications/test`, {
+    method: 'POST',
+    headers: adminHeaders(token),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to send test push notification');
+  return json;
+}
+
 
 
 

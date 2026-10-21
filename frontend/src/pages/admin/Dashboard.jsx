@@ -57,6 +57,7 @@ import {
 } from 'lucide-react';
 
 import AccessDenied from '../../components/AccessDenied';
+import PushNotificationManager from '../../components/notifications/PushNotificationManager';
 
 const ROLE_PERMITTED_TABS = {
   SALES: [
@@ -631,6 +632,9 @@ export default function Dashboard() {
               {activeTab === 'quotation_generator' && 'Quotation Generator (PDF)'}
               {activeTab === 'quotation_history' && 'Quotation History & Records'}
             </h1>
+          </div>
+          <div className="flex items-center gap-3">
+            <PushNotificationManager />
           </div>
         </header>
 

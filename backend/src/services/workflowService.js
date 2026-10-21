@@ -339,7 +339,7 @@ export async function startInstallationJob({ checklist_id, user }) {
     const { data, error } = await supabase
       .from('installation_checklists')
       .update({
-        installation_status: 'In Progress',
+        installation_status: 'Assigned',
         actual_start_datetime: nowIso,
         updated_at: nowIso,
       })
@@ -352,7 +352,7 @@ export async function startInstallationJob({ checklist_id, user }) {
         const { data: fbData, error: fbErr } = await supabase
           .from('installation_checklists')
           .update({
-            installation_status: 'In Progress',
+            installation_status: 'Assigned',
             updated_at: nowIso,
           })
           .eq('id', checklist_id)
@@ -371,13 +371,13 @@ export async function startInstallationJob({ checklist_id, user }) {
       const { data: fbData } = await supabase
         .from('installation_checklists')
         .update({
-          installation_status: 'In Progress',
+          installation_status: 'Assigned',
           updated_at: nowIso,
         })
         .eq('id', checklist_id)
         .select()
         .single();
-      updated = fbData || { id: checklist_id, installation_status: 'In Progress' };
+      updated = fbData || { id: checklist_id, installation_status: 'Assigned' };
     } else {
       throw err;
     }
@@ -386,7 +386,7 @@ export async function startInstallationJob({ checklist_id, user }) {
   // Update in-memory schedule store
   const existingSched = inMemoryChecklistSchedules.get(checklist_id) || {};
   existingSched.actual_start_datetime = nowIso;
-  existingSched.installation_status = 'In Progress';
+  existingSched.installation_status = 'Assigned';
   inMemoryChecklistSchedules.set(checklist_id, existingSched);
 
   await logAudit({
@@ -566,6 +566,31 @@ export async function getAdditionalCustomerInstallations({ checklist_id, technic
 }
 
 /**
+ * Detects whether an item or material name refers to screw hardware.
+ * Screws (Long Screw, Small Screw) are excluded from the Post-Installation Form's
+ * material selection, usage, and return fields.
+ */
+export function isScrewMaterial(itemOrName) {
+  if (!itemOrName) return false;
+  const name = typeof itemOrName === 'string'
+    ? itemOrName
+    : (itemOrName.item_name || itemOrName.material_name || itemOrName.product_name || itemOrName.device_type || '');
+  const sku = typeof itemOrName === 'object' ? (itemOrName.sku || '') : '';
+  const n = String(name).toLowerCase().replace(/[-_()]/g, ' ').replace(/\s+/g, ' ').trim();
+  const s = String(sku).toLowerCase();
+  return (
+    s.includes('screw') ||
+    n === 'long screw' ||
+    n === 'small screw' ||
+    n === 'screw long' ||
+    n === 'screw small' ||
+    n.includes('long screw') ||
+    n.includes('small screw') ||
+    n.includes('screw')
+  );
+}
+
+/**
  * Stage 3: Technical submits Post-Installation Completion Form
  */
 export async function submitInstallationCompletionReport(param1, param2) {
@@ -582,8 +607,12 @@ export async function submitInstallationCompletionReport(param1, param2) {
 
   const checklist_id = opts.checklist_id;
   const user = opts.user || { id: 'tech-user', email: 'tech@eagleeye.com', role: 'TECHNICAL' };
-  const items = opts.items || opts.device_items;
-  const rawMaterialItems = opts.material_items || opts.materials || [];
+  const items = (opts.items || opts.device_items || []).filter(
+    (i) => !isScrewMaterial(i.device_type || i.item_name)
+  );
+  const rawMaterialItems = (opts.material_items || opts.materials || []).filter(
+    (m) => !isScrewMaterial(m.material_name || m.item_name)
+  );
   const completion_status = opts.completion_status || 'Site Work Completed';
   const remarks = opts.remarks || opts.completion_notes || '';
 
@@ -743,9 +772,11 @@ export async function submitInstallationCompletionReport(param1, param2) {
     };
   });
 
-  // Reconcile extra loose backup items if declared/provided
+  // Reconcile extra loose backup items if declared/provided (screws excluded from post-installation form)
   let processedBackupItems = [];
-  const rawBackupItems = opts.backup_items || opts.backupItems || [];
+  const rawBackupItems = (opts.backup_items || opts.backupItems || []).filter(
+    (b) => !isScrewMaterial(b.item_name || b.material_name)
+  );
   if (Array.isArray(rawBackupItems) && rawBackupItems.length > 0) {
     const { reconcileBackupItems } = await import('./backupItemService.js');
     const reconResult = await reconcileBackupItems({
@@ -904,8 +935,10 @@ export async function submitInstallationCompletionReport(param1, param2) {
     }
   }
 
-  // Auto create material return declaration if unused fitting materials exist
-  const returnedMaterialItems = processedMaterialItems.filter((m) => m.quantity_returned > 0);
+  // Auto create material return declaration if unused fitting materials exist (excluding screws)
+  const returnedMaterialItems = processedMaterialItems
+    .filter((m) => !isScrewMaterial(m.material_name))
+    .filter((m) => m.quantity_returned > 0);
   if (returnedMaterialItems.length > 0) {
     await declareMaterialReturns({
       checklist_id,
@@ -957,6 +990,7 @@ export async function submitInstallationCompletionReport(param1, param2) {
       .from('installation_checklists')
       .update({
         installation_status: finalInstStatus,
+        completion_type: 'TECHNICIAN_INSTALLED',
         reconciliation_status: finalReconStatus,
         final_bom_snapshot: finalBomSnapshot,
         actual_materials_used: processedMaterialItems.filter((m) => m.quantity_used > 0),
@@ -975,6 +1009,7 @@ export async function submitInstallationCompletionReport(param1, param2) {
         .from('installation_checklists')
         .update({
           installation_status: finalInstStatus,
+          completion_type: 'TECHNICIAN_INSTALLED',
           reconciliation_status: finalReconStatus,
           actual_completion_datetime: now,
           updated_at: submissionTime,
@@ -986,6 +1021,7 @@ export async function submitInstallationCompletionReport(param1, param2) {
           .from('installation_checklists')
           .update({
             installation_status: finalInstStatus,
+            completion_type: 'TECHNICIAN_INSTALLED',
             updated_at: submissionTime,
           })
           .eq('id', checklist_id);
@@ -1090,15 +1126,21 @@ export async function getInstallationCompletionReport(checklist_id) {
       ]);
 
       const cached = inMemoryCompletionReports.get(checklist_id);
-      const effectiveItems = (items && items.length > 0)
+      const effectiveItems = ((items && items.length > 0)
         ? items
-        : (cached?.items || cached?.device_items || report.items || []);
+        : (cached?.items || cached?.device_items || report.items || []))
+        .filter((it) => !isScrewMaterial(it.device_type || it.item_name));
+
+      const rawMaterials = report.material_items || cached?.material_items || [];
+      const sanitizedMaterials = Array.isArray(rawMaterials)
+        ? rawMaterials.filter((m) => !isScrewMaterial(m.material_name || m.item_name))
+        : [];
 
       return {
         ...report,
         items: effectiveItems,
         device_items: effectiveItems,
-        material_items: report.material_items || cached?.material_items || [],
+        material_items: sanitizedMaterials,
         extra_installations: (extraInstallations && extraInstallations.length > 0)
           ? extraInstallations
           : (cached?.extra_installations || report.extra_installations || []),
@@ -1111,10 +1153,17 @@ export async function getInstallationCompletionReport(checklist_id) {
   const cached = inMemoryCompletionReports.get(checklist_id);
   if (cached) {
     const extraInstallations = await getAdditionalCustomerInstallations({ checklist_id });
+    const cachedMaterials = Array.isArray(cached.material_items)
+      ? cached.material_items.filter((m) => !isScrewMaterial(m.material_name || m.item_name))
+      : [];
+    const cachedItems = (cached.items || cached.device_items || []).filter(
+      (it) => !isScrewMaterial(it.device_type || it.item_name)
+    );
     return {
       ...cached,
-      items: cached.items || cached.device_items || [],
-      device_items: cached.items || cached.device_items || [],
+      items: cachedItems,
+      device_items: cachedItems,
+      material_items: cachedMaterials,
       extra_installations: extraInstallations || cached.extra_installations || [],
     };
   }
@@ -1251,13 +1300,16 @@ export async function declareMaterialReturns({
   if (!checklist_id) {
     throw new Error('Checklist ID is required to declare material returns');
   }
-  if (!Array.isArray(items) || items.length === 0) {
+  const validItems = (Array.isArray(items) ? items : []).filter(
+    (it) => !isScrewMaterial(it.material_name || it.item_name)
+  );
+  if (validItems.length === 0) {
     return [];
   }
 
   const createdRecords = [];
 
-  for (const item of items) {
+  for (const item of validItems) {
     const declaredQty = parseFloat(item.quantity_returned ?? item.declared_return_qty) || 0;
     if (declaredQty <= 0) continue;
 
@@ -1816,7 +1868,7 @@ export async function getAllStoreMaterialReturns() {
     }
   }
 
-  return returns;
+  return returns.filter((r) => !isScrewMaterial(r.material_name));
 }
 
 /**
@@ -2043,18 +2095,35 @@ export async function enrichChecklistsWithWorkflowStatus(checklists) {
     copy.returns = itemReturns;
     copy.device_returns = itemReturns;
 
-    const itemMatReturns = Array.from(inMemoryMaterialReturns.values()).filter((r) => r.checklist_id === item.id);
+    const itemMatReturns = Array.from(inMemoryMaterialReturns.values())
+      .filter((r) => r.checklist_id === item.id)
+      .filter((r) => !isScrewMaterial(r.material_name));
     copy.material_returns = itemMatReturns;
+
+    if (Array.isArray(copy.actual_materials_returned)) {
+      copy.actual_materials_returned = copy.actual_materials_returned.filter(
+        (m) => !isScrewMaterial(m.material_name || m.item_name)
+      );
+    }
+    if (Array.isArray(copy.actual_materials_used)) {
+      copy.actual_materials_used = copy.actual_materials_used.filter(
+        (m) => !isScrewMaterial(m.material_name || m.item_name)
+      );
+    }
 
     if (inMemReport) {
       if (!copy.final_bom_snapshot && (inMemReport.final_bom || inMemReport.final_bom_snapshot)) {
         copy.final_bom_snapshot = inMemReport.final_bom || inMemReport.final_bom_snapshot;
       }
       if (!copy.actual_materials_used && inMemReport.material_items) {
-        copy.actual_materials_used = inMemReport.material_items.filter((m) => m.quantity_used > 0);
+        copy.actual_materials_used = inMemReport.material_items
+          .filter((m) => !isScrewMaterial(m.material_name))
+          .filter((m) => m.quantity_used > 0);
       }
       if (!copy.actual_materials_returned && inMemReport.material_items) {
-        copy.actual_materials_returned = inMemReport.material_items.filter((m) => m.quantity_returned > 0);
+        copy.actual_materials_returned = inMemReport.material_items
+          .filter((m) => !isScrewMaterial(m.material_name))
+          .filter((m) => m.quantity_returned > 0);
       }
     }
 
@@ -2076,6 +2145,11 @@ export async function enrichChecklistsWithWorkflowStatus(checklists) {
         copy.reconciliation_status = 'PENDING_STORE_VERIFICATION';
         copy.material_return_status = 'PENDING_STORE_VERIFICATION';
       }
+    } else if (copy.material_return_status === 'PENDING_STORE_VERIFICATION' && (!copy.actual_materials_returned || copy.actual_materials_returned.length === 0)) {
+      copy.material_return_status = 'NOT_APPLICABLE';
+      if (copy.reconciliation_status === 'PENDING_STORE_VERIFICATION' && (!copy.returns || copy.returns.length === 0)) {
+        copy.reconciliation_status = 'FULLY_RECONCILED';
+      }
     }
 
 
@@ -2091,12 +2165,10 @@ export async function enrichChecklistsWithWorkflowStatus(checklists) {
     if (isCompleted) {
       copy.installation_status = 'Completed';
       copy.completion_type = item.completion_type || (hasCompletionReport ? 'TECHNICIAN_INSTALLED' : (item.delivery_method === 'Product Couriered' ? 'CUSTOMER_INSTALLED' : 'TECHNICIAN_INSTALLED'));
-    } else if (instStatusNormalized === 'in progress') {
-      copy.installation_status = 'In Progress';
-    } else if (instStatusNormalized === 'cancelled') {
-      copy.installation_status = 'Cancelled';
+    } else if (rawStatus === 'Assign Later' || (!item.service_engineer && item.delivery_method === 'Product Couriered')) {
+      copy.installation_status = 'Assign Later';
     } else {
-      copy.installation_status = rawStatus || 'Assigned';
+      copy.installation_status = 'Assigned';
     }
 
     return copy;

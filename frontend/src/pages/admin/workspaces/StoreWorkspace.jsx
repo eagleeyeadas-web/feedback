@@ -59,6 +59,7 @@ import {
   allocateDeviceSetsApi,
   releaseDeviceAllocationApi,
 } from '../../../lib/api';
+import { isScrewMaterial } from '../../../lib/productHelpers';
 
 const STANDARD_DEVICE_TYPES = [
   '2 Channel Live',
@@ -105,6 +106,10 @@ export default function StoreWorkspace({ onSelectChecklist }) {
   const [showDeleteMovementsModal, setShowDeleteMovementsModal] = useState(false);
   const [deletingMovements, setDeletingMovements] = useState(false);
   const [deleteMovementsScope, setDeleteMovementsScope] = useState('ALL'); // 'ALL' | 'FILTERED'
+  const [singleDeleteMovement, setSingleDeleteMovement] = useState(null);
+  const [deletingSingleMovement, setDeletingSingleMovement] = useState(false);
+  const [singleDeleteError, setSingleDeleteError] = useState('');
+  const [remarksModalMovement, setRemarksModalMovement] = useState(null);
 
   const [showDeleteReturnsModal, setShowDeleteReturnsModal] = useState(false);
   const [deletingReturns, setDeletingReturns] = useState(false);
@@ -241,6 +246,25 @@ export default function StoreWorkspace({ onSelectChecklist }) {
     }
   };
 
+  // Format Movement Type helper for clean UI badges
+  const formatMovementType = (type) => {
+    if (!type) return 'Movement';
+    switch (type) {
+      case 'OPENING_STOCK': return 'Opening Stock';
+      case 'STOCK_RECEIVED': return 'Stock Received';
+      case 'STOCK_ISSUED': return 'Stock Issued';
+      case 'COURIER_DISPATCHED': return 'Courier Dispatched';
+      case 'STOCK_ADJUSTMENT': return 'Stock Adjustment';
+      case 'STOCK_REVERSAL': return 'Stock Reversal';
+      case 'USABLE_STOCK_RETURNED':
+      case 'RETURNED_USABLE': return 'Usable Return';
+      case 'DAMAGED_STOCK_RECEIVED':
+      case 'RETURNED_DAMAGED': return 'Damaged Return';
+      case 'DAMAGED_STOCK_DISPOSITION': return 'Damaged Disposition';
+      default: return type.replace(/_/g, ' ');
+    }
+  };
+
   // Handle Delete / Clear Stock Movement History
   const handleDeleteAllMovements = async (scope = deleteMovementsScope) => {
     if (!token || deletingMovements) return;
@@ -250,26 +274,34 @@ export default function StoreWorkspace({ onSelectChecklist }) {
         ? { category: movementCategory, type: movementType }
         : { category: 'All', type: 'All' };
       const res = await clearStockMovementsHistoryApi(token, params);
-      showToast(res.message || 'Movement history deleted successfully!');
+      showToast(res.message || `Cleaned ${res.deletedCount || 0} eligible test records. Preserved ${res.protectedCount || 0} genuine transactions.`);
       setShowDeleteMovementsModal(false);
       await loadAllData();
     } catch (err) {
-      showToast(err.message || 'Failed to delete movement history');
+      showToast(err.message || 'Failed to clean movement history');
     } finally {
       setDeletingMovements(false);
     }
   };
 
-  const handleDeleteSingleMovement = async (id) => {
-    if (!token || !id) return;
-    if (!window.confirm('Are you sure you want to delete this stock movement record from history?')) return;
+  const handleOpenSingleDeleteModal = (movement) => {
+    setSingleDeleteError('');
+    setSingleDeleteMovement(movement);
+  };
+
+  const handleConfirmSingleDelete = async () => {
+    if (!token || !singleDeleteMovement || deletingSingleMovement) return;
+    setDeletingSingleMovement(true);
+    setSingleDeleteError('');
     try {
-      await deleteStockMovementApi(token, id);
-      showToast('Stock movement deleted from history');
-      setMovements((prev) => prev.filter((m) => m.id !== id));
-      setMovementTotalCount((prev) => Math.max(0, prev - 1));
+      const res = await deleteStockMovementApi(token, singleDeleteMovement.id);
+      showToast(res.message || 'Stock movement record deleted from history');
+      setSingleDeleteMovement(null);
+      await loadAllData();
     } catch (err) {
-      showToast(err.message || 'Failed to delete movement record');
+      setSingleDeleteError(err.message || 'Failed to delete movement record');
+    } finally {
+      setDeletingSingleMovement(false);
     }
   };
 
@@ -619,8 +651,10 @@ export default function StoreWorkspace({ onSelectChecklist }) {
     }
   };
 
-  // Filter pending returns
-  const pendingReturns = storeReturns.filter((r) => r.status === 'PENDING_STORE_VERIFICATION');
+  // Filter pending returns (screws excluded from return verification)
+  const pendingReturns = storeReturns
+    .filter((r) => !isScrewMaterial(r.material_name || r.device_type))
+    .filter((r) => r.status === 'PENDING_STORE_VERIFICATION');
 
   // Low stock items check
   const lowStockDevices = products.filter((p) => Number(p.usable_stock) <= Number(p.min_stock_level || 5));
@@ -1647,76 +1681,123 @@ export default function StoreWorkspace({ onSelectChecklist }) {
             <table className="w-full text-left border-collapse text-xs">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-200 text-[11px] font-bold text-gray-600 uppercase tracking-wider">
-                  <th className="py-3 px-4">Date / Time</th>
-                  <th className="py-3 px-4">Category</th>
-                  <th className="py-3 px-4">Item Name & SKU</th>
-                  <th className="py-3 px-4 text-center">Type</th>
-                  <th className="py-3 px-4 text-center">Movement Qty</th>
-                  <th className="py-3 px-4 text-center">Balance Transition</th>
-                  <th className="py-3 px-4">Performed By</th>
-                  <th className="py-3 px-4 min-w-[200px]">Reason / Audit Remarks</th>
-                  <th className="py-3 px-4 text-right">Action</th>
+                  <th className="py-2.5 px-3.5 whitespace-nowrap">Date & Time</th>
+                  <th className="py-2.5 px-3.5">Item</th>
+                  <th className="py-2.5 px-3.5 text-center whitespace-nowrap">Type</th>
+                  <th className="py-2.5 px-3.5 text-center whitespace-nowrap">Quantity</th>
+                  <th className="py-2.5 px-3.5 text-center whitespace-nowrap">Stock Balance</th>
+                  <th className="py-2.5 px-3.5 whitespace-nowrap">Performed By</th>
+                  <th className="py-2.5 px-3.5 min-w-[180px]">Reason</th>
+                  <th className="py-2.5 px-3.5 text-right whitespace-nowrap">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {movements.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="py-8 text-center text-gray-400">
+                    <td colSpan={8} className="py-8 text-center text-gray-400">
                       No stock movement records match the current filter.
                     </td>
                   </tr>
                 ) : (
-                  movements.map((t) => (
-                    <tr key={t.id} className="hover:bg-amber-50/20 transition-colors">
-                      <td className="py-3 px-4 font-mono text-[11px] text-gray-500 whitespace-nowrap">
-                        {new Date(t.created_at).toLocaleString('en-IN')}
-                      </td>
-                      <td className="py-3 px-4">
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                          t.category === 'Camera Device' ? 'bg-blue-100 text-blue-800' : 'bg-amber-100 text-amber-800'
-                        }`}>
-                          {t.category || (t.device_type ? 'Camera Device' : 'Material')}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 font-bold text-gray-900">
-                        {t.item_name || t.device_name || t.device_type || t.material_name}
-                        {t.sku && <span className="block font-mono text-[10px] text-gray-400 font-normal">{t.sku}</span>}
-                      </td>
-                      <td className="py-3 px-4 text-center">
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-800">
-                          {t.transaction_type}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-center font-bold font-mono">
-                        {t.quantity} {t.unit || 'Nos.'}
-                      </td>
-                      <td className="py-3 px-4 text-center font-mono text-[11px]">
-                        {t.previous_balance !== null && t.previous_balance !== undefined && t.new_balance !== null && t.new_balance !== undefined ? (
-                          <span className="text-gray-700 font-semibold">
-                            {t.previous_balance} → <strong className="text-gray-900">{t.new_balance}</strong>
+                  movements.map((t) => {
+                    const balanceBefore = t.balance_before !== undefined && t.balance_before !== null ? t.balance_before : t.previous_balance;
+                    const balanceAfter = t.balance_after !== undefined && t.balance_after !== null ? t.balance_after : t.new_balance;
+                    const movementTypeVal = t.movement_type || t.transaction_type;
+                    const reasonText = t.reason_or_remarks || t.reason || '—';
+
+                    return (
+                      <tr key={t.id} className="hover:bg-amber-50/20 transition-colors">
+                        {/* 1. Date & Time */}
+                        <td className="py-2.5 px-3.5 font-mono text-[11px] text-gray-500 whitespace-nowrap">
+                          {new Date(t.created_at).toLocaleString('en-IN', {
+                            dateStyle: 'short',
+                            timeStyle: 'short',
+                          })}
+                        </td>
+
+                        {/* 2. Item */}
+                        <td className="py-2.5 px-3.5 font-bold text-gray-900">
+                          <span className="block leading-tight">
+                            {t.item_name || t.device_name || t.device_type || t.material_name}
                           </span>
-                        ) : (
-                          '—'
-                        )}
-                      </td>
-                      <td className="py-3 px-4 text-gray-700">
-                        {t.performer_name || 'Store Manager'}
-                      </td>
-                      <td className="py-3 px-4 text-gray-600 text-[11px]">
-                        {t.reason_or_remarks || '—'}
-                      </td>
-                      <td className="py-3 px-4 text-right">
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteSingleMovement(t.id)}
-                          className="p-1 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
-                          title="Delete this movement record"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </td>
-                    </tr>
-                  ))
+                          {t.sku && (
+                            <span className="font-mono text-[10px] text-gray-400 font-normal block">
+                              {t.sku}
+                            </span>
+                          )}
+                        </td>
+
+                        {/* 3. Type */}
+                        <td className="py-2.5 px-3.5 text-center whitespace-nowrap">
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                            movementTypeVal === 'STOCK_ISSUED' || movementTypeVal === 'COURIER_DISPATCHED'
+                              ? 'bg-blue-100 text-blue-800'
+                              : movementTypeVal === 'STOCK_RECEIVED' || movementTypeVal === 'OPENING_STOCK'
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : movementTypeVal?.includes('RETURN')
+                              ? 'bg-amber-100 text-amber-800'
+                              : 'bg-gray-100 text-gray-800'
+                          }`}>
+                            {formatMovementType(movementTypeVal)}
+                          </span>
+                        </td>
+
+                        {/* 4. Quantity */}
+                        <td className="py-2.5 px-3.5 text-center font-bold font-mono text-gray-900 whitespace-nowrap">
+                          {t.quantity} {t.unit || 'Nos.'}
+                        </td>
+
+                        {/* 5. Stock Balance */}
+                        <td className="py-2.5 px-3.5 text-center font-mono text-[11px] whitespace-nowrap">
+                          {balanceBefore !== null && balanceBefore !== undefined && balanceAfter !== null && balanceAfter !== undefined ? (
+                            <span className="text-gray-600">
+                              {balanceBefore} → <strong className="text-gray-900">{balanceAfter}</strong>
+                            </span>
+                          ) : balanceAfter !== null && balanceAfter !== undefined ? (
+                            <strong className="text-gray-900">{balanceAfter}</strong>
+                          ) : (
+                            '—'
+                          )}
+                        </td>
+
+                        {/* 6. Performed By */}
+                        <td className="py-2.5 px-3.5 text-gray-700 whitespace-nowrap">
+                          {t.performer_name || 'Store Manager'}
+                        </td>
+
+                        {/* 7. Reason */}
+                        <td className="py-2.5 px-3.5 text-gray-600 max-w-[220px]">
+                          <div className="flex items-center justify-between gap-1">
+                            <span className="truncate block" title={reasonText}>
+                              {reasonText}
+                            </span>
+                            {(t.reason_or_remarks || t.reason) && (
+                              <button
+                                type="button"
+                                onClick={() => setRemarksModalMovement(t)}
+                                className="text-[10px] text-amber-700 hover:text-amber-900 font-semibold underline shrink-0 cursor-pointer ml-1"
+                              >
+                                View
+                              </button>
+                            )}
+                          </div>
+                        </td>
+
+                        {/* 8. Action */}
+                        <td className="py-2.5 px-3.5 text-right whitespace-nowrap">
+                          <button
+                            type="button"
+                            onClick={() => handleOpenSingleDeleteModal(t)}
+                            className="px-2.5 py-1 text-xs font-semibold text-rose-700 hover:text-rose-900 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-lg transition-colors cursor-pointer inline-flex items-center gap-1 shadow-2xs"
+                            title="Delete or inspect this movement record"
+                          >
+                            <Trash2 className="w-3 h-3 text-rose-500" />
+                            <span>Delete</span>
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
@@ -2453,110 +2534,341 @@ export default function StoreWorkspace({ onSelectChecklist }) {
         />
       )}
 
-      {/* 8. Delete Movement History Confirmation Modal */}
-      {showDeleteMovementsModal && (
+      {/* 8. Stock Movement Remarks Details Modal */}
+      {remarksModalMovement && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 border border-rose-100 animate-in fade-in zoom-in-95 duration-150">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4 border border-gray-200 animate-in fade-in zoom-in-95 duration-150">
             <div className="flex items-center justify-between pb-3 border-b border-gray-100">
-              <div className="flex items-center gap-2 text-rose-700">
-                <div className="p-2 bg-rose-100 rounded-xl">
-                  <Trash2 className="w-5 h-5 text-rose-600" />
+              <div className="flex items-center gap-2 text-gray-900">
+                <div className="p-2 bg-amber-50 rounded-xl text-amber-700">
+                  <Info className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-gray-900">Delete Stock Movements History</h3>
-                  <p className="text-[11px] text-gray-500">Permanently purge movement ledger records</p>
+                  <h3 className="text-sm font-bold text-gray-900">Stock Movement Audit Details</h3>
+                  <p className="text-[11px] text-gray-500 font-mono">
+                    {new Date(remarksModalMovement.created_at).toLocaleString('en-IN')}
+                  </p>
                 </div>
               </div>
               <button
                 type="button"
-                onClick={() => setShowDeleteMovementsModal(false)}
+                onClick={() => setRemarksModalMovement(null)}
                 className="text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-gray-100 cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            {/* Stock Balance Invariance Guarantee */}
-            <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs space-y-1 text-amber-900">
-              <div className="flex items-center gap-1.5 font-bold">
-                <ShieldCheck className="w-4 h-4 text-amber-700 shrink-0" />
-                <span>Physical Stock Count Protected</span>
-              </div>
-              <p className="text-[11px] text-amber-800 leading-relaxed">
-                Deleting movement logs clears the transaction audit history only. Current usable balances in <strong>Camera Devices</strong> and <strong>Installation Materials</strong> will remain completely safe and untouched.
-              </p>
-            </div>
-
-            {/* Scope Selection */}
-            <div className="space-y-2 text-xs">
-              <label className="block font-bold text-gray-700">Select Deletion Scope:</label>
-              <label className={`flex items-start gap-2.5 p-3 rounded-xl border cursor-pointer transition-colors ${
-                deleteMovementsScope === 'ALL' ? 'border-rose-300 bg-rose-50/50' : 'border-gray-200 hover:bg-gray-50'
-              }`}>
-                <input
-                  type="radio"
-                  name="movementScope"
-                  value="ALL"
-                  checked={deleteMovementsScope === 'ALL'}
-                  onChange={() => setDeleteMovementsScope('ALL')}
-                  className="mt-0.5 text-rose-600 focus:ring-rose-500"
-                />
+            <div className="space-y-3 text-xs">
+              <div className="grid grid-cols-2 gap-2 bg-gray-50 p-3 rounded-xl">
                 <div>
-                  <span className="font-bold text-gray-900 block">Delete All Stock Movements</span>
-                  <span className="text-[11px] text-gray-500">Purges all {movementTotalCount} movement ledger records across all categories.</span>
+                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Item</span>
+                  <span className="font-bold text-gray-900 block mt-0.5">
+                    {remarksModalMovement.item_name}
+                  </span>
+                  {remarksModalMovement.sku && (
+                    <span className="text-[10px] font-mono text-gray-500 block">
+                      SKU: {remarksModalMovement.sku}
+                    </span>
+                  )}
                 </div>
-              </label>
+                <div>
+                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Type & Qty</span>
+                  <span className="font-bold text-gray-900 block mt-0.5">
+                    {formatMovementType(remarksModalMovement.movement_type || remarksModalMovement.transaction_type)}
+                  </span>
+                  <span className="text-[11px] font-mono font-bold text-amber-800 block">
+                    {remarksModalMovement.quantity} {remarksModalMovement.unit || 'Nos.'}
+                  </span>
+                </div>
+              </div>
 
-              {(movementCategory !== 'All' || movementType !== 'All') && (
-                <label className={`flex items-start gap-2.5 p-3 rounded-xl border cursor-pointer transition-colors ${
-                  deleteMovementsScope === 'FILTERED' ? 'border-rose-300 bg-rose-50/50' : 'border-gray-200 hover:bg-gray-50'
-                }`}>
-                  <input
-                    type="radio"
-                    name="movementScope"
-                    value="FILTERED"
-                    checked={deleteMovementsScope === 'FILTERED'}
-                    onChange={() => setDeleteMovementsScope('FILTERED')}
-                    className="mt-0.5 text-rose-600 focus:ring-rose-500"
-                  />
-                  <div>
-                    <span className="font-bold text-gray-900 block">
-                      Delete Filtered Movements Only
-                    </span>
-                    <span className="text-[11px] text-gray-500">
-                      Only delete records matching {movementCategory !== 'All' ? `Category: ${movementCategory}` : ''} {movementType !== 'All' ? `Type: ${movementType}` : ''}.
-                    </span>
-                  </div>
-                </label>
+              <div className="grid grid-cols-2 gap-2 bg-gray-50 p-3 rounded-xl">
+                <div>
+                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Stock Transition</span>
+                  <span className="font-mono text-xs font-semibold text-gray-800 block mt-0.5">
+                    {remarksModalMovement.balance_before ?? '—'} → <strong className="text-gray-900">{remarksModalMovement.balance_after ?? '—'}</strong>
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Performed By</span>
+                  <span className="font-semibold text-gray-900 block mt-0.5">
+                    {remarksModalMovement.performer_name || 'Store Manager'}
+                  </span>
+                  {remarksModalMovement.performer_email && (
+                    <span className="text-[10px] text-gray-500 block">{remarksModalMovement.performer_email}</span>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">
+                  Full Reason / Audit Remarks
+                </span>
+                <div className="p-3 bg-amber-50/50 border border-amber-200/60 rounded-xl text-gray-800 text-xs leading-relaxed font-sans whitespace-pre-wrap max-h-40 overflow-y-auto">
+                  {remarksModalMovement.reason_or_remarks || remarksModalMovement.reason || 'No detailed remarks recorded for this movement.'}
+                </div>
+              </div>
+
+              {(remarksModalMovement.checklist_id || remarksModalMovement.reference_transaction_id) && (
+                <div className="p-2.5 bg-blue-50 border border-blue-200 rounded-xl text-[11px] text-blue-900 space-y-0.5">
+                  <span className="font-bold block">Linked Business Transaction:</span>
+                  {remarksModalMovement.checklist_id && (
+                    <span className="block font-mono">Checklist ID: {remarksModalMovement.checklist_id}</span>
+                  )}
+                  {remarksModalMovement.reference_transaction_id && (
+                    <span className="block font-mono">Ref Tx ID: {remarksModalMovement.reference_transaction_id}</span>
+                  )}
+                </div>
               )}
             </div>
 
-            <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-800 text-[11px]">
-              <strong>Warning:</strong> This deletion is permanent and cannot be undone.
-            </div>
-
-            <div className="flex items-center justify-end gap-2 pt-2">
+            <div className="flex justify-end pt-2 border-t border-gray-100">
               <button
                 type="button"
-                disabled={deletingMovements}
-                onClick={() => setShowDeleteMovementsModal(false)}
-                className="px-4 py-2 font-semibold text-gray-600 hover:bg-gray-100 rounded-xl text-xs cursor-pointer"
+                onClick={() => setRemarksModalMovement(null)}
+                className="px-4 py-2 font-bold text-white bg-gray-900 hover:bg-black rounded-xl text-xs cursor-pointer shadow-xs"
               >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={deletingMovements}
-                onClick={handleDeleteAllMovements}
-                className="px-4 py-2 font-bold text-white bg-rose-600 hover:bg-rose-700 disabled:opacity-50 rounded-xl text-xs flex items-center gap-1.5 cursor-pointer shadow-xs transition-colors"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                <span>{deletingMovements ? 'Deleting History...' : 'Confirm & Delete History'}</span>
+                Close
               </button>
             </div>
           </div>
         </div>
       )}
+
+      {/* 9. Single Stock Movement Delete Confirmation Modal */}
+      {singleDeleteMovement && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 border border-gray-200 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-3 border-b border-gray-100">
+              <div className="flex items-center gap-2">
+                <div className={`p-2 rounded-xl ${singleDeleteMovement.is_protected ? 'bg-amber-100 text-amber-800' : 'bg-rose-100 text-rose-700'}`}>
+                  {singleDeleteMovement.is_protected ? <ShieldCheck className="w-5 h-5" /> : <Trash2 className="w-5 h-5" />}
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-gray-900">
+                    {singleDeleteMovement.is_protected ? 'Protected Genuine Transaction' : 'Delete Test Movement Record'}
+                  </h3>
+                  <p className="text-[11px] text-gray-500 font-mono">ID: {singleDeleteMovement.id}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSingleDeleteMovement(null)}
+                className="text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-gray-100 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {singleDeleteError && (
+              <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-800 text-xs">
+                {singleDeleteError}
+              </div>
+            )}
+
+            {singleDeleteMovement.is_protected ? (
+              <div className="space-y-3 text-xs">
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 space-y-1.5">
+                  <div className="flex items-center gap-1.5 font-bold">
+                    <AlertTriangle className="w-4 h-4 text-amber-700 shrink-0" />
+                    <span>Audit Preservation Safeguard</span>
+                  </div>
+                  <p className="text-[11px] leading-relaxed text-amber-800">
+                    This stock movement record represents a genuine inventory transaction linked to an installation checklist, store issuance, return, or physical inventory change.
+                  </p>
+                  <p className="text-[11px] leading-relaxed text-amber-900 font-semibold">
+                    Under inventory audit compliance rules, genuine historical movements cannot be deleted.
+                  </p>
+                </div>
+
+                <div className="p-3 bg-gray-50 rounded-xl border border-gray-100 space-y-1">
+                  <span className="text-[11px] text-gray-600 block">
+                    <strong>Need to correct stock counts?</strong>
+                  </span>
+                  <p className="text-[11px] text-gray-500">
+                    Use <strong>Manage Stock</strong> to record an authorized Stock Adjustment or Reversal with a valid business reason.
+                  </p>
+                </div>
+
+                <div className="flex justify-end gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setSingleDeleteMovement(null)}
+                    className="px-4 py-2 font-bold text-gray-700 hover:bg-gray-100 rounded-xl text-xs cursor-pointer"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3 text-xs">
+                <div className="p-3 bg-gray-50 rounded-xl space-y-1 text-gray-700">
+                  <p>
+                    <strong>Item:</strong> {singleDeleteMovement.item_name}
+                  </p>
+                  <p>
+                    <strong>Type:</strong> {formatMovementType(singleDeleteMovement.movement_type || singleDeleteMovement.transaction_type)} ({singleDeleteMovement.quantity} {singleDeleteMovement.unit || 'Nos.'})
+                  </p>
+                  <p>
+                    <strong>Remarks:</strong> {singleDeleteMovement.reason_or_remarks || singleDeleteMovement.reason || '—'}
+                  </p>
+                </div>
+
+                <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-900 text-[11px] space-y-1">
+                  <div className="flex items-center gap-1.5 font-bold">
+                    <Check className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
+                    <span>Eligible Test Record</span>
+                  </div>
+                  <p className="text-emerald-800">
+                    This is a non-authoritative test entry. Deleting it will remove it from the audit ledger without changing any product stock balances.
+                  </p>
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-2">
+                  <button
+                    type="button"
+                    disabled={deletingSingleMovement}
+                    onClick={() => setSingleDeleteMovement(null)}
+                    className="px-4 py-2 font-semibold text-gray-600 hover:bg-gray-100 rounded-xl text-xs cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={deletingSingleMovement}
+                    onClick={handleConfirmSingleDelete}
+                    className="px-4 py-2 font-bold text-white bg-rose-600 hover:bg-rose-700 disabled:opacity-50 rounded-xl text-xs flex items-center gap-1.5 cursor-pointer shadow-xs transition-colors"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>{deletingSingleMovement ? 'Deleting...' : 'Confirm Delete'}</span>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* 10. Delete All / Clean Movements Modal */}
+      {showDeleteMovementsModal && (() => {
+        const eligibleCount = movements.filter((m) => !m.is_protected).length;
+        const protectedCount = movements.filter((m) => m.is_protected).length;
+
+        return (
+          <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 border border-rose-100 animate-in fade-in zoom-in-95 duration-150">
+              <div className="flex items-center justify-between pb-3 border-b border-gray-100">
+                <div className="flex items-center gap-2 text-rose-700">
+                  <div className="p-2 bg-rose-100 rounded-xl">
+                    <Trash2 className="w-5 h-5 text-rose-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-gray-900">Clean Stock Movements History</h3>
+                    <p className="text-[11px] text-gray-500">Safe purge of eligible test/non-authoritative records</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteMovementsModal(false)}
+                  className="text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-gray-100 cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Status Breakdown */}
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl">
+                  <span className="text-[10px] font-bold text-rose-700 uppercase tracking-wider block">Eligible Test Records</span>
+                  <span className="text-xl font-black text-rose-900 block mt-1">{eligibleCount}</span>
+                  <span className="text-[10px] text-rose-600 block mt-0.5">Will be safely cleaned</span>
+                </div>
+                <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl">
+                  <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider block">Protected Transactions</span>
+                  <span className="text-xl font-black text-emerald-900 block mt-1">{protectedCount}</span>
+                  <span className="text-[10px] text-emerald-700 block mt-0.5">Safely preserved</span>
+                </div>
+              </div>
+
+              {/* Stock Balance Invariance Guarantee */}
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs space-y-1 text-amber-900">
+                <div className="flex items-center gap-1.5 font-bold">
+                  <ShieldCheck className="w-4 h-4 text-amber-700 shrink-0" />
+                  <span>Physical Stock Count Protected</span>
+                </div>
+                <p className="text-[11px] text-amber-800 leading-relaxed">
+                  Cleanup removes test audit entries only. Protected movements linked to checklists, issuances, or returns are permanently preserved. Usable stock balances will remain completely safe and untouched.
+                </p>
+              </div>
+
+              {/* Scope Selection */}
+              <div className="space-y-2 text-xs">
+                <label className="block font-bold text-gray-700">Select Deletion Scope:</label>
+                <label className={`flex items-start gap-2.5 p-3 rounded-xl border cursor-pointer transition-colors ${
+                  deleteMovementsScope === 'ALL' ? 'border-rose-300 bg-rose-50/50' : 'border-gray-200 hover:bg-gray-50'
+                }`}>
+                  <input
+                    type="radio"
+                    name="movementScope"
+                    value="ALL"
+                    checked={deleteMovementsScope === 'ALL'}
+                    onChange={() => setDeleteMovementsScope('ALL')}
+                    className="mt-0.5 text-rose-600 focus:ring-rose-500"
+                  />
+                  <div>
+                    <span className="font-bold text-gray-900 block">Clean All Eligible Test Records</span>
+                    <span className="text-[11px] text-gray-500">Purges eligible test entries across all categories. Protected records stay preserved.</span>
+                  </div>
+                </label>
+
+                {(movementCategory !== 'All' || movementType !== 'All') && (
+                  <label className={`flex items-start gap-2.5 p-3 rounded-xl border cursor-pointer transition-colors ${
+                    deleteMovementsScope === 'FILTERED' ? 'border-rose-300 bg-rose-50/50' : 'border-gray-200 hover:bg-gray-50'
+                  }`}>
+                    <input
+                      type="radio"
+                      name="movementScope"
+                      value="FILTERED"
+                      checked={deleteMovementsScope === 'FILTERED'}
+                      onChange={() => setDeleteMovementsScope('FILTERED')}
+                      className="mt-0.5 text-rose-600 focus:ring-rose-500"
+                    />
+                    <div>
+                      <span className="font-bold text-gray-900 block">
+                        Clean Filtered Movements Only
+                      </span>
+                      <span className="text-[11px] text-gray-500">
+                        Only cleans test records matching {movementCategory !== 'All' ? `Category: ${movementCategory}` : ''} {movementType !== 'All' ? `Type: ${movementType}` : ''}.
+                      </span>
+                    </div>
+                  </label>
+                )}
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  disabled={deletingMovements}
+                  onClick={() => setShowDeleteMovementsModal(false)}
+                  className="px-4 py-2 font-semibold text-gray-600 hover:bg-gray-100 rounded-xl text-xs cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={deletingMovements || eligibleCount === 0}
+                  onClick={handleDeleteAllMovements}
+                  className="px-4 py-2 font-bold text-white bg-rose-600 hover:bg-rose-700 disabled:opacity-50 rounded-xl text-xs flex items-center gap-1.5 cursor-pointer shadow-xs transition-colors"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>{deletingMovements ? 'Cleaning...' : eligibleCount === 0 ? 'No Eligible Test Records' : 'Confirm & Clean Records'}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* 9. Delete Return Records Confirmation Modal */}
       {showDeleteReturnsModal && (

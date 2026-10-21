@@ -32,6 +32,7 @@ import {
   verifyStoreMaterialReturnApi,
   verifyStoreBackupReturns,
 } from '../../lib/api';
+import { isScrewMaterial } from '../../lib/productHelpers';
 import IssueMaterialsModal from './IssueMaterialsModal';
 
 export default function StoreInstallationRequirements({ token, onSelectChecklist }) {
@@ -184,7 +185,9 @@ export default function StoreInstallationRequirements({ token, onSelectChecklist
     setBackupReturnError('');
     setBackupReturnRemarks('');
     setBackupReturnRows(
-      (backupItems || []).map((item) => ({
+      (backupItems || [])
+        .filter((item) => !isScrewMaterial(item.item_name))
+        .map((item) => ({
         item_name: item.item_name,
         unit: item.unit || 'Nos.',
         declared_carried: Number(item.quantity) || 0,
@@ -1081,7 +1084,7 @@ export default function StoreInstallationRequirements({ token, onSelectChecklist
                               <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 uppercase tracking-wider">
                                 Technical Installation Completed
                               </span>
-                              {req.material_return_status === 'PENDING_STORE_VERIFICATION' ? (
+                              {req.material_return_status === 'PENDING_STORE_VERIFICATION' && (req.actual_materials_returned || []).some(m => !isScrewMaterial(m.material_name)) ? (
                                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-500/30 text-amber-200 border border-amber-400/40 uppercase tracking-wider flex items-center gap-1">
                                   <Clock className="w-3 h-3 text-amber-300" /> Pending Physical Return Verification
                                 </span>
@@ -1097,34 +1100,37 @@ export default function StoreInstallationRequirements({ token, onSelectChecklist
                             </h4>
                           </div>
 
-                          {/* Action button if pending return verification */}
-                          {req.material_return_status === 'PENDING_STORE_VERIFICATION' && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const retItems = req.actual_materials_returned || [];
-                                const firstRet = retItems[0] || {};
-                                setReturnVerificationModal({
-                                  checklistId: req.checklist_id || req.id,
-                                  checklistNumber: req.checklist_number,
-                                  return_id: req.material_returns?.[0]?.id,
-                                  items: retItems,
-                                  total_qty: retItems.reduce((acc, m) => acc + (Number(m.quantity_returned) || 0), 0),
-                                });
-                                setReturnForm({
-                                  accepted_usable_qty: String(firstRet.quantity_returned || firstRet.declared_return_qty || ''),
-                                  damaged_qty: '0',
-                                  missing_qty: '0',
-                                  remarks: '',
-                                });
-                                setVerificationError('');
-                              }}
-                              className="px-3.5 py-1.5 text-xs font-bold text-navy bg-amber-400 hover:bg-amber-300 rounded-xl transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
-                            >
-                              <ShieldCheck className="w-3.5 h-3.5" />
-                              <span>Verify Physical Returns</span>
-                            </button>
-                          )}
+                          {/* Action button if pending return verification (excluding screws) */}
+                          {(() => {
+                            const retItems = (req.actual_materials_returned || []).filter(m => !isScrewMaterial(m.material_name));
+                            if (req.material_return_status !== 'PENDING_STORE_VERIFICATION' || retItems.length === 0) return null;
+                            const firstRet = retItems[0] || {};
+                            return (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setReturnVerificationModal({
+                                    checklistId: req.checklist_id || req.id,
+                                    checklistNumber: req.checklist_number,
+                                    return_id: req.material_returns?.[0]?.id,
+                                    items: retItems,
+                                    total_qty: retItems.reduce((acc, m) => acc + (Number(m.quantity_returned) || 0), 0),
+                                  });
+                                  setReturnForm({
+                                    accepted_usable_qty: String(firstRet.quantity_returned || firstRet.declared_return_qty || ''),
+                                    damaged_qty: '0',
+                                    missing_qty: '0',
+                                    remarks: '',
+                                  });
+                                  setVerificationError('');
+                                }}
+                                className="px-3.5 py-1.5 text-xs font-bold text-navy bg-amber-400 hover:bg-amber-300 rounded-xl transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
+                              >
+                                <ShieldCheck className="w-3.5 h-3.5" />
+                                <span>Verify Physical Returns</span>
+                              </button>
+                            );
+                          })()}
                         </div>
 
                         {/* 3A: Device Reconciliation Breakdown */}

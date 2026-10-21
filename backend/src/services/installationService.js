@@ -16,6 +16,7 @@ import {
 } from './bomService.js';
 import { syncStoreRequirementForChecklist } from './storeRequirementService.js';
 import { notifyStoreManagerOnInstallationChecklist } from './notificationService.js';
+import { notifyChecklistCreated } from './pushNotificationService.js';
 import { getPendingExtensionForChecklist } from './scheduleExtensionService.js';
 import { logAudit } from './auditService.js';
 
@@ -139,22 +140,55 @@ export async function createChecklist(adminUserId, data, options = {}) {
   }
 
   // Calculate inclusive booking end date and validate engineer availability atomically
-  const engineerName = data.service_engineer ? data.service_engineer.trim() : '';
+  const isCouriered = data.delivery_method === 'Product Couriered';
+  let initialStatus = data.installation_status;
+  if (!initialStatus) {
+    initialStatus = (data.service_engineer && data.expected_arrival_date) ? 'Assigned' : (isCouriered ? 'Assign Later' : 'Assigned');
+  }
+
+  // Technician Carries cannot be created directly as Completed
+  if (!isCouriered && initialStatus === 'Completed') {
+    const err = new Error('Technician Carries installations cannot be created as Completed directly. They must be completed through the Post-Installation Form.');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const isAssignLater = initialStatus === 'Assign Later';
+  const engineerName = data.service_engineer ? data.service_engineer.trim() : null;
   const startDate = data.expected_arrival_date || null;
-  const duration = data.installation_duration ? data.installation_duration.trim() : '1 Day';
+  const duration = data.installation_duration ? data.installation_duration.trim() : (isCouriered || isAssignLater ? null : '1 Day');
   let bookingEndDate = null;
   let resolvedEng = null;
 
+  // For Technician Carries jobs: strictly require arrival date, duration and service engineer UNLESS Assign Later
+  if (!isCouriered && !isAssignLater) {
+    if (!startDate) {
+      const err = new Error('Expected Date of Arrival is required for Technician Carries');
+      err.statusCode = 400;
+      throw err;
+    }
+    if (!engineerName) {
+      const err = new Error('Service Engineer is required for Technician Carries');
+      err.statusCode = 400;
+      throw err;
+    }
+  }
+
+  // If Product Couriered and no engineer/startDate provided, ensure status is Assign Later
+  if (isCouriered && (!engineerName || !startDate) && initialStatus !== 'Completed') {
+    initialStatus = 'Assign Later';
+  }
+
   if (engineerName && startDate) {
     resolvedEng = resolveEngineer(engineerName);
-    bookingEndDate = calculateBookingEndDate(startDate, duration);
+    bookingEndDate = calculateBookingEndDate(startDate, duration || '1 Day');
 
     // Validate availability before creating checklist (throws 409 conflict if already booked)
     const availCheck = await checkEngineerAvailability({
       engineerIdOrName: resolvedEng ? resolvedEng.id : engineerName,
       startDate,
       endDate: bookingEndDate,
-      duration,
+      duration: duration || '1 Day',
     });
     if (!availCheck.available) {
       const c = availCheck.conflict;
@@ -240,13 +274,13 @@ export async function createChecklist(adminUserId, data, options = {}) {
     installation_duration: duration,
     vehicle_type: data.vehicle_type === 'Other' && data.custom_vehicle_type ? data.custom_vehicle_type.trim() : (data.vehicle_type || 'Truck'),
     expected_arrival_date: startDate,
-    expected_arrival_time: data.expected_arrival_time || '10:00 AM',
+    expected_arrival_time: data.expected_arrival_time ? data.expected_arrival_time.trim() : (isCouriered || isAssignLater ? null : '10:00 AM'),
     original_expected_arrival_date: startDate,
-    original_expected_arrival_time: data.expected_arrival_time || '10:00 AM',
+    original_expected_arrival_time: data.expected_arrival_time ? data.expected_arrival_time.trim() : (isCouriered || isAssignLater ? null : '10:00 AM'),
     original_installation_duration: duration,
     original_booking_end_date: bookingEndDate,
     current_expected_arrival_date: startDate,
-    current_expected_arrival_time: data.expected_arrival_time || '10:00 AM',
+    current_expected_arrival_time: data.expected_arrival_time ? data.expected_arrival_time.trim() : (isCouriered || isAssignLater ? null : '10:00 AM'),
     current_installation_duration: duration,
     current_booking_end_date: bookingEndDate,
     schedule_revision_number: 0,
@@ -256,15 +290,11 @@ export async function createChecklist(adminUserId, data, options = {}) {
     service_engineer: engineerName,
     service_engineer_id: resolvedEng ? resolvedEng.id : null,
     booking_end_date: bookingEndDate,
-    service_assistant: data.service_assistant ? data.service_assistant.trim() : '',
+    service_assistant: data.service_assistant ? data.service_assistant.trim() : null,
     delivery_method: data.delivery_method || 'Technician Carries',
     courier_dispatch_status: data.delivery_method === 'Product Couriered' ? 'NOT_DISPATCHED' : 'NOT_APPLICABLE',
     is_courier_dispatched: false,
-    installation_status: data.installation_status || (
-      data.delivery_method === 'Product Couriered' && (!startDate || !engineerName)
-        ? 'Awaiting Technician Assignment'
-        : 'Assigned'
-    ),
+    installation_status: initialStatus,
     payment_status: paymentStatus,
     bom_snapshot: bomSnapshot,
     material_issuance_status: isInstallationJob ? (data.material_issuance_status || 'PENDING') : 'NOT_APPLICABLE',
@@ -315,8 +345,6 @@ export async function createChecklist(adminUserId, data, options = {}) {
       delete fallbackPayload.current_booking_end_date;
       delete fallbackPayload.schedule_revision_number;
       delete fallbackPayload.schedule_last_updated_at;
-      delete fallbackPayload.courier_dispatch_status;
-      delete fallbackPayload.is_courier_dispatched;
 
       let lastErr = error;
       for (let attempt = 0; attempt < 5; attempt++) {
@@ -329,6 +357,10 @@ export async function createChecklist(adminUserId, data, options = {}) {
           inserted = {
             ...payload,
             ...res2,
+            courier_dispatch_status: payload.delivery_method === 'Product Couriered'
+              ? (res2.courier_dispatch_status && res2.courier_dispatch_status !== 'NOT_APPLICABLE' ? res2.courier_dispatch_status : 'NOT_DISPATCHED')
+              : (res2.courier_dispatch_status || payload.courier_dispatch_status),
+            is_courier_dispatched: res2.is_courier_dispatched ?? payload.is_courier_dispatched,
             booking_end_date: payload.booking_end_date,
             original_booking_end_date: payload.original_booking_end_date,
             current_booking_end_date: payload.current_booking_end_date,
@@ -396,6 +428,15 @@ export async function createChecklist(adminUserId, data, options = {}) {
       );
     } catch (reqErr) {
       console.warn('Could not sync store requirement for checklist:', reqErr.message);
+    }
+
+    // Trigger Mobile Web Push notifications to all subscribed active team members (fault-tolerant)
+    try {
+      await notifyChecklistCreated(inserted).catch((pushErr) => {
+        console.warn('[PUSH_NOTIF_WARN] Could not dispatch mobile push notification:', pushErr.message);
+      });
+    } catch (pushErr) {
+      console.warn('[PUSH_NOTIF_ERROR] Failed to invoke push notification service:', pushErr.message);
     }
   }
 
@@ -627,13 +668,54 @@ export async function updateChecklist(id, data) {
     paymentStatus = 'Partially Paid';
   }
 
-  const newEngName = data.service_engineer !== undefined ? (data.service_engineer ? data.service_engineer.trim() : '') : existing.service_engineer;
-  const newStartDate = data.expected_arrival_date !== undefined ? data.expected_arrival_date : existing.expected_arrival_date;
-  const newDuration = data.installation_duration !== undefined ? data.installation_duration : (existing.installation_duration || '1 Day');
+  const effectiveDeliveryMethod = data.delivery_method !== undefined ? data.delivery_method : (existing.delivery_method || 'Technician Carries');
+  const isCouriered = effectiveDeliveryMethod === 'Product Couriered';
+
+  const newEngName = data.service_engineer !== undefined ? (data.service_engineer ? data.service_engineer.trim() : null) : (existing.service_engineer || null);
+  const newStartDate = data.expected_arrival_date !== undefined ? (data.expected_arrival_date || null) : (existing.expected_arrival_date || null);
+  const newDuration = data.installation_duration !== undefined
+    ? (data.installation_duration ? data.installation_duration.trim() : null)
+    : (existing.installation_duration || (isCouriered ? null : '1 Day'));
   let newStatus = data.installation_status !== undefined ? data.installation_status : existing.installation_status;
 
+  // Completed check:
+  if (newStatus === 'Completed' && existing.installation_status !== 'Completed') {
+    if (!isCouriered) {
+      const err = new Error('Technician Carries checklists must become Completed through the Post-Installation Form submission workflow. Manual completion is not permitted.');
+      err.statusCode = 400;
+      throw err;
+    } else {
+      const hasTech = Boolean(newEngName || existing.service_engineer);
+      if (hasTech) {
+        const err = new Error('When a technician is assigned to a couriered order, installation must be completed via the Post-Installation Form submitted by the technician.');
+        err.statusCode = 400;
+        throw err;
+      }
+      const confirmNotes = (data.remarks || data.completion_notes || '').trim();
+      if (!confirmNotes) {
+        const err = new Error('Customer confirmation note is required to mark independent customer installation as Completed.');
+        err.statusCode = 400;
+        throw err;
+      }
+    }
+  }
+
+  // For Technician Carries: strictly require date and engineer UNLESS Assign Later
+  if (!isCouriered && newStatus !== 'Assign Later' && newStatus !== 'Completed') {
+    if (!newStartDate) {
+      const err = new Error('Expected Date of Arrival is required for Technician Carries');
+      err.statusCode = 400;
+      throw err;
+    }
+    if (!newEngName) {
+      const err = new Error('Service Engineer is required for Technician Carries');
+      err.statusCode = 400;
+      throw err;
+    }
+  }
+
   // If work starting date is being scheduled or changed, enforce strict next-day-only work-start booking rule
-  if (newStartDate && newStartDate !== existing.expected_arrival_date) {
+  if (newStartDate && newStartDate !== existing.expected_arrival_date && newStatus !== 'Assign Later') {
     const businessTomorrow = getBusinessTomorrow(config?.timezone);
     if (newStartDate !== businessTomorrow) {
       const err = new Error('Jobs can only be scheduled to start tomorrow. Advance pre-booking is not allowed.');
@@ -642,17 +724,21 @@ export async function updateChecklist(id, data) {
     }
   }
 
-  // If previously awaiting assignment and now both engineer and date are provided, transition to Assigned
-  if (newEngName && newStartDate && ['Awaiting Technician Assignment', 'Awaiting Schedule', 'Courier Pending', 'Pending'].includes(newStatus)) {
+  // If previously Assign Later or unscheduled and now both engineer and date are provided, ensure status is Assigned
+  if (newEngName && newStartDate && newStatus !== 'Completed') {
     newStatus = 'Assigned';
+  } else if (!newEngName && !newStartDate && newStatus !== 'Completed') {
+    newStatus = 'Assign Later';
   }
 
   let newBookingEndDate = existing.booking_end_date;
   let resolvedEng = existing.service_engineer_id ? { id: existing.service_engineer_id, name: existing.service_engineer } : resolveEngineer(newEngName);
 
-  if (newStatus === 'Cancelled') {
-    // Release booking if cancelled
-    await releaseEngineerBooking({ checklistId: existing.id });
+  if (newStatus === 'Cancelled' || newStatus === 'Assign Later') {
+    // Release booking if cancelled or postponed to Assign Later
+    if (existing.service_engineer) {
+      await releaseEngineerBooking({ checklistId: existing.id });
+    }
   } else if (newEngName && newStartDate) {
     resolvedEng = resolveEngineer(newEngName);
     newBookingEndDate = calculateBookingEndDate(newStartDate, newDuration);
@@ -769,9 +855,9 @@ export async function updateChecklist(id, data) {
     booking_end_date: newBookingEndDate,
     delivery_method: data.delivery_method !== undefined ? data.delivery_method : (existing.delivery_method || 'Technician Carries'),
     courier_dispatch_status: data.courier_dispatch_status !== undefined ? data.courier_dispatch_status : (existing.courier_dispatch_status || 'NOT_APPLICABLE'),
-    installation_status: ((existing.installation_status === 'Completed' || existing.installation_status === 'Site Work Completed') && (data.installation_status !== 'Completed'))
+    installation_status: (existing.installation_status === 'Completed' || newStatus === 'Completed')
       ? 'Completed'
-      : (newStatus || existing.installation_status),
+      : (newStatus === 'Assign Later' ? 'Assign Later' : 'Assigned'),
     payment_status: paymentStatus,
     bom_snapshot: updatedBomSnapshot,
     material_issuance_status: isInstallation
@@ -781,6 +867,19 @@ export async function updateChecklist(id, data) {
     client_confirmation: data.client_confirmation || existing.client_confirmation,
     updated_at: new Date().toISOString(),
   };
+
+  // If customer self-installation is marked Completed, record completion metadata
+  const isTechnicianJob = effectiveDeliveryMethod === 'Technician Carries' || Boolean(newEngName || existing.service_engineer);
+  const isCustomerSelfInstallCompletion = isCouriered && !isTechnicianJob && newStatus === 'Completed' && existing.installation_status !== 'Completed';
+
+  if (isCustomerSelfInstallCompletion) {
+    const completionTimestamp = new Date().toISOString();
+    payload.completion_type = 'CUSTOMER_INSTALLED';
+    payload.actual_completion_at = completionTimestamp;
+    payload.actual_completion_datetime = completionTimestamp;
+    payload.completed_by_name = data.salesperson_name || existing.salesperson_name || 'Sales';
+    payload.completion_notes = data.remarks || 'Confirmed customer independent installation';
+  }
 
   let updated;
   try {
@@ -826,8 +925,6 @@ export async function updateChecklist(id, data) {
       delete fallbackPayload.current_booking_end_date;
       delete fallbackPayload.schedule_revision_number;
       delete fallbackPayload.schedule_last_updated_at;
-      delete fallbackPayload.courier_dispatch_status;
-      delete fallbackPayload.is_courier_dispatched;
 
       let lastErr = error;
       for (let attempt = 0; attempt < 5; attempt++) {
@@ -838,7 +935,15 @@ export async function updateChecklist(id, data) {
           .select()
           .single();
         if (!err2) {
-          updated = { ...existing, ...payload, ...res2, id: existing.id };
+          updated = {
+            ...existing,
+            ...payload,
+            ...res2,
+            courier_dispatch_status: (res2.courier_dispatch_status && res2.courier_dispatch_status !== 'NOT_APPLICABLE')
+              ? res2.courier_dispatch_status
+              : (payload.courier_dispatch_status || existing.courier_dispatch_status),
+            id: existing.id,
+          };
           inMemoryChecklistSchedules.set(existing.id, {
             original_expected_arrival_date: payload.original_expected_arrival_date,
             original_expected_arrival_time: payload.original_expected_arrival_time,
@@ -878,6 +983,29 @@ export async function updateChecklist(id, data) {
       await syncStoreRequirementForChecklist(updated);
     } catch (reqErr) {
       console.warn('Could not sync store requirement on checklist update:', reqErr.message);
+    }
+  }
+
+  // Critical Rule 1: When an installation date is extended or changed, the affected room booking must automatically change to Pending Review
+  const datesChanged = Boolean(
+    (newStartDate && existing.expected_arrival_date && newStartDate !== existing.expected_arrival_date) ||
+    (newBookingEndDate && existing.booking_end_date && newBookingEndDate !== existing.booking_end_date) ||
+    (newDuration && existing.installation_duration && newDuration !== existing.installation_duration)
+  );
+
+  if (datesChanged && updated?.id) {
+    try {
+      const { handleInstallationDateChange } = await import('./coordinatorBookingService.js');
+      await handleInstallationDateChange({
+        checklistId: updated.id,
+        oldStartDate: existing.expected_arrival_date,
+        newStartDate: newStartDate,
+        oldEndDate: existing.booking_end_date,
+        newEndDate: newBookingEndDate,
+        reason: `Installation schedule updated to start: ${newStartDate || existing.expected_arrival_date}, end: ${newBookingEndDate || existing.booking_end_date}`,
+      });
+    } catch (dateErr) {
+      console.warn('Could not update coordinator room booking on date change:', dateErr.message);
     }
   }
 
@@ -1439,22 +1567,20 @@ export async function getInstallationStats() {
   const [
     { count: total },
     { count: assigned },
+    { count: assignLater },
     { count: completed },
-    { count: pending },
-    { count: inProgress },
   ] = await Promise.all([
     supabase.from('installation_checklists').select('*', { count: 'exact', head: true }),
-    supabase.from('installation_checklists').select('*', { count: 'exact', head: true }).in('installation_status', ['Assigned', 'Pending', 'In Progress']),
-    supabase.from('installation_checklists').select('*', { count: 'exact', head: true }).in('installation_status', ['Completed', 'Site Work Completed']),
-    supabase.from('installation_checklists').select('*', { count: 'exact', head: true }).eq('installation_status', 'Pending'),
-    supabase.from('installation_checklists').select('*', { count: 'exact', head: true }).eq('installation_status', 'In Progress'),
+    supabase.from('installation_checklists').select('*', { count: 'exact', head: true }).eq('installation_status', 'Assigned'),
+    supabase.from('installation_checklists').select('*', { count: 'exact', head: true }).eq('installation_status', 'Assign Later'),
+    supabase.from('installation_checklists').select('*', { count: 'exact', head: true }).eq('installation_status', 'Completed'),
   ]);
 
   return {
     total: total || 0,
     assigned: assigned || 0,
+    assignLater: assignLater || 0,
     completed: completed || 0,
-    pending: pending || 0,
-    inProgress: inProgress || 0,
+    pending: assignLater || 0, // backward compatibility
   };
 }

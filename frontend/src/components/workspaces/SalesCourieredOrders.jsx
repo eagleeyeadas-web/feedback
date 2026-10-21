@@ -3,8 +3,6 @@ import {
   Package,
   Truck,
   CheckCircle2,
-  Clock,
-  AlertTriangle,
   Search,
   RefreshCw,
   ExternalLink,
@@ -16,13 +14,11 @@ import {
   X,
   Wrench,
   ShieldCheck,
-  ChevronRight,
   Info,
 } from 'lucide-react';
 import {
   fetchCourieredChecklists,
   confirmCourierCustomerInstalledApi,
-  requestCourierTechnicianApi,
   scheduleCourierTechnicianApi,
   fetchEngineersAvailabilityApi,
 } from '../../lib/api';
@@ -34,7 +30,6 @@ export default function SalesCourieredOrders({ token, onSelectChecklist }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('ALL');
   const [toastMsg, setToastMsg] = useState('');
 
   // Outcome A: Independent Customer Installation Modal
@@ -222,7 +217,7 @@ export default function SalesCourieredOrders({ token, onSelectChecklist }) {
         installation_duration,
         remarks,
       });
-      showToast('Technician installation requested. Complete the scheduling details to assign an engineer.');
+      showToast('Technician assigned and scheduled successfully.');
       setScheduleModal({
         open: false,
         order: null,
@@ -246,51 +241,25 @@ export default function SalesCourieredOrders({ token, onSelectChecklist }) {
     }
   };
 
-  // Status Classifier for Filters
-  const getOrderFilterCategory = (item) => {
-    const isCompleted = (item.installation_status || '').toLowerCase() === 'completed';
-    if (isCompleted) return 'COMPLETED';
-
-    const courierStatus = item.courier_dispatch_status || (item.dispatch ? item.dispatch.delivery_status : 'Pending Dispatch');
-    const instStatus = (item.installation_status || '').trim();
-
-    if (instStatus === 'Installation Required') return 'INSTALLATION_REQUIRED';
-    if (instStatus === 'Assigned' && item.service_engineer) return 'SCHEDULED';
-
-    if (courierStatus === 'Delivered') return 'DELIVERED_AWAITING_CONFIRMATION';
-    if (courierStatus === 'In Transit') return 'IN_TRANSIT';
-    if (courierStatus === 'Dispatched') return 'DISPATCHED';
-
-    return 'AWAITING_DISPATCH';
-  };
-
-  // Filtered orders list
+  // Simple search filter
   const filteredOrders = orders.filter((item) => {
-    if (statusFilter === 'ALL') return true;
-    const cat = getOrderFilterCategory(item);
-    if (statusFilter === 'AWAITING_DISPATCH') return cat === 'AWAITING_DISPATCH';
-    if (statusFilter === 'IN_TRANSIT') return cat === 'IN_TRANSIT' || cat === 'DISPATCHED';
-    if (statusFilter === 'DELIVERED') return cat === 'DELIVERED_AWAITING_CONFIRMATION';
-    if (statusFilter === 'INSTALLATION_REQUIRED') return cat === 'INSTALLATION_REQUIRED';
-    if (statusFilter === 'SCHEDULED') return cat === 'SCHEDULED';
-    if (statusFilter === 'COMPLETED') return cat === 'COMPLETED';
-    return true;
+    if (!search.trim()) return true;
+    const s = search.trim().toLowerCase();
+    return (
+      (item.checklist_number || '').toLowerCase().includes(s) ||
+      (item.client_name || '').toLowerCase().includes(s) ||
+      (item.client_mobile || '').toLowerCase().includes(s) ||
+      (item.client_location || '').toLowerCase().includes(s) ||
+      (item.device_type || '').toLowerCase().includes(s) ||
+      (item.service_engineer || '').toLowerCase().includes(s) ||
+      (item.dispatch?.tracking_number || '').toLowerCase().includes(s) ||
+      (item.dispatch?.courier_company || '').toLowerCase().includes(s)
+    );
   });
-
-  // KPI Counts
-  const counts = {
-    total: orders.length,
-    awaitingDispatch: orders.filter((o) => getOrderFilterCategory(o) === 'AWAITING_DISPATCH').length,
-    inTransit: orders.filter((o) => getOrderFilterCategory(o) === 'IN_TRANSIT' || getOrderFilterCategory(o) === 'DISPATCHED').length,
-    delivered: orders.filter((o) => getOrderFilterCategory(o) === 'DELIVERED_AWAITING_CONFIRMATION').length,
-    installationRequired: orders.filter((o) => getOrderFilterCategory(o) === 'INSTALLATION_REQUIRED').length,
-    scheduled: orders.filter((o) => getOrderFilterCategory(o) === 'SCHEDULED').length,
-    completed: orders.filter((o) => getOrderFilterCategory(o) === 'COMPLETED').length,
-  };
 
   return (
     <div className="space-y-6">
-      {/* Toast */}
+      {/* Toast Notification */}
       {toastMsg && (
         <div className="fixed bottom-5 right-5 z-50 bg-indigo-900 text-white px-5 py-3.5 rounded-xl shadow-xl flex items-center gap-2 text-xs font-bold animate-bounce border border-indigo-400">
           <CheckCircle2 className="w-5 h-5 text-indigo-300" />
@@ -298,165 +267,74 @@ export default function SalesCourieredOrders({ token, onSelectChecklist }) {
         </div>
       )}
 
-      {/* Header Banner */}
-      <div className="bg-gradient-to-r from-indigo-900 via-blue-900 to-navy p-6 rounded-2xl text-white shadow-md flex flex-col md:flex-row md:items-center justify-between gap-4">
+      {/* Page Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
         <div>
-          <span className="text-xs font-bold px-2.5 py-1 bg-indigo-500/30 text-indigo-200 rounded-md border border-indigo-400/30 uppercase tracking-wider">
-            Sales Post-Delivery Lifecycle
-          </span>
-          <h1 className="text-2xl font-bold mt-2 flex items-center gap-2">
-            <Package className="w-7 h-7 text-indigo-300" /> Couriered Orders Follow-up
+          <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2.5">
+            <Package className="w-6 h-6 text-indigo-600" />
+            <span>Couriered Orders &amp; Customer Tracking</span>
           </h1>
-          <p className="text-xs text-white/80 mt-1 max-w-2xl leading-relaxed">
-            Follow up on customer orders dispatched directly via courier. Once delivered, confirm whether the customer installed independently or requires a technician assigned on the same order.
+          <p className="text-xs text-gray-500 mt-1 max-w-2xl leading-relaxed">
+            Follow up on orders dispatched via courier. Assign a technician if the customer requests technical assistance, or mark the order completed once customer self-installation is confirmed.
           </p>
         </div>
 
         <button
+          type="button"
           onClick={loadOrders}
           disabled={loading}
-          className="self-start md:self-auto flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white text-xs font-semibold px-4 py-2.5 rounded-xl border border-white/20 transition-all cursor-pointer disabled:opacity-50"
+          className="self-start sm:self-auto flex items-center gap-2 bg-gray-50 hover:bg-gray-100 text-gray-700 text-xs font-semibold px-4 py-2.5 rounded-xl border border-gray-200 transition-all cursor-pointer disabled:opacity-50"
         >
           <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-          <span>Refresh Orders</span>
+          <span>Refresh</span>
         </button>
       </div>
 
-      {/* KPI Summary Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        <div
-          onClick={() => setStatusFilter('ALL')}
-          className={`p-4 rounded-xl border shadow-xs cursor-pointer transition-all ${
-            statusFilter === 'ALL' ? 'bg-indigo-50/70 border-indigo-500 ring-1 ring-indigo-500' : 'bg-white border-gray-200 hover:border-gray-300'
-          }`}
-        >
-          <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">Total Couriered</span>
-          <span className="text-xl font-black text-gray-900 mt-1 block">{counts.total}</span>
-        </div>
-
-        <div
-          onClick={() => setStatusFilter('AWAITING_DISPATCH')}
-          className={`p-4 rounded-xl border shadow-xs cursor-pointer transition-all ${
-            statusFilter === 'AWAITING_DISPATCH' ? 'bg-amber-50 border-amber-500 ring-1 ring-amber-500' : 'bg-white border-gray-200 hover:border-gray-300'
-          }`}
-        >
-          <span className="text-[10px] font-bold text-amber-700 uppercase tracking-wider block">Awaiting Dispatch</span>
-          <span className="text-xl font-black text-amber-900 mt-1 block">{counts.awaitingDispatch}</span>
-        </div>
-
-        <div
-          onClick={() => setStatusFilter('IN_TRANSIT')}
-          className={`p-4 rounded-xl border shadow-xs cursor-pointer transition-all ${
-            statusFilter === 'IN_TRANSIT' ? 'bg-blue-50 border-blue-500 ring-1 ring-blue-500' : 'bg-white border-gray-200 hover:border-gray-300'
-          }`}
-        >
-          <span className="text-[10px] font-bold text-blue-700 uppercase tracking-wider block">In Transit</span>
-          <span className="text-xl font-black text-blue-900 mt-1 block">{counts.inTransit}</span>
-        </div>
-
-        <div
-          onClick={() => setStatusFilter('DELIVERED')}
-          className={`p-4 rounded-xl border shadow-xs cursor-pointer transition-all ${
-            statusFilter === 'DELIVERED' ? 'bg-purple-50 border-purple-500 ring-1 ring-purple-500' : 'bg-white border-gray-200 hover:border-gray-300'
-          }`}
-        >
-          <span className="text-[10px] font-bold text-purple-700 uppercase tracking-wider block">Awaiting Confirm</span>
-          <span className="text-xl font-black text-purple-900 mt-1 block">{counts.delivered}</span>
-        </div>
-
-        <div
-          onClick={() => setStatusFilter('INSTALLATION_REQUIRED')}
-          className={`p-4 rounded-xl border shadow-xs cursor-pointer transition-all ${
-            statusFilter === 'INSTALLATION_REQUIRED' ? 'bg-rose-50 border-rose-500 ring-1 ring-rose-500' : 'bg-white border-gray-200 hover:border-gray-300'
-          }`}
-        >
-          <span className="text-[10px] font-bold text-rose-700 uppercase tracking-wider block">Need Technician</span>
-          <span className="text-xl font-black text-rose-900 mt-1 block">{counts.installationRequired}</span>
-        </div>
-
-        <div
-          onClick={() => setStatusFilter('COMPLETED')}
-          className={`p-4 rounded-xl border shadow-xs cursor-pointer transition-all ${
-            statusFilter === 'COMPLETED' ? 'bg-emerald-50 border-emerald-500 ring-1 ring-emerald-500' : 'bg-white border-gray-200 hover:border-gray-300'
-          }`}
-        >
-          <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider block">Completed</span>
-          <span className="text-xl font-black text-emerald-900 mt-1 block">{counts.completed}</span>
-        </div>
-      </div>
-
-      {/* Search and Filters Bar */}
-      <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-xs flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2 flex-1 min-w-[260px]">
-          <div className="relative w-full max-w-md">
-            <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              placeholder="Search checklist #, client name, tracking number..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:border-indigo-500"
-            />
-          </div>
+      {/* Simple Search Box */}
+      <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex items-center justify-between gap-3">
+        <div className="relative flex-1 max-w-md">
+          <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          <input
+            type="text"
+            placeholder="Search by checklist #, client name, mobile, location, tracking number..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full pl-9 pr-8 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:border-indigo-500"
+          />
           {search && (
-            <button onClick={() => setSearch('')} className="text-xs text-gray-500 hover:text-gray-800 font-semibold cursor-pointer">
-              Clear
+            <button
+              type="button"
+              onClick={() => setSearch('')}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer"
+            >
+              <X size={14} />
             </button>
           )}
         </div>
 
-        <div className="flex flex-wrap items-center gap-1.5 text-xs">
-          {[
-            { id: 'ALL', label: 'All Couriered' },
-            { id: 'AWAITING_DISPATCH', label: 'Awaiting Dispatch' },
-            { id: 'IN_TRANSIT', label: 'In Transit' },
-            { id: 'DELIVERED', label: 'Delivered — Awaiting Confirmation' },
-            { id: 'INSTALLATION_REQUIRED', label: 'Needs Scheduling' },
-            { id: 'SCHEDULED', label: 'Scheduled' },
-            { id: 'COMPLETED', label: 'Completed' },
-          ].map((f) => (
-            <button
-              key={f.id}
-              onClick={() => setStatusFilter(f.id)}
-              className={`px-3 py-1.5 rounded-lg font-semibold transition-all cursor-pointer ${
-                statusFilter === f.id
-                  ? 'bg-indigo-600 text-white shadow-xs'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
-            >
-              {f.label}
-            </button>
-          ))}
-        </div>
+        <span className="text-xs text-gray-500 font-medium">
+          {filteredOrders.length} {filteredOrders.length === 1 ? 'order' : 'orders'}
+        </span>
       </div>
 
-      {/* Orders Table */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden">
-        <div className="p-4 border-b border-gray-200 bg-gray-50/50 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Package className="w-4 h-4 text-indigo-600" />
-            <h3 className="text-sm font-bold text-gray-900">Couriered Orders Lifecycle</h3>
-          </div>
-          <span className="text-xs text-gray-500 font-medium">Showing {filteredOrders.length} orders</span>
-        </div>
-
+      {/* Couriered Orders Table */}
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse text-xs">
             <thead>
-              <tr className="bg-gray-50 border-b border-gray-200 font-semibold text-gray-500 uppercase tracking-wider text-[11px]">
-                <th className="py-3 px-4">Checklist No.</th>
-                <th className="py-3 px-4">Client &amp; Contact</th>
-                <th className="py-3 px-4">Device Requested</th>
-                <th className="py-3 px-4">Courier Status</th>
-                <th className="py-3 px-4">Tracking Info</th>
-                <th className="py-3 px-4">Order Status</th>
-                <th className="py-3 px-4 text-right">Available Actions</th>
+              <tr className="bg-gray-50/80 border-b border-gray-200 font-semibold text-gray-600 uppercase tracking-wider text-[11px]">
+                <th className="py-3.5 px-4">Checklist Number</th>
+                <th className="py-3.5 px-4">Customer Name and Contact</th>
+                <th className="py-3.5 px-4">Product / Device Requested</th>
+                <th className="py-3.5 px-4">Courier Tracking Number and Delivery Status</th>
+                <th className="py-3.5 px-4">Technician Assignment</th>
+                <th className="py-3.5 px-4 text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-200">
+            <tbody className="divide-y divide-gray-100">
               {loading ? (
                 <tr>
-                  <td colSpan={7} className="py-10 text-center text-gray-400">
+                  <td colSpan={6} className="py-12 text-center text-gray-400">
                     <div className="flex items-center justify-center gap-2">
                       <RefreshCw className="w-4 h-4 animate-spin text-indigo-600" />
                       <span>Loading couriered orders...</span>
@@ -465,171 +343,161 @@ export default function SalesCourieredOrders({ token, onSelectChecklist }) {
                 </tr>
               ) : filteredOrders.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-10 text-center text-gray-400">
-                    <p className="font-semibold text-gray-500">No couriered orders found matching the filter.</p>
+                  <td colSpan={6} className="py-12 text-center text-gray-400">
+                    <p className="font-semibold text-gray-600 text-sm">No couriered orders found.</p>
                     <p className="text-[11px] text-gray-400 mt-1">Checklists created with "Product Couriered" will appear here.</p>
                   </td>
                 </tr>
               ) : (
                 filteredOrders.map((item) => {
-                  const courierStatus = item.courier_dispatch_status || item.dispatch?.delivery_status || 'Pending Dispatch';
-                  const isDelivered = courierStatus === 'Delivered';
+                  const courierStatus = item.courier_dispatch_status || item.dispatch?.delivery_status || 'Not Dispatched';
                   const isCompleted = (item.installation_status || '').toLowerCase() === 'completed';
                   const isCustomerInstalled = item.completion_type === 'CUSTOMER_INSTALLED';
                   const isTechnicianInstalled = item.completion_type === 'TECHNICIAN_INSTALLED' || item.has_completion_report;
-                  const isInstallationRequired = item.installation_status === 'Installation Required';
-                  const isScheduled = Boolean(item.service_engineer && item.expected_arrival_date && !isCompleted);
+                  const hasTechnician = Boolean(item.service_engineer && item.service_engineer.trim());
 
                   return (
-                    <tr key={item.id} className="hover:bg-gray-50/80 transition-colors">
-                      <td className="py-3 px-4 font-mono font-bold text-indigo-700">
+                    <tr key={item.id} className="hover:bg-gray-50/70 transition-colors">
+                      {/* 1. Checklist Number */}
+                      <td className="py-3.5 px-4 font-mono font-bold text-indigo-700">
                         <button
                           type="button"
                           onClick={() => onSelectChecklist && onSelectChecklist(item.id)}
                           className="hover:underline flex items-center gap-1 cursor-pointer"
+                          title="View Checklist Details"
                         >
                           <span>{item.checklist_number}</span>
                           <ExternalLink className="w-3 h-3 text-gray-400" />
                         </button>
                       </td>
 
-                      <td className="py-3 px-4">
+                      {/* 2. Customer Name and Contact */}
+                      <td className="py-3.5 px-4">
                         <div className="font-bold text-gray-900">{item.client_name}</div>
                         <div className="text-[11px] text-gray-500 font-mono flex items-center gap-1 mt-0.5">
-                          <Phone className="w-3 h-3 text-gray-400" />
+                          <Phone className="w-3 h-3 text-gray-400 shrink-0" />
                           <span>{item.client_mobile || '—'}</span>
                         </div>
-                        <div className="text-[10px] text-gray-500 flex items-center gap-1 mt-0.5">
-                          <MapPin className="w-3 h-3 text-gray-400" />
-                          <span className="truncate max-w-[180px]">{item.client_location || '—'}</span>
+                        <div className="text-[11px] text-gray-500 flex items-center gap-1 mt-0.5">
+                          <MapPin className="w-3 h-3 text-gray-400 shrink-0" />
+                          <span className="truncate max-w-[200px]">{item.client_location || '—'}</span>
                         </div>
                       </td>
 
-                      <td className="py-3 px-4">
+                      {/* 3. Product / Device Requested */}
+                      <td className="py-3.5 px-4">
                         <div className="font-semibold text-gray-900">{item.device_type}</div>
-                        <div className="text-[11px] text-gray-500">
-                          {item.number_of_devices} Nos. ({item.installation_or_service || 'Installation'})
+                        <div className="text-[11px] text-gray-500 mt-0.5">
+                          {item.number_of_devices} Nos. • {item.installation_or_service || 'Installation'}
                         </div>
                       </td>
 
-                      <td className="py-3 px-4">
-                        <span
-                          className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
-                            courierStatus === 'Delivered'
-                              ? 'bg-emerald-100 text-emerald-800'
-                              : courierStatus === 'In Transit' || courierStatus === 'Dispatched'
-                              ? 'bg-blue-100 text-blue-800'
-                              : courierStatus === 'Delivery Exception'
-                              ? 'bg-rose-100 text-rose-800'
-                              : courierStatus === 'Cancelled'
-                              ? 'bg-gray-100 text-gray-700'
-                              : 'bg-amber-100 text-amber-800'
-                          }`}
-                        >
-                          <Truck className="w-3 h-3" />
-                          <span>{courierStatus}</span>
-                        </span>
-                      </td>
+                      {/* 4. Courier Tracking Number and Delivery Status */}
+                      <td className="py-3.5 px-4">
+                        <div className="space-y-1">
+                          <span
+                            className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
+                              courierStatus === 'Delivered'
+                                ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                                : courierStatus === 'In Transit' || courierStatus === 'Dispatched'
+                                ? 'bg-blue-100 text-blue-800 border border-blue-200'
+                                : courierStatus === 'Delivery Exception'
+                                ? 'bg-rose-100 text-rose-800 border border-rose-200'
+                                : 'bg-gray-100 text-gray-700 border border-gray-200'
+                            }`}
+                          >
+                            <Truck className="w-3 h-3" />
+                            <span>{courierStatus}</span>
+                          </span>
 
-                      <td className="py-3 px-4 text-gray-600">
-                        {item.dispatch?.tracking_number ? (
-                          <div className="space-y-0.5">
-                            <div className="font-bold font-mono text-gray-900">{item.dispatch.tracking_number}</div>
-                            <div className="text-[10px] text-gray-500">{item.dispatch.courier_company}</div>
-                          </div>
-                        ) : (
-                          <span className="text-gray-400 text-[11px]">Awaiting Dispatch</span>
-                        )}
-                      </td>
-
-                      <td className="py-3 px-4">
-                        {isCompleted ? (
-                          <div className="space-y-0.5">
-                            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
-                              <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                              {isCustomerInstalled
-                                ? 'Completed — Customer Installed'
-                                : 'Completed — Tech Installed'}
-                            </span>
-                            {item.completed_at && (
-                              <div className="text-[10px] text-gray-400">
-                                {new Date(item.completed_at).toLocaleDateString()}
-                              </div>
+                          <div className="text-[11px] font-mono text-gray-700">
+                            {item.dispatch?.tracking_number ? (
+                              <span>
+                                <span className="font-semibold">{item.dispatch.tracking_number}</span>
+                                {item.dispatch.courier_company && (
+                                  <span className="text-gray-500 font-sans ml-1">({item.dispatch.courier_company})</span>
+                                )}
+                              </span>
+                            ) : (
+                              <span className="text-gray-400 italic font-sans">Not Dispatched</span>
                             )}
                           </div>
-                        ) : isScheduled ? (
+                        </div>
+                      </td>
+
+                      {/* 5. Technician Assignment */}
+                      <td className="py-3.5 px-4">
+                        {hasTechnician ? (
                           <div className="space-y-0.5">
-                            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-800 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200">
-                              <Calendar className="w-3 h-3 text-blue-600" />
-                              <span>Scheduled: {item.service_engineer}</span>
+                            <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-blue-800 bg-blue-50 px-2.5 py-1 rounded-md border border-blue-200">
+                              <User className="w-3 h-3 text-blue-600" />
+                              <span>{item.service_engineer}</span>
                             </span>
-                            <div className="text-[10px] text-gray-500">
-                              Start: {item.expected_arrival_date} ({item.installation_duration || '1 Day'})
+                            <div className="text-[10px] text-gray-500 flex items-center gap-1">
+                              <Calendar className="w-3 h-3 text-gray-400" />
+                              <span>
+                                {item.expected_arrival_date || 'Date Pending'}
+                                {item.installation_duration ? ` (${item.installation_duration})` : ''}
+                              </span>
                             </div>
                           </div>
-                        ) : isInstallationRequired ? (
-                          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-rose-800 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200">
-                            <AlertTriangle className="w-3 h-3 text-rose-600" />
-                            <span>Installation Required</span>
-                          </span>
-                        ) : isDelivered ? (
-                          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-purple-800 bg-purple-50 px-2 py-0.5 rounded-md border border-purple-200">
-                            <Clock className="w-3 h-3 text-purple-600" />
-                            <span>Awaiting Customer Decision</span>
-                          </span>
                         ) : (
-                          <span className="text-gray-500 text-[11px]">Courier In Progress</span>
+                          <span className="text-gray-400 text-[11px] italic">
+                            None (Customer Self-Installation)
+                          </span>
                         )}
                       </td>
 
-                      <td className="py-3 px-4 text-right">
+                      {/* 6. Actions */}
+                      <td className="py-3.5 px-4 text-right">
                         <div className="flex items-center justify-end gap-2">
-                          {/* If Delivered and awaiting customer confirmation: provide Outcome A and Outcome B */}
-                          {isDelivered && !isCompleted && !isScheduled && !isInstallationRequired && (
+                          {isCompleted ? (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-800 bg-emerald-50 px-3 py-1 rounded-lg border border-emerald-200">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                              <span>
+                                {isCustomerInstalled
+                                  ? 'Completed (Customer Installed)'
+                                  : isTechnicianInstalled
+                                  ? 'Completed (Tech Installed)'
+                                  : 'Completed'}
+                              </span>
+                            </span>
+                          ) : (
                             <>
-                              <button
-                                type="button"
-                                onClick={() => handleOpenCustomerInstalledModal(item)}
-                                className="px-2.5 py-1.5 text-xs font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded-lg flex items-center gap-1 cursor-pointer transition shadow-2xs"
-                                title="Customer has confirmed they installed independently"
-                              >
-                                <Check className="w-3.5 h-3.5 text-emerald-600" />
-                                <span>Customer Installed</span>
-                              </button>
+                              {/* Action 1: Assign Technician (hidden if customer already has a technician) */}
+                              {!hasTechnician && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenScheduleModal(item)}
+                                  className="px-3 py-1.5 text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-lg flex items-center gap-1.5 cursor-pointer transition shadow-2xs"
+                                  title="Assign an eligible technician if the customer requests technical assistance"
+                                >
+                                  <Wrench className="w-3.5 h-3.5 text-indigo-600" />
+                                  <span>Assign Technician</span>
+                                </button>
+                              )}
 
-                              <button
-                                type="button"
-                                onClick={() => handleOpenScheduleModal(item)}
-                                className="px-2.5 py-1.5 text-xs font-bold text-indigo-800 bg-indigo-50 hover:bg-indigo-100 border border-indigo-300 rounded-lg flex items-center gap-1 cursor-pointer transition shadow-2xs"
-                                title="Customer requires our technical team to install"
-                              >
-                                <Wrench className="w-3.5 h-3.5 text-indigo-600" />
-                                <span>Assign Technician</span>
-                              </button>
+                              {/* Action 2: Mark Completed (valid for customer self-installation) */}
+                              {!hasTechnician && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenCustomerInstalledModal(item)}
+                                  className="px-3 py-1.5 text-xs font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded-lg flex items-center gap-1.5 cursor-pointer transition shadow-2xs"
+                                  title="Customer confirmed independent installation completed without a technician"
+                                >
+                                  <Check className="w-3.5 h-3.5 text-emerald-600" />
+                                  <span>Mark Completed</span>
+                                </button>
+                              )}
+
+                              {/* If technician is assigned, completion is controlled via Post-Installation Form */}
+                              {hasTechnician && (
+                                <span className="text-[10px] text-gray-500 italic bg-gray-50 border border-gray-200 px-2.5 py-1 rounded-md">
+                                  Completes via Post-Installation Form
+                                </span>
+                              )}
                             </>
                           )}
-
-                          {/* If Installation Required: provide Assign & Schedule button */}
-                          {isInstallationRequired && !isCompleted && !isScheduled && (
-                            <button
-                              type="button"
-                              onClick={() => handleOpenScheduleModal(item)}
-                              className="px-3 py-1.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg flex items-center gap-1.5 cursor-pointer shadow-xs transition"
-                            >
-                              <Calendar className="w-3.5 h-3.5" />
-                              <span>Schedule Engineer</span>
-                            </button>
-                          )}
-
-                          {/* View details */}
-                          <button
-                            type="button"
-                            onClick={() => onSelectChecklist && onSelectChecklist(item.id)}
-                            className="p-1.5 text-gray-500 hover:text-gray-800 hover:bg-gray-100 rounded-lg cursor-pointer"
-                            title="View Checklist Details"
-                          >
-                            <ChevronRight className="w-4 h-4" />
-                          </button>
                         </div>
                       </td>
                     </tr>

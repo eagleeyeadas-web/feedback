@@ -1,5 +1,285 @@
 {
-  "extensions": {},
-  "revisions": {},
-  "updated_at": "2026-10-19T09:07:12.448Z"
+  "extensions": [
+    {
+      "id": "9ece4153-2c9b-4790-a39e-baa68dfe5ac2",
+      "checklist_id": "4a1e980c-c84d-4d7b-83e4-4fa3f2126f82",
+      "checklist_number": "EE-INST-20261021-0037",
+      "client_name": "Atlas Logistics 1792557857877",
+      "client_location": "Madurai Industrial Hub",
+      "technician_user_id": "00000000-0000-0000-0000-000000000002",
+      "technician_name": "tech@gmail.com",
+      "engineer_name": "Sakthivel",
+      "engineer_id": "e1000000-0000-0000-0000-000000000004",
+      "current_completion_date": "2027-11-24",
+      "original_dates": {
+        "arrival_date": "2027-11-23",
+        "arrival_time": "10:00:00",
+        "duration": "2 Days",
+        "completion_date": "2027-11-24"
+      },
+      "current_dates": {
+        "arrival_date": "2027-11-23",
+        "arrival_time": "10:00:00",
+        "duration": "2 Days",
+        "completion_date": "2027-11-24"
+      },
+      "requested_completion_date": "2027-11-25",
+      "requested_return_travel_date": null,
+      "additional_working_days": 1,
+      "rest_day_requested": false,
+      "requested_rest_date": null,
+      "reason": "Customer fleet arrived late; need extra half day for calibration",
+      "notes": null,
+      "status": "PENDING",
+      "coordinator_decision_notes": null,
+      "decided_by": null,
+      "decided_at": null,
+      "created_at": "2026-10-21T04:44:32.954Z",
+      "updated_at": "2026-10-21T04:44:32.954Z"
+    },
+    {
+      "id": "fb1e5446-e6bc-4120-8b2d-6f07d38bd52f",
+      "checklist_id": "2ea7e87d-7201-400c-bc20-9b28133434f2",
+      "checklist_number": "EE-INST-20261021-0072",
+      "client_name": "Acceptance Logistics 1792574758910",
+      "client_location": "Coimbatore Airport Road",
+      "technician_user_id": "e1000000-0000-0000-0000-000000000001",
+      "technician_name": "mathi@eagleeyesafdrive.com",
+      "engineer_name": "Mathi",
+      "engineer_id": "e1000000-0000-0000-0000-000000000001",
+      "current_completion_date": "2027-06-20",
+      "original_dates": {
+        "arrival_date": "2027-06-19",
+        "arrival_time": "10:00:00",
+        "duration": "2 Days",
+        "completion_date": "2027-06-20"
+      },
+      "current_dates": {
+        "arrival_date": "2027-06-19",
+        "arrival_time": "10:00:00",
+        "duration": "2 Days",
+        "completion_date": "2027-06-20"
+      },
+      "requested_completion_date": "2027-06-23",
+      "requested_return_travel_date": null,
+      "additional_working_days": 2,
+      "rest_day_requested": false,
+      "requested_rest_date": null,
+      "reason": "Additional vehicle wiring required",
+      "notes": null,
+      "status": "PENDING",
+      "coordinator_decision_notes": null,
+      "decided_by": null,
+      "decided_at": null,
+      "created_at": "2026-10-21T09:26:21.974Z",
+      "updated_at": "2026-10-21T09:26:21.974Z"
+    },
+    {
+      "id": "678a6d85-bef7-40e4-9fed-f399f91af8e6",
+      "checklist_id": "4832053e-d2a5-43d4-97c6-42d60d2e52b1",
+      "checklist_number": "EE-INST-20261021-0074",
+      "client_name": "Acceptance Logistics 1792575062569",
+      "client_location": "Coimbatore Airport Road",
+      "technician_user_id": "e1000000-0000-0000-0000-000000000001",
+      "technician_name": "mathi@eagleeyesafdrive.com",
+      "engineer_name": "Mathi",
+      "engineer_id": "e1000000-0000-0000-0000-000000000001",
+      "current_completion_date": "2033-08-11",
+      "original_dates": {
+        "arrival_date": "2033-08-10",
+        "arrival_time": "10:00:00",
+        "duration": "2 Days",
+        "completion_date": "2033-08-11"
+      },
+      "current_dates": {
+        "arrival_date": "2033-08-10",
+        "arrival_time": "10:00:00",
+        "duration": "2 Days",
+        "completion_date": "2033-08-11"
+      },
+      "requested_completion_date": "2033-08-14",
+      "requested_return_travel_date": null,
+      "additional_working_days": 2,
+      "rest_day_requested": false,
+      "requested_rest_date": null,
+      "reason": "Additional vehicle wiring required",
+      "notes": null,
+      "status": "APPROVED",
+      "coordinator_decision_notes": "Approved for client request",
+      "decided_by": "00000000-0000-0000-0000-000000000005",
+      "decided_at": "2026-10-21T09:31:25.999Z",
+      "created_at": "2026-10-21T09:31:23.596Z",
+      "updated_at": "2026-10-21T09:31:25.999Z",
+      "decision_notes": "Approved for client request",
+      "reviewed_by": "hr@eagleeyesafdrive.com",
+      "reviewer": "hr@eagleeyesafdrive.com",
+      "reviewed_at": "2026-10-21T09:31:25.999Z"
+    },
+    {
+      "id": "64625ac6-0607-46c5-a7ed-1baeb35b5f0c",
+      "checklist_id": "6a28b6c5-1b51-4be3-ae27-1c6f7b345396",
+      "checklist_number": "EE-INST-20261021-0079",
+      "client_name": "Acceptance Logistics 1792575631172",
+      "client_location": "Coimbatore Airport Road",
+      "technician_user_id": "e1000000-0000-0000-0000-000000000001",
+      "technician_name": "mathi@eagleeyesafdrive.com",
+      "engineer_name": "Mathi",
+      "engineer_id": "e1000000-0000-0000-0000-000000000001",
+      "current_completion_date": "2040-03-18",
+      "original_dates": {
+        "arrival_date": "2040-03-17",
+        "arrival_time": "10:00:00",
+        "duration": "2 Days",
+        "completion_date": "2040-03-18"
+      },
+      "current_dates": {
+        "arrival_date": "2040-03-17",
+        "arrival_time": "10:00:00",
+        "duration": "2 Days",
+        "completion_date": "2040-03-18"
+      },
+      "requested_completion_date": "2040-03-21",
+      "requested_return_travel_date": null,
+      "additional_working_days": 2,
+      "rest_day_requested": false,
+      "requested_rest_date": null,
+      "reason": "Additional vehicle wiring required",
+      "notes": null,
+      "status": "APPROVED",
+      "coordinator_decision_notes": "Approved for client request",
+      "decided_by": "00000000-0000-0000-0000-000000000005",
+      "decided_at": "2026-10-21T09:40:52.763Z",
+      "created_at": "2026-10-21T09:40:50.223Z",
+      "updated_at": "2026-10-21T09:40:52.763Z",
+      "decision_notes": "Approved for client request",
+      "reviewed_by": "hr@eagleeyesafdrive.com",
+      "reviewer": "hr@eagleeyesafdrive.com",
+      "reviewed_at": "2026-10-21T09:40:52.763Z"
+    },
+    {
+      "id": "bb55db12-1dcd-4e87-b1ea-dbccc59397f5",
+      "checklist_id": "6c7eacb9-4c8f-4da3-b14a-62ef4d6eaa5b",
+      "checklist_number": "EE-INST-20261021-0084",
+      "client_name": "Acceptance Logistics 1792576603829",
+      "client_location": "Coimbatore Airport Road",
+      "technician_user_id": "e1000000-0000-0000-0000-000000000001",
+      "technician_name": "mathi@eagleeyesafdrive.com",
+      "engineer_name": "Mathi",
+      "engineer_id": "e1000000-0000-0000-0000-000000000001",
+      "current_completion_date": "2049-08-19",
+      "original_dates": {
+        "arrival_date": "2049-08-18",
+        "arrival_time": "10:00:00",
+        "duration": "2 Days",
+        "completion_date": "2049-08-19"
+      },
+      "current_dates": {
+        "arrival_date": "2049-08-18",
+        "arrival_time": "10:00:00",
+        "duration": "2 Days",
+        "completion_date": "2049-08-19"
+      },
+      "requested_completion_date": "2049-08-22",
+      "requested_return_travel_date": null,
+      "additional_working_days": 2,
+      "rest_day_requested": false,
+      "requested_rest_date": null,
+      "reason": "Additional vehicle wiring required",
+      "notes": null,
+      "status": "APPROVED",
+      "coordinator_decision_notes": "Approved for client request",
+      "decided_by": "00000000-0000-0000-0000-000000000005",
+      "decided_at": "2026-10-21T09:57:07.600Z",
+      "created_at": "2026-10-21T09:57:05.476Z",
+      "updated_at": "2026-10-21T09:57:07.600Z",
+      "decision_notes": "Approved for client request",
+      "reviewed_by": "hr@eagleeyesafdrive.com",
+      "reviewer": "hr@eagleeyesafdrive.com",
+      "reviewed_at": "2026-10-21T09:57:07.600Z"
+    }
+  ],
+  "revisions": [
+    {
+      "id": "86dfff44-d708-4ea9-9431-2f0e95db4f23",
+      "checklist_id": "4832053e-d2a5-43d4-97c6-42d60d2e52b1",
+      "revision_number": 1,
+      "previous_schedule": {
+        "arrival_date": "2033-08-10",
+        "arrival_time": "10:00:00",
+        "duration": "2 Days",
+        "completion_date": "2033-08-11",
+        "revision_number": 0
+      },
+      "new_schedule": {
+        "arrival_date": "2033-08-10",
+        "arrival_time": "10:00:00",
+        "duration": "5 Days",
+        "completion_date": "2033-08-14",
+        "revision_number": 1
+      },
+      "new_completion_date": "2033-08-14",
+      "action": "APPROVED",
+      "reason": "Extension Request Approved: Additional vehicle wiring required | Note: Approved for client request",
+      "changed_by": "00000000-0000-0000-0000-000000000005",
+      "changed_by_email": "hr@eagleeyesafdrive.com",
+      "changed_by_role": "HR",
+      "related_extension_id": "678a6d85-bef7-40e4-9fed-f399f91af8e6",
+      "created_at": "2026-10-21T09:31:25.999Z"
+    },
+    {
+      "id": "b0edaa43-26de-4770-80ea-52a777ce359e",
+      "checklist_id": "6a28b6c5-1b51-4be3-ae27-1c6f7b345396",
+      "revision_number": 1,
+      "previous_schedule": {
+        "arrival_date": "2040-03-17",
+        "arrival_time": "10:00:00",
+        "duration": "2 Days",
+        "completion_date": "2040-03-18",
+        "revision_number": 0
+      },
+      "new_schedule": {
+        "arrival_date": "2040-03-17",
+        "arrival_time": "10:00:00",
+        "duration": "5 Days",
+        "completion_date": "2040-03-21",
+        "revision_number": 1
+      },
+      "new_completion_date": "2040-03-21",
+      "action": "APPROVED",
+      "reason": "Extension Request Approved: Additional vehicle wiring required | Note: Approved for client request",
+      "changed_by": "00000000-0000-0000-0000-000000000005",
+      "changed_by_email": "hr@eagleeyesafdrive.com",
+      "changed_by_role": "HR",
+      "related_extension_id": "64625ac6-0607-46c5-a7ed-1baeb35b5f0c",
+      "created_at": "2026-10-21T09:40:52.763Z"
+    },
+    {
+      "id": "10907093-c9d9-449c-9b5a-12bb3c2eccb4",
+      "checklist_id": "6c7eacb9-4c8f-4da3-b14a-62ef4d6eaa5b",
+      "revision_number": 1,
+      "previous_schedule": {
+        "arrival_date": "2049-08-18",
+        "arrival_time": "10:00:00",
+        "duration": "2 Days",
+        "completion_date": "2049-08-19",
+        "revision_number": 0
+      },
+      "new_schedule": {
+        "arrival_date": "2049-08-18",
+        "arrival_time": "10:00:00",
+        "duration": "5 Days",
+        "completion_date": "2049-08-22",
+        "revision_number": 1
+      },
+      "new_completion_date": "2049-08-22",
+      "action": "APPROVED",
+      "reason": "Extension Request Approved: Additional vehicle wiring required | Note: Approved for client request",
+      "changed_by": "00000000-0000-0000-0000-000000000005",
+      "changed_by_email": "hr@eagleeyesafdrive.com",
+      "changed_by_role": "HR",
+      "related_extension_id": "bb55db12-1dcd-4e87-b1ea-dbccc59397f5",
+      "created_at": "2026-10-21T09:57:07.600Z"
+    }
+  ],
+  "updated_at": "2026-10-21T09:57:11.590Z"
 }

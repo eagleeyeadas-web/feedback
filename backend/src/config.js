@@ -27,6 +27,12 @@ const config = {
   },
 
   timezone: 'Asia/Kolkata',
+
+  vapid: {
+    publicKey: process.env.VAPID_PUBLIC_KEY || 'BHuQF3JPfy22S-XKWMTxF6Ay6bg0nV-7dKX28lN8ZXS_zqOoaNPDtypy7-K_e4JDgu8xxF43TgrQ9o48BHZIeT0',
+    privateKey: process.env.VAPID_PRIVATE_KEY || 'fXVuY6eOqDiXYaxRjcFc1ADUQ70mxn48IZOa-9d50UY',
+    subject: process.env.VAPID_SUBJECT || 'mailto:support@eagleeyesafdrive.com',
+  },
 };
 
 // Validate required config

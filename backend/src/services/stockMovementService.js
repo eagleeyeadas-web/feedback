@@ -181,6 +181,90 @@ export async function recordStockMovement({
   return movementRecord;
 }
 
+export function isUUID(str) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(str || ''));
+}
+
+/**
+ * Determine whether a stock movement record represents a genuine, protected transaction
+ * that must be preserved for audit compliance vs an eligible test or non-authoritative entry.
+ */
+export function isMovementProtected(movement) {
+  if (!movement) return false;
+
+  const remarks = String(
+    movement.reason_or_remarks || movement.remarks || movement.reason || ''
+  ).toLowerCase();
+
+  // If explicitly flagged as test/mock/sandbox/demo, it is eligible for deletion
+  const isExplicitTest =
+    remarks.includes('[test]') ||
+    remarks.includes('(test)') ||
+    remarks.startsWith('test ') ||
+    remarks.endsWith(' test') ||
+    remarks === 'test' ||
+    remarks.includes('dummy') ||
+    remarks.includes('mock') ||
+    remarks.includes('sandbox') ||
+    String(movement.item_name || '').toLowerCase().includes('test item');
+
+  if (isExplicitTest) {
+    return false;
+  }
+
+  // 1. Check if linked to an installation checklist or courier dispatch
+  if (movement.checklist_id) return true;
+  if (movement.reference_transaction_id) return true;
+  if (
+    remarks.includes('checklist') ||
+    remarks.includes('courier') ||
+    remarks.includes('dispatch') ||
+    remarks.includes('post-installation') ||
+    remarks.includes('chk-')
+  ) {
+    return true;
+  }
+
+  // 2. Physical store movements representing physical inventory transactions
+  const physicalMovementTypes = [
+    'STOCK_ISSUED',
+    'COURIER_DISPATCHED',
+    'USABLE_STOCK_RETURNED',
+    'DAMAGED_STOCK_RECEIVED',
+    'DAMAGED_STOCK_DISPOSITION',
+    'RETURNED_USABLE',
+    'RETURNED_DAMAGED',
+    'STOCK_REVERSAL',
+  ];
+  const type = movement.movement_type || movement.transaction_type;
+  if (physicalMovementTypes.includes(type)) {
+    return true;
+  }
+
+  // 3. Genuine stock adjustment or opening stock for active products without test tags
+  const genuineTypes = ['OPENING_STOCK', 'STOCK_RECEIVED', 'STOCK_ADJUSTMENT'];
+  if (genuineTypes.includes(type)) {
+    return true;
+  }
+
+  return false;
+}
+
+function normalizeMovement(m) {
+  return {
+    ...m,
+    movement_type: m.movement_type || m.transaction_type,
+    transaction_type: m.movement_type || m.transaction_type,
+    balance_before: m.balance_before !== undefined && m.balance_before !== null ? m.balance_before : m.previous_balance,
+    previous_balance: m.balance_before !== undefined && m.balance_before !== null ? m.balance_before : m.previous_balance,
+    balance_after: m.balance_after !== undefined && m.balance_after !== null ? m.balance_after : m.new_balance,
+    new_balance: m.balance_after !== undefined && m.balance_after !== null ? m.balance_after : m.new_balance,
+    reason_or_remarks: m.reason_or_remarks || m.remarks || m.reason || null,
+    reason: m.reason_or_remarks || m.remarks || m.reason || null,
+    is_protected: isMovementProtected(m),
+  };
+}
+
 /**
  * Fetch unified stock movements from Supabase PostgreSQL with pagination, filtering, and search.
  */
@@ -222,13 +306,14 @@ export async function getStockMovements(params = {}) {
 
     const { data, count, error } = await query;
 
-    if (!error && data) {
+    if (!error && Array.isArray(data)) {
+      const normalizedData = data.map(normalizeMovement);
       return {
-        movements: data,
-        transactions: data, // For backward compatibility with frontend consumers
-        totalCount: count !== null ? count : data.length,
+        movements: normalizedData,
+        transactions: normalizedData, // For backward compatibility with frontend consumers
+        totalCount: count !== null ? count : normalizedData.length,
         page: pageNum,
-        totalPages: Math.ceil((count !== null ? count : data.length) / limitNum) || 1,
+        totalPages: Math.ceil((count !== null ? count : normalizedData.length) / limitNum) || 1,
       };
     }
   } catch (err) {
@@ -245,7 +330,7 @@ export async function getStockMovements(params = {}) {
   }
 
   if (type && type !== 'All') {
-    filtered = filtered.filter((m) => m.movement_type === type);
+    filtered = filtered.filter((m) => (m.movement_type || m.transaction_type) === type);
   }
 
   if (search && search.trim()) {
@@ -254,13 +339,13 @@ export async function getStockMovements(params = {}) {
       (m) =>
         (m.item_name || '').toLowerCase().includes(s) ||
         (m.sku || '').toLowerCase().includes(s) ||
-        (m.reason_or_remarks || '').toLowerCase().includes(s) ||
+        (m.reason_or_remarks || m.remarks || '').toLowerCase().includes(s) ||
         (m.performer_name || '').toLowerCase().includes(s) ||
         (m.idempotency_key || '').toLowerCase().includes(s)
     );
   }
 
-  const paginated = filtered.slice(offset, offset + limitNum);
+  const paginated = filtered.slice(offset, offset + limitNum).map(normalizeMovement);
 
   return {
     movements: paginated,
@@ -294,25 +379,73 @@ export function pruneLocalExpiredMovements(cutoffDate) {
 }
 
 /**
- * Delete a specific stock movement by ID from both Supabase and in-memory/file storage
+ * Delete a specific stock movement by ID from both Supabase and in-memory/file storage.
+ * Only eligible test/non-authoritative records can be deleted. Protected records throw a 400 error.
+ * Deletion never alters stock quantities.
  */
-export async function deleteStockMovementById(movementId) {
-  if (!movementId) return false;
-
-  // 1. Delete from Supabase
-  try {
-    await supabase.from('stock_movements').delete().eq('id', movementId);
-  } catch (err) {
-    console.warn('Could not delete stock movement from Supabase:', err.message);
+export async function deleteStockMovementById(movementId, user = null) {
+  if (!movementId) {
+    const err = new Error('Movement ID is required for deletion.');
+    err.status = 400;
+    throw err;
   }
 
-  // 2. Delete from in-memory fallback list
+  // 1. Locate existing record to inspect protection status
+  let movement = inMemoryStockMovements.find((m) => m.id === movementId);
+
+  if (!movement && fs.existsSync(STORAGE_FILE)) {
+    try {
+      const data = JSON.parse(fs.readFileSync(STORAGE_FILE, 'utf-8')) || {};
+      movement = (data.stockMovements || []).find((m) => m.id === movementId) ||
+                 (data.deviceTransactions || []).find((t) => t.id === movementId) ||
+                 (data.materialTransactions || []).find((t) => t.id === movementId);
+    } catch (e) {
+      // ignore
+    }
+  }
+
+  if (!movement && isUUID(movementId)) {
+    try {
+      const { data } = await supabase.from('stock_movements').select('*').eq('id', movementId).maybeSingle();
+      if (data) movement = data;
+    } catch (e) {
+      // ignore
+    }
+  }
+
+  // 2. Check if the movement is protected
+  if (movement && isMovementProtected(movement)) {
+    const err = new Error(
+      'Cannot delete protected genuine stock transaction. Movements linked to checklists, store issuances, returns, or genuine stock changes must be preserved for audit compliance. If stock needs correction, please use an authorized Stock Adjustment or Reversal.'
+    );
+    err.status = 400;
+    err.isProtected = true;
+    throw err;
+  }
+
+  // 3. Delete from Supabase if valid UUID
+  if (isUUID(movementId)) {
+    try {
+      const { error } = await supabase.from('stock_movements').delete().eq('id', movementId);
+      if (error) {
+        console.warn('Could not delete stock movement from Supabase:', error.message);
+        const err = new Error(`Database error deleting movement: ${error.message}`);
+        err.status = 500;
+        throw err;
+      }
+    } catch (err) {
+      if (err.status) throw err;
+      console.warn('Could not delete stock movement from Supabase:', err.message);
+    }
+  }
+
+  // 4. Delete from in-memory fallback list
   const idx = inMemoryStockMovements.findIndex((m) => m.id === movementId);
   if (idx !== -1) {
     inMemoryStockMovements.splice(idx, 1);
   }
 
-  // 3. Delete from inventory_storage.json legacy transactions if present
+  // 5. Delete from inventory_storage.json legacy transactions if present
   try {
     if (fs.existsSync(STORAGE_FILE)) {
       const data = JSON.parse(fs.readFileSync(STORAGE_FILE, 'utf-8')) || {};
@@ -322,69 +455,79 @@ export async function deleteStockMovementById(movementId) {
       if (Array.isArray(data.materialTransactions)) {
         data.materialTransactions = data.materialTransactions.filter((t) => t.id !== movementId);
       }
-      data.stockMovements = inMemoryStockMovements;
+      if (Array.isArray(data.stockMovements)) {
+        data.stockMovements = data.stockMovements.filter((m) => m.id !== movementId);
+      }
       fs.writeFileSync(STORAGE_FILE, JSON.stringify(data, null, 2), 'utf-8');
     }
   } catch (err) {
     console.warn('Could not update inventory_storage after delete:', err.message);
   }
 
-  return true;
+  return { success: true, message: 'Stock movement deleted successfully' };
 }
 
 /**
- * Clear all or filtered stock movements history from both Supabase and in-memory/file storage
+ * Clear all or filtered eligible stock movements history from both Supabase and in-memory/file storage.
+ * Protected genuine movements are safely preserved. Stock balances are never altered.
  */
-export async function clearStockMovementsHistory({ category = 'All', type = 'All' } = {}) {
-  let deletedCount = 0;
+export async function clearStockMovementsHistory({ category = 'All', type = 'All', user = null } = {}) {
+  // 1. Fetch all matching movements to partition into eligible vs protected
+  const { movements: currentMovements } = await getStockMovements({
+    category,
+    type,
+    limit: 1000,
+  });
 
-  // 1. Delete from Supabase
-  try {
-    let query = supabase.from('stock_movements').delete();
+  const allMatching = currentMovements || [];
+  const eligibleToDelete = [];
+  const protectedMovements = [];
 
-    if (category === 'Devices' || category === 'Camera Device') {
-      query = query.eq('category', 'Camera Device');
-    } else if (category === 'Materials' || category === 'Installation Material') {
-      query = query.eq('category', 'Installation Material');
+  for (const m of allMatching) {
+    if (isMovementProtected(m)) {
+      protectedMovements.push(m);
     } else {
-      query = query.not('id', 'is', null);
+      eligibleToDelete.push(m);
     }
-
-    if (type && type !== 'All') {
-      query = query.eq('movement_type', type);
-    }
-
-    const { data, error } = await query;
-    if (!error && Array.isArray(data)) {
-      deletedCount = data.length;
-    }
-  } catch (err) {
-    console.warn('Could not delete stock movements from Supabase:', err.message);
   }
 
-  // 2. Delete from in-memory fallback list
-  const beforeCount = inMemoryStockMovements.length;
-  if (category === 'All' && type === 'All') {
-    inMemoryStockMovements.length = 0;
-  } else {
-    const surviving = inMemoryStockMovements.filter((m) => {
-      const matchCat = (category === 'Devices' && m.category === 'Camera Device') ||
-                       (category === 'Materials' && m.category === 'Installation Material') ||
-                       category === 'All';
-      const matchType = type === 'All' || m.movement_type === type;
-      return !(matchCat && matchType);
-    });
-    inMemoryStockMovements.length = 0;
-    inMemoryStockMovements.push(...surviving);
+  if (eligibleToDelete.length === 0) {
+    return {
+      success: true,
+      deletedCount: 0,
+      protectedCount: protectedMovements.length,
+      message: `No eligible test records found to clean. All ${protectedMovements.length} matching movements are protected genuine inventory transactions and have been safely preserved.`,
+    };
   }
 
-  // 3. Clear from inventory_storage.json
+  // 2. Delete eligible records from Supabase
+  const eligibleUuids = eligibleToDelete.map((m) => m.id).filter(isUUID);
+  if (eligibleUuids.length > 0) {
+    try {
+      const { error } = await supabase.from('stock_movements').delete().in('id', eligibleUuids);
+      if (error) {
+        console.warn('Could not bulk delete stock movements from Supabase:', error.message);
+      }
+    } catch (err) {
+      console.warn('Supabase bulk delete exception:', err.message);
+    }
+  }
+
+  // 3. Delete eligible records from in-memory fallback list
+  const eligibleIdsSet = new Set(eligibleToDelete.map((m) => m.id));
+  const surviving = inMemoryStockMovements.filter((m) => !eligibleIdsSet.has(m.id));
+  inMemoryStockMovements.length = 0;
+  inMemoryStockMovements.push(...surviving);
+
+  // 4. Clear eligible records from inventory_storage.json
   try {
     if (fs.existsSync(STORAGE_FILE)) {
       const data = JSON.parse(fs.readFileSync(STORAGE_FILE, 'utf-8')) || {};
-      if (category === 'All' && type === 'All') {
-        data.deviceTransactions = [];
-        data.materialTransactions = [];
+      if (Array.isArray(data.deviceTransactions)) {
+        data.deviceTransactions = data.deviceTransactions.filter((t) => !eligibleIdsSet.has(t.id));
+      }
+      if (Array.isArray(data.materialTransactions)) {
+        data.materialTransactions = data.materialTransactions.filter((t) => !eligibleIdsSet.has(t.id));
       }
       data.stockMovements = inMemoryStockMovements;
       fs.writeFileSync(STORAGE_FILE, JSON.stringify(data, null, 2), 'utf-8');
@@ -393,7 +536,11 @@ export async function clearStockMovementsHistory({ category = 'All', type = 'All
     console.warn('Could not save storage after clear:', err.message);
   }
 
-  deletedCount = Math.max(deletedCount, beforeCount - inMemoryStockMovements.length);
-  return { success: true, deletedCount };
+  return {
+    success: true,
+    deletedCount: eligibleToDelete.length,
+    protectedCount: protectedMovements.length,
+    message: `Cleaned ${eligibleToDelete.length} eligible test movements. Preserved ${protectedMovements.length} protected genuine inventory transactions.`,
+  };
 }
 

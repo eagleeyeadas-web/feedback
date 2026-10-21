@@ -1,0 +1,50 @@
+{
+  "subscriptions": [
+    {
+      "id": "af323a2c-fcd6-40c6-abbc-71cebf3e041a",
+      "user_id": "00000000-0000-0000-0000-000000000001",
+      "user_email": "sales@eagleeyesafdrive.com",
+      "user_role": "SALES",
+      "endpoint": "https://fcm.googleapis.com/fcm/send/test-endpoint-chk-1792576525049",
+      "p256dh": "BFrIByCIzalrRBWaVvZKki8Kb4fb6NM4Qy7Yit7Fh3GCawDAxi_6UNrskH3q3AD-ZFDZEPnGLAtnWIvRX0entKE",
+      "auth": "authSecret123",
+      "user_agent": null,
+      "device_type": "Android",
+      "is_active": true,
+      "created_at": "2026-10-21T09:55:25.049Z",
+      "updated_at": "2026-10-21T09:55:25.049Z",
+      "last_used_at": "2026-10-21T09:55:25.049Z"
+    },
+    {
+      "id": "dbaf1a8b-efb4-4a30-87c3-652501faddd1",
+      "user_id": "00000000-0000-0000-0000-000000000001",
+      "user_email": "sales@eagleeyesafdrive.com",
+      "user_role": "SALES",
+      "endpoint": "https://fcm.googleapis.com/fcm/send/test-endpoint-idemp-1792576577656",
+      "p256dh": "BH8hSUcuzv6cOZHjkMe2DRu1wZq3jHPHnsWwCod94OoDltJeMpdRhQTsYCq41w_lR-b9nhzwHil6pDX1OTvzLlY",
+      "auth": "authSecretIdemp",
+      "user_agent": null,
+      "device_type": "Android",
+      "is_active": true,
+      "created_at": "2026-10-21T09:56:17.656Z",
+      "updated_at": "2026-10-21T09:56:17.656Z",
+      "last_used_at": "2026-10-21T09:56:17.656Z"
+    },
+    {
+      "id": "ff8fab53-cba3-4df8-89bc-4294fffbb246",
+      "user_id": "00000000-0000-0000-0000-000000000001",
+      "user_email": "sales@eagleeyesafdrive.com",
+      "user_role": "SALES",
+      "endpoint": "https://fcm.googleapis.com/fcm/send/test-endpoint-chk-1792576578237",
+      "p256dh": "BH8hSUcuzv6cOZHjkMe2DRu1wZq3jHPHnsWwCod94OoDltJeMpdRhQTsYCq41w_lR-b9nhzwHil6pDX1OTvzLlY",
+      "auth": "authSecret123",
+      "user_agent": null,
+      "device_type": "Android",
+      "is_active": true,
+      "created_at": "2026-10-21T09:56:18.237Z",
+      "updated_at": "2026-10-21T09:56:18.237Z",
+      "last_used_at": "2026-10-21T09:56:18.237Z"
+    }
+  ],
+  "updated_at": "2026-10-21T09:56:18.463Z"
+}

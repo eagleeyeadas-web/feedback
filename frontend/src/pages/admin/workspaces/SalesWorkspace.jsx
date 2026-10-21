@@ -274,25 +274,37 @@ export default function SalesWorkspace({ onSelectChecklist, onCreateChecklist, o
         </div>
 
         <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-xs flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg bg-amber-50 flex items-center justify-center text-amber-600">
+          <div className="w-9 h-9 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600">
             <Calendar className="w-4 h-4" />
           </div>
           <div>
-            <p className="text-[11px] text-gray-500 font-medium">Assigned Jobs</p>
-            <p className="text-xl font-bold text-gray-900">
-              {checklists.filter((c) => c.installation_status === 'Assigned' || c.installation_status === 'Pending').length}
+            <p className="text-[11px] text-gray-500 font-medium">Assigned</p>
+            <p className="text-xl font-bold text-blue-900">
+              {checklists.filter((c) => c.installation_status === 'Assigned').length}
             </p>
           </div>
         </div>
 
         <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-xs flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg bg-purple-50 flex items-center justify-center text-purple-600">
+          <div className="w-9 h-9 rounded-lg bg-amber-50 flex items-center justify-center text-amber-600">
+            <Clock className="w-4 h-4" />
+          </div>
+          <div>
+            <p className="text-[11px] text-gray-500 font-medium">Assign Later</p>
+            <p className="text-xl font-bold text-amber-900">
+              {checklists.filter((c) => c.installation_status === 'Assign Later').length}
+            </p>
+          </div>
+        </div>
+
+        <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-xs flex items-center gap-3">
+          <div className="w-9 h-9 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600">
             <CheckCircle2 className="w-4 h-4" />
           </div>
           <div>
-            <p className="text-[11px] text-gray-500 font-medium">Completed Jobs</p>
-            <p className="text-xl font-bold text-gray-900">
-              {checklists.filter((c) => c.installation_status === 'Completed' || c.installation_status === 'Site Work Completed').length}
+            <p className="text-[11px] text-gray-500 font-medium">Completed</p>
+            <p className="text-xl font-bold text-emerald-900">
+              {checklists.filter((c) => c.installation_status === 'Completed').length}
             </p>
           </div>
         </div>
@@ -312,9 +324,9 @@ export default function SalesWorkspace({ onSelectChecklist, onCreateChecklist, o
               <p className="text-xl font-bold text-gray-900">
                 {checklists.filter((c) => c.delivery_method === 'Product Couriered').length}
               </p>
-              {checklists.filter((c) => c.delivery_method === 'Product Couriered' && c.installation_status === 'Awaiting Customer Confirmation').length > 0 && (
+              {checklists.filter((c) => c.delivery_method === 'Product Couriered' && c.courier_dispatch_status === 'Delivered' && c.installation_status !== 'Completed' && !c.service_engineer).length > 0 && (
                 <span className="text-[9px] bg-amber-100 text-amber-800 border border-amber-300 px-1 py-0.2 rounded font-bold animate-pulse">
-                  {checklists.filter((c) => c.delivery_method === 'Product Couriered' && c.installation_status === 'Awaiting Customer Confirmation').length} Awaiting
+                  {checklists.filter((c) => c.delivery_method === 'Product Couriered' && c.courier_dispatch_status === 'Delivered' && c.installation_status !== 'Completed' && !c.service_engineer).length} Awaiting
                 </span>
               )}
             </div>
@@ -377,15 +389,15 @@ export default function SalesWorkspace({ onSelectChecklist, onCreateChecklist, o
           <Package className="w-4 h-4" />
           <span>Couriered Orders & Customer Tracking</span>
           <span className={`text-[10px] px-2 py-0.5 rounded-full font-mono font-bold ${
-            checklists.filter((c) => c.delivery_method === 'Product Couriered' && c.installation_status === 'Awaiting Customer Confirmation').length > 0
+            checklists.filter((c) => c.delivery_method === 'Product Couriered' && c.courier_dispatch_status === 'Delivered' && c.installation_status !== 'Completed' && !c.service_engineer).length > 0
               ? 'bg-amber-400 text-amber-950 animate-pulse'
               : 'bg-black/10 text-inherit'
           }`}>
             {checklists.filter((c) => c.delivery_method === 'Product Couriered').length}
           </span>
-          {checklists.filter((c) => c.delivery_method === 'Product Couriered' && c.installation_status === 'Awaiting Customer Confirmation').length > 0 && (
+          {checklists.filter((c) => c.delivery_method === 'Product Couriered' && c.courier_dispatch_status === 'Delivered' && c.installation_status !== 'Completed' && !c.service_engineer).length > 0 && (
             <span className="text-[10px] bg-amber-100 text-amber-800 border border-amber-300 px-1.5 py-0.5 rounded-full font-semibold">
-              {checklists.filter((c) => c.delivery_method === 'Product Couriered' && c.installation_status === 'Awaiting Customer Confirmation').length} Awaiting Customer Confirmation
+              {checklists.filter((c) => c.delivery_method === 'Product Couriered' && c.courier_dispatch_status === 'Delivered' && c.installation_status !== 'Completed' && !c.service_engineer).length} Awaiting Customer Confirmation
             </span>
           )}
         </button>
@@ -517,15 +529,13 @@ export default function SalesWorkspace({ onSelectChecklist, onCreateChecklist, o
                     </td>
                     <td className="py-3 px-4">
                       <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${
-                        item.installation_status === 'Completed' || item.installation_status === 'Site Work Completed'
+                        item.installation_status === 'Completed'
                           ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                          : item.installation_status === 'In Progress'
-                          ? 'bg-blue-100 text-blue-800 border border-blue-300'
                           : item.installation_status === 'Assigned'
-                          ? 'bg-purple-100 text-purple-800 border border-purple-300'
+                          ? 'bg-blue-100 text-blue-800 border border-blue-300'
                           : 'bg-amber-100 text-amber-800 border border-amber-300'
                       }`}>
-                        {item.installation_status === 'Site Work Completed' ? 'Completed' : (item.installation_status || 'Assigned')}
+                        {item.installation_status || 'Assigned'}
                       </span>
                     </td>
                     <td className="py-3 px-4">

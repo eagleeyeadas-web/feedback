@@ -141,9 +141,18 @@ export async function getNotifications({ role = null, userId = null, unreadOnly 
 
   inMemoryNotifications.forEach((n) => {
     if (seenIds.has(n.id)) return;
-    const roleMatch = !n.target_role || (role && n.target_role.toLowerCase() === role.toLowerCase());
-    const userMatch = !n.target_user_id || (userId && n.target_user_id === userId);
-    if ((roleMatch || userMatch) && (!unreadOnly || !n.is_read)) {
+    let match = false;
+    if (role && userId) {
+      match = (n.target_role && n.target_role.toLowerCase() === role.toLowerCase()) ||
+              (n.target_user_id && n.target_user_id === userId);
+    } else if (role) {
+      match = !n.target_role || (n.target_role && n.target_role.toLowerCase() === role.toLowerCase());
+    } else if (userId) {
+      match = n.target_user_id === userId;
+    } else {
+      match = true;
+    }
+    if (match && (!unreadOnly || !n.is_read)) {
       notifications.push(n);
     }
   });

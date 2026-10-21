@@ -283,9 +283,11 @@ export async function dispatchChecklistViaCourier(
     if (dbChk) checklist = dbChk;
   } catch (e) {}
 
-  if (!checklist) {
+  const { getChecklistById, normalizeChecklistDeviceConfigs } = await import('./installationService.js');
+  if (checklist) {
+    checklist = normalizeChecklistDeviceConfigs(checklist);
+  } else {
     try {
-      const { getChecklistById } = await import('./installationService.js');
       checklist = await getChecklistById(checklist_id);
     } catch (e) {}
   }
@@ -351,6 +353,14 @@ export async function dispatchChecklistViaCourier(
             unit: m.unit || 'Nos.',
           });
         }
+      });
+    }
+    if (dispatchItems.length === 0 && checklist.device_type) {
+      dispatchItems.push({
+        item_type: 'DEVICE',
+        item_name: checklist.device_type,
+        quantity: Number(checklist.number_of_devices || 1),
+        unit: 'Nos.',
       });
     }
   }
@@ -711,11 +721,6 @@ export async function updateCourierDeliveryStatus(
       updated_at: new Date().toISOString(),
     };
 
-    // If delivered and job was awaiting delivery / unassigned, transition status to 'Awaiting Customer Confirmation'
-    if (isDelivered) {
-      checklistUpdate.installation_status = 'Awaiting Customer Confirmation';
-    }
-
     await dbClient
       .from('installation_checklists')
       .update(checklistUpdate)
@@ -999,6 +1004,7 @@ export const inMemoryCourierCompletions = new Map();
 export async function markChecklistCustomerInstalled({
   checklist_id,
   notes = '',
+  confirmation_note = '',
   user = null,
   dbClient = supabase,
 }) {
@@ -1034,16 +1040,18 @@ export async function markChecklistCustomerInstalled({
     throw new Error(`Checklist ${checklist.checklist_number} is already marked completed.`);
   }
 
-  // Verify courier was delivered
-  const dispatch = await getCourierDispatchByChecklistId(checklist_id, dbClient);
-  const isDelivered =
-    checklist.courier_dispatch_status === 'Delivered' ||
-    (dispatch && dispatch.delivery_status === 'Delivered');
-
-  if (!isDelivered) {
-    throw new Error(`Cannot complete order: Courier status is "${checklist.courier_dispatch_status || dispatch?.delivery_status || 'Pending'}". Products must be delivered before confirming independent customer installation.`);
+  // If technician is assigned, post-installation form is strictly required
+  if (checklist.service_engineer && checklist.service_engineer.trim()) {
+    throw new Error(`Technician "${checklist.service_engineer}" is assigned to checklist ${checklist.checklist_number}. Technician-assigned orders must be completed via the Post-Installation Form.`);
   }
 
+  // Mandatory customer confirmation note
+  const finalNotes = (notes || confirmation_note || '').trim();
+  if (!finalNotes) {
+    throw new Error('Customer confirmation note is required to confirm independent customer installation.');
+  }
+
+  // Courier tracking is kept strictly separate from installation status
   const completionTimestamp = new Date().toISOString();
   const userName = user?.full_name || user?.email || 'Sales';
   const userId = user?.id || null;
@@ -1054,8 +1062,10 @@ export async function markChecklistCustomerInstalled({
     completion_type: 'CUSTOMER_INSTALLED',
     completed_by_user_id: userId,
     completed_by_name: userName,
+    confirmed_by_user: userName,
     completed_at: completionTimestamp,
-    completion_notes: (notes || '').trim(),
+    actual_completion_datetime: completionTimestamp,
+    completion_notes: finalNotes,
     created_at: completionTimestamp,
   };
 
@@ -1067,8 +1077,9 @@ export async function markChecklistCustomerInstalled({
     completion_type: 'CUSTOMER_INSTALLED',
     completed_by_user_id: userId,
     completed_by_name: userName,
+    actual_completion_datetime: completionTimestamp,
     actual_completion_at: completionTimestamp,
-    completion_notes: (notes || '').trim(),
+    completion_notes: finalNotes,
     updated_at: completionTimestamp,
   };
 
@@ -1084,6 +1095,8 @@ export async function markChecklistCustomerInstalled({
         .from('installation_checklists')
         .update({
           installation_status: 'Completed',
+          completion_type: 'CUSTOMER_INSTALLED',
+          actual_completion_datetime: completionTimestamp,
           actual_completion_at: completionTimestamp,
           updated_at: completionTimestamp,
         })
@@ -1115,7 +1128,7 @@ export async function markChecklistCustomerInstalled({
       checklist_number: checklist.checklist_number,
       client_name: checklist.client_name,
       completion_type: 'CUSTOMER_INSTALLED',
-      notes,
+      notes: finalNotes,
     },
   });
 
@@ -1123,6 +1136,10 @@ export async function markChecklistCustomerInstalled({
     success: true,
     message: 'Order completed — Customer installed independently.',
     completion: completionData,
+    installation_status: 'Completed',
+    completed_by_user: userName,
+    completed_at: completionTimestamp,
+    notes: finalNotes,
     checklist: {
       ...checklist,
       ...updatePayload,
@@ -1168,7 +1185,7 @@ export async function requestTechnicianForCourieredChecklist({
   }
 
   const updatePayload = {
-    installation_status: 'Installation Required',
+    installation_status: 'Assigned',
     updated_at: new Date().toISOString(),
   };
 

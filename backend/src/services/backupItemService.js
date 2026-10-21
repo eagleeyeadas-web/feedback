@@ -5,6 +5,7 @@ import supabase from './supabase.js';
 import { logAudit } from './auditService.js';
 import { getMaterialInventory, adjustMaterialStock } from './materialStockService.js';
 import { getInventoryProducts, adjustStock } from './inventoryService.js';
+import { isScrewMaterial } from './workflowService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -563,9 +564,23 @@ export async function reconcileBackupItems({ checklistId, user, items = [] }) {
 
   for (const decItem of declaredItems) {
     const key = decItem.item_name.toLowerCase();
-    const rep = inputMap.get(key) || {};
-
     const qtyCarried = Number(decItem.quantity) || 0;
+
+    // Screws (Long Screw, Small Screw) are excluded from Post-Installation reconciliation & returns
+    if (isScrewMaterial(decItem.item_name)) {
+      reconciledRows.push({
+        ...decItem,
+        quantity_used: qtyCarried,
+        quantity_returned: 0,
+        quantity_damaged: 0,
+        quantity_missing: 0,
+        discrepancy_reason: null,
+        updated_at: new Date().toISOString(),
+      });
+      continue;
+    }
+
+    const rep = inputMap.get(key) || {};
     const qtyUsed = Math.max(0, Number(rep.quantity_used || rep.quantity_installed || 0));
     const qtyReturned = Math.max(0, Number(rep.quantity_returned || rep.quantity_to_return || 0));
     const qtyDamaged = Math.max(0, Number(rep.quantity_damaged || 0));

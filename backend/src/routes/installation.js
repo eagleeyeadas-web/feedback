@@ -169,7 +169,7 @@ export const checklistValidationSchema = z.object({
   pending_amount: z.number().gte(0, 'Pending amount cannot be negative').default(0),
   delivery_method: z.enum(['Technician Carries', 'Product Couriered']).optional().default('Technician Carries'),
   courier_dispatch_status: z.string().optional().default('NOT_APPLICABLE'),
-  installation_duration: z.string().optional().default('1 Day'),
+  installation_duration: z.string().nullable().optional().default('1 Day'),
   vehicle_type: z.string().min(1, 'Vehicle type is required'),
   custom_vehicle_type: z.string().nullable().optional(),
   expected_arrival_date: z.string().nullable().optional(),
@@ -181,21 +181,8 @@ export const checklistValidationSchema = z.object({
   service_engineer_id: z.string().nullable().optional(),
   booking_end_date: z.string().nullable().optional(),
   service_assistant: z.string().nullable().optional().default(''),
-  installation_status: z.enum([
-    'Pending',
-    'Assigned',
-    'In Progress',
-    'Completed',
-    'Cancelled',
-    'Awaiting Technician Assignment',
-    'Awaiting Schedule',
-    'Ready for Installation',
-    'Courier Pending',
-    'Awaiting Customer Confirmation',
-    'Installation Required',
-    'Site Work Completed',
-  ], {
-    errorMap: () => ({ message: 'Invalid installation status' }),
+  installation_status: z.enum(['Assigned', 'Assign Later', 'Completed'], {
+    errorMap: () => ({ message: 'Installation Status must be one of: Assigned, Assign Later, or Completed' }),
   }).optional().default('Assigned'),
   payment_status: z.enum(['Paid', 'Partially Paid', 'Pending']).default('Pending'),
   remarks: z.string().nullable().optional(),
@@ -204,8 +191,9 @@ export const checklistValidationSchema = z.object({
   material_issuance_status: z.enum(['PENDING', 'PARTIALLY_ISSUED', 'ISSUED', 'NOT_APPLICABLE']).optional(),
 }).superRefine((data, ctx) => {
   const isCouriered = data.delivery_method === 'Product Couriered';
+  const isAssignLater = data.installation_status === 'Assign Later';
 
-  if (!isCouriered) {
+  if (!isCouriered && !isAssignLater) {
     if (!data.installation_duration || !data.installation_duration.trim()) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -657,6 +645,9 @@ router.post('/', requireRole('SALES', 'ADMIN'), async (req, res) => {
       });
     }
 
+    // A newly created checklist always starts as Assigned
+    parsed.data.installation_status = 'Assigned';
+
     const created = await createChecklist(req.profile.id, parsed.data, {
       enforceNextDayBooking: Boolean(parsed.data.expected_arrival_date),
     });
@@ -684,6 +675,28 @@ router.put('/:id', requireRole('SALES', 'ADMIN'), async (req, res) => {
       return res.status(400).json({ error: firstErr, details: parsed.error.format() });
     }
 
+    // Enforce workflow status-transition rules
+    if (parsed.data.installation_status === 'Completed') {
+      const existing = await getChecklistById(req.params.id);
+      const isTechJob = (parsed.data.delivery_method || existing.delivery_method) === 'Technician Carries' ||
+        Boolean(parsed.data.service_engineer || existing.service_engineer);
+
+      if (isTechJob && existing.installation_status !== 'Completed') {
+        const report = await getInstallationCompletionReport(existing.id);
+        if (!report) {
+          return res.status(400).json({
+            error: 'Technician-assigned installations cannot be manually marked Completed. Status updates to Completed automatically once the assigned technician submits the Post-Installation Form.',
+          });
+        }
+      } else if (!isTechJob && (parsed.data.delivery_method || existing.delivery_method) === 'Product Couriered') {
+        if (parsed.data.client_confirmation !== 'Confirmed') {
+          return res.status(400).json({
+            error: 'Customer confirmation ("Confirmed") is required before completing couriered self-installation.',
+          });
+        }
+      }
+    }
+
     const updated = await updateChecklist(req.params.id, parsed.data);
     return res.json(updated);
   } catch (err) {
@@ -704,10 +717,11 @@ router.put('/:id', requireRole('SALES', 'ADMIN'), async (req, res) => {
  */
 router.post('/:id/courier-customer-installed', requireRole('SALES', 'ADMIN'), async (req, res) => {
   try {
-    const { notes } = req.body;
+    const { notes, confirmation_note } = req.body;
     const result = await markChecklistCustomerInstalled({
       checklist_id: req.params.id,
-      notes: notes || '',
+      notes: notes || confirmation_note || '',
+      confirmation_note: confirmation_note || notes || '',
       user: req.profile || req.user,
     });
     return res.json(result);

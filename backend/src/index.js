@@ -19,6 +19,7 @@ import materialRoutes from './routes/materials.js';
 import coordinatorRoutes from './routes/coordinator.js';
 import hrRoutes from './routes/hr.js';
 import courierRoutes from './routes/courier.js';
+import notificationRoutes from './routes/notifications.js';
 import { runFullCleanup, handleCleanupEndpoint, handleCleanupStatusEndpoint, executeActivityTriggeredCleanup } from './services/quotationCleanupService.js';
 import { startDailyCleanupSchedule } from './services/inventoryCleanupService.js';
 import { startOverdueDetectionScheduler } from './services/overdueDetectionService.js';
@@ -107,6 +108,8 @@ app.use('/api/courier', courierRoutes);
 app.use('/api/admin/customers', customerRoutes);
 app.use('/api/admin/users', userRoutes);
 app.use('/api/admin/audit-logs', auditRoutes);
+app.use('/api/admin/notifications', notificationRoutes);
+app.use('/api/notifications', notificationRoutes);
 app.use('/api/admin', adminRoutes);
 
 // Serve built static frontend files if present (fixes 404 on refresh)

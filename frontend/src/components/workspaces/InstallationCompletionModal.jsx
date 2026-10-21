@@ -31,6 +31,8 @@ import {
   fetchDeviceConfigurations,
   fetchAdditionalCustomerInstallations,
 } from '../../lib/api';
+import { isScrewMaterial } from '../../lib/productHelpers';
+export { isScrewMaterial };
 
 export const DEFAULT_CONFIGS = [
   {
@@ -399,7 +401,9 @@ export default function InstallationCompletionModal({
               }
 
               if (Array.isArray(report.material_items) && report.material_items.length > 0) {
-                const matRows = report.material_items.map((m, idx) => {
+                const matRows = report.material_items
+                  .filter((m) => !isScrewMaterial(m.material_name))
+                  .map((m, idx) => {
                   const issued = Number(m.quantity_issued) || 0;
                   const used = Number(m.quantity_used) || 0;
                   const ret = Number(m.quantity_returned) || 0;
@@ -489,11 +493,11 @@ export default function InstallationCompletionModal({
           });
         }
 
-        // 3B. Standard fitting materials from checklist preliminary BOM snapshot
+        // 3B. Standard fitting materials from checklist preliminary BOM snapshot (screws excluded from Post-Installation Form)
         const prelimMaterials = checklist.bom_snapshot?.items || [];
         prelimMaterials.forEach((m) => {
           const name = (m.material_name || '').trim();
-          if (!name) return;
+          if (!name || isScrewMaterial(name)) return;
           const qty = Number(m.total_quantity !== undefined ? m.total_quantity : m.quantity) || 0;
           const key = name.toLowerCase();
 
@@ -511,12 +515,12 @@ export default function InstallationCompletionModal({
           }
         });
 
-        // 3C. Extra loose backup items from pre-installation declaration
+        // 3C. Extra loose backup items from pre-installation declaration (screws excluded from Post-Installation Form)
         const backupItemMap = new Map();
         if (backupDecl && backupDecl.has_backup_items && Array.isArray(backupDecl.items)) {
           backupDecl.items.forEach((b) => {
             const name = (b.item_name || '').trim();
-            if (!name) return;
+            if (!name || isScrewMaterial(name)) return;
             const qty = Number(b.quantity) || 0;
             const key = name.toLowerCase();
             backupItemMap.set(key, {
@@ -540,6 +544,7 @@ export default function InstallationCompletionModal({
           const ext = backupItemMap.get(k);
 
           const productName = std?.product_name || ext?.product_name;
+          if (!productName || isScrewMaterial(productName)) return;
           const matchedProd = products.find(
             (p) => (p.item_name || '').toLowerCase() === productName.toLowerCase()
           );
@@ -651,9 +656,9 @@ export default function InstallationCompletionModal({
     const prodsForCategory = availableProducts.filter((p) =>
       listType === 'device'
         ? p.category === 'Device Component' || isDeviceComponent(p.item_name)
-        : p.category === 'Installation Material' || !isDeviceComponent(p.item_name)
+        : (p.category === 'Installation Material' || !isDeviceComponent(p.item_name)) && !isScrewMaterial(p.item_name)
     );
-    const defaultProduct = prodsForCategory[0] || availableProducts[0];
+    const defaultProduct = prodsForCategory[0] || availableProducts.find(p => !isScrewMaterial(p.item_name)) || availableProducts[0];
 
     const newRow = {
       id: `custom-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
@@ -929,7 +934,9 @@ export default function InstallationCompletionModal({
             discrepancy_reason: d.discrepancy_reason ? d.discrepancy_reason.trim() : null,
           };
         }),
-        material_items: materialItems.map((m) => {
+        material_items: materialItems
+          .filter((m) => !isScrewMaterial(m.product_name))
+          .map((m) => {
           const stats = getRowStats(m);
           return {
             material_id: m.product_id,
@@ -946,7 +953,7 @@ export default function InstallationCompletionModal({
           };
         }),
         backup_items: [...deviceItems, ...materialItems]
-          .filter((it) => (Number(it.extra_quantity) || 0) > 0)
+          .filter((it) => (Number(it.extra_quantity) || 0) > 0 && !isScrewMaterial(it.product_name))
           .map((b) => {
             const stats = getRowStats(b);
             const stdQty = Number(b.standard_quantity) || 0;
@@ -985,7 +992,7 @@ export default function InstallationCompletionModal({
     const prodsForCat = availableProducts.filter((p) =>
       listType === 'device'
         ? p.category === 'Device Component' || isDeviceComponent(p.item_name)
-        : p.category === 'Installation Material' || !isDeviceComponent(p.item_name)
+        : (p.category === 'Installation Material' || !isDeviceComponent(p.item_name)) && !isScrewMaterial(p.item_name)
     );
 
     return (
@@ -1542,7 +1549,7 @@ export default function InstallationCompletionModal({
                       Fitting Materials Usage & Returns
                     </span>
                     <span className="text-[11px] text-gray-500">
-                      Tape, cable ties, screws, wire, and other installation materials ({materialItems.length} items)
+                      Tape, cable ties, wire, and other installation materials ({materialItems.length} items)
                     </span>
                   </div>
                   {materialsCollapsed ? (

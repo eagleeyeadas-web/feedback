@@ -1,6 +1,7 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { LogOut, Shield } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
+import PushNotificationManager from '../notifications/PushNotificationManager';
 
 export default function StaffWorkspaceLayout({
   title,
@@ -89,6 +90,9 @@ export default function StaffWorkspaceLayout({
             >
               {role}
             </span>
+
+            {/* Mobile Push Notification Preferences / Toggle */}
+            <PushNotificationManager />
 
             {/* Sign Out Button */}
             <button

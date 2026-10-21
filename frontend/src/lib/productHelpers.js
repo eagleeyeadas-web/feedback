@@ -72,3 +72,28 @@ export function getFullProductDescription(productKeyOrDesc, displaySize = '10-in
       return productKeyOrDesc;
   }
 }
+
+/**
+ * Detects whether an item or material name refers to screw hardware.
+ * Screws (Long Screw, Small Screw) are excluded from the Post-Installation Form's
+ * material selection, usage, and return fields.
+ */
+export function isScrewMaterial(itemOrName) {
+  if (!itemOrName) return false;
+  const name = typeof itemOrName === 'string'
+    ? itemOrName
+    : (itemOrName.item_name || itemOrName.material_name || itemOrName.product_name || itemOrName.device_type || '');
+  const sku = typeof itemOrName === 'object' ? (itemOrName.sku || '') : '';
+  const n = String(name).toLowerCase().replace(/[-_()]/g, ' ').replace(/\s+/g, ' ').trim();
+  const s = String(sku).toLowerCase();
+  return (
+    s.includes('screw') ||
+    n === 'long screw' ||
+    n === 'small screw' ||
+    n === 'screw long' ||
+    n === 'screw small' ||
+    n.includes('long screw') ||
+    n.includes('small screw') ||
+    n.includes('screw')
+  );
+}

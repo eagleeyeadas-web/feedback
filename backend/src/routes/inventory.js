@@ -215,7 +215,7 @@ router.get('/all-movements', requireRole('STORE_MANAGER', 'ADMIN'), async (req, 
       limit,
     });
 
-    if (result.movements && result.movements.length > 0) {
+    if (result && Array.isArray(result.movements)) {
       return res.json({
         transactions: result.movements,
         totalCount: result.totalCount,
@@ -482,23 +482,26 @@ router.post('/cleanup', requireRole('STORE_MANAGER', 'ADMIN'), async (req, res) 
 router.delete('/movements/:id', requireRole('STORE_MANAGER', 'ADMIN'), async (req, res) => {
   try {
     const { id } = req.params;
-    const success = await deleteStockMovementById(id);
-    return res.json({ success, message: 'Stock movement deleted successfully' });
+    const result = await deleteStockMovementById(id, req.profile);
+    return res.json({ success: true, message: result.message || 'Stock movement deleted successfully' });
   } catch (err) {
     console.error('Error deleting stock movement:', err);
-    return res.status(500).json({ error: err.message || 'Failed to delete stock movement' });
+    return res.status(err.status || 400).json({
+      error: err.message || 'Failed to delete stock movement',
+      isProtected: Boolean(err.isProtected),
+    });
   }
 });
 
 /**
  * DELETE /api/admin/inventory/movements
- * Delete all or filtered stock movements history (STORE_MANAGER, ADMIN)
+ * Delete all or filtered eligible stock movements history (STORE_MANAGER, ADMIN)
  */
 router.delete('/movements', requireRole('STORE_MANAGER', 'ADMIN'), async (req, res) => {
   try {
     const { category, type } = req.query;
-    const result = await clearStockMovementsHistory({ category, type });
-    return res.json({ success: true, ...result, message: 'Stock movement history deleted successfully' });
+    const result = await clearStockMovementsHistory({ category, type, user: req.profile });
+    return res.json(result);
   } catch (err) {
     console.error('Error clearing stock movement history:', err);
     return res.status(500).json({ error: err.message || 'Failed to clear stock movement history' });

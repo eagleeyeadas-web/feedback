@@ -278,12 +278,10 @@ export default function InstallationChecklistList({ onSelectChecklist, onCreateN
         return 'bg-emerald-100 text-emerald-800 border-emerald-300';
       case 'Assigned':
         return 'bg-blue-100 text-blue-800 border-blue-300';
-      case 'In Progress':
-        return 'bg-indigo-100 text-indigo-800 border-indigo-300';
-      case 'Cancelled':
-        return 'bg-rose-100 text-rose-800 border-rose-300';
-      default:
+      case 'Assign Later':
         return 'bg-amber-100 text-amber-800 border-amber-300';
+      default:
+        return 'bg-gray-100 text-gray-800 border-gray-300';
     }
   };
 
@@ -421,6 +419,7 @@ export default function InstallationChecklistList({ onSelectChecklist, onCreateN
               >
                 <option value="">All Statuses</option>
                 <option value="Assigned">Assigned</option>
+                <option value="Assign Later">Assign Later</option>
                 <option value="Completed">Completed</option>
               </select>
             </div>

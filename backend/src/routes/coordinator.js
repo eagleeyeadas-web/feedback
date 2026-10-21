@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import multer from 'multer';
 import { requireRole } from '../middleware/auth.js';
 import {
   getCoordinatorChecklists,
@@ -7,6 +8,11 @@ import {
   getBookingAuditHistory,
   extendRoomBooking,
   updateReturnTicketBooking,
+  getReturnTicketTasks,
+  submitTechnicianReturnTicket,
+  verifyReturnTicketBooking,
+  requestReturnTicketCorrection,
+  uploadTicketReceiptService,
 } from '../services/coordinatorBookingService.js';
 import {
   getExtensionRequests,
@@ -146,8 +152,119 @@ router.post('/checklists/:id/cancel', requireChecklistDeleteRole, async (req, re
   }
 });
 
+const uploadTicketReceiptMulter = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+  fileFilter: (req, file, cb) => {
+    const allowed = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+    if (allowed.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid file format. Only JPEG, PNG, WebP, and PDF receipts are accepted.'));
+    }
+  },
+});
+
+/**
+ * GET /api/admin/coordinator/return-ticket-tasks
+ * Retrieve return ticket tasks (filtered by assigned technician for TECHNICAL role, all for COORDINATOR/ADMIN)
+ */
+router.get('/return-ticket-tasks', requireRole('TECHNICAL', 'COORDINATOR', 'ADMIN', 'SUPER_ADMIN'), async (req, res) => {
+  try {
+    const tasks = await getReturnTicketTasks({
+      user: req.profile || req.user,
+      status: req.query.status,
+      search: req.query.search,
+    });
+    return res.json({ tasks });
+  } catch (err) {
+    console.error('Error in GET /return-ticket-tasks:', err);
+    const status = err.statusCode || 500;
+    return res.status(status).json({ error: err.message || 'Failed to fetch return ticket tasks' });
+  }
+});
+
+/**
+ * POST /api/admin/coordinator/bookings/:checklistId/technician-return-ticket
+ * Technician submits return journey booking details for Coordinator verification
+ */
+router.post('/bookings/:checklistId/technician-return-ticket', requireRole('TECHNICAL', 'COORDINATOR', 'ADMIN', 'SUPER_ADMIN'), async (req, res) => {
+  try {
+    const result = await submitTechnicianReturnTicket({
+      checklistId: req.params.checklistId,
+      bookingData: req.body,
+      user: req.profile || req.user,
+    });
+    return res.json({ success: true, ...result });
+  } catch (err) {
+    console.error('Error in POST /technician-return-ticket:', err);
+    const status = err.statusCode || 500;
+    return res.status(status).json({ error: err.message || 'Failed to submit return ticket details' });
+  }
+});
+
+/**
+ * POST /api/admin/coordinator/upload-ticket-receipt
+ * Upload receipt/ticket image or PDF
+ */
+router.post('/upload-ticket-receipt', requireRole('TECHNICAL', 'COORDINATOR', 'ADMIN', 'SUPER_ADMIN'), uploadTicketReceiptMulter.single('file'), async (req, res) => {
+  try {
+    const file = req.file;
+    if (!file) {
+      return res.status(400).json({ error: 'No ticket or receipt file provided' });
+    }
+    const result = await uploadTicketReceiptService({
+      file,
+      checklistId: req.body.checklistId,
+    });
+    return res.json(result);
+  } catch (err) {
+    console.error('Error in POST /upload-ticket-receipt:', err);
+    const status = err.statusCode || 500;
+    return res.status(status).json({ error: err.message || 'Failed to upload ticket receipt' });
+  }
+});
+
 // Strict least-privilege access: ONLY COORDINATOR and ADMIN can access Coordinator workspace APIs (travel, accommodation, leaves, rest days, extensions)
 router.use(requireRole('COORDINATOR', 'ADMIN'));
+
+/**
+ * POST /api/admin/coordinator/bookings/:checklistId/verify-return-ticket
+ * Coordinator verifies submitted return-ticket details and completes task
+ */
+router.post('/bookings/:checklistId/verify-return-ticket', async (req, res) => {
+  try {
+    const result = await verifyReturnTicketBooking({
+      checklistId: req.params.checklistId,
+      user: req.profile || req.user,
+    });
+    return res.json({ success: true, ...result });
+  } catch (err) {
+    console.error('Error in POST /verify-return-ticket:', err);
+    const status = err.statusCode || 500;
+    return res.status(status).json({ error: err.message || 'Failed to verify return ticket task' });
+  }
+});
+
+/**
+ * POST /api/admin/coordinator/bookings/:checklistId/request-return-ticket-correction
+ * Coordinator requests correction on return ticket details
+ */
+router.post('/bookings/:checklistId/request-return-ticket-correction', async (req, res) => {
+  try {
+    const { reason } = req.body;
+    const result = await requestReturnTicketCorrection({
+      checklistId: req.params.checklistId,
+      reason,
+      user: req.profile || req.user,
+    });
+    return res.json({ success: true, ...result });
+  } catch (err) {
+    console.error('Error in POST /request-return-ticket-correction:', err);
+    const status = err.statusCode || 500;
+    return res.status(status).json({ error: err.message || 'Failed to request return ticket correction' });
+  }
+});
 
 /**
  * GET /api/admin/coordinator/bookings
@@ -200,20 +317,35 @@ router.post('/bookings/:checklistId', async (req, res) => {
 
 /**
  * POST /api/admin/coordinator/bookings/:checklistId/status
+ * Universal endpoint to update outbound, room, or return booking status
  */
 router.post('/bookings/:checklistId/status', async (req, res) => {
   try {
-    const { status, notes } = req.body;
-    if (!status) {
-      return res.status(400).json({ error: 'Status is required' });
-    }
-
+    const { status, notes, outbound_status, accommodation_status, return_status, type } = req.body;
     const details = await getBookingDetails(req.params.checklistId);
     const mergedBookingData = {
       ...(details.booking || {}),
-      booking_status: status,
-      coordinator_notes: notes || details.booking?.coordinator_notes,
     };
+
+    if (notes !== undefined) {
+      mergedBookingData.coordinator_notes = notes;
+    }
+
+    if (type === 'outbound' || outbound_status) {
+      mergedBookingData.outbound_status = outbound_status || status;
+    } else if (type === 'room' || type === 'accommodation' || accommodation_status) {
+      mergedBookingData.accommodation_status = accommodation_status || status;
+    } else if (type === 'return' || return_status) {
+      mergedBookingData.return_status = return_status || status;
+    } else if (status) {
+      if (['Pending', 'Booked', 'Confirmed', 'Cancelled'].includes(status)) {
+        mergedBookingData.booking_status = status === 'Confirmed' ? 'COMPLETED' : 'IN_PROGRESS';
+      } else {
+        mergedBookingData.booking_status = status;
+      }
+    } else {
+      return res.status(400).json({ error: 'Status is required' });
+    }
 
     const saved = await saveCoordinatorBooking({
       checklistId: req.params.checklistId,
@@ -229,6 +361,90 @@ router.post('/bookings/:checklistId/status', async (req, res) => {
       error: err.message || 'Failed to update booking status',
       errors: err.errors || undefined,
     });
+  }
+});
+
+/**
+ * POST /api/admin/coordinator/bookings/:checklistId/outbound-status
+ */
+router.post('/bookings/:checklistId/outbound-status', async (req, res) => {
+  try {
+    const { status, notes } = req.body;
+    if (!status || !['Pending', 'Booked', 'Confirmed', 'Cancelled'].includes(status)) {
+      return res.status(400).json({ error: 'Valid outbound status (Pending, Booked, Confirmed, Cancelled) is required' });
+    }
+    const details = await getBookingDetails(req.params.checklistId);
+    const mergedBookingData = {
+      ...(details.booking || {}),
+      outbound_status: status,
+      coordinator_notes: notes !== undefined ? notes : details.booking?.coordinator_notes,
+    };
+    const saved = await saveCoordinatorBooking({
+      checklistId: req.params.checklistId,
+      bookingData: mergedBookingData,
+      user: req.profile || req.user || {},
+    });
+    return res.json({ success: true, booking: saved });
+  } catch (err) {
+    console.error('Error in POST /coordinator/bookings/:checklistId/outbound-status:', err);
+    const status = err.statusCode || 400;
+    return res.status(status).json({ error: err.message || 'Failed to update outbound status' });
+  }
+});
+
+/**
+ * POST /api/admin/coordinator/bookings/:checklistId/room-status
+ */
+router.post('/bookings/:checklistId/room-status', async (req, res) => {
+  try {
+    const { status, notes } = req.body;
+    if (!status || !['Pending', 'Pending Review', 'Booked', 'Confirmed', 'Cancelled'].includes(status)) {
+      return res.status(400).json({ error: 'Valid room booking status (Pending, Pending Review, Booked, Confirmed, Cancelled) is required' });
+    }
+    const details = await getBookingDetails(req.params.checklistId);
+    const mergedBookingData = {
+      ...(details.booking || {}),
+      accommodation_status: status,
+      coordinator_notes: notes !== undefined ? notes : details.booking?.coordinator_notes,
+    };
+    const saved = await saveCoordinatorBooking({
+      checklistId: req.params.checklistId,
+      bookingData: mergedBookingData,
+      user: req.profile || req.user || {},
+    });
+    return res.json({ success: true, booking: saved });
+  } catch (err) {
+    console.error('Error in POST /coordinator/bookings/:checklistId/room-status:', err);
+    const status = err.statusCode || 400;
+    return res.status(status).json({ error: err.message || 'Failed to update room booking status' });
+  }
+});
+
+/**
+ * POST /api/admin/coordinator/bookings/:checklistId/return-status
+ */
+router.post('/bookings/:checklistId/return-status', async (req, res) => {
+  try {
+    const { status, notes } = req.body;
+    if (!status || !['Pending', 'Booked', 'Confirmed', 'Cancelled'].includes(status)) {
+      return res.status(400).json({ error: 'Valid return ticket status (Pending, Booked, Confirmed, Cancelled) is required' });
+    }
+    const details = await getBookingDetails(req.params.checklistId);
+    const mergedBookingData = {
+      ...(details.booking || {}),
+      return_status: status,
+      coordinator_notes: notes !== undefined ? notes : details.booking?.coordinator_notes,
+    };
+    const saved = await saveCoordinatorBooking({
+      checklistId: req.params.checklistId,
+      bookingData: mergedBookingData,
+      user: req.profile || req.user || {},
+    });
+    return res.json({ success: true, booking: saved });
+  } catch (err) {
+    console.error('Error in POST /coordinator/bookings/:checklistId/return-status:', err);
+    const status = err.statusCode || 400;
+    return res.status(status).json({ error: err.message || 'Failed to update return ticket status' });
   }
 });
 

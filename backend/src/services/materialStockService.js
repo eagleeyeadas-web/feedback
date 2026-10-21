@@ -10,6 +10,26 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const STORAGE_FILE = path.join(__dirname, '../data/inventory_storage.json');
 
+export const ACTIVE_REQUIRED_MATERIALS_ORDER = [
+  'Camera',
+  'Live Display',
+  'Recording Display',
+  'Memory Card',
+  '0.5 mm Wire',
+  '5-metre Cable',
+  '15-metre Cable',
+  'Insulation Tape',
+  'Cable Tie – 200 mm',
+  'Cable Tie – 300 mm',
+  'Long Screw',
+  'Small Screw',
+];
+
+export const OBSOLETE_MATERIALS = [
+  'Display',
+  'Airtel M2M 4G SIM Card',
+];
+
 export const STANDARD_MATERIALS = [
   { id: 'mat-001', sku: 'MAT-INSU-TAPE', material_name: 'Insulation Tape', unit: 'Nos.', opening_stock: 100, current_stock: 100, opening_stock_set: true, min_stock_level: 20 },
   { id: 'mat-002', sku: 'MAT-CT-200MM', material_name: 'Cable Tie – 200 mm', unit: 'Packets', opening_stock: 50, current_stock: 50, opening_stock_set: true, min_stock_level: 10 },
@@ -21,7 +41,7 @@ export const STANDARD_MATERIALS = [
   { id: 'mat-008', sku: 'MAT-CBL-5M', material_name: '5-metre Cable', unit: 'Nos.', opening_stock: 150, current_stock: 150, opening_stock_set: true, min_stock_level: 25 },
   { id: 'mat-009', sku: 'MAT-CBL-15M', material_name: '15-metre Cable', unit: 'Nos.', opening_stock: 50, current_stock: 50, opening_stock_set: true, min_stock_level: 10 },
   { id: 'mat-010', sku: 'MAT-CAM-LOOSE', material_name: 'Camera', unit: 'Nos.', opening_stock: 50, current_stock: 50, opening_stock_set: true, min_stock_level: 10 },
-  { id: 'mat-011', sku: 'MAT-DISP-LOOSE', material_name: 'Display', unit: 'Nos.', opening_stock: 50, current_stock: 50, opening_stock_set: true, min_stock_level: 10 },
+  { id: 'mat-011', sku: 'MAT-DISP-LOOSE', material_name: 'Display', unit: 'Nos.', opening_stock: 50, current_stock: 50, opening_stock_set: true, min_stock_level: 10, is_active: false },
   { id: 'mat-012', sku: 'MAT-DISP-LIVE', material_name: 'Live Display', unit: 'Nos.', opening_stock: 0, current_stock: 0, opening_stock_set: false, min_stock_level: 5 },
   { id: 'mat-013', sku: 'MAT-DISP-REC', material_name: 'Recording Display', unit: 'Nos.', opening_stock: 0, current_stock: 0, opening_stock_set: false, min_stock_level: 5 },
 ];
@@ -42,7 +62,7 @@ const inMemoryMaterials = new Map(
       current_stock: item.current_stock,
       issued_stock: 0,
       min_stock_level: item.min_stock_level,
-      is_active: true,
+      is_active: item.is_active !== undefined ? item.is_active : true,
       updated_at: new Date().toISOString(),
     },
   ])
@@ -102,7 +122,11 @@ export function loadMaterialFallbackStorage() {
       const data = JSON.parse(raw);
       if (data.materialProducts && typeof data.materialProducts === 'object') {
         Object.entries(data.materialProducts).forEach(([k, v]) => {
-          inMemoryMaterials.set(k, { ...v });
+          const isObsolete = OBSOLETE_MATERIALS.includes(k) || OBSOLETE_MATERIALS.includes(v.material_name);
+          inMemoryMaterials.set(k, {
+            ...v,
+            is_active: isObsolete ? false : (v.is_active !== false),
+          });
         });
       }
       if (Array.isArray(data.materialTransactions)) {
@@ -192,28 +216,50 @@ async function ensureDbMaterialsSeeded() {
 
 /**
  * Get all materials in inventory with current stock balances
+ * Displays active items sorted strictly in the required 12-item order
  */
-export async function getMaterialInventory() {
+export async function getMaterialInventory({ includeInactive = false } = {}) {
   await ensureDbMaterialsSeeded();
 
+  let allItems = [];
   try {
     const { data, error } = await supabase
       .from('material_inventory')
-      .select('*')
-      .order('material_name', { ascending: true });
+      .select('*');
 
     if (!error && data && data.length > 0) {
       data.forEach((m) => {
-        inMemoryMaterials.set(m.material_name, { ...m });
+        const isObsolete = OBSOLETE_MATERIALS.includes(m.material_name);
+        const activeVal = isObsolete ? false : (m.is_active !== false);
+        inMemoryMaterials.set(m.material_name, { ...m, is_active: activeVal });
       });
       saveMaterialFallbackStorage();
-      return data;
+      allItems = data.map((m) => {
+        const isObsolete = OBSOLETE_MATERIALS.includes(m.material_name);
+        return { ...m, is_active: isObsolete ? false : (m.is_active !== false) };
+      });
     }
   } catch (err) {
     console.warn('DB material_inventory fetch failed, using in-memory store:', err.message);
   }
 
-  return Array.from(inMemoryMaterials.values()).sort((a, b) => a.material_name.localeCompare(b.material_name));
+  if (allItems.length === 0) {
+    allItems = Array.from(inMemoryMaterials.values());
+  }
+
+  let result = allItems;
+  if (!includeInactive) {
+    result = result.filter((m) => m.is_active !== false && !OBSOLETE_MATERIALS.includes(m.material_name));
+  }
+
+  return result.sort((a, b) => {
+    const idxA = ACTIVE_REQUIRED_MATERIALS_ORDER.indexOf(a.material_name);
+    const idxB = ACTIVE_REQUIRED_MATERIALS_ORDER.indexOf(b.material_name);
+    if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+    if (idxA !== -1) return -1;
+    if (idxB !== -1) return 1;
+    return a.material_name.localeCompare(b.material_name);
+  });
 }
 
 /**
