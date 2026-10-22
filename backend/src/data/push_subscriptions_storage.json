@@ -1,50 +1,65 @@
 {
   "subscriptions": [
     {
-      "id": "af323a2c-fcd6-40c6-abbc-71cebf3e041a",
-      "user_id": "00000000-0000-0000-0000-000000000001",
-      "user_email": "sales@eagleeyesafdrive.com",
-      "user_role": "SALES",
-      "endpoint": "https://fcm.googleapis.com/fcm/send/test-endpoint-chk-1792576525049",
-      "p256dh": "BFrIByCIzalrRBWaVvZKki8Kb4fb6NM4Qy7Yit7Fh3GCawDAxi_6UNrskH3q3AD-ZFDZEPnGLAtnWIvRX0entKE",
-      "auth": "authSecret123",
-      "user_agent": null,
-      "device_type": "Android",
+      "id": "0ec9b997-4745-45f5-a1fe-945c7507f460",
+      "user_id": "abaff860-05b2-44fa-9139-b14d92e3fa19",
+      "user_email": "tech@gmail.com",
+      "user_role": "TECHNICAL",
+      "endpoint": "https://fcm.googleapis.com/fcm/send/cJoeUfuRoQA:APA91bGdWXgAhye6iJ1h4nl46GZHfLDnn2TWUpSTA-9aGP1CWcJZly5BUp7UeR0_LWlP_PCKBN2bUQrn0KbE5QFLs4m0uCogDaZ01Waesjf3RTA8lu0FucUqVqhq4IOB6nFVaFhK05Wl",
+      "p256dh": "BD9I8cPXsUJFf13ZhdftpAnlhMyDggccEHDeyyC-xFhgcwSF6kwBuy9wkgJQwg4sdaYeezRGDI9K-Lo82e8gZCE",
+      "auth": "jj_M8wuOlJQPGXedARV6Sw",
+      "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36",
+      "device_type": "Desktop",
       "is_active": true,
-      "created_at": "2026-10-21T09:55:25.049Z",
-      "updated_at": "2026-10-21T09:55:25.049Z",
-      "last_used_at": "2026-10-21T09:55:25.049Z"
+      "created_at": "2026-10-21T10:32:28.794+00:00",
+      "updated_at": "2026-10-21T10:32:28.794+00:00",
+      "last_used_at": "2026-10-21T12:59:01.583Z"
     },
     {
-      "id": "dbaf1a8b-efb4-4a30-87c3-652501faddd1",
+      "id": "d0f7e585-4546-488a-b5e9-38373063e5a7",
+      "user_id": "abaff860-05b2-44fa-9139-b14d92e3fa19",
+      "user_email": "tech@gmail.com",
+      "user_role": "TECHNICAL",
+      "endpoint": "https://fcm.googleapis.com/fcm/send/dRiBRBreJeg:APA91bFIt2YBzah6_XNmq3nS_fV2XsE6ghM1D7D4qfcK2Evw8599lVr7xwOHFJShrIyyENvpt2maTS0ORNy6McAmwwoQo1P2p3F5KaW0MZn71hfFaRv0cKDPZxNqy_XyZE7Ms8zPpZUN",
+      "p256dh": "BC8nXy7wTWhwcrhbFqKhBEqRsMWE9s4IEBJiIYxgRGhLQDLmmpgEdmT07ePwKFbHSma7syPOCt-hTFtiwADASS8",
+      "auth": "P1-AF03MMAlXPdDZVe-_dQ",
+      "user_agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36",
+      "device_type": "Android",
+      "is_active": true,
+      "created_at": "2026-10-21T10:32:59.831+00:00",
+      "updated_at": "2026-10-21T10:32:59.831+00:00",
+      "last_used_at": "2026-10-21T12:59:01.572Z"
+    },
+    {
+      "id": "e442d528-777c-4680-b97b-760257066956",
       "user_id": "00000000-0000-0000-0000-000000000001",
       "user_email": "sales@eagleeyesafdrive.com",
       "user_role": "SALES",
-      "endpoint": "https://fcm.googleapis.com/fcm/send/test-endpoint-idemp-1792576577656",
-      "p256dh": "BH8hSUcuzv6cOZHjkMe2DRu1wZq3jHPHnsWwCod94OoDltJeMpdRhQTsYCq41w_lR-b9nhzwHil6pDX1OTvzLlY",
+      "endpoint": "https://fcm.googleapis.com/fcm/send/test-endpoint-idemp-1792587541003",
+      "p256dh": "BGwjtaw6EtD2lhooac9toqs83Os6q9HUNrlU9uTFveH1TW-WwoLaItuPPFg-EX24dggGuvYare3WwPoxFT_jKUU",
       "auth": "authSecretIdemp",
       "user_agent": null,
       "device_type": "Android",
       "is_active": true,
-      "created_at": "2026-10-21T09:56:17.656Z",
-      "updated_at": "2026-10-21T09:56:17.656Z",
-      "last_used_at": "2026-10-21T09:56:17.656Z"
+      "created_at": "2026-10-21T12:59:01.003Z",
+      "updated_at": "2026-10-21T12:59:01.003Z",
+      "last_used_at": "2026-10-21T12:59:01.003Z"
     },
     {
-      "id": "ff8fab53-cba3-4df8-89bc-4294fffbb246",
+      "id": "5dc0fcc1-cd27-44cb-b1cb-66edbbd0fcae",
       "user_id": "00000000-0000-0000-0000-000000000001",
       "user_email": "sales@eagleeyesafdrive.com",
       "user_role": "SALES",
-      "endpoint": "https://fcm.googleapis.com/fcm/send/test-endpoint-chk-1792576578237",
-      "p256dh": "BH8hSUcuzv6cOZHjkMe2DRu1wZq3jHPHnsWwCod94OoDltJeMpdRhQTsYCq41w_lR-b9nhzwHil6pDX1OTvzLlY",
+      "endpoint": "https://fcm.googleapis.com/fcm/send/test-endpoint-chk-1792587541781",
+      "p256dh": "BGwjtaw6EtD2lhooac9toqs83Os6q9HUNrlU9uTFveH1TW-WwoLaItuPPFg-EX24dggGuvYare3WwPoxFT_jKUU",
       "auth": "authSecret123",
       "user_agent": null,
       "device_type": "Android",
       "is_active": true,
-      "created_at": "2026-10-21T09:56:18.237Z",
-      "updated_at": "2026-10-21T09:56:18.237Z",
-      "last_used_at": "2026-10-21T09:56:18.237Z"
+      "created_at": "2026-10-21T12:59:01.781Z",
+      "updated_at": "2026-10-21T12:59:01.781Z",
+      "last_used_at": "2026-10-21T12:59:01.781Z"
     }
   ],
-  "updated_at": "2026-10-21T09:56:18.463Z"
+  "updated_at": "2026-10-21T12:59:01.969Z"
 }

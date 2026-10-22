@@ -27,4 +27,5 @@ Thumbs.db
 scratch/
 supabase/.temp/
 backend/backups/
+backend/backup/
 *.pdf

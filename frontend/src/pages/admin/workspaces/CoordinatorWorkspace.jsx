@@ -23,11 +23,9 @@ import {
   AlertTriangle,
   History,
   RefreshCw,
-  LogOut,
   Menu,
   X,
   ChevronRight,
-  Shield,
   Calendar,
   Check,
   Eye,
@@ -90,7 +88,7 @@ const STATUS_STYLES = {
 };
 
 export default function CoordinatorWorkspace() {
-  const { token, user, signOut } = useAuth();
+  const { token } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
 
   // Active Navigation Section: 'outbound' | 'room' | 'return' | 'extensions' | 'conflicts'
@@ -319,118 +317,7 @@ export default function CoordinatorWorkspace() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-800">
-      {/* ============================================================ */}
-      {/* 1. HEADER */}
-      {/* ============================================================ */}
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-xs">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          {/* Logo & System Brand */}
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="lg:hidden p-2 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 focus:outline-hidden"
-              aria-label="Toggle navigation menu"
-            >
-              {sidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-            </button>
-
-            <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-lg bg-blue-600 flex items-center justify-center text-white font-bold text-lg shadow-xs">
-                EE
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="font-bold text-slate-900 text-base leading-tight tracking-tight">
-                    Eagle Eye SafDrive
-                  </span>
-                  <span className="hidden sm:inline-block px-2 py-0.5 text-xs font-semibold rounded-full bg-blue-50 text-blue-700 border border-blue-200">
-                    Travel & Room Logistics
-                  </span>
-                </div>
-                <p className="text-xs text-slate-500 font-medium">Enterprise Fleet Safety</p>
-              </div>
-            </div>
-          </div>
-
-          {/* User Profile & Actions */}
-          <div className="flex items-center gap-3 sm:gap-4">
-            {/* Notifications Bell */}
-            <div className="relative">
-              <button
-                onClick={() => setShowNotifDropdown(!showNotifDropdown)}
-                className="relative p-2 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors"
-                title="Notifications"
-              >
-                <Bell className="w-5 h-5" />
-                {notifications.some((n) => !n.is_read) && (
-                  <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-blue-600 ring-2 ring-white" />
-                )}
-              </button>
-
-              {showNotifDropdown && (
-                <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-lg border border-slate-200 py-2 z-40">
-                  <div className="px-4 py-2 border-b border-slate-100 flex items-center justify-between">
-                    <span className="font-semibold text-xs text-slate-700 uppercase tracking-wider">
-                      Coordinator Notifications
-                    </span>
-                    <button
-                      onClick={() => setShowNotifDropdown(false)}
-                      className="text-xs text-slate-400 hover:text-slate-600"
-                    >
-                      Close
-                    </button>
-                  </div>
-                  <div className="max-h-72 overflow-y-auto divide-y divide-slate-100">
-                    {notifications.length === 0 ? (
-                      <p className="text-xs text-slate-400 p-4 text-center">No notifications</p>
-                    ) : (
-                      notifications.slice(0, 5).map((n) => (
-                        <div key={n.id} className="p-3 hover:bg-slate-50 transition-colors">
-                          <p className="text-xs font-semibold text-slate-800">{n.title}</p>
-                          <p className="text-xs text-slate-600 mt-0.5 line-clamp-2">{n.message}</p>
-                          <span className="text-[10px] text-slate-400 mt-1 block">
-                            {formatDisplayDate(n.created_at)}
-                          </span>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Coordinator Info */}
-            <div className="hidden md:flex flex-col text-right">
-              <span className="text-xs font-semibold text-slate-900 truncate max-w-[200px]">
-                {user?.email || 'coordinator@eagleeye.com'}
-              </span>
-              <span className="text-[11px] text-blue-600 font-medium flex items-center justify-end gap-1">
-                <Shield className="w-3 h-3 text-blue-600" />
-                Coordinator
-              </span>
-            </div>
-
-            <span className="inline-flex md:hidden px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800">
-              Coordinator
-            </span>
-
-            {/* Sign Out Button */}
-            <button
-              onClick={() => {
-                if (window.confirm('Are you sure you want to sign out?')) {
-                  signOut();
-                }
-              }}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-700 hover:text-red-700 hover:bg-red-50 border border-slate-200 hover:border-red-200 rounded-lg transition-colors cursor-pointer"
-            >
-              <LogOut className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Sign Out</span>
-            </button>
-          </div>
-        </div>
-      </header>
-
+    <div className="w-full flex flex-col lg:flex-row items-start gap-6 font-sans text-slate-800">
       {/* Toast Notification Banner */}
       {toast && (
         <div
@@ -449,219 +336,286 @@ export default function CoordinatorWorkspace() {
         </div>
       )}
 
+      {/* Mobile Backdrop for Sidebar Drawer */}
+      {sidebarOpen && (
+        <div
+          onClick={() => setSidebarOpen(false)}
+          className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-40 lg:hidden"
+        />
+      )}
       {/* ============================================================ */}
-      {/* 2. BODY LAYOUT: SIDEBAR + MAIN CONTENT */}
+      {/* 1. SIDEBAR NAVIGATION */}
       {/* ============================================================ */}
-      <div className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 flex gap-6">
-        {/* Left Sidebar */}
-        <aside
-          className={`fixed lg:static inset-y-0 left-0 z-20 w-64 bg-white lg:bg-transparent border-r lg:border-r-0 border-slate-200 p-4 lg:p-0 flex flex-col gap-1 transition-transform duration-200 ease-in-out shrink-0 ${
-            sidebarOpen ? 'translate-x-0 shadow-xl lg:shadow-none' : '-translate-x-full lg:translate-x-0'
-          }`}
-        >
-          <div className="lg:hidden flex items-center justify-between pb-3 mb-2 border-b border-slate-100">
-            <span className="font-semibold text-xs text-slate-400 uppercase tracking-wider">
-              Coordinator Menu
-            </span>
-            <button
-              onClick={() => setSidebarOpen(false)}
-              className="p-1 text-slate-400 hover:text-slate-600"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-
-          <div className="space-y-1">
-            {/* Outbound Travel */}
-            <button
-              onClick={() => {
-                setActiveSection('outbound');
-                setSidebarOpen(false);
-              }}
-              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all ${
-                activeSection === 'outbound'
-                  ? 'bg-blue-600 text-white shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <Bus className={`w-4 h-4 ${activeSection === 'outbound' ? 'text-white' : 'text-slate-400'}`} />
-                <span>Outbound Travel</span>
-              </div>
-              <span
-                className={`px-2 py-0.5 text-xs font-semibold rounded-full ${
-                  activeSection === 'outbound'
-                    ? 'bg-white/20 text-white'
-                    : 'bg-amber-100 text-amber-800'
-                }`}
-              >
-                {navBadges.outbound}
-              </span>
-            </button>
-
-            {/* Room Bookings */}
-            <button
-              onClick={() => {
-                setActiveSection('room');
-                setSidebarOpen(false);
-              }}
-              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all ${
-                activeSection === 'room'
-                  ? 'bg-blue-600 text-white shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <Building className={`w-4 h-4 ${activeSection === 'room' ? 'text-white' : 'text-slate-400'}`} />
-                <span>Room Bookings</span>
-              </div>
-              <span
-                className={`px-2 py-0.5 text-xs font-semibold rounded-full ${
-                  activeSection === 'room'
-                    ? 'bg-white/20 text-white'
-                    : 'bg-purple-100 text-purple-800'
-                }`}
-              >
-                {navBadges.room}
-              </span>
-            </button>
-
-            {/* Return Tickets */}
-            <button
-              onClick={() => {
-                setActiveSection('return');
-                setSidebarOpen(false);
-              }}
-              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all ${
-                activeSection === 'return'
-                  ? 'bg-blue-600 text-white shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <Ticket className={`w-4 h-4 ${activeSection === 'return' ? 'text-white' : 'text-slate-400'}`} />
-                <span>Return Tickets</span>
-              </div>
-              <span
-                className={`px-2 py-0.5 text-xs font-semibold rounded-full ${
-                  activeSection === 'return'
-                    ? 'bg-white/20 text-white'
-                    : 'bg-blue-100 text-blue-800'
-                }`}
-              >
-                {navBadges.return}
-              </span>
-            </button>
-
-            {/* Extension Reviews */}
-            <button
-              onClick={() => {
-                setActiveSection('extensions');
-                setSidebarOpen(false);
-              }}
-              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all ${
-                activeSection === 'extensions'
-                  ? 'bg-blue-600 text-white shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <Clock className={`w-4 h-4 ${activeSection === 'extensions' ? 'text-white' : 'text-purple-500'}`} />
-                <span>Extension Reviews</span>
-              </div>
-              {navBadges.extensions > 0 && (
-                <span
-                  className={`px-2 py-0.5 text-xs font-semibold rounded-full ${
-                    activeSection === 'extensions'
-                      ? 'bg-white/20 text-white'
-                      : 'bg-purple-100 text-purple-800 font-bold'
-                  }`}
-                >
-                  {navBadges.extensions}
-                </span>
-              )}
-            </button>
-
-            {/* Schedule Conflicts */}
-            <button
-              onClick={() => {
-                setActiveSection('conflicts');
-                setSidebarOpen(false);
-              }}
-              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all ${
-                activeSection === 'conflicts'
-                  ? 'bg-blue-600 text-white shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <AlertTriangle className={`w-4 h-4 ${activeSection === 'conflicts' ? 'text-white' : 'text-rose-500'}`} />
-                <span>Schedule Conflicts</span>
-              </div>
-              {navBadges.conflicts > 0 && (
-                <span
-                  className={`px-2 py-0.5 text-xs font-semibold rounded-full ${
-                    activeSection === 'conflicts'
-                      ? 'bg-white/20 text-white'
-                      : 'bg-rose-100 text-rose-800 font-bold'
-                  }`}
-                >
-                  {navBadges.conflicts}
-                </span>
-              )}
-            </button>
-          </div>
-
-          {/* Quick Info Box in Sidebar */}
-          <div className="mt-6 p-3.5 rounded-xl bg-slate-100 border border-slate-200 text-xs text-slate-600">
-            <p className="font-semibold text-slate-800 mb-1 flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5 text-blue-600" />
-              Coordinator Role
-            </p>
-            <p className="leading-relaxed">
-              Manage travel & room booking statuses directly. No transport or hotel booking details required.
-            </p>
-          </div>
-        </aside>
-
-        {/* Mobile backdrop */}
-        {sidebarOpen && (
-          <div
+      <aside
+        className={`fixed lg:static inset-y-0 left-0 z-50 w-64 bg-white lg:bg-transparent border-r lg:border-r-0 border-slate-200 p-4 lg:p-0 flex flex-col gap-1 transition-transform duration-200 ease-in-out shrink-0 ${
+          sidebarOpen ? 'translate-x-0 shadow-2xl lg:shadow-none' : '-translate-x-full lg:translate-x-0'
+        }`}
+      >
+        <div className="lg:hidden flex items-center justify-between pb-3 mb-2 border-b border-slate-100">
+          <span className="font-semibold text-xs text-slate-500 uppercase tracking-wider">
+            Coordinator Navigation
+          </span>
+          <button
+            type="button"
             onClick={() => setSidebarOpen(false)}
-            className="fixed inset-0 bg-slate-900/30 backdrop-blur-xs z-10 lg:hidden"
-          />
-        )}
+            className="p-1 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 cursor-pointer"
+            aria-label="Close sidebar"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <nav className="space-y-1 w-full" aria-label="Coordinator Sections">
+          {/* Outbound Travel */}
+          <button
+            type="button"
+            onClick={() => {
+              setActiveSection('outbound');
+              setSidebarOpen(false);
+            }}
+            className={`w-full flex items-center justify-between px-3.5 h-11 rounded-xl text-sm font-medium transition-all cursor-pointer ${
+              activeSection === 'outbound'
+                ? 'bg-blue-600 text-white shadow-xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+            }`}
+          >
+            <div className="flex items-center gap-3 min-w-0">
+              <Bus className={`w-4 h-4 shrink-0 ${activeSection === 'outbound' ? 'text-white' : 'text-slate-400'}`} />
+              <span className="truncate">Outbound Travel</span>
+            </div>
+            <span
+              className={`inline-flex items-center justify-center min-w-[24px] h-6 px-2 text-xs font-semibold rounded-full tabular-nums shrink-0 ${
+                activeSection === 'outbound'
+                  ? 'bg-white/20 text-white'
+                  : 'bg-amber-100 text-amber-800'
+              }`}
+            >
+              {navBadges.outbound}
+            </span>
+          </button>
+
+          {/* Room Bookings */}
+          <button
+            type="button"
+            onClick={() => {
+              setActiveSection('room');
+              setSidebarOpen(false);
+            }}
+            className={`w-full flex items-center justify-between px-3.5 h-11 rounded-xl text-sm font-medium transition-all cursor-pointer ${
+              activeSection === 'room'
+                ? 'bg-blue-600 text-white shadow-xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+            }`}
+          >
+            <div className="flex items-center gap-3 min-w-0">
+              <Building className={`w-4 h-4 shrink-0 ${activeSection === 'room' ? 'text-white' : 'text-slate-400'}`} />
+              <span className="truncate">Room Bookings</span>
+            </div>
+            <span
+              className={`inline-flex items-center justify-center min-w-[24px] h-6 px-2 text-xs font-semibold rounded-full tabular-nums shrink-0 ${
+                activeSection === 'room'
+                  ? 'bg-white/20 text-white'
+                  : 'bg-purple-100 text-purple-800'
+              }`}
+            >
+              {navBadges.room}
+            </span>
+          </button>
+
+          {/* Return Tickets */}
+          <button
+            type="button"
+            onClick={() => {
+              setActiveSection('return');
+              setSidebarOpen(false);
+            }}
+            className={`w-full flex items-center justify-between px-3.5 h-11 rounded-xl text-sm font-medium transition-all cursor-pointer ${
+              activeSection === 'return'
+                ? 'bg-blue-600 text-white shadow-xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+            }`}
+          >
+            <div className="flex items-center gap-3 min-w-0">
+              <Ticket className={`w-4 h-4 shrink-0 ${activeSection === 'return' ? 'text-white' : 'text-slate-400'}`} />
+              <span className="truncate">Return Tickets</span>
+            </div>
+            <span
+              className={`inline-flex items-center justify-center min-w-[24px] h-6 px-2 text-xs font-semibold rounded-full tabular-nums shrink-0 ${
+                activeSection === 'return'
+                  ? 'bg-white/20 text-white'
+                  : 'bg-blue-100 text-blue-800'
+              }`}
+            >
+              {navBadges.return}
+            </span>
+          </button>
+
+          {/* Extension Reviews */}
+          <button
+            type="button"
+            onClick={() => {
+              setActiveSection('extensions');
+              setSidebarOpen(false);
+            }}
+            className={`w-full flex items-center justify-between px-3.5 h-11 rounded-xl text-sm font-medium transition-all cursor-pointer ${
+              activeSection === 'extensions'
+                ? 'bg-blue-600 text-white shadow-xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+            }`}
+          >
+            <div className="flex items-center gap-3 min-w-0">
+              <Clock className={`w-4 h-4 shrink-0 ${activeSection === 'extensions' ? 'text-white' : 'text-purple-500'}`} />
+              <span className="truncate">Extension Reviews</span>
+            </div>
+            <span
+              className={`inline-flex items-center justify-center min-w-[24px] h-6 px-2 text-xs font-semibold rounded-full tabular-nums shrink-0 ${
+                activeSection === 'extensions'
+                  ? 'bg-white/20 text-white'
+                  : 'bg-purple-100 text-purple-800 font-bold'
+              }`}
+            >
+              {navBadges.extensions}
+            </span>
+          </button>
+
+          {/* Schedule Conflicts */}
+          <button
+            type="button"
+            onClick={() => {
+              setActiveSection('conflicts');
+              setSidebarOpen(false);
+            }}
+            className={`w-full flex items-center justify-between px-3.5 h-11 rounded-xl text-sm font-medium transition-all cursor-pointer ${
+              activeSection === 'conflicts'
+                ? 'bg-blue-600 text-white shadow-xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+            }`}
+          >
+            <div className="flex items-center gap-3 min-w-0">
+              <AlertTriangle className={`w-4 h-4 shrink-0 ${activeSection === 'conflicts' ? 'text-white' : 'text-rose-500'}`} />
+              <span className="truncate">Schedule Conflicts</span>
+            </div>
+            <span
+              className={`inline-flex items-center justify-center min-w-[24px] h-6 px-2 text-xs font-semibold rounded-full tabular-nums shrink-0 ${
+                activeSection === 'conflicts'
+                  ? 'bg-white/20 text-white'
+                  : 'bg-rose-100 text-rose-800 font-bold'
+              }`}
+            >
+              {navBadges.conflicts}
+            </span>
+          </button>
+        </nav>
+
+        {/* Quick Info Box in Sidebar */}
+        <div className="mt-4 p-3.5 rounded-xl bg-slate-100/80 border border-slate-200 text-xs text-slate-600">
+          <p className="font-semibold text-slate-800 mb-1 flex items-center gap-1.5">
+            <Sparkles className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+            Coordinator Role
+          </p>
+          <p className="leading-relaxed text-[11px] text-slate-600">
+            Manage travel & room booking statuses directly. No transport or hotel booking details required.
+          </p>
+        </div>
+      </aside>
 
         {/* ============================================================ */}
-        {/* 3. MAIN CONTENT WORKSPACE */}
+        {/* 2. MAIN CONTENT WORKSPACE */}
         {/* ============================================================ */}
-        <main className="flex-1 flex flex-col gap-5 min-w-0">
-          {/* Top Actions: Search & Refresh */}
+        <main className="flex-1 flex flex-col gap-5 min-w-0 w-full">
+          {/* Top Actions: Search, Notifications & Refresh Toolbar */}
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-            <div className="relative flex-1 max-w-md">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                placeholder="Search by Job ID, Technician, Destination..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-800 placeholder-slate-400 focus:outline-hidden focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all shadow-xs"
-              />
-              {searchTerm && (
-                <button
-                  onClick={() => setSearchTerm('')}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              )}
+            <div className="flex items-center gap-2 flex-1 min-w-0">
+              {/* Mobile Sections Toggle (visible on < lg) */}
+              <button
+                type="button"
+                onClick={() => setSidebarOpen(true)}
+                className="lg:hidden inline-flex items-center gap-1.5 h-10 px-3 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-50 shadow-2xs shrink-0 cursor-pointer"
+                aria-label="Open sidebar sections"
+              >
+                <Menu className="w-4 h-4 text-slate-500" />
+                <span>Sections</span>
+              </button>
+
+              {/* Search Input */}
+              <div className="relative flex-1 max-w-md">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  type="text"
+                  placeholder="Search by Job ID, Technician, Destination..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full h-10 pl-10 pr-9 bg-white border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-800 placeholder-slate-400 focus:outline-hidden focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all shadow-2xs"
+                />
+                {searchTerm && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchTerm('')}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 rounded-md cursor-pointer"
+                    title="Clear search"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
             </div>
 
-            <div className="flex items-center gap-2 self-end sm:self-auto">
+            {/* Right Action Controls: In-App Notifications & Refresh Button */}
+            <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+              {/* Coordinator In-App Notifications Dropdown */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setShowNotifDropdown(!showNotifDropdown)}
+                  className="relative inline-flex items-center justify-center h-10 w-10 bg-white border border-slate-200 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-50 shadow-2xs transition-colors cursor-pointer"
+                  title="Coordinator Notifications"
+                  aria-label="View notifications"
+                >
+                  <Bell className="w-4 h-4" />
+                  {notifications.some((n) => !n.is_read) && (
+                    <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-blue-600 ring-2 ring-white" />
+                  )}
+                </button>
+
+                {showNotifDropdown && (
+                  <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-xl border border-slate-200 py-2 z-50 animate-in fade-in">
+                    <div className="px-4 py-2 border-b border-slate-100 flex items-center justify-between">
+                      <span className="font-semibold text-xs text-slate-700 uppercase tracking-wider">
+                        Coordinator Notifications
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setShowNotifDropdown(false)}
+                        className="text-xs text-slate-400 hover:text-slate-600 p-1 rounded cursor-pointer"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                    <div className="max-h-72 overflow-y-auto divide-y divide-slate-100">
+                      {notifications.length === 0 ? (
+                        <p className="text-xs text-slate-400 p-4 text-center">No notifications</p>
+                      ) : (
+                        notifications.slice(0, 5).map((n) => (
+                          <div key={n.id} className="p-3 hover:bg-slate-50 transition-colors">
+                            <p className="text-xs font-semibold text-slate-800">{n.title}</p>
+                            <p className="text-xs text-slate-600 mt-0.5 line-clamp-2">{n.message}</p>
+                            <span className="text-[10px] text-slate-400 mt-1 block">
+                              {formatDisplayDate(n.created_at)}
+                            </span>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Refresh Button */}
               <button
+                type="button"
                 onClick={() => loadDashboardData(true)}
                 disabled={refreshing}
-                className="inline-flex items-center gap-1.5 px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-medium text-slate-700 hover:bg-slate-50 shadow-xs transition-colors cursor-pointer disabled:opacity-50"
+                className="inline-flex items-center gap-1.5 h-10 px-3.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-50 shadow-2xs transition-colors cursor-pointer disabled:opacity-50"
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin text-blue-600' : 'text-slate-500'}`} />
                 <span>{refreshing ? 'Refreshing...' : 'Refresh'}</span>
@@ -670,156 +624,156 @@ export default function CoordinatorWorkspace() {
           </div>
 
           {/* ============================================================ */}
-          {/* 7. DASHBOARD SUMMARY CARDS (DYNAMIC PER ACTIVE VIEW) */}
+          {/* 3. DASHBOARD SUMMARY CARDS (DYNAMIC PER ACTIVE VIEW) */}
           {/* ============================================================ */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3 sm:gap-4">
             {activeSection === 'outbound' && (
               <>
-                <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-xs">
+                <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs flex flex-col justify-between min-h-[88px]">
                   <span className="text-xs font-semibold text-amber-700 uppercase tracking-wider block mb-1">
                     Pending
                   </span>
-                  <span className="text-2xl font-bold text-slate-900">{stats.outbound_pending}</span>
+                  <span className="text-2xl font-bold text-slate-900 tabular-nums">{stats.outbound_pending}</span>
                 </div>
-                <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-xs">
+                <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs flex flex-col justify-between min-h-[88px]">
                   <span className="text-xs font-semibold text-blue-700 uppercase tracking-wider block mb-1">
                     Booked
                   </span>
-                  <span className="text-2xl font-bold text-slate-900">{stats.outbound_booked}</span>
+                  <span className="text-2xl font-bold text-slate-900 tabular-nums">{stats.outbound_booked}</span>
                 </div>
-                <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-xs">
+                <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs flex flex-col justify-between min-h-[88px]">
                   <span className="text-xs font-semibold text-emerald-700 uppercase tracking-wider block mb-1">
                     Confirmed
                   </span>
-                  <span className="text-2xl font-bold text-slate-900">{stats.outbound_confirmed}</span>
+                  <span className="text-2xl font-bold text-slate-900 tabular-nums">{stats.outbound_confirmed}</span>
                 </div>
-                <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-xs">
+                <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs flex flex-col justify-between min-h-[88px]">
                   <span className="text-xs font-semibold text-rose-700 uppercase tracking-wider block mb-1">
                     Cancelled
                   </span>
-                  <span className="text-2xl font-bold text-slate-900">{stats.outbound_cancelled}</span>
+                  <span className="text-2xl font-bold text-slate-900 tabular-nums">{stats.outbound_cancelled}</span>
                 </div>
-                <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-xs hidden lg:block">
+                <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs flex flex-col justify-between min-h-[88px]">
                   <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1">
                     Total Jobs
                   </span>
-                  <span className="text-2xl font-bold text-slate-900">{stats.outbound_total}</span>
+                  <span className="text-2xl font-bold text-slate-900 tabular-nums">{stats.outbound_total}</span>
                 </div>
               </>
             )}
 
             {activeSection === 'room' && (
               <>
-                <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-xs">
+                <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs flex flex-col justify-between min-h-[88px]">
                   <span className="text-xs font-semibold text-amber-700 uppercase tracking-wider block mb-1">
                     Pending
                   </span>
-                  <span className="text-2xl font-bold text-slate-900">{stats.room_pending}</span>
+                  <span className="text-2xl font-bold text-slate-900 tabular-nums">{stats.room_pending}</span>
                 </div>
-                <div className="bg-white p-3.5 rounded-xl border border-purple-200 bg-purple-50/30 shadow-xs">
+                <div className="bg-white p-3.5 rounded-xl border border-purple-200 bg-purple-50/30 shadow-2xs flex flex-col justify-between min-h-[88px]">
                   <span className="text-xs font-semibold text-purple-700 uppercase tracking-wider block mb-1">
                     Pending Review
                   </span>
-                  <span className="text-2xl font-bold text-purple-900">{stats.room_pending_review}</span>
+                  <span className="text-2xl font-bold text-purple-900 tabular-nums">{stats.room_pending_review}</span>
                 </div>
-                <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-xs">
+                <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs flex flex-col justify-between min-h-[88px]">
                   <span className="text-xs font-semibold text-blue-700 uppercase tracking-wider block mb-1">
                     Booked
                   </span>
-                  <span className="text-2xl font-bold text-slate-900">{stats.room_booked}</span>
+                  <span className="text-2xl font-bold text-slate-900 tabular-nums">{stats.room_booked}</span>
                 </div>
-                <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-xs">
+                <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs flex flex-col justify-between min-h-[88px]">
                   <span className="text-xs font-semibold text-emerald-700 uppercase tracking-wider block mb-1">
                     Confirmed
                   </span>
-                  <span className="text-2xl font-bold text-slate-900">{stats.room_confirmed}</span>
+                  <span className="text-2xl font-bold text-slate-900 tabular-nums">{stats.room_confirmed}</span>
                 </div>
-                <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-xs hidden lg:block">
+                <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs flex flex-col justify-between min-h-[88px]">
                   <span className="text-xs font-semibold text-rose-700 uppercase tracking-wider block mb-1">
                     Cancelled
                   </span>
-                  <span className="text-2xl font-bold text-slate-900">{stats.room_cancelled}</span>
+                  <span className="text-2xl font-bold text-slate-900 tabular-nums">{stats.room_cancelled}</span>
                 </div>
               </>
             )}
 
             {activeSection === 'return' && (
               <>
-                <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-xs">
+                <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs flex flex-col justify-between min-h-[88px]">
                   <span className="text-xs font-semibold text-amber-700 uppercase tracking-wider block mb-1">
                     Pending
                   </span>
-                  <span className="text-2xl font-bold text-slate-900">{stats.return_pending}</span>
+                  <span className="text-2xl font-bold text-slate-900 tabular-nums">{stats.return_pending}</span>
                 </div>
-                <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-xs">
+                <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs flex flex-col justify-between min-h-[88px]">
                   <span className="text-xs font-semibold text-blue-700 uppercase tracking-wider block mb-1">
                     Booked
                   </span>
-                  <span className="text-2xl font-bold text-slate-900">{stats.return_booked}</span>
+                  <span className="text-2xl font-bold text-slate-900 tabular-nums">{stats.return_booked}</span>
                 </div>
-                <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-xs">
+                <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs flex flex-col justify-between min-h-[88px]">
                   <span className="text-xs font-semibold text-emerald-700 uppercase tracking-wider block mb-1">
                     Confirmed
                   </span>
-                  <span className="text-2xl font-bold text-slate-900">{stats.return_confirmed}</span>
+                  <span className="text-2xl font-bold text-slate-900 tabular-nums">{stats.return_confirmed}</span>
                 </div>
-                <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-xs">
+                <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs flex flex-col justify-between min-h-[88px]">
                   <span className="text-xs font-semibold text-rose-700 uppercase tracking-wider block mb-1">
                     Cancelled
                   </span>
-                  <span className="text-2xl font-bold text-slate-900">{stats.return_cancelled}</span>
+                  <span className="text-2xl font-bold text-slate-900 tabular-nums">{stats.return_cancelled}</span>
                 </div>
-                <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-xs hidden lg:block">
+                <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs flex flex-col justify-between min-h-[88px]">
                   <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1">
                     Active Requests
                   </span>
-                  <span className="text-2xl font-bold text-slate-900">{stats.return_total}</span>
+                  <span className="text-2xl font-bold text-slate-900 tabular-nums">{stats.return_total}</span>
                 </div>
               </>
             )}
 
             {activeSection === 'extensions' && (
               <>
-                <div className="bg-white p-3.5 rounded-xl border border-purple-300 bg-purple-50/40 shadow-xs">
+                <div className="bg-white p-3.5 rounded-xl border border-purple-200 bg-purple-50/30 shadow-2xs flex flex-col justify-between min-h-[88px]">
                   <span className="text-xs font-semibold text-purple-700 uppercase tracking-wider block mb-1">
                     Awaiting Review
                   </span>
-                  <span className="text-2xl font-bold text-purple-900">{stats.extension_reviews}</span>
+                  <span className="text-2xl font-bold text-purple-900 tabular-nums">{stats.extension_reviews}</span>
                 </div>
-                <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-xs">
+                <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs flex flex-col justify-between min-h-[88px]">
                   <span className="text-xs font-semibold text-emerald-700 uppercase tracking-wider block mb-1">
                     Rooms Confirmed
                   </span>
-                  <span className="text-2xl font-bold text-slate-900">{stats.room_confirmed}</span>
+                  <span className="text-2xl font-bold text-slate-900 tabular-nums">{stats.room_confirmed}</span>
                 </div>
-                <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-xs">
+                <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs flex flex-col justify-between min-h-[88px]">
                   <span className="text-xs font-semibold text-blue-700 uppercase tracking-wider block mb-1">
                     Rooms Booked
                   </span>
-                  <span className="text-2xl font-bold text-slate-900">{stats.room_booked}</span>
+                  <span className="text-2xl font-bold text-slate-900 tabular-nums">{stats.room_booked}</span>
                 </div>
-                <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-xs">
+                <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs flex flex-col justify-between min-h-[88px]">
                   <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1">
                     Total Rooms
                   </span>
-                  <span className="text-2xl font-bold text-slate-900">{stats.room_total}</span>
+                  <span className="text-2xl font-bold text-slate-900 tabular-nums">{stats.room_total}</span>
                 </div>
               </>
             )}
 
             {activeSection === 'conflicts' && (
               <>
-                <div className="bg-white p-3.5 rounded-xl border border-rose-300 bg-rose-50/40 shadow-xs">
+                <div className="bg-white p-3.5 rounded-xl border border-rose-200 bg-rose-50/30 shadow-2xs flex flex-col justify-between min-h-[88px]">
                   <span className="text-xs font-semibold text-rose-700 uppercase tracking-wider block mb-1">
                     Active Conflicts
                   </span>
-                  <span className="text-2xl font-bold text-rose-900">{conflicts.length}</span>
+                  <span className="text-2xl font-bold text-rose-900 tabular-nums">{conflicts.length}</span>
                 </div>
-                <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-xs">
+                <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs flex flex-col justify-between min-h-[88px]">
                   <span className="text-xs font-semibold text-amber-700 uppercase tracking-wider block mb-1">
                     Engineers Involved
                   </span>
-                  <span className="text-2xl font-bold text-slate-900">
+                  <span className="text-2xl font-bold text-slate-900 tabular-nums">
                     {new Set(conflicts.map((c) => c.engineer_name)).size}
                   </span>
                 </div>
@@ -842,18 +796,18 @@ export default function CoordinatorWorkspace() {
                 {/* 2. OUTBOUND TRAVEL TABLE */}
                 {/* -------------------------------------------------------- */}
                 {activeSection === 'outbound' && (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse text-xs sm:text-sm">
+                  <div className="overflow-x-auto w-full">
+                    <table className="w-full min-w-[960px] text-left border-collapse text-xs sm:text-sm">
                       <thead>
                         <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold uppercase tracking-wider text-[11px]">
                           <th className="py-3 px-3.5 w-12 text-center">#</th>
-                          <th className="py-3 px-3.5">Job ID</th>
-                          <th className="py-3 px-3.5">Technician</th>
-                          <th className="py-3 px-3.5">Travel Date</th>
-                          <th className="py-3 px-3.5">Destination</th>
-                          <th className="py-3 px-3.5">Current Status</th>
-                          <th className="py-3 px-3.5">Update Status</th>
-                          <th className="py-3 px-3.5 text-right pr-4">Action</th>
+                          <th className="py-3 px-3.5 w-32 whitespace-nowrap">Job ID</th>
+                          <th className="py-3 px-3.5 w-44 whitespace-nowrap">Technician</th>
+                          <th className="py-3 px-3.5 w-32 whitespace-nowrap">Travel Date</th>
+                          <th className="py-3 px-3.5 min-w-[140px]">Destination</th>
+                          <th className="py-3 px-3.5 w-36 whitespace-nowrap">Current Status</th>
+                          <th className="py-3 px-3.5 w-40 whitespace-nowrap">Update Status</th>
+                          <th className="py-3 px-3.5 w-24 text-right pr-5 whitespace-nowrap">Action</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
@@ -874,42 +828,45 @@ export default function CoordinatorWorkspace() {
 
                             return (
                               <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
-                                <td className="py-3 px-3.5 text-center text-slate-400 font-mono text-xs">
+                                <td className="py-3 px-3.5 text-center text-slate-400 font-mono text-xs align-middle">
                                   {idx + 1}
                                 </td>
-                                <td className="py-3 px-3.5 font-medium text-slate-900">
+                                <td className="py-3 px-3.5 font-medium text-slate-900 align-middle whitespace-nowrap">
                                   <button
+                                    type="button"
                                     onClick={() => openHistory(item.id, item.checklist_number)}
-                                    className="hover:underline hover:text-blue-600 text-left cursor-pointer"
+                                    className="hover:underline hover:text-blue-600 font-mono text-xs text-left cursor-pointer transition-colors"
                                     title="View audit history"
                                   >
                                     {item.checklist_number || item.id.slice(0, 8)}
                                   </button>
                                 </td>
-                                <td className="py-3 px-3.5 text-slate-700">
+                                <td className="py-3 px-3.5 text-slate-800 font-medium align-middle whitespace-nowrap">
                                   {item.service_engineer || 'Unassigned'}
                                 </td>
-                                <td className="py-3 px-3.5 text-slate-700">
+                                <td className="py-3 px-3.5 text-slate-600 align-middle whitespace-nowrap text-xs">
                                   {formatDisplayDate(
                                     cb.outbound_departure_datetime || cb.travel_datetime || item.expected_arrival_date
                                   )}
                                 </td>
-                                <td className="py-3 px-3.5 text-slate-700">
-                                  {cb.outbound_destination || cb.destination || item.client_location || '—'}
+                                <td className="py-3 px-3.5 text-slate-700 align-middle">
+                                  <span className="line-clamp-2" title={cb.outbound_destination || cb.destination || item.client_location || '—'}>
+                                    {cb.outbound_destination || cb.destination || item.client_location || '—'}
+                                  </span>
                                 </td>
-                                <td className="py-3 px-3.5">
+                                <td className="py-3 px-3.5 align-middle whitespace-nowrap">
                                   <span
                                     className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border ${badgeStyle.bg} ${badgeStyle.text} ${badgeStyle.border}`}
                                   >
-                                    <span className={`w-1.5 h-1.5 rounded-full ${badgeStyle.dot}`} />
-                                    {currentStatus}
+                                    <span className={`w-1.5 h-1.5 rounded-full ${badgeStyle.dot} shrink-0`} />
+                                    <span>{currentStatus}</span>
                                   </span>
                                 </td>
-                                <td className="py-3 px-3.5">
+                                <td className="py-3 px-3.5 align-middle whitespace-nowrap">
                                   <select
                                     value={selectedDraft}
                                     onChange={(e) => handleDraftChange(item.id, e.target.value)}
-                                    className="bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 focus:outline-hidden focus:border-blue-500 focus:ring-1 focus:ring-blue-100 cursor-pointer"
+                                    className="w-36 h-8 bg-white border border-slate-200 rounded-lg px-2 text-xs font-medium text-slate-800 focus:outline-hidden focus:border-blue-500 focus:ring-1 focus:ring-blue-100 cursor-pointer shadow-2xs"
                                   >
                                     <option value="Pending">Pending</option>
                                     <option value="Booked">Booked</option>
@@ -917,20 +874,22 @@ export default function CoordinatorWorkspace() {
                                     <option value="Cancelled">Cancelled</option>
                                   </select>
                                 </td>
-                                <td className="py-3 px-3.5 text-right pr-4">
+                                <td className="py-3 px-3.5 text-right pr-5 align-middle whitespace-nowrap">
                                   <button
+                                    type="button"
                                     onClick={() => handleSaveStatus(item, 'outbound')}
                                     disabled={!isChanged || isSaving}
-                                    className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                                    className={`inline-flex items-center justify-center gap-1.5 h-8 px-3 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                                       isChanged
-                                        ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-xs'
+                                        ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-2xs'
                                         : 'bg-slate-100 text-slate-400 cursor-not-allowed'
                                     }`}
+                                    title={isChanged ? 'Save status change' : 'No changes to save'}
                                   >
                                     {isSaving ? (
-                                      <RefreshCw className="w-3 h-3 animate-spin" />
+                                      <RefreshCw className="w-3 h-3 animate-spin shrink-0" />
                                     ) : (
-                                      <Check className="w-3 h-3" />
+                                      <Check className="w-3 h-3 shrink-0" />
                                     )}
                                     <span>Save</span>
                                   </button>
@@ -948,19 +907,19 @@ export default function CoordinatorWorkspace() {
                 {/* 3. ROOM BOOKINGS TABLE */}
                 {/* -------------------------------------------------------- */}
                 {activeSection === 'room' && (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse text-xs sm:text-sm">
+                  <div className="overflow-x-auto w-full">
+                    <table className="w-full min-w-[960px] text-left border-collapse text-xs sm:text-sm">
                       <thead>
                         <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold uppercase tracking-wider text-[11px]">
                           <th className="py-3 px-3.5 w-12 text-center">#</th>
-                          <th className="py-3 px-3.5">Job ID</th>
-                          <th className="py-3 px-3.5">Technician</th>
-                          <th className="py-3 px-3.5">Original Date</th>
-                          <th className="py-3 px-3.5">Revised Date</th>
-                          <th className="py-3 px-3.5">Destination</th>
-                          <th className="py-3 px-3.5">Current Status</th>
-                          <th className="py-3 px-3.5">Update Status</th>
-                          <th className="py-3 px-3.5 text-right pr-4">Action</th>
+                          <th className="py-3 px-3.5 w-32 whitespace-nowrap">Job ID</th>
+                          <th className="py-3 px-3.5 w-44 whitespace-nowrap">Technician</th>
+                          <th className="py-3 px-3.5 w-32 whitespace-nowrap">Original Date</th>
+                          <th className="py-3 px-3.5 w-32 whitespace-nowrap">Revised Date</th>
+                          <th className="py-3 px-3.5 min-w-[140px]">Destination</th>
+                          <th className="py-3 px-3.5 w-36 whitespace-nowrap">Current Status</th>
+                          <th className="py-3 px-3.5 w-40 whitespace-nowrap">Update Status</th>
+                          <th className="py-3 px-3.5 w-24 text-right pr-5 whitespace-nowrap">Action</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
@@ -987,49 +946,52 @@ export default function CoordinatorWorkspace() {
 
                             return (
                               <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
-                                <td className="py-3 px-3.5 text-center text-slate-400 font-mono text-xs">
+                                <td className="py-3 px-3.5 text-center text-slate-400 font-mono text-xs align-middle">
                                   {idx + 1}
                                 </td>
-                                <td className="py-3 px-3.5 font-medium text-slate-900">
+                                <td className="py-3 px-3.5 font-medium text-slate-900 align-middle whitespace-nowrap">
                                   <button
+                                    type="button"
                                     onClick={() => openHistory(item.id, item.checklist_number)}
-                                    className="hover:underline hover:text-blue-600 text-left cursor-pointer"
+                                    className="hover:underline hover:text-blue-600 font-mono text-xs text-left cursor-pointer transition-colors"
                                     title="View audit history"
                                   >
                                     {item.checklist_number || item.id.slice(0, 8)}
                                   </button>
                                 </td>
-                                <td className="py-3 px-3.5 text-slate-700">
+                                <td className="py-3 px-3.5 text-slate-800 font-medium align-middle whitespace-nowrap">
                                   {item.service_engineer || 'Unassigned'}
                                 </td>
-                                <td className="py-3 px-3.5 text-slate-700">
+                                <td className="py-3 px-3.5 text-slate-600 align-middle whitespace-nowrap text-xs">
                                   {formatDisplayDate(origDate)}
                                 </td>
-                                <td className="py-3 px-3.5 text-slate-700 font-medium">
+                                <td className="py-3 px-3.5 align-middle whitespace-nowrap text-xs">
                                   {revDate ? (
-                                    <span className="text-purple-700 font-semibold bg-purple-50 px-2 py-0.5 rounded-md border border-purple-200">
+                                    <span className="inline-flex items-center text-purple-700 font-semibold bg-purple-50 px-2 py-0.5 rounded-md border border-purple-200">
                                       {formatDisplayDate(revDate)}
                                     </span>
                                   ) : (
                                     <span className="text-slate-400">—</span>
                                   )}
                                 </td>
-                                <td className="py-3 px-3.5 text-slate-700">
-                                  {cb.outbound_destination || item.client_location || '—'}
+                                <td className="py-3 px-3.5 text-slate-700 align-middle">
+                                  <span className="line-clamp-2" title={cb.outbound_destination || item.client_location || '—'}>
+                                    {cb.outbound_destination || item.client_location || '—'}
+                                  </span>
                                 </td>
-                                <td className="py-3 px-3.5">
+                                <td className="py-3 px-3.5 align-middle whitespace-nowrap">
                                   <span
                                     className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border ${badgeStyle.bg} ${badgeStyle.text} ${badgeStyle.border}`}
                                   >
-                                    <span className={`w-1.5 h-1.5 rounded-full ${badgeStyle.dot}`} />
-                                    {currentStatus}
+                                    <span className={`w-1.5 h-1.5 rounded-full ${badgeStyle.dot} shrink-0`} />
+                                    <span>{currentStatus}</span>
                                   </span>
                                 </td>
-                                <td className="py-3 px-3.5">
+                                <td className="py-3 px-3.5 align-middle whitespace-nowrap">
                                   <select
                                     value={selectedDraft}
                                     onChange={(e) => handleDraftChange(item.id, e.target.value)}
-                                    className="bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 focus:outline-hidden focus:border-blue-500 focus:ring-1 focus:ring-blue-100 cursor-pointer"
+                                    className="w-36 h-8 bg-white border border-slate-200 rounded-lg px-2 text-xs font-medium text-slate-800 focus:outline-hidden focus:border-blue-500 focus:ring-1 focus:ring-blue-100 cursor-pointer shadow-2xs"
                                   >
                                     <option value="Pending">Pending</option>
                                     <option value="Pending Review">Pending Review</option>
@@ -1038,20 +1000,22 @@ export default function CoordinatorWorkspace() {
                                     <option value="Cancelled">Cancelled</option>
                                   </select>
                                 </td>
-                                <td className="py-3 px-3.5 text-right pr-4">
+                                <td className="py-3 px-3.5 text-right pr-5 align-middle whitespace-nowrap">
                                   <button
+                                    type="button"
                                     onClick={() => handleSaveStatus(item, 'room')}
                                     disabled={!isChanged || isSaving}
-                                    className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                                    className={`inline-flex items-center justify-center gap-1.5 h-8 px-3 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                                       isChanged
-                                        ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-xs'
+                                        ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-2xs'
                                         : 'bg-slate-100 text-slate-400 cursor-not-allowed'
                                     }`}
+                                    title={isChanged ? 'Save status change' : 'No changes to save'}
                                   >
                                     {isSaving ? (
-                                      <RefreshCw className="w-3 h-3 animate-spin" />
+                                      <RefreshCw className="w-3 h-3 animate-spin shrink-0" />
                                     ) : (
-                                      <Check className="w-3 h-3" />
+                                      <Check className="w-3 h-3 shrink-0" />
                                     )}
                                     <span>Save</span>
                                   </button>
@@ -1069,18 +1033,18 @@ export default function CoordinatorWorkspace() {
                 {/* 4. RETURN TICKETS TABLE */}
                 {/* -------------------------------------------------------- */}
                 {activeSection === 'return' && (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse text-xs sm:text-sm">
+                  <div className="overflow-x-auto w-full">
+                    <table className="w-full min-w-[960px] text-left border-collapse text-xs sm:text-sm">
                       <thead>
                         <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold uppercase tracking-wider text-[11px]">
                           <th className="py-3 px-3.5 w-12 text-center">#</th>
-                          <th className="py-3 px-3.5">Job ID</th>
-                          <th className="py-3 px-3.5">Technician</th>
-                          <th className="py-3 px-3.5">Post-Install Submission</th>
-                          <th className="py-3 px-3.5">Destination</th>
-                          <th className="py-3 px-3.5">Current Status</th>
-                          <th className="py-3 px-3.5">Update Status</th>
-                          <th className="py-3 px-3.5 text-right pr-4">Action</th>
+                          <th className="py-3 px-3.5 w-32 whitespace-nowrap">Job ID</th>
+                          <th className="py-3 px-3.5 w-44 whitespace-nowrap">Technician</th>
+                          <th className="py-3 px-3.5 w-36 whitespace-nowrap">Post-Install Submission</th>
+                          <th className="py-3 px-3.5 min-w-[140px]">Destination</th>
+                          <th className="py-3 px-3.5 w-36 whitespace-nowrap">Current Status</th>
+                          <th className="py-3 px-3.5 w-40 whitespace-nowrap">Update Status</th>
+                          <th className="py-3 px-3.5 w-24 text-right pr-5 whitespace-nowrap">Action</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
@@ -1110,40 +1074,43 @@ export default function CoordinatorWorkspace() {
 
                             return (
                               <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
-                                <td className="py-3 px-3.5 text-center text-slate-400 font-mono text-xs">
+                                <td className="py-3 px-3.5 text-center text-slate-400 font-mono text-xs align-middle">
                                   {idx + 1}
                                 </td>
-                                <td className="py-3 px-3.5 font-medium text-slate-900">
+                                <td className="py-3 px-3.5 font-medium text-slate-900 align-middle whitespace-nowrap">
                                   <button
+                                    type="button"
                                     onClick={() => openHistory(item.id, item.checklist_number)}
-                                    className="hover:underline hover:text-blue-600 text-left cursor-pointer"
+                                    className="hover:underline hover:text-blue-600 font-mono text-xs text-left cursor-pointer transition-colors"
                                     title="View audit history"
                                   >
                                     {item.checklist_number || item.id.slice(0, 8)}
                                   </button>
                                 </td>
-                                <td className="py-3 px-3.5 text-slate-700">
+                                <td className="py-3 px-3.5 text-slate-800 font-medium align-middle whitespace-nowrap">
                                   {item.service_engineer || 'Unassigned'}
                                 </td>
-                                <td className="py-3 px-3.5 text-slate-700">
+                                <td className="py-3 px-3.5 text-slate-600 align-middle whitespace-nowrap text-xs">
                                   {formatDisplayDate(submissionDate)}
                                 </td>
-                                <td className="py-3 px-3.5 text-slate-700">
-                                  {cb.return_destination || cb.outbound_origin || 'Base Office'}
+                                <td className="py-3 px-3.5 text-slate-700 align-middle">
+                                  <span className="line-clamp-2" title={cb.return_destination || cb.outbound_origin || 'Base Office'}>
+                                    {cb.return_destination || cb.outbound_origin || 'Base Office'}
+                                  </span>
                                 </td>
-                                <td className="py-3 px-3.5">
+                                <td className="py-3 px-3.5 align-middle whitespace-nowrap">
                                   <span
                                     className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border ${badgeStyle.bg} ${badgeStyle.text} ${badgeStyle.border}`}
                                   >
-                                    <span className={`w-1.5 h-1.5 rounded-full ${badgeStyle.dot}`} />
-                                    {currentStatus}
+                                    <span className={`w-1.5 h-1.5 rounded-full ${badgeStyle.dot} shrink-0`} />
+                                    <span>{currentStatus}</span>
                                   </span>
                                 </td>
-                                <td className="py-3 px-3.5">
+                                <td className="py-3 px-3.5 align-middle whitespace-nowrap">
                                   <select
                                     value={selectedDraft}
                                     onChange={(e) => handleDraftChange(item.id, e.target.value)}
-                                    className="bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 focus:outline-hidden focus:border-blue-500 focus:ring-1 focus:ring-blue-100 cursor-pointer"
+                                    className="w-36 h-8 bg-white border border-slate-200 rounded-lg px-2 text-xs font-medium text-slate-800 focus:outline-hidden focus:border-blue-500 focus:ring-1 focus:ring-blue-100 cursor-pointer shadow-2xs"
                                   >
                                     <option value="Pending">Pending</option>
                                     <option value="Booked">Booked</option>
@@ -1151,20 +1118,22 @@ export default function CoordinatorWorkspace() {
                                     <option value="Cancelled">Cancelled</option>
                                   </select>
                                 </td>
-                                <td className="py-3 px-3.5 text-right pr-4">
+                                <td className="py-3 px-3.5 text-right pr-5 align-middle whitespace-nowrap">
                                   <button
+                                    type="button"
                                     onClick={() => handleSaveStatus(item, 'return')}
                                     disabled={!isChanged || isSaving}
-                                    className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                                    className={`inline-flex items-center justify-center gap-1.5 h-8 px-3 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                                       isChanged
-                                        ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-xs'
+                                        ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-2xs'
                                         : 'bg-slate-100 text-slate-400 cursor-not-allowed'
                                     }`}
+                                    title={isChanged ? 'Save status change' : 'No changes to save'}
                                   >
                                     {isSaving ? (
-                                      <RefreshCw className="w-3 h-3 animate-spin" />
+                                      <RefreshCw className="w-3 h-3 animate-spin shrink-0" />
                                     ) : (
-                                      <Check className="w-3 h-3" />
+                                      <Check className="w-3 h-3 shrink-0" />
                                     )}
                                     <span>Save</span>
                                   </button>
@@ -1182,17 +1151,17 @@ export default function CoordinatorWorkspace() {
                 {/* 5. EXTENSION REVIEWS TABLE */}
                 {/* -------------------------------------------------------- */}
                 {activeSection === 'extensions' && (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse text-xs sm:text-sm">
+                  <div className="overflow-x-auto w-full">
+                    <table className="w-full min-w-[920px] text-left border-collapse text-xs sm:text-sm">
                       <thead>
                         <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold uppercase tracking-wider text-[11px]">
-                          <th className="py-3 px-3.5">Job ID</th>
-                          <th className="py-3 px-3.5">Technician</th>
-                          <th className="py-3 px-3.5">Previous Date</th>
-                          <th className="py-3 px-3.5">Revised Date</th>
-                          <th className="py-3 px-3.5">Room Booking Status</th>
-                          <th className="py-3 px-3.5">Update Status</th>
-                          <th className="py-3 px-3.5 text-right pr-4">Action</th>
+                          <th className="py-3 px-3.5 w-32 whitespace-nowrap">Job ID</th>
+                          <th className="py-3 px-3.5 w-44 whitespace-nowrap">Technician</th>
+                          <th className="py-3 px-3.5 w-32 whitespace-nowrap">Previous Date</th>
+                          <th className="py-3 px-3.5 w-32 whitespace-nowrap">Revised Date</th>
+                          <th className="py-3 px-3.5 w-36 whitespace-nowrap">Room Booking Status</th>
+                          <th className="py-3 px-3.5 w-40 whitespace-nowrap">Update Status</th>
+                          <th className="py-3 px-3.5 w-40 text-right pr-5 whitespace-nowrap">Action</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
@@ -1222,35 +1191,36 @@ export default function CoordinatorWorkspace() {
 
                             return (
                               <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
-                                <td className="py-3 px-3.5 font-medium text-slate-900">
+                                <td className="py-3 px-3.5 font-medium text-slate-900 align-middle whitespace-nowrap">
                                   <button
+                                    type="button"
                                     onClick={() => openHistory(item.id, item.checklist_number)}
-                                    className="hover:underline hover:text-blue-600 text-left cursor-pointer"
+                                    className="hover:underline hover:text-blue-600 font-mono text-xs text-left cursor-pointer transition-colors"
                                     title="View audit history"
                                   >
                                     {item.checklist_number || item.id.slice(0, 8)}
                                   </button>
                                 </td>
-                                <td className="py-3 px-3.5 text-slate-700">
+                                <td className="py-3 px-3.5 text-slate-800 font-medium align-middle whitespace-nowrap">
                                   {item.service_engineer || 'Unassigned'}
                                 </td>
-                                <td className="py-3 px-3.5 text-slate-700">
+                                <td className="py-3 px-3.5 text-slate-600 align-middle whitespace-nowrap text-xs">
                                   {formatDisplayDate(origDate)}
                                 </td>
-                                <td className="py-3 px-3.5 text-purple-700 font-semibold">
+                                <td className="py-3 px-3.5 text-purple-700 font-semibold align-middle whitespace-nowrap text-xs">
                                   {formatDisplayDate(revDate)}
                                 </td>
-                                <td className="py-3 px-3.5">
+                                <td className="py-3 px-3.5 align-middle whitespace-nowrap">
                                   <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-purple-50 text-purple-700 border border-purple-200">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-purple-500" />
-                                    {currentStatus}
+                                    <span className="w-1.5 h-1.5 rounded-full bg-purple-500 shrink-0" />
+                                    <span>{currentStatus}</span>
                                   </span>
                                 </td>
-                                <td className="py-3 px-3.5">
+                                <td className="py-3 px-3.5 align-middle whitespace-nowrap">
                                   <select
                                     value={selectedDraft}
                                     onChange={(e) => handleDraftChange(item.id, e.target.value)}
-                                    className="bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 focus:outline-hidden focus:border-blue-500 focus:ring-1 focus:ring-blue-100 cursor-pointer"
+                                    className="w-36 h-8 bg-white border border-slate-200 rounded-lg px-2 text-xs font-medium text-slate-800 focus:outline-hidden focus:border-blue-500 focus:ring-1 focus:ring-blue-100 cursor-pointer shadow-2xs"
                                   >
                                     <option value="Pending Review">Pending Review</option>
                                     <option value="Booked">Booked</option>
@@ -1259,20 +1229,22 @@ export default function CoordinatorWorkspace() {
                                     <option value="Pending">Pending</option>
                                   </select>
                                 </td>
-                                <td className="py-3 px-3.5 text-right pr-4">
+                                <td className="py-3 px-3.5 text-right pr-5 align-middle whitespace-nowrap">
                                   <button
+                                    type="button"
                                     onClick={() => handleSaveStatus(item, 'room')}
                                     disabled={!isChanged || isSaving}
-                                    className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                                    className={`inline-flex items-center justify-center gap-1.5 h-8 px-3 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                                       isChanged
-                                        ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-xs'
+                                        ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-2xs'
                                         : 'bg-slate-100 text-slate-400 cursor-not-allowed'
                                     }`}
+                                    title={isChanged ? 'Save status change' : 'No changes to save'}
                                   >
                                     {isSaving ? (
-                                      <RefreshCw className="w-3 h-3 animate-spin" />
+                                      <RefreshCw className="w-3 h-3 animate-spin shrink-0" />
                                     ) : (
-                                      <Check className="w-3 h-3" />
+                                      <Check className="w-3 h-3 shrink-0" />
                                     )}
                                     <span>Save Room Status</span>
                                   </button>
@@ -1290,15 +1262,15 @@ export default function CoordinatorWorkspace() {
                 {/* 6. SCHEDULE CONFLICTS TABLE */}
                 {/* -------------------------------------------------------- */}
                 {activeSection === 'conflicts' && (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse text-xs sm:text-sm">
+                  <div className="overflow-x-auto w-full">
+                    <table className="w-full min-w-[800px] text-left border-collapse text-xs sm:text-sm">
                       <thead>
                         <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold uppercase tracking-wider text-[11px]">
-                          <th className="py-3 px-3.5">Job ID</th>
-                          <th className="py-3 px-3.5">Technician</th>
-                          <th className="py-3 px-3.5">Conflicting Dates</th>
-                          <th className="py-3 px-3.5">Conflict Description</th>
-                          <th className="py-3 px-3.5">Review Status</th>
+                          <th className="py-3 px-3.5 w-32 whitespace-nowrap">Job ID</th>
+                          <th className="py-3 px-3.5 w-44 whitespace-nowrap">Technician</th>
+                          <th className="py-3 px-3.5 w-52 whitespace-nowrap">Conflicting Dates</th>
+                          <th className="py-3 px-3.5 min-w-[200px]">Conflict Description</th>
+                          <th className="py-3 px-3.5 w-36 text-right pr-5 whitespace-nowrap">Review Status</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
@@ -1325,20 +1297,22 @@ export default function CoordinatorWorkspace() {
 
                             return (
                               <tr key={idx} className="hover:bg-slate-50/80 transition-colors">
-                                <td className="py-3 px-3.5 font-medium text-slate-900 font-mono text-xs">
+                                <td className="py-3 px-3.5 font-medium text-slate-900 font-mono text-xs align-middle whitespace-nowrap">
                                   {jobId}
                                 </td>
-                                <td className="py-3 px-3.5 text-slate-700 font-medium">
+                                <td className="py-3 px-3.5 text-slate-800 font-medium align-middle whitespace-nowrap">
                                   {c.engineer_name}
                                 </td>
-                                <td className="py-3 px-3.5 text-rose-700 font-semibold">
+                                <td className="py-3 px-3.5 text-rose-700 font-semibold align-middle whitespace-nowrap text-xs">
                                   {dates}
                                 </td>
-                                <td className="py-3 px-3.5 text-slate-600 max-w-xs">{desc}</td>
-                                <td className="py-3 px-3.5">
+                                <td className="py-3 px-3.5 text-slate-600 align-middle">
+                                  <span className="line-clamp-2" title={desc}>{desc}</span>
+                                </td>
+                                <td className="py-3 px-3.5 text-right pr-5 align-middle whitespace-nowrap">
                                   <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200">
-                                    <AlertTriangle className="w-3 h-3 text-rose-500" />
-                                    Conflict Detected
+                                    <AlertTriangle className="w-3 h-3 text-rose-500 shrink-0" />
+                                    <span>Conflict Detected</span>
                                   </span>
                                 </td>
                               </tr>
@@ -1353,7 +1327,6 @@ export default function CoordinatorWorkspace() {
             )}
           </div>
         </main>
-      </div>
 
       {/* ============================================================ */}
       {/* AUDIT HISTORY MODAL */}

@@ -25,6 +25,7 @@ const PORTALS = {
   sales: {
     id: 'sales',
     name: 'Sales Portal',
+    shortName: 'Sales',
     title: 'Sales Portal Sign In',
     subtitle: 'Client intake, installation checklists & quotation generator',
     role: 'SALES',
@@ -41,6 +42,7 @@ const PORTALS = {
   technical: {
     id: 'technical',
     name: 'Technical Team',
+    shortName: 'Technical',
     title: 'Technical Team Sign In',
     subtitle: 'Field operations, assigned jobs & installation reports',
     role: 'TECHNICAL',
@@ -57,6 +59,7 @@ const PORTALS = {
   store: {
     id: 'store',
     name: 'Store Manager',
+    shortName: 'Store',
     title: 'Store Manager Sign In',
     subtitle: 'Inventory management, stock dispatch & technician returns',
     role: 'STORE_MANAGER',
@@ -73,6 +76,7 @@ const PORTALS = {
   coordinator: {
     id: 'coordinator',
     name: 'Coordinator',
+    shortName: 'Coordinator',
     title: 'Coordinator Sign In',
     subtitle: 'Travel arrangements, bus and room booking management',
     role: 'COORDINATOR',
@@ -89,6 +93,7 @@ const PORTALS = {
   hr: {
     id: 'hr',
     name: 'HR Portal',
+    shortName: 'HR',
     title: 'HR Portal Sign In',
     subtitle: 'Technician availability management & extension approvals',
     role: 'HR',
@@ -250,7 +255,7 @@ export default function Login() {
           }}
         />
 
-        <div className="max-w-md w-full relative z-10">
+        <div className="max-w-2xl w-full relative z-10">
           {/* Back to Portals link */}
           <div className="mb-4 sm:mb-6 flex items-center justify-between">
             <Link
@@ -276,14 +281,16 @@ export default function Login() {
                   key={portal.id}
                   type="button"
                   onClick={() => handleSelectPortal(portal.id)}
-                  className={`flex-1 py-2 px-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all duration-200 cursor-pointer ${
+                  className={`flex-1 min-w-0 py-2 px-1.5 sm:px-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1 sm:gap-1.5 transition-all duration-200 cursor-pointer ${
                     isActive
                       ? portal.activeTabClass
                       : 'text-slate-300 hover:text-white hover:bg-white/10'
                   }`}
+                  title={portal.name}
                 >
                   <Icon size={14} className="shrink-0" />
-                  <span className="truncate">{portal.name}</span>
+                  <span className="hidden sm:inline truncate">{portal.name}</span>
+                  <span className="sm:hidden truncate">{portal.shortName || portal.name}</span>
                 </button>
               );
             })}
@@ -314,7 +321,7 @@ export default function Login() {
               <h1 className="text-2xl font-black text-white tracking-tight">
                 {portalConfig.title}
               </h1>
-              <p className="text-xs text-blue-100/70 mt-1 max-w-xs mx-auto">
+              <p className="text-xs text-blue-100/70 mt-1 max-w-md mx-auto">
                 {portalConfig.subtitle}
               </p>
             </div>

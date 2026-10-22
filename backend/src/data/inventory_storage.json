@@ -3568,6 +3568,48 @@
   "processedMaterialReturnCredits": [],
   "stockMovements": [
     {
+      "id": "a81e9698-2bd1-4621-99b9-bb4c0d2129fc",
+      "item_id": "7eb8416b-3226-4017-9298-fc2438634176",
+      "product_id": null,
+      "item_name": "Live Display",
+      "sku": null,
+      "category": "Camera Device",
+      "movement_type": "STOCK_ADJUSTMENT",
+      "quantity": 1,
+      "unit": "Nos.",
+      "balance_before": 1,
+      "balance_after": 0,
+      "checklist_id": "2df4459f-82ca-4b09-b852-9c752d41cbc3",
+      "reference_transaction_id": null,
+      "performed_by": "00000000-0000-0000-0000-000000000001",
+      "performer_name": "Sales",
+      "performer_email": null,
+      "reason_or_remarks": "[Checklist Reservation] Reserved 1 Live Displays for 1 sets of \"2 Channel Live\" (Checklist EE-INST-20261021-0091)",
+      "idempotency_key": "MOV-1792587546455-evvu",
+      "created_at": "2026-10-21T12:59:06.455Z"
+    },
+    {
+      "id": "2854934e-8eae-4b2e-98e1-8e219705fcb1",
+      "item_id": "c7b53868-efff-486d-9b6f-560baf2b3cae",
+      "product_id": null,
+      "item_name": "Camera",
+      "sku": null,
+      "category": "Camera Device",
+      "movement_type": "STOCK_ADJUSTMENT",
+      "quantity": 2,
+      "unit": "Nos.",
+      "balance_before": 6,
+      "balance_after": 4,
+      "checklist_id": "2df4459f-82ca-4b09-b852-9c752d41cbc3",
+      "reference_transaction_id": null,
+      "performed_by": "00000000-0000-0000-0000-000000000001",
+      "performer_name": "Sales",
+      "performer_email": null,
+      "reason_or_remarks": "[Checklist Reservation] Reserved 2 Cameras for 1 sets of \"2 Channel Live\" (Checklist EE-INST-20261021-0091)",
+      "idempotency_key": "MOV-1792587545678-ac1k",
+      "created_at": "2026-10-21T12:59:05.677Z"
+    },
+    {
       "id": "60526930-06a9-47b7-b07a-fd5193ce493c",
       "item_id": "7eb8416b-3226-4017-9298-fc2438634176",
       "product_id": null,
@@ -8168,6 +8210,33 @@
     }
   ],
   "deviceStockAllocations": [
+    {
+      "id": "alloc-1792587545512-skl4",
+      "device_type": "2 Channel Live",
+      "allocated_sets": 1,
+      "components_reserved": [
+        {
+          "component_name": "Camera",
+          "quantity_required_per_set": 2,
+          "quantity": 2,
+          "unit": "Nos.",
+          "component_id": "c7b53868-efff-486d-9b6f-560baf2b3cae"
+        },
+        {
+          "component_name": "Live Display",
+          "quantity_required_per_set": 1,
+          "quantity": 1,
+          "unit": "Nos.",
+          "component_id": "7eb8416b-3226-4017-9298-fc2438634176"
+        }
+      ],
+      "status": "ALLOCATED",
+      "checklist_id": "2df4459f-82ca-4b09-b852-9c752d41cbc3",
+      "allocated_by": "00000000-0000-0000-0000-000000000001",
+      "allocator_name": "Sales",
+      "notes": "Automatic reservation for checklist EE-INST-20261021-0091",
+      "created_at": "2026-10-21T12:59:05.512Z"
+    },
     {
       "id": "alloc-1792581533459-ga2r",
       "device_type": "2 Channel Live",
