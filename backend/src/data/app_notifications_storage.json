@@ -1,4 +1,141 @@
 {
-  "notifications": [],
-  "updated_at": "2026-10-21T12:08:56.896Z"
+  "notifications": [
+    {
+      "id": "4725d69c-2930-4db3-a83c-786ea2208785",
+      "target_role": "HR",
+      "target_user_id": null,
+      "title": "Late Completion Recorded",
+      "message": "The Post-Installation Form was submitted after the scheduled end date. The original schedule and overdue history have been preserved. Review the record if follow-up is required. Checklist: EE-INST-20261022-0019, Customer: Express Cargo Logistics Ltd, Technician: Mathi, Scheduled: 2026-10-18, Completed: 22 Oct 2026, 9:45 am, Submitted: 22 Oct 2026, 9:45 am",
+      "type": "LATE_COMPLETION_ALERT",
+      "checklist_id": "a4ebf823-c29e-423d-a39c-73dcffff4b28",
+      "checklist_number": "EE-INST-20261022-0019",
+      "metadata": {
+        "alert_id": "c9706131-1691-4230-a358-8ac8f7abc14c",
+        "category": "Late Completion Recorded",
+        "client_name": "Express Cargo Logistics Ltd",
+        "client_location": "Peenya Industrial Area, Bangalore",
+        "technician_name": "Mathi",
+        "scheduled_start_date": "2026-10-18",
+        "scheduled_end_date": "2026-10-18",
+        "actual_completion_at": "2026-10-22T04:15:33.316Z",
+        "post_installation_submitted_at": "2026-10-22T04:15:33.316Z",
+        "link": "/admin/workspaces/hr?tab=overdue&checklistId=a4ebf823-c29e-423d-a39c-73dcffff4b28"
+      },
+      "is_read": true,
+      "created_at": "2026-10-22T04:15:33.537Z"
+    },
+    {
+      "id": "20b00d87-604e-472f-8619-3cd380d5c079",
+      "target_role": "COORDINATOR",
+      "target_user_id": null,
+      "title": "Return ticket task created — awaiting technician booking",
+      "message": "Installation completed for checklist EE-INST-20261022-0019 (Express Cargo Logistics Ltd). Return-ticket booking task created and awaiting technician booking & verification. Completed: 2026-10-22T04:15:33.316Z",
+      "type": "RETURN_TICKET_AWAITING_BOOKING",
+      "checklist_id": "a4ebf823-c29e-423d-a39c-73dcffff4b28",
+      "checklist_number": "EE-INST-20261022-0019",
+      "metadata": {
+        "task_id": "RET-TASK-EE-INST-20261022-0019",
+        "checklist_id": "a4ebf823-c29e-423d-a39c-73dcffff4b28",
+        "checklist_number": "EE-INST-20261022-0019",
+        "client_name": "Express Cargo Logistics Ltd",
+        "location": "Peenya Industrial Area, Bangalore",
+        "technician_name": "Mathi",
+        "actual_completion_datetime": "2026-10-22T04:15:33.316Z",
+        "report_submission_datetime": "2026-10-22T04:15:33.316Z",
+        "urgency": "Overdue",
+        "booking_link": "/coordinator?view=a4ebf823-c29e-423d-a39c-73dcffff4b28&action=return_ticket"
+      },
+      "is_read": true,
+      "created_at": "2026-10-22T04:15:37.128Z"
+    },
+    {
+      "id": "5e841325-d861-4d4c-9690-860894cdd763",
+      "target_role": "TECHNICAL",
+      "target_user_id": "e1000000-0000-0000-0000-000000000001",
+      "title": "Return ticket booking required",
+      "message": "Installation completed for checklist EE-INST-20261022-0019 (Express Cargo Logistics Ltd). Please book your return ticket and submit details for coordinator verification.",
+      "type": "RETURN_TICKET_BOOKING_REQUIRED",
+      "checklist_id": "a4ebf823-c29e-423d-a39c-73dcffff4b28",
+      "checklist_number": "EE-INST-20261022-0019",
+      "metadata": {
+        "task_id": "RET-TASK-EE-INST-20261022-0019",
+        "checklist_id": "a4ebf823-c29e-423d-a39c-73dcffff4b28",
+        "checklist_number": "EE-INST-20261022-0019",
+        "client_name": "Express Cargo Logistics Ltd",
+        "location": "Peenya Industrial Area, Bangalore",
+        "actual_completion_datetime": "2026-10-22T04:15:33.316Z"
+      },
+      "is_read": true,
+      "created_at": "2026-10-22T04:15:37.329Z"
+    },
+    {
+      "id": "c996ec38-953d-4840-ade8-9db90c9df632",
+      "target_role": "COORDINATOR",
+      "target_user_id": null,
+      "title": "Return ticket task created — awaiting technician booking",
+      "message": "Installation completed for checklist EE-ACCP-1792646049369-88 (Main Alpha Fleet). Return-ticket booking task created and awaiting technician booking & verification. Completed: 2026-10-22T05:14:21.680Z",
+      "type": "RETURN_TICKET_AWAITING_BOOKING",
+      "checklist_id": "59f6985a-5010-4f95-9caa-eafff226b8f4",
+      "checklist_number": "EE-ACCP-1792646049369-88",
+      "metadata": {
+        "task_id": "RET-TASK-EE-ACCP-1792646049369-88",
+        "checklist_id": "59f6985a-5010-4f95-9caa-eafff226b8f4",
+        "checklist_number": "EE-ACCP-1792646049369-88",
+        "client_name": "Main Alpha Fleet",
+        "location": "Central Distribution Hub, Chennai",
+        "technician_name": "Mathi",
+        "actual_completion_datetime": "2026-10-22T05:14:21.680Z",
+        "report_submission_datetime": "2026-10-22T05:14:21.680Z",
+        "urgency": "Normal",
+        "booking_link": "/coordinator?view=59f6985a-5010-4f95-9caa-eafff226b8f4&action=return_ticket"
+      },
+      "is_read": true,
+      "created_at": "2026-10-22T05:14:24.960Z"
+    },
+    {
+      "id": "176867a5-2d9e-4e53-800e-9b99eb4effcd",
+      "target_role": "TECHNICAL",
+      "target_user_id": "e1000000-0000-0000-0000-000000000001",
+      "title": "Return ticket booking required",
+      "message": "Installation completed for checklist EE-ACCP-1792646049369-88 (Main Alpha Fleet). Please book your return ticket and submit details for coordinator verification.",
+      "type": "RETURN_TICKET_BOOKING_REQUIRED",
+      "checklist_id": "59f6985a-5010-4f95-9caa-eafff226b8f4",
+      "checklist_number": "EE-ACCP-1792646049369-88",
+      "metadata": {
+        "task_id": "RET-TASK-EE-ACCP-1792646049369-88",
+        "checklist_id": "59f6985a-5010-4f95-9caa-eafff226b8f4",
+        "checklist_number": "EE-ACCP-1792646049369-88",
+        "client_name": "Main Alpha Fleet",
+        "location": "Central Distribution Hub, Chennai",
+        "actual_completion_datetime": "2026-10-22T05:14:21.680Z"
+      },
+      "is_read": true,
+      "created_at": "2026-10-22T05:14:25.153Z"
+    },
+    {
+      "id": "6d1c85a2-b696-4c36-865c-5985d5f2721a",
+      "target_role": "COORDINATOR",
+      "target_user_id": null,
+      "title": "Post-Installation Report Submitted",
+      "message": "Technician Kamalesh has submitted the post-installation report for checklist EE-TEST-ERR. Please review the report and return-ticket details.",
+      "type": "POST_INSTALLATION_REPORT_SUBMITTED",
+      "checklist_id": "invalid-endpoint-test-id",
+      "checklist_number": "EE-TEST-ERR",
+      "metadata": {
+        "task_type": "POST_INSTALLATION_REPORT",
+        "checklist_id": "invalid-endpoint-test-id",
+        "checklist_number": "EE-TEST-ERR",
+        "client_name": "",
+        "technician_name": "Kamalesh",
+        "submitted_at": "2026-10-22T05:44:28.126Z",
+        "actual_completion_datetime": "2026-10-22T05:44:28.126Z",
+        "action_label": "Review Report",
+        "action_url": "/coordinator?tab=return&checklist=invalid-endpoint-test-id&openReport=true",
+        "idempotency_key": "post-install-report-invalid-endpoint-test-id"
+      },
+      "is_read": true,
+      "created_at": "2026-10-22T05:44:28.340Z"
+    }
+  ],
+  "updated_at": "2026-10-22T05:53:20.826Z"
 }

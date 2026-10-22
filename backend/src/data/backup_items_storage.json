@@ -1,5 +1,79 @@
 {
-  "declarations": {},
-  "verifiedReturns": {},
-  "updated_at": "2026-10-21T12:08:56.896Z"
+  "declarations": {
+    "59f6985a-5010-4f95-9caa-eafff226b8f4": {
+      "id": "e3d657ed-d8e1-4725-a16f-cdbbdd70d777",
+      "checklist_id": "59f6985a-5010-4f95-9caa-eafff226b8f4",
+      "technician_id": null,
+      "technician_name": "Mathi",
+      "has_backup_items": true,
+      "no_items_reason": null,
+      "status": "DECLARED",
+      "declaration_timestamp": "2026-10-22T05:14:10.659+00:00",
+      "history": [],
+      "created_at": "2026-10-22T05:14:10.659+00:00",
+      "updated_at": "2026-10-22T05:14:10.659+00:00",
+      "items": [
+        {
+          "id": "708f0237-06db-4f41-833e-f684758db87c",
+          "declaration_id": "e3d657ed-d8e1-4725-a16f-cdbbdd70d777",
+          "checklist_id": "59f6985a-5010-4f95-9caa-eafff226b8f4",
+          "item_id": "c0b6eb5f-5aa8-4c7f-92ea-e9607ef58348",
+          "item_name": "Camera",
+          "item_sku": null,
+          "quantity": 6,
+          "unit": "Nos.",
+          "quantity_issued": 0,
+          "quantity_used": 0,
+          "quantity_returned": 0,
+          "quantity_damaged": 0,
+          "quantity_missing": 0,
+          "discrepancy_reason": null,
+          "created_at": "2026-10-22T05:14:10.659+00:00",
+          "updated_at": "2026-10-22T05:14:10.659+00:00",
+          "category": "Device Component"
+        },
+        {
+          "id": "650f8e5e-3d7d-47e0-8dbd-059a84fc7f7c",
+          "declaration_id": "e3d657ed-d8e1-4725-a16f-cdbbdd70d777",
+          "checklist_id": "59f6985a-5010-4f95-9caa-eafff226b8f4",
+          "item_id": "e0c90630-8410-4f6a-8b3b-edc1af9df3e0",
+          "item_name": "Live Display",
+          "item_sku": null,
+          "quantity": 2,
+          "unit": "Nos.",
+          "quantity_issued": 0,
+          "quantity_used": 0,
+          "quantity_returned": 0,
+          "quantity_damaged": 0,
+          "quantity_missing": 0,
+          "discrepancy_reason": null,
+          "created_at": "2026-10-22T05:14:10.659+00:00",
+          "updated_at": "2026-10-22T05:14:10.659+00:00",
+          "category": "Device Component"
+        },
+        {
+          "id": "911de989-cc26-431d-9597-355db636ef21",
+          "declaration_id": "e3d657ed-d8e1-4725-a16f-cdbbdd70d777",
+          "checklist_id": "59f6985a-5010-4f95-9caa-eafff226b8f4",
+          "item_id": "ce30f975-1ac9-43ef-bb90-e4f1e4f0e611",
+          "item_name": "0.5 mm Wire",
+          "item_sku": null,
+          "quantity": 15.5,
+          "unit": "Metres",
+          "quantity_issued": 0,
+          "quantity_used": 0,
+          "quantity_returned": 0,
+          "quantity_damaged": 0,
+          "quantity_missing": 0,
+          "discrepancy_reason": null,
+          "created_at": "2026-10-22T05:14:10.659+00:00",
+          "updated_at": "2026-10-22T05:14:10.659+00:00",
+          "category": "Installation Material"
+        }
+      ],
+      "sales_expected": false
+    }
+  },
+  "verifiedReturns": [],
+  "updated_at": "2026-10-22T05:14:11.282Z"
 }

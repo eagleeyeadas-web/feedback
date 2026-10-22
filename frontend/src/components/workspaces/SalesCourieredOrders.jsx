@@ -65,10 +65,15 @@ export default function SalesCourieredOrders({ token, onSelectChecklist }) {
     setTimeout(() => setToastMsg(''), 4500);
   };
 
+  const getTodayDate = () => {
+    return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+  };
+
   const getTomorrowDate = () => {
-    const today = new Date();
-    today.setDate(today.getDate() + 1);
-    return today.toISOString().split('T')[0];
+    const todayStr = getTodayDate();
+    const [y, m, d] = todayStr.split('-').map(Number);
+    const tomorrow = new Date(Date.UTC(y, m - 1, d + 1));
+    return tomorrow.toISOString().split('T')[0];
   };
 
   const loadOrders = useCallback(async () => {
@@ -737,7 +742,7 @@ export default function SalesCourieredOrders({ token, onSelectChecklist }) {
                   <input
                     type="date"
                     required
-                    min={getTomorrowDate()}
+                    min={getTodayDate()}
                     value={scheduleModal.expected_arrival_date}
                     onChange={(e) => {
                       const val = e.target.value;
@@ -746,7 +751,7 @@ export default function SalesCourieredOrders({ token, onSelectChecklist }) {
                     }}
                     className="w-full p-2.5 border border-gray-200 rounded-xl font-medium focus:outline-none focus:border-indigo-500"
                   />
-                  <span className="text-[10px] text-gray-400 mt-1 block">Tomorrow or later</span>
+                  <span className="text-[10px] text-gray-400 mt-1 block">Today or later (same-day urgent fixes permitted)</span>
                 </div>
 
                 <div>

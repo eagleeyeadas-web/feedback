@@ -152,7 +152,7 @@ export default function PushNotificationManager({ compact = false }) {
 
       {/* Dropdown Panel */}
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-80 sm:w-96 rounded-2xl bg-white shadow-2xl border border-gray-200 z-50 p-4 text-xs font-sans animate-in fade-in zoom-in-95 duration-100">
+        <div className="absolute right-0 mt-2 w-[calc(100vw-20px)] max-w-xs sm:w-96 rounded-2xl bg-white shadow-2xl border border-gray-200 z-50 p-4 text-xs font-sans animate-in fade-in zoom-in-95 duration-100">
           {/* Header */}
           <div className="flex items-center justify-between pb-3 border-b border-gray-100">
             <div className="flex items-center gap-2">

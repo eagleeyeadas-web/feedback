@@ -513,3 +513,138 @@ export async function getNotificationHistory(limit = 50) {
   merged.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
   return merged.slice(0, limit);
 }
+
+/**
+ * Trigger Web Push notification to Coordinator when a Post-Installation Report is submitted
+ * Follows all acceptance criteria:
+ * - Clear title: "Post-Installation Report Submitted"
+ * - Concise, privacy-safe message (no private customer details or expense details on lock screen)
+ * - Clickable destination: links to report / return ticket in Coordinator Workspace
+ * - Restricted to authorized COORDINATOR subscriptions
+ * - Idempotent (stable event identifier prevents duplicate push on retries)
+ * - Non-blocking (push failure never disrupts or reverts saved report)
+ */
+export async function notifyCoordinatorReportSubmitted({
+  checklist,
+  report = null,
+  technicianName = null,
+  submissionTime = null,
+  force = false,
+}) {
+  if (!checklist || (!checklist.id && !checklist.checklist_number)) {
+    return { skipped: true, reason: 'Invalid checklist data' };
+  }
+
+  const checklistId = checklist.id;
+  const checklistNumber = checklist.checklist_number || `INST-${checklistId?.slice(0, 8)}`;
+  const eventId = `post-install-push-${checklistId || checklistNumber}`;
+
+  // Idempotency check: Skip duplicate dispatch if already handled
+  if (processedEventIds.has(eventId) && !force) {
+    console.log(`[PUSH_SERVICE] Notification event ${eventId} already processed. Skipping duplicate.`);
+    return { skipped: true, reason: 'Duplicate event already dispatched' };
+  }
+  processedEventIds.add(eventId);
+
+  // Filter for active Coordinator subscriptions only
+  const allSubscriptions = await getAllActiveSubscriptions();
+  const coordinatorSubs = allSubscriptions.filter((s) => {
+    if (!s.is_active) return false;
+    const role = s.user_role ? String(s.user_role).toUpperCase() : '';
+    const email = s.user_email ? String(s.user_email).toLowerCase() : '';
+    return role === 'COORDINATOR' || (role === '' && email.includes('coordinator'));
+  });
+
+  if (coordinatorSubs.length === 0) {
+    console.log('[PUSH_SERVICE] No active coordinator push subscriptions registered. Push notification skipped.');
+    return { skipped: true, reason: 'No active coordinator subscriptions' };
+  }
+
+  const techName = technicianName || checklist.service_engineer || 'Technician';
+  const title = 'Post-Installation Report Submitted';
+  const body = `Technician ${techName} has submitted the post-installation report for checklist ${checklistNumber}. Please review the report and return-ticket details.`;
+
+  const targetUrl = `/coordinator?tab=return&checklist=${checklistId}&openReport=true`;
+
+  const pushPayload = {
+    title,
+    body,
+    icon: '/icon-192.png',
+    badge: '/icon-192.png',
+    tag: `post-install-${checklistId || checklistNumber}`,
+    renotify: true,
+    data: {
+      url: targetUrl,
+      checklistId,
+      checklistNumber,
+      action: 'review_report',
+      timestamp: Date.now(),
+    },
+  };
+
+  console.log(`[PUSH_SERVICE] Dispatching coordinator push notification for ${checklistNumber} to ${coordinatorSubs.length} subscriber(s)...`);
+
+  const deliveryPromises = coordinatorSubs.map((sub) => sendPushNotification(sub, pushPayload));
+  const results = await Promise.allSettled(deliveryPromises);
+
+  let succeeded = 0;
+  let failed = 0;
+  const deliveryDetails = [];
+
+  results.forEach((res, idx) => {
+    const sub = coordinatorSubs[idx];
+    if (res.status === 'fulfilled' && res.value.success) {
+      succeeded++;
+      deliveryDetails.push({
+        userId: sub.user_id,
+        userEmail: sub.user_email,
+        status: 'SUCCESS',
+        statusCode: res.value.statusCode,
+      });
+    } else {
+      failed++;
+      deliveryDetails.push({
+        userId: sub.user_id,
+        userEmail: sub.user_email,
+        status: 'FAILED',
+        error: res.value?.error || res.reason?.message || 'Delivery error',
+        statusCode: res.value?.statusCode || 0,
+      });
+    }
+  });
+
+  console.log(`[PUSH_SERVICE] Coordinator dispatch complete for ${checklistNumber}: ${succeeded} succeeded, ${failed} failed`);
+
+  const historyRecord = {
+    id: uuidv4(),
+    event_id: eventId,
+    checklist_id: checklistId || null,
+    checklist_number: checklistNumber,
+    title,
+    body,
+    url: targetUrl,
+    recipients_attempted: coordinatorSubs.length,
+    recipients_succeeded: succeeded,
+    recipients_failed: failed,
+    delivery_details: deliveryDetails,
+    created_at: new Date().toISOString(),
+  };
+
+  inMemoryHistory.push(historyRecord);
+  saveHistoryStorage();
+
+  try {
+    await supabase.from('push_notification_history').insert([historyRecord]);
+  } catch (err) {
+    // Non-blocking
+  }
+
+  return {
+    success: true,
+    eventId,
+    attempted: coordinatorSubs.length,
+    succeeded,
+    failed,
+    historyId: historyRecord.id,
+  };
+}

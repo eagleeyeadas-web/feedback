@@ -28,10 +28,18 @@ export const inMemoryChecklistBomSnapshots = new Map();
 export const inMemoryChecklistSchedules = new Map();
 
 /**
+ * Calculate today date string YYYY-MM-DD based on configured business timezone
+ */
+export function getBusinessToday(timeZone = config?.timezone || 'Asia/Kolkata', date = new Date()) {
+  const d = date instanceof Date ? date : new Date(date);
+  return d.toLocaleDateString('en-CA', { timeZone });
+}
+
+/**
  * Calculate tomorrow date string YYYY-MM-DD based on configured business timezone
  */
 export function getBusinessTomorrow(timeZone = config?.timezone || 'Asia/Kolkata', date = new Date()) {
-  const todayStr = (date instanceof Date ? date : new Date(date)).toLocaleDateString('en-CA', { timeZone });
+  const todayStr = getBusinessToday(timeZone, date);
   const [y, m, d] = todayStr.split('-').map(Number);
   const tomorrowDate = new Date(Date.UTC(y, m - 1, d + 1));
   return tomorrowDate.toISOString().split('T')[0];
@@ -114,14 +122,17 @@ export async function generateInstallationChecklistNumber() {
  * Create a new Installation Checklist
  */
 export async function createChecklist(adminUserId, data, options = {}) {
-  // Strict next-day-only work-start booking rule
-  // Sales can create and submit a new installation or service checklist only when its work starting date is exactly tomorrow
-  if (options?.enforceNextDayBooking || data?.enforceNextDayBooking) {
-    const businessTomorrow = getBusinessTomorrow(config?.timezone);
-    if (data.expected_arrival_date !== businessTomorrow) {
-      const err = new Error('Jobs can only be scheduled to start tomorrow. Advance pre-booking is not allowed.');
-      err.statusCode = 400;
-      throw err;
+  // Work-start date booking rule:
+  // Sales can create and submit a new installation or service checklist starting today (urgent same-day) or any future date.
+  // Past dates are strictly rejected.
+  if (options?.enforceDateValidation || options?.enforceNextDayBooking || data?.enforceDateValidation || data?.enforceNextDayBooking) {
+    if (data.expected_arrival_date) {
+      const businessToday = getBusinessToday(config?.timezone);
+      if (data.expected_arrival_date < businessToday) {
+        const err = new Error('Installation jobs cannot be scheduled in the past. Please select today or a future date.');
+        err.statusCode = 400;
+        throw err;
+      }
     }
   }
 
@@ -659,7 +670,9 @@ export async function getChecklistById(id, { enrich = true } = {}) {
   const { data, error } = await query.maybeSingle();
 
   if (error || !data) {
-    throw new Error('Installation checklist not found');
+    const notFoundErr = new Error('Installation checklist not found');
+    notFoundErr.statusCode = 404;
+    throw notFoundErr;
   }
 
   const normalized = normalizeChecklistDeviceConfigs(data);
@@ -740,11 +753,11 @@ export async function updateChecklist(id, data) {
     }
   }
 
-  // If work starting date is being scheduled or changed, enforce strict next-day-only work-start booking rule
+  // If work starting date is being scheduled or changed, start date must be today or future date
   if (newStartDate && newStartDate !== existing.expected_arrival_date && newStatus !== 'Assign Later') {
-    const businessTomorrow = getBusinessTomorrow(config?.timezone);
-    if (newStartDate !== businessTomorrow) {
-      const err = new Error('Jobs can only be scheduled to start tomorrow. Advance pre-booking is not allowed.');
+    const businessToday = getBusinessToday(config?.timezone);
+    if (newStartDate < businessToday) {
+      const err = new Error('Installation jobs cannot be scheduled in the past. Please select today or a future date.');
       err.statusCode = 400;
       throw err;
     }

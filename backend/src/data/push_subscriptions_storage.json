@@ -59,7 +59,37 @@
       "created_at": "2026-10-21T12:59:01.781Z",
       "updated_at": "2026-10-21T12:59:01.781Z",
       "last_used_at": "2026-10-21T12:59:01.781Z"
+    },
+    {
+      "id": "146a1f2b-58da-48b3-be86-f4080467d8c0",
+      "user_id": "b641c67b-2707-4fda-a251-3f2610ba063f",
+      "user_email": "coordinator@example.com",
+      "user_role": "COORDINATOR",
+      "endpoint": "https://fcm.googleapis.com/fcm/send/test-coordinator-1792647867190",
+      "p256dh": "BNcRdreALRFXTkOOUHK1EtK2wtaz5Ry4YfYCA_0QT9t04kn8-pcWJDa5EmfZQgGaWObyLwhFlatqhAhY-JUAUhQ",
+      "auth": "tBHItJI5svbpez7KI4CCXg",
+      "user_agent": null,
+      "device_type": "Other",
+      "is_active": true,
+      "created_at": "2026-10-22T05:44:27.190Z",
+      "updated_at": "2026-10-22T05:44:27.190Z",
+      "last_used_at": "2026-10-22T05:44:27.190Z"
+    },
+    {
+      "id": "e560d928-1f04-46ac-9098-71b5cb8cb054",
+      "user_id": "8242b3cd-ba5f-4149-bbc6-a3a30738485d",
+      "user_email": "coordinator@example.com",
+      "user_role": "COORDINATOR",
+      "endpoint": "https://fcm.googleapis.com/fcm/send/test-coordinator-1792648398871",
+      "p256dh": "BNcRdreALRFXTkOOUHK1EtK2wtaz5Ry4YfYCA_0QT9t04kn8-pcWJDa5EmfZQgGaWObyLwhFlatqhAhY-JUAUhQ",
+      "auth": "tBHItJI5svbpez7KI4CCXg",
+      "user_agent": null,
+      "device_type": "Other",
+      "is_active": true,
+      "created_at": "2026-10-22T05:53:18.872Z",
+      "updated_at": "2026-10-22T05:53:18.872Z",
+      "last_used_at": "2026-10-22T05:53:18.872Z"
     }
   ],
-  "updated_at": "2026-10-21T12:59:01.969Z"
+  "updated_at": "2026-10-22T05:53:19.135Z"
 }

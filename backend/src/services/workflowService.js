@@ -1054,6 +1054,21 @@ export async function submitInstallationCompletionReport(param1, param2) {
     completeEngineerBookingByChecklistId(checklist_id, now);
   } catch (e) {}
 
+  // Stage 3 Notification: Trigger persistent & real-time Coordinator notification for Post-Installation Report
+  try {
+    const { notifyCoordinatorOnPostInstallationReport } = await import('./coordinatorBookingService.js');
+    await notifyCoordinatorOnPostInstallationReport({
+      checklist,
+      report: savedReport,
+      technicianName: checklist.service_engineer || user?.full_name || user?.name || user?.email || 'Technician',
+      user,
+      submissionTime,
+      actualCompletionDatetime: now,
+    });
+  } catch (notifErr) {
+    console.warn('[WORKFLOW] Coordinator post-installation notification error (report safely saved):', notifErr.message);
+  }
+
   // Requirement 4: Trigger Return Ticket Booking Task for Coordinator
   try {
     const { triggerReturnTicketBookingTask } = await import('./coordinatorBookingService.js');

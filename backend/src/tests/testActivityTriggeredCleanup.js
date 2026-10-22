@@ -262,14 +262,13 @@ async function runActivityTriggeredCleanupTestSuite() {
   const expiredPdfStillInStorage = storageExpired && storageExpired.some(f => f.name === `test_act_expired_${timestamp}.pdf`);
   assert(!expiredPdfStillInStorage, 'Expired physical PDF (> 20 days) was deleted from storage');
 
-  // Verify expired DB record PRESERVED with pdf_path = null
-  const { data: expDbCheck } = await supabase.from('quotations').select('id, quotation_number, pdf_path').eq('id', expQuotation.id).single();
-  assert(expDbCheck !== null, 'Expired quotation database record was PRESERVED');
-  assert(expDbCheck.pdf_path === null, 'Expired quotation pdf_path was updated to null');
+  // Verify expired DB record PERMANENTLY DELETED
+  const { data: expDbCheck } = await supabase.from('quotations').select('id, quotation_number, pdf_path').eq('id', expQuotation.id).maybeSingle();
+  assert(expDbCheck === null, 'Expired quotation database record was PERMANENTLY DELETED');
 
-  // Verify quotation items PRESERVED
+  // Verify quotation items deleted
   const { data: itemsCheck } = await supabase.from('quotation_items').select('id').eq('quotation_id', expQuotation.id);
-  assert(itemsCheck && itemsCheck.length === 1, 'Quotation line items preserved and intact');
+  assert(!itemsCheck || itemsCheck.length === 0, 'Quotation line items permanently deleted');
 
   // Verify active quotation (< 20 days) PRESERVED in storage
   const { data: storageActive } = await supabase.storage.from('pdfs').list('quotations', { search: `test_act_active_${timestamp}.pdf` });

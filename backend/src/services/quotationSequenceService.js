@@ -1,8 +1,20 @@
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import supabase from './supabase.js';
 
-const SEQUENCE_FILE_PATH = path.resolve(process.cwd(), 'assets/quotation_sequence.json');
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+function getCandidateSequenceFilePaths() {
+  const paths = [
+    path.resolve(process.cwd(), 'assets/quotation_sequence.json'),
+    path.resolve(process.cwd(), 'backend/assets/quotation_sequence.json'),
+    path.resolve(__dirname, '../../assets/quotation_sequence.json'),
+    path.resolve(__dirname, '../../../assets/quotation_sequence.json'),
+  ];
+  return Array.from(new Set(paths));
+}
 
 // In-memory mutex lock for atomic sequence operations
 let isLockAcquired = false;
@@ -29,35 +41,41 @@ function releaseLock() {
 }
 
 /**
- * Reads local sequence backup file
+ * Reads local sequence backup file across candidate project locations
  */
 function readLocalSequence() {
-  try {
-    if (fs.existsSync(SEQUENCE_FILE_PATH)) {
-      const content = fs.readFileSync(SEQUENCE_FILE_PATH, 'utf-8');
-      const parsed = JSON.parse(content);
-      if (parsed && typeof parsed.last_value === 'number') {
-        return parsed.last_value;
+  let highest = 238;
+  const paths = getCandidateSequenceFilePaths();
+  for (const p of paths) {
+    try {
+      if (fs.existsSync(p)) {
+        const content = fs.readFileSync(p, 'utf-8');
+        const parsed = JSON.parse(content);
+        if (parsed && typeof parsed.last_value === 'number' && parsed.last_value > highest) {
+          highest = parsed.last_value;
+        }
       }
+    } catch {
+      // ignore
     }
-  } catch (err) {
-    console.warn('Could not read local sequence file:', err.message);
   }
-  return 238; // Default baseline (so next is CQS/00239)
+  return highest;
 }
 
 /**
- * Writes local sequence backup file
+ * Writes local sequence backup file to all candidate project locations
  */
 function writeLocalSequence(val) {
-  try {
-    const dir = path.dirname(SEQUENCE_FILE_PATH);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
+  const paths = getCandidateSequenceFilePaths();
+  for (const p of paths) {
+    try {
+      const dir = path.dirname(p);
+      if (fs.existsSync(dir)) {
+        fs.writeFileSync(p, JSON.stringify({ last_value: val, updated_at: new Date().toISOString() }, null, 2));
+      }
+    } catch {
+      // ignore
     }
-    fs.writeFileSync(SEQUENCE_FILE_PATH, JSON.stringify({ last_value: val, updated_at: new Date().toISOString() }, null, 2));
-  } catch (err) {
-    console.warn('Could not write local sequence file:', err.message);
   }
 }
 
@@ -128,7 +146,10 @@ async function getHighestSequenceValueInternal() {
     writeLocalSequence(dbSeqVal);
   }
 
-  const highest = Math.max(dbSeqVal > 0 ? dbSeqVal : localVal, dbMaxVal, 238);
+  const highest = Math.max(dbSeqVal > 0 ? dbSeqVal : localVal, dbMaxVal, localVal, 238);
+  if (highest > localVal) {
+    writeLocalSequence(highest);
+  }
   return highest;
 }
 

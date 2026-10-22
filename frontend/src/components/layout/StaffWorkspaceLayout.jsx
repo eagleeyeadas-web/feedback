@@ -31,14 +31,14 @@ export default function StaffWorkspaceLayout({
     <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* 1. Header Navigation Bar */}
       <header className="bg-white border-b border-gray-200 sticky top-0 z-40 shadow-xs">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-2.5 sm:py-3 flex items-center justify-between gap-4">
+        <div className="max-w-7xl mx-auto px-2.5 sm:px-6 py-2 sm:py-3 flex items-center justify-between gap-2 sm:gap-4">
           {/* Brand & Department Badge */}
-          <div className="flex items-center gap-3 min-w-0">
-            <Link to="/" className="flex items-center gap-2.5 shrink-0 group">
+          <div className="flex items-center gap-1.5 sm:gap-3 min-w-0">
+            <Link to="/" className="flex items-center gap-2 shrink-0 group">
               <img
                 src="/logo.png"
                 alt="Eagle Eye SafDrive"
-                className="h-8 sm:h-9 w-auto object-contain transition-transform group-hover:scale-105"
+                className="h-7 sm:h-9 w-auto object-contain transition-transform group-hover:scale-105 shrink-0"
                 onError={(e) => {
                   e.target.style.display = 'none';
                 }}
@@ -56,18 +56,18 @@ export default function StaffWorkspaceLayout({
             <div className="h-5 w-px bg-gray-200 hidden sm:block" />
 
             {/* Department Workspace Indicator */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center min-w-0">
               <span
-                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold border ${badgeColorClass}`}
+                className={`inline-flex items-center gap-1 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-md text-[11px] sm:text-xs font-bold border truncate ${badgeColorClass}`}
               >
-                {IconComponent && <IconComponent size={14} className="shrink-0" />}
-                <span>{departmentBadge || title}</span>
+                {IconComponent && <IconComponent size={13} className="shrink-0" />}
+                <span className="truncate max-w-[95px] xs:max-w-[140px] sm:max-w-none">{departmentBadge || title}</span>
               </span>
             </div>
           </div>
 
           {/* Right Action Area: User Identity & Sign Out */}
-          <div className="flex items-center gap-3 shrink-0">
+          <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
             {/* User & Role Badge */}
             <div className="hidden md:flex flex-col items-end text-right">
               <span className="text-xs font-bold text-gray-800 leading-tight truncate max-w-[220px]">
@@ -84,7 +84,7 @@ export default function StaffWorkspaceLayout({
 
             {/* Mobile simplified role badge */}
             <span
-              className={`md:hidden text-[10px] font-bold px-2 py-0.5 rounded border uppercase ${
+              className={`md:hidden text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase shrink-0 ${
                 roleBadgeColors[role] || 'bg-gray-100 text-gray-700'
               }`}
             >
@@ -92,14 +92,14 @@ export default function StaffWorkspaceLayout({
             </span>
 
             {/* Mobile Push Notification Preferences / Toggle */}
-            <PushNotificationManager />
+            <PushNotificationManager compact={true} />
 
             {/* Sign Out Button */}
             <button
               type="button"
               onClick={handleSignOut}
               title="Sign Out of Workspace"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-gray-700 hover:text-red-700 hover:bg-red-50 border border-gray-200 hover:border-red-200 transition-all cursor-pointer shadow-2xs"
+              className="inline-flex items-center justify-center gap-1.5 p-1.5 sm:px-3 sm:py-1.5 rounded-lg text-xs font-semibold text-gray-700 hover:text-red-700 hover:bg-red-50 border border-gray-200 hover:border-red-200 transition-all cursor-pointer shadow-2xs shrink-0"
             >
               <LogOut size={14} />
               <span className="hidden sm:inline">Sign Out</span>
@@ -112,7 +112,7 @@ export default function StaffWorkspaceLayout({
       </header>
 
       {/* 2. Main Content Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8">
+      <main className="flex-1 max-w-7xl w-full mx-auto p-2.5 sm:p-6 lg:p-8">
         {children}
       </main>
 

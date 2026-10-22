@@ -26,7 +26,6 @@ import {
   X,
   Archive,
   Ticket,
-  Bus,
   MapPin,
 } from 'lucide-react';
 import InstallationCompletionModal from '../../../components/workspaces/InstallationCompletionModal';
@@ -335,22 +334,6 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
   const filteredAssignedJobs = allAssignedJobs.filter(matchesFilter);
   const filteredCompletedJobs = allCompletedJobs.filter(matchesFilter);
 
-  const pendingReturnCount = returnTicketTasks.filter(
-    (t) => t.return_status === 'Awaiting Technician Booking' || t.return_status === 'Needs Correction'
-  ).length;
-
-  const filteredReturnTicketTasks = returnTicketTasks.filter((t) => {
-    if (!search.trim()) return true;
-    const s = search.trim().toLowerCase();
-    return (
-      (t.checklist_number || '').toLowerCase().includes(s) ||
-      (t.client_name || '').toLowerCase().includes(s) ||
-      (t.client_location || '').toLowerCase().includes(s) ||
-      (t.return_operator || '').toLowerCase().includes(s) ||
-      (t.return_ticket_reference || '').toLowerCase().includes(s)
-    );
-  });
-
   // Dynamic Metrics Bar (Source of Truth counts)
   const assignedJobsCount = allAssignedJobs.length;
   const inProgressCount = checklists.filter(
@@ -369,7 +352,7 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
       )}
 
       {/* Header */}
-      <div className="bg-gradient-to-r from-purple-900 to-navy p-6 rounded-2xl text-white shadow-md flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="bg-gradient-to-r from-purple-900 to-navy p-6 rounded-2xl text-white shadow-md">
         <div>
           <span className="text-xs font-bold px-2.5 py-1 bg-purple-500/30 text-purple-200 rounded-md border border-purple-400/30 uppercase tracking-wider">
             Operational Workspace
@@ -377,45 +360,14 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
           <h1 className="text-2xl font-bold mt-2 flex items-center gap-2">
             <Wrench className="w-7 h-7 text-purple-400" /> Technical Team Job Workspace
           </h1>
-          <p className="text-xs text-white/70 mt-1 max-w-xl">
+          <p className="text-xs text-white/70 mt-1 max-w-2xl">
             Manage assigned installation jobs, view Sales device allocations, submit post-installation device reports, and view historical completed jobs.
           </p>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2 self-start md:self-auto">
-          <button
-            type="button"
-            onClick={() => setIsRestDayModalOpen(true)}
-            className="flex items-center gap-1.5 bg-purple-600/60 hover:bg-purple-600 text-white text-xs font-semibold px-3 py-2 rounded-xl border border-purple-400/40 transition-all cursor-pointer shadow-xs"
-            title="Request post-job or scheduled rest days"
-          >
-            <Coffee className="w-3.5 h-3.5 text-amber-300" />
-            <span>Request Rest Day</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setIsLeaveModalOpen(true)}
-            className="flex items-center gap-1.5 bg-indigo-600/60 hover:bg-indigo-600 text-white text-xs font-semibold px-3 py-2 rounded-xl border border-indigo-400/40 transition-all cursor-pointer shadow-xs"
-            title="Request casual or sick leave"
-          >
-            <Calendar className="w-3.5 h-3.5 text-blue-300" />
-            <span>Request Leave</span>
-          </button>
-
-          <button
-            onClick={loadData}
-            disabled={loading}
-            className="flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white text-xs font-semibold px-4 py-2 rounded-xl border border-white/20 transition-all cursor-pointer disabled:opacity-50"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-            <span>Refresh Jobs</span>
-          </button>
         </div>
       </div>
 
       {/* Metrics Bar */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div
           onClick={() => setActiveTab('assigned')}
           className={`bg-white p-5 rounded-xl border shadow-xs flex items-center gap-4 cursor-pointer transition-all ${
@@ -457,26 +409,6 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
           <div>
             <p className="text-xs text-gray-500 font-medium">Completed Jobs</p>
             <p className="text-2xl font-bold text-gray-900">{completedJobsCount}</p>
-          </div>
-        </div>
-
-        <div
-          onClick={() => setActiveTab('return_tickets')}
-          className={`bg-white p-5 rounded-xl border shadow-xs flex items-center gap-4 cursor-pointer transition-all ${
-            activeTab === 'return_tickets'
-              ? 'border-amber-500 ring-2 ring-amber-100 bg-amber-50/20'
-              : 'border-gray-200 hover:border-amber-300'
-          }`}
-        >
-          <div className="w-10 h-10 rounded-lg bg-amber-50 flex items-center justify-center text-amber-600">
-            <Ticket className="w-5 h-5" />
-          </div>
-          <div>
-            <p className="text-xs text-gray-500 font-medium">Return Ticket Tasks</p>
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-2xl font-bold text-gray-900">{pendingReturnCount}</span>
-              <span className="text-xs text-gray-400 font-semibold">/ {returnTicketTasks.length} total</span>
-            </div>
           </div>
         </div>
       </div>
@@ -570,36 +502,6 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
               {filteredCompletedJobs.length}
             </span>
           </button>
-
-          {/* Toggle: Return Ticket Tasks */}
-          <button
-            type="button"
-            id="toggle-return-ticket-tasks"
-            onClick={() => setActiveTab('return_tickets')}
-            className={`px-5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
-              activeTab === 'return_tickets'
-                ? 'bg-gradient-to-r from-purple-900 to-indigo-950 text-white shadow-md font-extrabold'
-                : 'text-gray-600 hover:text-gray-900 hover:bg-white/70'
-            }`}
-          >
-            <Ticket className={`w-3.5 h-3.5 ${activeTab === 'return_tickets' ? 'text-amber-300' : 'text-gray-400'}`} />
-            <span>Return Ticket Tasks</span>
-            {pendingReturnCount > 0 ? (
-              <span className="px-2 py-0.5 rounded-full text-[11px] font-extrabold bg-amber-500 text-white animate-pulse">
-                {pendingReturnCount}
-              </span>
-            ) : (
-              <span
-                className={`px-2.5 py-0.5 rounded-full text-[11px] font-extrabold ${
-                  activeTab === 'return_tickets'
-                    ? 'bg-purple-700/80 text-white border border-purple-400/30'
-                    : 'bg-gray-200 text-gray-700'
-                }`}
-              >
-                {returnTicketTasks.length}
-              </span>
-            )}
-          </button>
         </div>
 
         <div className="text-xs text-gray-500 font-medium">
@@ -608,15 +510,10 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
               Showing <strong className="text-gray-800">{filteredAssignedJobs.length}</strong> of{' '}
               <strong className="text-gray-800">{allAssignedJobs.length}</strong> assigned jobs
             </span>
-          ) : activeTab === 'completed' ? (
+          ) : (
             <span>
               Showing <strong className="text-gray-800">{filteredCompletedJobs.length}</strong> of{' '}
               <strong className="text-gray-800">{allCompletedJobs.length}</strong> completed jobs
-            </span>
-          ) : (
-            <span>
-              Showing <strong className="text-gray-800">{filteredReturnTicketTasks.length}</strong> of{' '}
-              <strong className="text-gray-800">{returnTicketTasks.length}</strong> return ticket tasks
             </span>
           )}
         </div>
@@ -1172,6 +1069,26 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
                               >
                                 <Receipt className="w-3.5 h-3.5 text-purple-600" /> Expenses
                               </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const task = returnTicketTasks.find((t) => t.checklist_id === item.id) || {
+                                    id: item.id,
+                                    checklist_id: item.id,
+                                    checklist_number: item.checklist_number,
+                                    client_name: item.client_name,
+                                    client_location: item.client_location,
+                                    service_engineer: item.service_engineer,
+                                    actual_completion_datetime: item.actual_completion_datetime || item.completion_date,
+                                    return_status: 'Awaiting Technician Booking',
+                                  };
+                                  setSelectedReturnTask(task);
+                                }}
+                                className="px-2.5 py-1 text-xs font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg flex items-center gap-1 cursor-pointer w-fit"
+                                title="Submit or review return journey ticket details for Coordinator verification"
+                              >
+                                <Ticket className="w-3.5 h-3.5 text-amber-600" /> Return Ticket
+                              </button>
                             </div>
 
                             <div className="flex items-center gap-2.5 text-[10px] mt-0.5 text-gray-500">
@@ -1207,181 +1124,7 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
         </div>
       )}
 
-      {/* SECTION 3: RETURN TICKET TASKS */}
-      {activeTab === 'return_tickets' && (
-        <div className="bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden">
-          <div className="p-4 border-b border-gray-200 bg-gray-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div>
-              <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
-                <Ticket className="w-4 h-4 text-amber-600" /> Return Journey Ticket Tasks
-              </h3>
-              <p className="text-[11px] text-gray-500 mt-0.5">
-                Book your return ticket after installation site completion and submit details for Coordinator verification.
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-gray-500 font-medium">
-                {filteredReturnTicketTasks.length} task(s)
-              </span>
-              <button
-                type="button"
-                onClick={loadData}
-                className="p-1.5 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition"
-                title="Refresh tasks"
-              >
-                <RefreshCw size={14} />
-              </button>
-            </div>
-          </div>
 
-          {loading ? (
-            <div className="p-12 text-center">
-              <div className="w-8 h-8 border-3 border-purple-600 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-              <p className="text-xs font-semibold text-gray-700">Loading Return Ticket Tasks...</p>
-            </div>
-          ) : filteredReturnTicketTasks.length === 0 ? (
-            <div className="p-12 text-center text-gray-400 space-y-3">
-              <Ticket className="w-12 h-12 text-gray-300 mx-auto" />
-              <p className="text-xs font-bold text-gray-700">No Return Ticket Tasks Found</p>
-              <p className="text-[11px] text-gray-400 max-w-sm mx-auto">
-                Return ticket booking tasks are automatically generated when you submit the Post-Installation Completion Form.
-              </p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse text-xs">
-                <thead>
-                  <tr className="border-b border-gray-200 bg-gray-50/70 text-[11px] font-bold text-gray-600 uppercase tracking-wider">
-                    <th className="py-3 px-4">Checklist & Customer</th>
-                    <th className="py-3 px-4">Completion Time</th>
-                    <th className="py-3 px-4">Return Journey Details</th>
-                    <th className="py-3 px-4">Status</th>
-                    <th className="py-3 px-4 text-right">Action</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {filteredReturnTicketTasks.map((t) => {
-                    const b = t.coordinator_booking || t;
-                    const isNeedsCorrection = t.return_status === 'Needs Correction';
-                    const isVerified = t.return_status === 'Verified/Completed';
-                    const isSubmitted = t.return_status === 'Submitted for Verification';
-                    const isAwaitingBooking = t.return_status === 'Awaiting Technician Booking' || (!isNeedsCorrection && !isVerified && !isSubmitted);
-
-                    return (
-                      <tr key={t.id || t.checklist_id} className={`hover:bg-gray-50/60 transition ${isNeedsCorrection ? 'bg-rose-50/30' : ''}`}>
-                        <td className="py-3 px-4">
-                          <div className="font-mono font-bold text-indigo-700 text-xs">
-                            {t.checklist_number}
-                          </div>
-                          <div className="font-bold text-gray-900 mt-0.5">{t.client_name}</div>
-                          <div className="text-[11px] text-gray-500 flex items-center gap-1 mt-0.5">
-                            <MapPin size={11} className="text-gray-400 shrink-0" />
-                            <span>{t.client_location || 'Site Location'}</span>
-                          </div>
-                        </td>
-
-                        <td className="py-3 px-4">
-                          <div className="font-semibold text-gray-800">
-                            {t.actual_completion_datetime
-                              ? new Date(t.actual_completion_datetime).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })
-                              : 'Site Work Completed'}
-                          </div>
-                          {t.return_submitted_at && (
-                            <div className="text-[10px] text-gray-400 mt-0.5">
-                              Submitted: {new Date(t.return_submitted_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                            </div>
-                          )}
-                        </td>
-
-                        <td className="py-3 px-4">
-                          {b.return_departure_datetime || b.return_operator ? (
-                            <div className="space-y-0.5">
-                              <div className="font-bold text-gray-900 flex items-center gap-1.5">
-                                <Bus size={12} className="text-indigo-600 shrink-0" />
-                                <span>{b.return_operator || 'Bus Service'} ({b.return_method || 'Bus'})</span>
-                              </div>
-                              <div className="text-gray-600 text-[11px]">
-                                {b.return_boarding_point || 'Boarding'} → {b.return_destination || 'Destination'}
-                              </div>
-                              <div className="text-gray-500 text-[10px]">
-                                Departure: {b.return_departure_datetime ? new Date(b.return_departure_datetime).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : 'TBD'}
-                              </div>
-                              {b.return_ticket_reference && (
-                                <div className="font-mono text-purple-700 text-[10px]">
-                                  Ref/PNR: {b.return_ticket_reference}
-                                </div>
-                              )}
-                              {b.return_attachment_url && (
-                                <a
-                                  href={b.return_attachment_url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-indigo-600 font-bold hover:underline inline-flex items-center gap-1 text-[10px]"
-                                >
-                                  <FileText size={10} />
-                                  <span>View Attachment</span>
-                                </a>
-                              )}
-                            </div>
-                          ) : (
-                            <span className="text-gray-400 italic text-[11px]">No booking details submitted yet</span>
-                          )}
-                        </td>
-
-                        <td className="py-3 px-4">
-                          <div className="space-y-1">
-                            <span
-                              className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider inline-block ${
-                                isVerified
-                                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
-                                  : isSubmitted
-                                  ? 'bg-blue-100 text-blue-800 border border-blue-200'
-                                  : isNeedsCorrection
-                                  ? 'bg-rose-100 text-rose-800 border border-rose-300 animate-pulse'
-                                  : 'bg-amber-100 text-amber-900 border border-amber-300'
-                              }`}
-                            >
-                              {t.return_status}
-                            </span>
-                            {isNeedsCorrection && t.return_correction_reason && (
-                              <div className="p-1.5 bg-rose-50 border border-rose-200 rounded text-[10px] text-rose-900 font-medium max-w-xs">
-                                <strong>Correction needed:</strong> {t.return_correction_reason}
-                              </div>
-                            )}
-                          </div>
-                        </td>
-
-                        <td className="py-3 px-4 text-right">
-                          <button
-                            type="button"
-                            onClick={() => setSelectedReturnTask(t)}
-                            className={`px-3 py-1.5 rounded-xl font-bold text-xs inline-flex items-center gap-1.5 transition cursor-pointer ${
-                              isNeedsCorrection
-                                ? 'bg-rose-600 hover:bg-rose-700 text-white shadow-xs'
-                                : isAwaitingBooking
-                                ? 'bg-amber-500 hover:bg-amber-600 text-white shadow-xs'
-                                : 'bg-gray-100 hover:bg-gray-200 text-gray-800'
-                            }`}
-                          >
-                            <Ticket size={12} />
-                            <span>
-                              {isNeedsCorrection
-                                ? 'Update & Resubmit'
-                                : isAwaitingBooking
-                                ? 'Book Return Ticket'
-                                : 'View Details'}
-                            </span>
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      )}
 
       {/* MODAL 2: Post-Installation Completion Form (Editable) */}
       {completionModalJob && (
@@ -1479,6 +1222,29 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
               <button
                 type="button"
                 onClick={() => {
+                  const targetJob = postInstallCompletedJob;
+                  setPostInstallCompletedJob(null);
+                  const task = returnTicketTasks.find((t) => t.checklist_id === targetJob.id) || {
+                    id: targetJob.id,
+                    checklist_id: targetJob.id,
+                    checklist_number: targetJob.checklist_number,
+                    client_name: targetJob.client_name,
+                    client_location: targetJob.client_location,
+                    service_engineer: targetJob.service_engineer,
+                    actual_completion_datetime: targetJob.actual_completion_datetime || targetJob.completion_date,
+                    return_status: 'Awaiting Technician Booking',
+                  };
+                  setSelectedReturnTask(task);
+                }}
+                className="w-full py-2 px-4 rounded-xl text-xs font-semibold text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200 transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <Ticket className="w-3.5 h-3.5 text-amber-600" />
+                <span>Book Return Ticket Details (If Coordinator Unavailable)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
                   setPostInstallCompletedJob(null);
                   showToast('Installation report saved. You can record expenses anytime from Completed Jobs.');
                 }}
@@ -1496,6 +1262,7 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
         <TechnicianExpenseModal
           checklist={expenseModalJob}
           token={token}
+          user={session?.user}
           onClose={() => setExpenseModalJob(null)}
           onSuccess={() => {
             showToast(`Expenses updated for ${expenseModalJob.checklist_number}!`);

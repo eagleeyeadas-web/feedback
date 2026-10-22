@@ -103,9 +103,9 @@ async function runCentralized20DayCleanupTestSuite() {
   }, null, 2));
 
   assert(cleanupResult.retentionDays === 20, 'Cleanup engine confirmed 20-day policy');
-  assert(cleanupResult.modules.quotations.dbRecordsPreserved === true, 'Database preservation flag confirmed true');
+  assert(cleanupResult.modules.quotations.permanentDeletion === true, 'Quotation permanent deletion flag confirmed true');
 
-  // --- Step 5: Verify Storage Object Deletion & DB Record Preservation ---
+  // --- Step 5: Verify Storage Object Deletion & DB Record Permanent Deletion ---
   console.log('\n--- Step 5: Verify Storage and Database Integrity ---');
 
   // Check Expired PDF in Storage (MUST BE GONE)
@@ -115,14 +115,13 @@ async function runCentralized20DayCleanupTestSuite() {
   const expiredPdfStillInStorage = storageListExpired && storageListExpired.some(f => f.name === `test_expired_${timestamp}.pdf`);
   assert(!expiredPdfStillInStorage, 'Physical expired PDF was deleted from Supabase Storage');
 
-  // Check Expired DB Record (MUST STILL EXIST with pdf_path = null)
-  const { data: expiredDbCheck } = await supabase.from('quotations').select('id, quotation_number, pdf_path').eq('id', expiredQuotation.id).single();
-  assert(expiredDbCheck !== null, 'Expired quotation database record was PRESERVED (not deleted)');
-  assert(expiredDbCheck.pdf_path === null, 'Expired quotation pdf_path was updated to null');
+  // Check Expired DB Record (MUST BE PERMANENTLY DELETED)
+  const { data: expiredDbCheck } = await supabase.from('quotations').select('id, quotation_number, pdf_path').eq('id', expiredQuotation.id).maybeSingle();
+  assert(expiredDbCheck === null, 'Expired quotation database record was PERMANENTLY DELETED');
 
-  // Check Expired Line Items (MUST STILL EXIST)
+  // Check Expired Line Items (MUST BE DELETED)
   const { data: itemsDbCheck } = await supabase.from('quotation_items').select('id').eq('quotation_id', expiredQuotation.id);
-  assert(itemsDbCheck && itemsDbCheck.length === 1, 'Expired quotation line items are completely intact');
+  assert(!itemsDbCheck || itemsDbCheck.length === 0, 'Expired quotation line items were completely deleted');
 
   // Check Active Quotation PDF in Storage (MUST STILL EXIST)
   const { data: storageListActive } = await supabase.storage.from('pdfs').list('quotations', {

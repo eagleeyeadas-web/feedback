@@ -1,3 +1,23 @@
 {
-  "alerts": []
+  "alerts": [
+    {
+      "id": "c9706131-1691-4230-a358-8ac8f7abc14c",
+      "checklist_id": "a4ebf823-c29e-423d-a39c-73dcffff4b28",
+      "checklist_number": "EE-INST-20261022-0019",
+      "client_name": "Express Cargo Logistics Ltd",
+      "client_location": "Peenya Industrial Area, Bangalore",
+      "technician_name": "Mathi",
+      "category": "Late Completion Recorded",
+      "scheduled_start_date": "2026-10-18",
+      "scheduled_end_date": "2026-10-18",
+      "actual_completion_at": "2026-10-22T04:15:33.316Z",
+      "post_installation_submitted_at": "2026-10-22T04:15:33.316Z",
+      "notification_sent": true,
+      "resolved": true,
+      "resolved_at": "2026-10-22T04:15:33.355Z",
+      "created_at": "2026-10-22T04:15:33.355Z",
+      "updated_at": "2026-10-22T04:15:33.355Z"
+    }
+  ],
+  "updated_at": "2026-10-22T04:15:33.533Z"
 }

@@ -78,9 +78,14 @@ function computeEndDate(startDate, durationStr) {
   return dt.toISOString().split('T')[0];
 }
 
+// Helper to compute today's date string YYYY-MM-DD based on business timezone (Asia/Kolkata)
+export function getBusinessToday(timeZone = 'Asia/Kolkata') {
+  return new Date().toLocaleDateString('en-CA', { timeZone });
+}
+
 // Helper to compute tomorrow's date string YYYY-MM-DD based on business timezone (Asia/Kolkata)
 export function getBusinessTomorrow(timeZone = 'Asia/Kolkata') {
-  const todayStr = new Date().toLocaleDateString('en-CA', { timeZone });
+  const todayStr = getBusinessToday(timeZone);
   const [y, m, d] = todayStr.split('-').map(Number);
   const dt = new Date(Date.UTC(y, m - 1, d + 1));
   return dt.toISOString().split('T')[0];
@@ -481,9 +486,9 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
         if (!formData.installation_duration?.trim()) return 'Installation Duration is required';
         if (!formData.expected_arrival_date) return 'Expected Date of Arrival is required for Technician Carries';
         if (!isEditMode) {
-          const tomorrowDate = getBusinessTomorrow();
-          if (formData.expected_arrival_date !== tomorrowDate) {
-            return 'Jobs can only be scheduled to start tomorrow. Advance pre-booking is not allowed.';
+          const businessToday = getBusinessToday();
+          if (formData.expected_arrival_date < businessToday) {
+            return 'Installation jobs cannot be scheduled in the past. Please select today or a future date.';
           }
         }
         if (!formData.expected_arrival_time) return 'Expected Time of Arrival is required for Technician Carries';
@@ -1483,47 +1488,64 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
                 <label className="block text-xs font-semibold text-gray-700">
                   Expected Arrival Date {formData.delivery_method === 'Product Couriered' || formData.installation_status === 'Assign Later' ? '(Optional)' : <span className="text-rose-500">*</span>}
                 </label>
-                {(formData.delivery_method === 'Product Couriered' || formData.installation_status === 'Assign Later') && formData.expected_arrival_date && (
+                <div className="flex items-center gap-1.5">
                   <button
                     type="button"
-                    onClick={() => handleChange('expected_arrival_date', '')}
-                    className="text-[10px] text-rose-600 hover:underline font-semibold"
+                    onClick={() => handleChange('expected_arrival_date', getBusinessToday())}
+                    className={`text-[10px] font-bold px-2 py-0.5 rounded transition-colors cursor-pointer ${
+                      formData.expected_arrival_date === getBusinessToday()
+                        ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                        : 'text-amber-700 hover:bg-amber-50 hover:underline'
+                    }`}
+                    title="Schedule for immediate/urgent service today"
                   >
-                    Clear (Schedule Later)
+                    ⚡ Today (Urgent)
                   </button>
-                )}
-                {(formData.delivery_method === 'Product Couriered' || formData.installation_status === 'Assign Later') && !formData.expected_arrival_date && (
                   <button
                     type="button"
                     onClick={() => handleChange('expected_arrival_date', getBusinessTomorrow())}
-                    className="text-[10px] text-blue-600 hover:underline font-semibold"
+                    className={`text-[10px] font-bold px-2 py-0.5 rounded transition-colors cursor-pointer ${
+                      formData.expected_arrival_date === getBusinessTomorrow()
+                        ? 'bg-blue-100 text-blue-800 border border-blue-300'
+                        : 'text-blue-600 hover:bg-blue-50 hover:underline'
+                    }`}
                   >
-                    Set Tomorrow
+                    Tomorrow
                   </button>
-                )}
+                  {(formData.delivery_method === 'Product Couriered' || formData.installation_status === 'Assign Later') && formData.expected_arrival_date && (
+                    <button
+                      type="button"
+                      onClick={() => handleChange('expected_arrival_date', '')}
+                      className="text-[10px] text-rose-600 hover:underline font-semibold cursor-pointer"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
               </div>
               <input
                 type="date"
                 required={formData.delivery_method !== 'Product Couriered' && formData.installation_status !== 'Assign Later'}
-                min={!isEditMode ? getBusinessTomorrow() : undefined}
-                max={!isEditMode ? getBusinessTomorrow() : undefined}
+                min={!isEditMode ? getBusinessToday() : undefined}
                 value={formData.expected_arrival_date}
                 onChange={(e) => handleChange('expected_arrival_date', e.target.value)}
                 className={`w-full text-xs p-2.5 border rounded-xl focus:outline-none font-medium ${
-                  !isEditMode
-                    ? 'border-blue-300 bg-blue-50/20 focus:border-blue-500'
+                  formData.expected_arrival_date === getBusinessToday()
+                    ? 'border-amber-400 bg-amber-50/20 focus:border-amber-500'
                     : 'border-gray-200 focus:border-blue-500'
                 }`}
               />
               <span className="text-[10px] text-gray-400 mt-1 block">
                 {(formData.delivery_method === 'Product Couriered' || formData.installation_status === 'Assign Later') && !formData.expected_arrival_date
                   ? 'Unscheduled — Will be configured upon assignment'
-                  : 'Full-day inclusive arrival date'}
+                  : formData.expected_arrival_date === getBusinessToday()
+                  ? '⚡ Urgent same-day booking — Starts today'
+                  : 'Today or any future date (same-day urgent fixes permitted)'}
               </span>
-              {!isEditMode && formData.expected_arrival_date && formData.installation_status !== 'Assign Later' && (
+              {!isEditMode && formData.expected_arrival_date === getBusinessToday() && formData.installation_status !== 'Assign Later' && (
                 <div className="mt-2 p-2.5 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-2 text-xs font-semibold text-amber-900 shadow-2xs">
                   <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                  <span>Jobs can only be scheduled to start tomorrow. Advance pre-booking is not allowed.</span>
+                  <span>Urgent same-day booking: Scheduled to start today. Verify technician availability below before submitting.</span>
                 </div>
               )}
             </div>
@@ -1826,6 +1848,23 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
                   })}
                 </div>
               </div>
+
+              {/* Alert when all engineers are unavailable on this date */}
+              {formData.expected_arrival_date && !checkingAvailability && engineersAvailability.length > 0 && !engineersAvailability.some((e) => e.available) && (
+                <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl text-rose-800 text-xs flex items-start gap-2.5 shadow-2xs">
+                  <AlertTriangle size={16} className="text-rose-600 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-bold">
+                      {formData.expected_arrival_date === getBusinessToday()
+                        ? 'No Service Engineers Available Today'
+                        : `No Service Engineers Available on ${formData.expected_arrival_date}`}
+                    </p>
+                    <p className="text-[11px] mt-0.5 text-rose-700">
+                      All technicians have conflicting assignments, approved leave, or rest days. Please select another date or choose &quot;Assign Later&quot; to schedule once availability opens.
+                    </p>
+                  </div>
+                </div>
+              )}
 
               {/* Active Conflict Warning Banner if current selected engineer is Booked */}
               {(() => {

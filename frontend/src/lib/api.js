@@ -995,7 +995,9 @@ export async function fetchJobExpenses(token, checklistId) {
   });
   if (!res.ok) {
     const json = await res.json().catch(() => ({}));
-    throw new Error(json.error || 'Failed to fetch job expenses');
+    const err = new Error(json.error || 'Failed to fetch job expenses');
+    err.status = res.status;
+    throw err;
   }
   return res.json();
 }
@@ -1460,6 +1462,14 @@ export async function fetchCoordinatorNotifications(token) {
 
 export async function markCoordinatorNotificationReadApi(token, id) {
   const res = await fetch(`${API_BASE}/admin/coordinator/notifications/${id}/read`, {
+    method: 'POST',
+    headers: adminHeaders(token),
+  });
+  return res.json();
+}
+
+export async function markCoordinatorAllNotificationsReadApi(token) {
+  const res = await fetch(`${API_BASE}/admin/coordinator/notifications/read-all`, {
     method: 'POST',
     headers: adminHeaders(token),
   });

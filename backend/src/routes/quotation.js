@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import supabase from '../services/supabase.js';
 import { generateQuotationPDF, numberToWordsIndian, getFullProductDescription } from '../services/quotationPdfGenerator.js';
-import { handleCleanupEndpoint, handleCleanupStatusEndpoint } from '../services/quotationCleanupService.js';
+import { handleCleanupEndpoint, handleCleanupStatusEndpoint, RETENTION_DAYS, RETENTION_MS } from '../services/quotationCleanupService.js';
 import { peekNextQuotationNumber, generateAndReserveQuotationNumber, handleQuotationDeletion } from '../services/quotationSequenceService.js';
 import { requireAdmin, requireRole } from '../middleware/auth.js';
 
@@ -162,7 +162,7 @@ router.post('/', async (req, res) => {
       : defaultTerms;
 
     const createdAt = new Date();
-    const expiresAt = new Date(createdAt.getTime() + (20 * 24 * 60 * 60 * 1000)); // Exactly 20 days in the future
+    const expiresAt = new Date(createdAt.getTime() + RETENTION_MS); // Exactly 20 days in the future (centralized RETENTION_MS)
 
     const quotationRecord = {
       quotation_number: quotationNo,

@@ -1253,7 +1253,7 @@ export async function scheduleTechnicianForCourieredChecklist({
   }
 
   const { SERVICE_ENGINEER_OPTIONS, resolveEngineer, reserveEngineerAtomic, calculateBookingEndDate } = await import('./engineerBookingService.js');
-  const { getBusinessTomorrow } = await import('./installationService.js');
+  const { getBusinessToday, getBusinessTomorrow } = await import('./installationService.js');
 
   if (!service_engineer || !SERVICE_ENGINEER_OPTIONS.includes(service_engineer.trim())) {
     throw new Error('Please select one of the authorized service engineers: Mathi, Guna, Sakthivel, or Kamalesh.');
@@ -1266,10 +1266,10 @@ export async function scheduleTechnicianForCourieredChecklist({
     throw new Error('Installation start date (Expected Arrival Date) is required.');
   }
 
-  // Next-day scheduling rule enforcement
-  const businessTomorrow = getBusinessTomorrow();
-  if (expected_arrival_date < businessTomorrow) {
-    throw new Error('Installation jobs cannot be scheduled in the past or today. Jobs must start tomorrow or later.');
+  // Work-start date booking rule: today or future date allowed, past dates rejected
+  const businessToday = getBusinessToday();
+  if (expected_arrival_date < businessToday) {
+    throw new Error('Installation jobs cannot be scheduled in the past. Please select today or a future date.');
   }
 
   let checklist = null;

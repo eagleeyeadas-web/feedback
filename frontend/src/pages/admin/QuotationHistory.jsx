@@ -249,7 +249,6 @@ export default function QuotationHistory({ onNavigateToGenerator, onBackToCheckl
                   const expDate = q.expires_at ? new Date(q.expires_at) : null;
                   const isExpired = expDate ? expDate <= new Date() : false;
                   const diffDays = expDate ? Math.ceil((expDate - new Date()) / (1000 * 60 * 60 * 24)) : 20;
-                  const isPdfCleaned = !q.pdf_path;
 
                   return (
                     <tr key={q.id} className="hover:bg-gray-50 transition">
@@ -258,16 +257,12 @@ export default function QuotationHistory({ onNavigateToGenerator, onBackToCheckl
                       <td className="p-3 font-semibold text-gray-900">{q.customer_name}</td>
                       <td className="p-3 text-gray-600">{q.contact_person || '-'}</td>
                       <td className="p-3">
-                        {isPdfCleaned ? (
+                        {isExpired ? (
                           <span
-                            className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full text-[10px] font-semibold border border-gray-200"
-                            title="Physical PDF cleaned up per 20-day retention policy. Quotation data preserved in database."
+                            className="px-2 py-0.5 bg-red-100 text-red-700 rounded-full text-[10px] font-bold"
+                            title="20-day retention deadline reached. Eligible for automated permanent deletion."
                           >
-                            Cleaned (20d)
-                          </span>
-                        ) : isExpired ? (
-                          <span className="px-2 py-0.5 bg-red-100 text-red-700 rounded-full text-[10px] font-bold">
-                            Expired (Cleanup Pending)
+                            Expired (Deletion Pending)
                           </span>
                         ) : diffDays <= 2 ? (
                           <span className="px-2 py-0.5 bg-amber-100 text-amber-800 rounded-full text-[10px] font-bold">
@@ -296,7 +291,7 @@ export default function QuotationHistory({ onNavigateToGenerator, onBackToCheckl
                             type="button"
                             onClick={() => handleDownload(q.id, q.quotation_number)}
                             className="p-1.5 rounded-lg transition text-green-600 hover:bg-green-50"
-                            title={isPdfCleaned ? "Download PDF (Dynamically generated from preserved record)" : "Download PDF"}
+                            title="Download PDF"
                           >
                             <Download className="w-4 h-4" />
                           </button>

@@ -14,6 +14,7 @@ import {
   cancelChecklist,
   getInstallationStats,
   getServiceEngineers,
+  getBusinessToday,
   getBusinessTomorrow,
 } from '../services/installationService.js';
 import config from '../config.js';
@@ -659,23 +660,24 @@ router.post('/', requireRole('SALES', 'ADMIN'), async (req, res) => {
       });
     }
 
-    // Strict next-day-only work-start booking rule
-    // Sales can create and submit a new installation or service checklist only when its work starting date is exactly tomorrow
+    // Work-start date booking rule:
+    // Sales can create and submit a new installation or service checklist starting today (urgent same-day) or any future date.
+    // Past dates are strictly rejected.
     const isCouriered = parsed.data.delivery_method === 'Product Couriered';
-    const businessTomorrow = getBusinessTomorrow(config.timezone);
+    const businessToday = getBusinessToday(config.timezone);
 
     if (parsed.data.expected_arrival_date) {
-      if (parsed.data.expected_arrival_date !== businessTomorrow) {
+      if (parsed.data.expected_arrival_date < businessToday) {
         return res.status(400).json({
-          error: 'Jobs can only be scheduled to start tomorrow. Advance pre-booking is not allowed.',
-          business_tomorrow: businessTomorrow,
+          error: 'Installation jobs cannot be scheduled in the past. Please select today or a future date.',
+          business_today: businessToday,
           provided_date: parsed.data.expected_arrival_date,
         });
       }
     } else if (!isCouriered) {
       return res.status(400).json({
-        error: 'Jobs can only be scheduled to start tomorrow. Advance pre-booking is not allowed.',
-        business_tomorrow: businessTomorrow,
+        error: 'Expected Date of Arrival is required for Technician Carries.',
+        business_today: businessToday,
       });
     }
 
@@ -683,7 +685,7 @@ router.post('/', requireRole('SALES', 'ADMIN'), async (req, res) => {
     parsed.data.installation_status = 'Assigned';
 
     const created = await createChecklist(req.profile.id, parsed.data, {
-      enforceNextDayBooking: Boolean(parsed.data.expected_arrival_date),
+      enforceDateValidation: Boolean(parsed.data.expected_arrival_date),
     });
     return res.status(201).json(created);
   } catch (err) {
@@ -988,7 +990,7 @@ router.post('/:id/start-installation', requireRole('TECHNICAL', 'ADMIN'), async 
  * GET /api/admin/installations/:id/completion-report
  * Fetch post-installation completion report for job
  */
-router.get('/:id/completion-report', requireRole('ADMIN', 'SALES', 'TECHNICAL', 'STORE_MANAGER'), async (req, res) => {
+router.get('/:id/completion-report', requireRole('ADMIN', 'SALES', 'TECHNICAL', 'STORE_MANAGER', 'COORDINATOR'), async (req, res) => {
   try {
     const report = await getInstallationCompletionReport(req.params.id);
     return res.json(report || { checklist_id: req.params.id, items: [] });
@@ -1054,7 +1056,7 @@ router.post('/:id/completion-report', requireRole('TECHNICAL', 'ADMIN'), async (
  * GET /api/admin/installations/:id/final-bom
  * Fetch Final BOM based on devices actually installed + Preliminary vs Final comparison
  */
-router.get('/:id/final-bom', requireRole('ADMIN', 'SALES', 'TECHNICAL', 'STORE_MANAGER'), async (req, res) => {
+router.get('/:id/final-bom', requireRole('ADMIN', 'SALES', 'TECHNICAL', 'STORE_MANAGER', 'COORDINATOR'), async (req, res) => {
   try {
     let item = await getChecklistById(req.params.id);
     if (!item) {
@@ -1255,6 +1257,7 @@ router.post('/:id/expenses/receipt', requireRole('TECHNICAL', 'ADMIN'), (req, re
         originalname: req.file.originalname,
         mimetype: req.file.mimetype,
         checklist_id: req.params.id,
+        user: req.profile,
       });
       return res.json(uploadRes);
     } catch (uploadErr) {

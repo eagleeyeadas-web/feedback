@@ -18,6 +18,7 @@ import {
   Calendar,
   CreditCard,
   FileCheck,
+  ShieldAlert,
 } from 'lucide-react';
 import {
   fetchJobExpenses,
@@ -46,10 +47,12 @@ const PAYMENT_METHODS = [
 export default function TechnicianExpenseModal({
   checklist,
   token,
+  user,
   onClose,
   onSuccess,
 }) {
   const [loading, setLoading] = useState(true);
+  const [isDenied, setIsDenied] = useState(false);
   const [saving, setSaving] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [printingPdf, setPrintingPdf] = useState(false);
@@ -60,18 +63,8 @@ export default function TechnicianExpenseModal({
   const [savedExpenses, setSavedExpenses] = useState([]);
   const [deletedIds, setDeletedIds] = useState([]);
 
-  // Form entries
-  const [entries, setEntries] = useState([
-    {
-      id: `new-${Date.now()}-0`,
-      expense_date: new Date().toISOString().split('T')[0],
-      category: 'Travel',
-      description: '',
-      amount: '',
-      payment_method: 'Cash',
-      notes: '',
-    },
-  ]);
+  // Form entries: start empty until authorized response loads
+  const [entries, setEntries] = useState([]);
 
   // Load existing saved expenses for this checklist
   useEffect(() => {
@@ -81,10 +74,13 @@ export default function TechnicianExpenseModal({
       if (!checklist?.id || !token) return;
       setLoading(true);
       setError('');
+      setIsDenied(false);
 
       try {
         const expData = await fetchJobExpenses(token, checklist.id);
         if (isMounted) {
+          setError('');
+          setIsDenied(false);
           const loaded = expData.expenses || [];
           setSavedExpenses(loaded);
 
@@ -116,7 +112,19 @@ export default function TechnicianExpenseModal({
         }
       } catch (err) {
         if (isMounted) {
-          setError(err.message || 'Failed to load expenses for this checklist');
+          const errMsg = err.message || 'Failed to load expenses for this checklist';
+          setError(errMsg);
+          const isForbidden =
+            err.status === 403 ||
+            err.status === 401 ||
+            /not authorized|forbidden|permission|unauthorized/i.test(errMsg);
+
+          if (isForbidden) {
+            setIsDenied(true);
+            // CRITICAL: Do NOT expose expense details that the user is not allowed to view
+            setEntries([]);
+            setSavedExpenses([]);
+          }
         }
       } finally {
         if (isMounted) setLoading(false);
@@ -131,6 +139,7 @@ export default function TechnicianExpenseModal({
 
   // Action 1: Add Expense
   const handleAddExpense = () => {
+    if (isDenied || loading) return;
     setEntries((prev) => [
       ...prev,
       {
@@ -147,6 +156,7 @@ export default function TechnicianExpenseModal({
 
   // Remove an expense entry
   const handleRemoveEntry = (index) => {
+    if (isDenied || loading) return;
     const item = entries[index];
     if (item && item.id && !item.id.startsWith('new-')) {
       setDeletedIds((prev) => [...prev, item.id]);
@@ -156,6 +166,7 @@ export default function TechnicianExpenseModal({
 
   // Clear all expense entries for this checklist
   const handleClearAllExpenses = async () => {
+    if (isDenied || loading) return;
     if (!window.confirm(`Are you sure you want to clear all ${entries.length} expense entry(ies) for this job? This will remove saved expense records.`)) {
       return;
     }
@@ -217,6 +228,7 @@ export default function TechnicianExpenseModal({
 
   // Action 2: Save Expenses
   const handleSaveExpenses = async () => {
+    if (isDenied || loading) return;
     setError('');
     setSuccessMsg('');
 
@@ -274,6 +286,7 @@ export default function TechnicianExpenseModal({
 
   // Action 3: Download Expense PDF
   const handleDownloadExpensePdf = async () => {
+    if (isDenied || loading || !hasSavedRecords) return;
     setError('');
     setSuccessMsg('');
     setDownloadingPdf(true);
@@ -301,6 +314,7 @@ export default function TechnicianExpenseModal({
 
   // Action 4: Print Expense Report
   const handlePrintExpenseReport = async () => {
+    if (isDenied || loading || !hasSavedRecords) return;
     setError('');
     setSuccessMsg('');
     setPrintingPdf(true);
@@ -341,8 +355,8 @@ export default function TechnicianExpenseModal({
   };
 
   // Calculate total expense amount
-  const totalAmount = entries.reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
-  const hasSavedRecords = savedExpenses.length > 0;
+  const totalAmount = isDenied ? 0 : entries.reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
+  const hasSavedRecords = !isDenied && savedExpenses.length > 0;
 
   return (
     <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
@@ -424,7 +438,12 @@ export default function TechnicianExpenseModal({
               type="button"
               id="btn-add-expense"
               onClick={handleAddExpense}
-              className="px-3 py-1.5 text-xs font-bold text-purple-800 bg-white hover:bg-purple-100 border border-purple-300 rounded-lg transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer"
+              disabled={loading || isDenied}
+              className={`px-3 py-1.5 text-xs font-bold text-purple-800 bg-white border border-purple-300 rounded-lg transition-all flex items-center gap-1.5 shadow-2xs ${
+                loading || isDenied
+                  ? 'opacity-40 cursor-not-allowed'
+                  : 'hover:bg-purple-100 cursor-pointer'
+              }`}
             >
               <Plus className="w-3.5 h-3.5 text-purple-700" />
               <span>Add Expense</span>
@@ -434,8 +453,12 @@ export default function TechnicianExpenseModal({
               type="button"
               id="btn-save-expenses"
               onClick={handleSaveExpenses}
-              disabled={saving}
-              className="px-4 py-1.5 text-xs font-bold text-white bg-purple-700 hover:bg-purple-800 rounded-lg transition-all flex items-center gap-1.5 shadow-xs cursor-pointer disabled:opacity-50"
+              disabled={saving || loading || isDenied || entries.length === 0}
+              className={`px-4 py-1.5 text-xs font-bold text-white bg-purple-700 rounded-lg transition-all flex items-center gap-1.5 shadow-xs ${
+                saving || loading || isDenied || entries.length === 0
+                  ? 'opacity-40 cursor-not-allowed'
+                  : 'hover:bg-purple-800 cursor-pointer'
+              }`}
             >
               {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
               <span>Save Expenses</span>
@@ -447,8 +470,14 @@ export default function TechnicianExpenseModal({
               type="button"
               id="btn-download-expense-pdf"
               onClick={handleDownloadExpensePdf}
-              disabled={downloadingPdf || !hasSavedRecords}
-              title={!hasSavedRecords ? 'Please click "Save Expenses" first to generate PDF' : 'Download printable A4 Expense Report PDF'}
+              disabled={downloadingPdf || !hasSavedRecords || isDenied || loading}
+              title={
+                isDenied
+                  ? 'Access denied for this job'
+                  : !hasSavedRecords
+                  ? 'Please click "Save Expenses" first to generate PDF'
+                  : 'Download printable A4 Expense Report PDF'
+              }
               className="px-3.5 py-1.5 text-xs font-bold text-indigo-700 bg-white hover:bg-indigo-50 border border-indigo-200 rounded-lg transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {downloadingPdf ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5 text-indigo-600" />}
@@ -459,8 +488,14 @@ export default function TechnicianExpenseModal({
               type="button"
               id="btn-print-expense-report"
               onClick={handlePrintExpenseReport}
-              disabled={printingPdf || !hasSavedRecords}
-              title={!hasSavedRecords ? 'Please click "Save Expenses" first to print report' : 'Print Expense Report for physical paper submission'}
+              disabled={printingPdf || !hasSavedRecords || isDenied || loading}
+              title={
+                isDenied
+                  ? 'Access denied for this job'
+                  : !hasSavedRecords
+                  ? 'Please click "Save Expenses" first to print report'
+                  : 'Print Expense Report for physical paper submission'
+              }
               className="px-3.5 py-1.5 text-xs font-bold text-slate-800 bg-white hover:bg-slate-100 border border-slate-300 rounded-lg transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {printingPdf ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Printer className="w-3.5 h-3.5 text-slate-700" />}
@@ -470,17 +505,24 @@ export default function TechnicianExpenseModal({
         </div>
 
         {/* Notification Alerts */}
-        {error && (
-          <div className="p-3 bg-rose-50 text-rose-800 border border-rose-200 rounded-xl text-xs flex items-center gap-2">
-            <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
-            <span>{error}</span>
+        {error && !loading && (
+          <div className="p-3.5 bg-rose-50 text-rose-800 border border-rose-200 rounded-xl text-xs flex items-start gap-2.5 shadow-2xs">
+            <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+            <div className="space-y-0.5">
+              <span className="font-bold">{error}</span>
+              {isDenied && (
+                <p className="text-[11px] text-rose-700">
+                  Technician expenses are private to the assigned service engineer ({checklist.service_engineer || 'Assigned Engineer'}) and administrators.
+                </p>
+              )}
+            </div>
           </div>
         )}
 
-        {successMsg && (
-          <div className="p-3 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-xl text-xs flex items-center gap-2">
+        {successMsg && !loading && (
+          <div className="p-3 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-xl text-xs flex items-center gap-2 shadow-2xs">
             <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-            <span>{successMsg}</span>
+            <span className="font-medium">{successMsg}</span>
           </div>
         )}
 
@@ -495,16 +537,17 @@ export default function TechnicianExpenseModal({
               <button
                 type="button"
                 onClick={handleAddExpense}
-                className="px-2.5 py-1 text-xs font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-lg transition-colors cursor-pointer flex items-center gap-1 shadow-2xs"
+                disabled={loading || isDenied}
+                className="px-2.5 py-1 text-xs font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-lg transition-colors cursor-pointer flex items-center gap-1 shadow-2xs disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 <Plus className="w-3.5 h-3.5" />
                 <span>Add Entry</span>
               </button>
-              {entries.length > 0 && (
+              {entries.length > 0 && !isDenied && !loading && (
                 <button
                   type="button"
                   onClick={handleClearAllExpenses}
-                  disabled={saving}
+                  disabled={saving || loading || isDenied}
                   className="px-2.5 py-1 text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-lg transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-1 shadow-2xs"
                   title="Clear all expense entries for this job"
                 >
@@ -519,9 +562,25 @@ export default function TechnicianExpenseModal({
           </div>
 
           {loading ? (
-            <div className="p-8 text-center text-gray-500 space-y-2">
-              <Loader2 className="w-6 h-6 animate-spin text-purple-600 mx-auto" />
-              <p className="text-xs">Loading saved expenses...</p>
+            <div className="p-10 text-center space-y-2.5 bg-slate-50/80 rounded-xl border border-slate-200">
+              <Loader2 className="w-7 h-7 animate-spin text-purple-600 mx-auto" />
+              <p className="text-xs font-bold text-gray-800">Verifying authorization and loading expenses...</p>
+              <p className="text-[11px] text-gray-500">Checking permissions for checklist {checklist.checklist_number}...</p>
+            </div>
+          ) : isDenied ? (
+            <div className="p-8 text-center border-2 border-dashed border-rose-200 bg-rose-50/50 rounded-xl space-y-3">
+              <div className="w-12 h-12 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center mx-auto shadow-2xs">
+                <ShieldAlert className="w-6 h-6" />
+              </div>
+              <div>
+                <h4 className="text-xs font-bold text-rose-900 uppercase tracking-wider">Access Restricted</h4>
+                <p className="text-xs font-semibold text-rose-700 mt-1 max-w-md mx-auto">
+                  {error || 'You are not authorized to view or submit expenses for this job.'}
+                </p>
+              </div>
+              <p className="text-[11px] text-gray-500 max-w-sm mx-auto">
+                No expense entries are displayed. Expense management is restricted strictly to the assigned service engineer and administrators.
+              </p>
             </div>
           ) : entries.length === 0 ? (
             <div className="p-8 text-center border-2 border-dashed border-gray-200 rounded-xl space-y-2">
@@ -692,8 +751,12 @@ export default function TechnicianExpenseModal({
             <button
               type="button"
               onClick={handleSaveExpenses}
-              disabled={saving}
-              className="px-5 py-2 text-xs font-bold text-white bg-purple-700 hover:bg-purple-800 rounded-xl transition-all cursor-pointer disabled:opacity-50 flex items-center gap-1.5 shadow-xs"
+              disabled={saving || loading || isDenied || entries.length === 0}
+              className={`px-5 py-2 text-xs font-bold text-white bg-purple-700 rounded-xl transition-all flex items-center gap-1.5 shadow-xs ${
+                saving || loading || isDenied || entries.length === 0
+                  ? 'opacity-40 cursor-not-allowed'
+                  : 'hover:bg-purple-800 cursor-pointer'
+              }`}
             >
               {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
               <span>Save Expenses</span>
@@ -702,8 +765,8 @@ export default function TechnicianExpenseModal({
             <button
               type="button"
               onClick={handleDownloadExpensePdf}
-              disabled={downloadingPdf || !hasSavedRecords}
-              className="px-4 py-2 text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-xl transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5"
+              disabled={downloadingPdf || !hasSavedRecords || isDenied || loading}
+              className="px-4 py-2 text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-xl transition-all flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
             >
               {downloadingPdf ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
               <span>Download Expense PDF</span>
@@ -712,8 +775,8 @@ export default function TechnicianExpenseModal({
             <button
               type="button"
               onClick={handlePrintExpenseReport}
-              disabled={printingPdf || !hasSavedRecords}
-              className="px-4 py-2 text-xs font-bold text-gray-800 bg-gray-100 hover:bg-gray-200 border border-gray-300 rounded-xl transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5"
+              disabled={printingPdf || !hasSavedRecords || isDenied || loading}
+              className="px-4 py-2 text-xs font-bold text-gray-800 bg-gray-100 hover:bg-gray-200 border border-gray-300 rounded-xl transition-all flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
             >
               {printingPdf ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Printer className="w-3.5 h-3.5" />}
               <span>Print Expense Report</span>

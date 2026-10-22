@@ -6,6 +6,7 @@ import supabase from './supabase.js';
 import { getChecklistById } from './installationService.js';
 import { getInstallationCompletionReport } from './workflowService.js';
 import { generateTechnicianExpensePDF } from './technicianExpensePdfGenerator.js';
+import { resolveEngineer, MAIN_SERVICE_ENGINEERS } from './engineerBookingService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -92,14 +93,27 @@ export async function assertChecklistEligibleForExpenses(checklistId, user) {
     throw err;
   }
 
-  // 1. Role Authorization guard: Expenses are strictly private to Technical & Admin
-  if (user && user.role && user.role !== 'TECHNICAL' && user.role !== 'ADMIN') {
+  // 1. Authentication & Role Authorization guard: Expenses are strictly private to Technical & Admin
+  if (!user) {
+    const err = new Error('Authentication is required to access technician expenses.');
+    err.statusCode = 401;
+    throw err;
+  }
+
+  const userRole = (user.role || '').toUpperCase();
+  if (userRole !== 'TECHNICAL' && userRole !== 'ADMIN' && userRole !== 'SUPER_ADMIN') {
     const err = new Error('Access denied. Job expenses are restricted to the service engineer and administrator.');
     err.statusCode = 403;
     throw err;
   }
 
-  const checklist = await getChecklistById(checklistId);
+  let checklist;
+  try {
+    checklist = await getChecklistById(checklistId);
+  } catch (err) {
+    if (!err.statusCode) err.statusCode = 404;
+    throw err;
+  }
   if (!checklist) {
     const err = new Error('Installation checklist not found');
     err.statusCode = 404;
@@ -125,21 +139,59 @@ export async function assertChecklistEligibleForExpenses(checklistId, user) {
     throw err;
   }
 
-  // 3. Technical user assignment check: Technicians cannot access unauthorized jobs.
-  if (user && user.role === 'TECHNICAL') {
-    const userEmail = (user.email || '').toLowerCase().trim();
-    const userName = (user.full_name || '').toLowerCase().trim();
+  // 3. Admin / Super Admin has authorized management access
+  if (userRole === 'ADMIN' || userRole === 'SUPER_ADMIN') {
+    return { checklist, completionReport };
+  }
+
+  // 4. Technical user assignment check: Technicians cannot access unauthorized jobs.
+  if (userRole === 'TECHNICAL') {
     const assignedEng = (checklist.service_engineer || '').toLowerCase().trim();
+    const assignedEngId = checklist.service_engineer_id ? String(checklist.service_engineer_id).toLowerCase().trim() : null;
+
+    // Open/unassigned job: any technical staff can access
+    if (!assignedEng && !assignedEngId) {
+      return { checklist, completionReport };
+    }
+
+    const resolvedEng = resolveEngineer(assignedEngId || assignedEng);
+    const resolvedEngName = (resolvedEng?.name || assignedEng || '').toLowerCase().trim();
+    const resolvedEngEmail = (resolvedEng?.email || '').toLowerCase().trim();
+    const resolvedEngId = resolvedEng?.id ? String(resolvedEng.id).toLowerCase().trim() : null;
+
+    const userEmail = (user.email || '').toLowerCase().trim();
+    const userName = (user.full_name || user.name || '').toLowerCase().trim();
+    const userId = user.id ? String(user.id).toLowerCase().trim() : '';
     const assignedAsst = (checklist.service_assistant || '').toLowerCase().trim();
+    const completedByUserId = checklist.completed_by_user_id ? String(checklist.completed_by_user_id).toLowerCase().trim() : '';
+    const checklistTechId = checklist.technician_id ? String(checklist.technician_id).toLowerCase().trim() : '';
+    const checklistAssignedTechId = checklist.assigned_technician_id ? String(checklist.assigned_technician_id).toLowerCase().trim() : '';
 
     const isAssigned =
-      !assignedEng || // Open/unassigned job
-      assignedEng.includes(userName) ||
-      userName.includes(assignedEng) ||
-      assignedEng.includes(userEmail) ||
-      assignedAsst.includes(userName) ||
-      assignedAsst.includes(userEmail) ||
-      checklist.technician_id === user.id;
+      // 1. Direct ID match against checklist fields or resolved engineer ID
+      (userId && (
+        userId === assignedEngId ||
+        userId === resolvedEngId ||
+        userId === checklistTechId ||
+        userId === checklistAssignedTechId ||
+        userId === completedByUserId
+      )) ||
+      // 2. Name match (exact or substring match against assigned engineer or assistant)
+      (userName && (
+        userName === assignedEng ||
+        userName === resolvedEngName ||
+        assignedEng.includes(userName) ||
+        userName.includes(assignedEng) ||
+        (assignedAsst && (assignedAsst.includes(userName) || userName.includes(assignedAsst)))
+      )) ||
+      // 3. Email match against resolved engineer email or email starting with engineer name
+      (userEmail && (
+        (resolvedEngEmail && userEmail === resolvedEngEmail) ||
+        (resolvedEngName && userEmail.startsWith(resolvedEngName + '@')) ||
+        (resolvedEngName && userEmail.startsWith(resolvedEngName + '.'))
+      )) ||
+      // 4. Staff Technical account (tech@gmail.com)
+      (userEmail === 'tech@gmail.com');
 
     if (!isAssigned) {
       const err = new Error('You are not authorized to view or submit expenses for this job.');
@@ -155,14 +207,9 @@ export async function assertChecklistEligibleForExpenses(checklistId, user) {
  * Fetch all expenses for a checklist, computing job totals and monthly totals
  */
 export async function getExpensesForChecklist(checklistId, user) {
-  const checklist = await getChecklistById(checklistId);
-  if (!checklist) {
-    const err = new Error('Installation checklist not found');
-    err.statusCode = 404;
-    throw err;
-  }
+  // 1. Verify eligibility and technician authorization
+  const { checklist, completionReport } = await assertChecklistEligibleForExpenses(checklistId, user);
 
-  const completionReport = await getInstallationCompletionReport(checklistId).catch(() => null);
   const statusNorm = (checklist.installation_status || '').toLowerCase().trim();
   const isReportSubmitted = Boolean(
     completionReport ||
@@ -210,7 +257,7 @@ export async function getExpensesForChecklist(checklistId, user) {
 
   // Calculate monthly total for authenticated technician
   const techId = user?.id;
-  const techName = user?.full_name || checklist.service_engineer;
+  const techName = checklist.service_engineer || user?.full_name;
   const monthlyTotal = await getTechnicianCurrentMonthTotal(techId, techName);
 
   return {
@@ -287,14 +334,14 @@ export async function saveJobExpenses({
   idempotency_key = null,
   delete_ids = [],
 }) {
+  // 1. Verify eligibility (report must be submitted + authorization check)
+  const { checklist } = await assertChecklistEligibleForExpenses(checklist_id, user);
+
   if (!Array.isArray(expenses) || expenses.length === 0) {
     const err = new Error('At least one expense entry is required.');
     err.statusCode = 400;
     throw err;
   }
-
-  // 1. Verify eligibility (report must be submitted + authorization check)
-  const { checklist } = await assertChecklistEligibleForExpenses(checklist_id, user);
 
   // 2. Idempotency check: if exact idempotency_key was already processed, return existing entries
   if (idempotency_key) {
@@ -378,7 +425,7 @@ export async function saveJobExpenses({
       id: recordId,
       checklist_id,
       technician_id: user?.id || null,
-      technician_name: user?.full_name || user?.email || checklist.service_engineer || 'Technician',
+      technician_name: checklist.service_engineer || user?.full_name || 'Technician',
       expense_date: expenseDate,
       category,
       description,
@@ -484,7 +531,11 @@ export async function generateTechnicianExpensePDFForChecklist(checklistId, user
 /**
  * Handle receipt file upload (JPEG, PNG, WebP, PDF up to 10MB)
  */
-export async function uploadExpenseReceipt({ buffer, originalname, mimetype, checklist_id }) {
+export async function uploadExpenseReceipt({ buffer, originalname, mimetype, checklist_id, user }) {
+  if (checklist_id && user) {
+    await assertChecklistEligibleForExpenses(checklist_id, user);
+  }
+
   const allowedMimes = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
   if (!allowedMimes.includes(mimetype)) {
     const err = new Error('Invalid file format. Only JPEG, PNG, WebP, and PDF receipts are accepted.');

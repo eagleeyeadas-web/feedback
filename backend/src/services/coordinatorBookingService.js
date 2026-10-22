@@ -2110,3 +2110,76 @@ export async function uploadTicketReceiptService({ file, checklistId = 'return' 
   };
 }
 
+/**
+ * Notify Coordinator immediately when a technician submits the Post-Installation Completion Form.
+ * - Only triggered after form validation and report save succeed in database/fallback
+ * - Creates persistent in-app notification for Coordinator role (idempotent, durable)
+ * - Dispatches Web Push notification to registered Coordinator devices (non-blocking)
+ * - Keeps return-ticket workflow intact as a separate coordinated action
+ */
+export async function notifyCoordinatorOnPostInstallationReport({
+  checklist,
+  report = null,
+  technicianName = null,
+  user = null,
+  submissionTime = null,
+  actualCompletionDatetime = null,
+}) {
+  if (!checklist?.id) return null;
+  const checklistId = checklist.id;
+  const checklistNumber = checklist.checklist_number || `INST-${checklistId.slice(0, 8)}`;
+  const techName = technicianName || checklist.service_engineer || user?.full_name || user?.name || user?.email || 'Technician';
+  const clientName = checklist.client_name || '';
+  const now = submissionTime || new Date().toISOString();
+  const compTime = actualCompletionDatetime || checklist.actual_completion_datetime || now;
+
+  const title = 'Post-Installation Report Submitted';
+  const message = `Technician ${techName} has submitted the post-installation report for checklist ${checklistNumber}. Please review the report and return-ticket details.`;
+
+  // 1. Create Persistent In-App Notification (Idempotent)
+  let notificationRecord = null;
+  try {
+    notificationRecord = await createNotification({
+      targetRole: 'COORDINATOR',
+      title,
+      message,
+      type: 'POST_INSTALLATION_REPORT_SUBMITTED',
+      checklistId,
+      checklistNumber,
+      metadata: {
+        task_type: 'POST_INSTALLATION_REPORT',
+        checklist_id: checklistId,
+        checklist_number: checklistNumber,
+        client_name: clientName,
+        technician_name: techName,
+        submitted_at: now,
+        actual_completion_datetime: compTime,
+        action_label: 'Review Report',
+        action_url: `/coordinator?tab=return&checklist=${checklistId}&openReport=true`,
+        idempotency_key: `post-install-report-${checklistId}`,
+      },
+    });
+  } catch (notifErr) {
+    console.warn('[COORDINATOR_NOTIF] In-app notification creation warning (report saved):', notifErr.message);
+  }
+
+  // 2. Deliver Web Push Notification (non-blocking: failure will never rollback or fail report)
+  let pushResult = null;
+  try {
+    const { notifyCoordinatorReportSubmitted } = await import('./pushNotificationService.js');
+    pushResult = await notifyCoordinatorReportSubmitted({
+      checklist,
+      report,
+      technicianName: techName,
+      submissionTime: now,
+    });
+  } catch (pushErr) {
+    console.warn('[COORDINATOR_NOTIF] Web Push notification delivery warning (in-app saved):', pushErr.message);
+  }
+
+  return {
+    notification: notificationRecord,
+    push: pushResult,
+  };
+}
+

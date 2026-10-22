@@ -3,7 +3,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import supabase from './supabase.js';
 import { logAudit } from './auditService.js';
-import { inMemoryChecklistSchedules } from './installationService.js';
+import { inMemoryChecklistSchedules, getBusinessToday } from './installationService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -581,7 +581,7 @@ export async function getEngineerCommitments(engineerIdOrName) {
   // - A completed assignment does not block future dates: its blocking range ends strictly on actual completion date!
   // - If the installation remains incomplete after scheduled end date, do not automatically release the technician.
   //   Mark the job overdue and keep the technician unavailable until completion or an approved schedule update.
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = getBusinessToday();
   commitments.forEach((c) => {
     if (c.type === 'JOB' && (c.status === 'COMPLETED' || c.status === 'SITE WORK COMPLETED')) {
       const completionDate = c.actual_completion_datetime ? c.actual_completion_datetime.split('T')[0] : c.start_date;

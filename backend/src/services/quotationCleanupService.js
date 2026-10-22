@@ -1,15 +1,17 @@
 import supabase from './supabase.js';
+import { getHighestSequenceValue } from './quotationSequenceService.js';
+import { createNotification } from './appNotificationService.js';
 
 /**
  * Eagle Eye SafDrive — Centralized 20-Day Automatic Cleanup Service
  * 
  * Retention Policy:
- * - 20 Calendar Days (480 hours) retention for temporary attachments (PDFs & signatures).
- * - Deletes the actual Storage objects from Supabase Storage buckets ('pdfs', 'signatures').
- * - PRESERVES core database records: Quotation history, line items, customer feedback,
- *   installation checklists, and customer profiles are kept in the database.
+ * - 20 Calendar Days (480 hours) retention for temporary attachments (PDFs & signatures) and quotations.
+ * - Permanently deletes eligible quotations and their line items once the 20-day retention deadline expires.
+ * - Removes associated quotation PDFs from Supabase Storage ('pdfs' bucket).
  * - STRICT EXCLUSION: Stock & Inventory tables, quantities, transactions, and return
  *   ledgers are permanently and unconditionally excluded from cleanup.
+ * - Sequence Preservation: Never decrements or reuses quotation sequence numbers.
  * - Idempotent, safe batch pagination, error-retry handling, and zero cascade damage.
  */
 
@@ -19,14 +21,15 @@ const BATCH_SIZE = 50;
 const MAX_BATCHES = 20; // Up to 1,000 records per run to prevent memory/HTTP timeouts
 
 /**
- * Automatically cleans up expired quotation PDF files from Supabase Storage.
+ * Automatically cleans up expired quotations and PDF files after 20 days.
  * Expiry logic: expires_at <= current UTC time (20 days after creation) or created_at <= 20 days ago.
  * 
  * Safety features:
- * - Deletes ONLY the physical PDF from Supabase Storage ('pdfs' bucket).
- * - Updates the quotation database record setting `pdf_path = null`.
- * - PRESERVES the quotation record, its line items, customer details, pricing, and history!
- * - Never triggers cascading deletes to quotation items or related workflows.
+ * - Deletes the physical PDF from Supabase Storage ('pdfs' bucket).
+ * - Permanently deletes quotation line items from 'quotation_items' table.
+ * - Permanently deletes the quotation database record from 'quotations' table.
+ * - Preserves monotonic quotation sequence numbers (never resets or steps back).
+ * - Strict module isolation: never touches customers, inventory, products, or system settings.
  * - Idempotent execution with batch pagination.
  * - Retains DB reference for retry if Storage removal encounters a network/system failure.
  */
@@ -35,9 +38,17 @@ export async function runQuotationCleanup() {
   const nowUtc = now.toISOString();
   const twentyDaysAgoUtc = new Date(now.getTime() - RETENTION_MS).toISOString();
 
-  console.log(`[Quotation Cleanup Job] Starting 20-day automated quotation PDF cleanup at ${nowUtc}...`);
+  console.log(`[Quotation Cleanup Job] Starting 20-day automated quotation permanent cleanup at ${nowUtc}...`);
+
+  // Step 0: Ensure current highest quotation number is locked into persistent sequence tracker
+  try {
+    await getHighestSequenceValue();
+  } catch (seqErr) {
+    console.warn('[Quotation Cleanup Job] Could not check highest sequence value before cleanup:', seqErr.message);
+  }
 
   let totalProcessed = 0;
+  let totalQuotationsDeleted = 0;
   let totalFilesDeleted = 0;
   let totalFailed = 0;
   let batchIndex = 0;
@@ -46,14 +57,13 @@ export async function runQuotationCleanup() {
     while (batchIndex < MAX_BATCHES) {
       batchIndex++;
 
-      // Fetch batch of up to 50 expired quotations that still have a PDF attachment
+      // Fetch batch of up to 50 expired quotations (expires_at <= nowUtc)
       let expiredQuotations = null;
       let fetchError = null;
 
       const { data: dataExpiry, error: errExpiry } = await supabase
         .from('quotations')
         .select('id, quotation_number, pdf_path, created_at, expires_at')
-        .not('pdf_path', 'is', null)
         .lte('expires_at', nowUtc)
         .limit(BATCH_SIZE);
 
@@ -63,7 +73,6 @@ export async function runQuotationCleanup() {
         const { data: dataCreated, error: errCreated } = await supabase
           .from('quotations')
           .select('id, quotation_number, pdf_path, created_at')
-          .not('pdf_path', 'is', null)
           .lte('created_at', twentyDaysAgoUtc)
           .limit(BATCH_SIZE);
 
@@ -78,6 +87,7 @@ export async function runQuotationCleanup() {
         console.error('[Quotation Cleanup Job] Error fetching expired quotations:', fetchError.message);
         return {
           processed: totalProcessed,
+          deletedQuotations: totalQuotationsDeleted,
           deletedFiles: totalFilesDeleted,
           failed: totalFailed,
           error: fetchError.message,
@@ -89,13 +99,13 @@ export async function runQuotationCleanup() {
         break;
       }
 
-      console.log(`[Quotation Cleanup Job] Batch ${batchIndex}: Processing ${expiredQuotations.length} expired quotation PDF(s)...`);
+      console.log(`[Quotation Cleanup Job] Batch ${batchIndex}: Processing ${expiredQuotations.length} expired quotation(s) for permanent deletion...`);
 
       for (const q of expiredQuotations) {
         totalProcessed++;
-        let pdfDeletedSuccessfully = true;
+        let storageCleanupSuccessful = true;
 
-        // Step 1: Remove PDF from Supabase Storage 'pdfs' bucket
+        // Step 1: Remove quotation PDF file from Supabase Storage 'pdfs' bucket (if exists)
         if (q.pdf_path) {
           try {
             const { error: storageError } = await supabase.storage
@@ -109,35 +119,53 @@ export async function runQuotationCleanup() {
 
               if (!isNotFound) {
                 console.error(`[Quotation Cleanup Job] Storage deletion error for PDF (${q.pdf_path}):`, storageError.message);
-                pdfDeletedSuccessfully = false;
+                storageCleanupSuccessful = false;
               } else {
-                console.log(`[Quotation Cleanup Job] PDF file already missing from storage (${q.pdf_path}), clearing DB reference.`);
+                console.log(`[Quotation Cleanup Job] PDF file already missing from storage (${q.pdf_path}). Proceeding with record deletion.`);
+                totalFilesDeleted++;
               }
             } else {
               console.log(`[Quotation Cleanup Job] Successfully deleted quotation PDF from storage: ${q.pdf_path}`);
+              totalFilesDeleted++;
             }
           } catch (err) {
             console.error(`[Quotation Cleanup Job] Unexpected error removing PDF (${q.pdf_path}):`, err.message);
-            pdfDeletedSuccessfully = false;
+            storageCleanupSuccessful = false;
           }
         }
 
-        // Step 2: Clear pdf_path reference in database, PRESERVING the quotation record and its line items!
-        if (pdfDeletedSuccessfully) {
-          const { error: dbUpdateError } = await supabase
-            .from('quotations')
-            .update({ pdf_path: null })
-            .eq('id', q.id);
+        // Step 2: Permanently delete quotation line items and main quotation record from database
+        if (storageCleanupSuccessful) {
+          try {
+            // Explicitly delete quotation items first to prevent any potential orphan items
+            const { error: itemsDelError } = await supabase
+              .from('quotation_items')
+              .delete()
+              .eq('quotation_id', q.id);
 
-          if (dbUpdateError) {
-            console.error(`[Quotation Cleanup Job] DB update failed for quotation ${q.quotation_number} (${q.id}):`, dbUpdateError.message);
+            if (itemsDelError) {
+              console.warn(`[Quotation Cleanup Job] Note on explicit quotation_items deletion for ${q.quotation_number}:`, itemsDelError.message);
+            }
+
+            // Permanently delete the quotation record
+            const { error: qDelError } = await supabase
+              .from('quotations')
+              .delete()
+              .eq('id', q.id);
+
+            if (qDelError) {
+              console.error(`[Quotation Cleanup Job] Database deletion error for quotation ${q.quotation_number} (${q.id}):`, qDelError.message);
+              totalFailed++;
+            } else {
+              totalQuotationsDeleted++;
+              console.log(`[Quotation Cleanup Job] Permanently deleted quotation ${q.quotation_number} (ID: ${q.id}) and all associated records.`);
+            }
+          } catch (dbErr) {
+            console.error(`[Quotation Cleanup Job] Unexpected error deleting database record for quotation ${q.quotation_number}:`, dbErr.message);
             totalFailed++;
-          } else {
-            console.log(`[Quotation Cleanup Job] Cleared PDF reference for quotation ${q.quotation_number} (ID: ${q.id}). Quotation & items preserved.`);
-            totalFilesDeleted++;
           }
         } else {
-          console.warn(`[Quotation Cleanup Job] Retaining DB reference for quotation ${q.quotation_number} for retry on next scheduled run because Storage deletion failed.`);
+          console.warn(`[Quotation Cleanup Job] Retaining quotation record ${q.quotation_number} for retry on next scheduled run because Storage deletion failed.`);
           totalFailed++;
         }
       }
@@ -148,17 +176,24 @@ export async function runQuotationCleanup() {
       }
     }
 
-    console.log(`[Quotation Cleanup Job] Completed quotation cleanup run. Processed: ${totalProcessed}, Deleted PDFs: ${totalFilesDeleted}, Failed/Retrying: ${totalFailed}`);
+    console.log(`[Quotation Cleanup Job] Completed quotation cleanup run. Processed: ${totalProcessed}, Permanently Deleted Quotations: ${totalQuotationsDeleted}, Deleted PDFs: ${totalFilesDeleted}, Failed/Retrying: ${totalFailed}`);
     return {
       processed: totalProcessed,
+      deletedQuotations: totalQuotationsDeleted,
       deletedFiles: totalFilesDeleted,
       failed: totalFailed,
-      dbRecordsPreserved: true,
+      permanentDeletion: true,
       timestamp: nowUtc,
     };
   } catch (error) {
     console.error('[Quotation Cleanup Job] Critical exception during quotation cleanup:', error.message);
-    return { processed: totalProcessed, deletedFiles: totalFilesDeleted, failed: totalFailed, error: error.message };
+    return {
+      processed: totalProcessed,
+      deletedQuotations: totalQuotationsDeleted,
+      deletedFiles: totalFilesDeleted,
+      failed: totalFailed,
+      error: error.message,
+    };
   }
 }
 
@@ -660,6 +695,24 @@ export async function executeActivityTriggeredCleanup({ userId = null, force = f
 
   if (!isSuccess) {
     console.error(`[Activity Cleanup Engine] Cleanup failed: ${executionError}. Last successful run timestamp was NOT updated.`);
+
+    // Alert an authorized administrator if cleanup fails
+    try {
+      await createNotification({
+        targetRole: 'ADMIN',
+        title: 'Quotation Cleanup Failed',
+        message: `Automatic 20-day retention cleanup encountered an issue: ${executionError || 'Execution failure'}. System will automatically retry on next scheduled interval.`,
+        type: 'WARNING',
+        metadata: {
+          error: executionError,
+          failedModules: cleanupResult?.modules,
+          timestamp: new Date().toISOString(),
+        },
+      });
+    } catch (notifErr) {
+      console.warn('[Activity Cleanup Engine] Could not dispatch admin alert notification:', notifErr.message);
+    }
+
     return {
       status: 'failed',
       executed: true,

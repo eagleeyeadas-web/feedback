@@ -76,6 +76,41 @@ export async function createNotification({
   checklistNumber = null,
   metadata = null,
 }) {
+  // Idempotency check: Prevent duplicate notifications for retried requests or identical idempotency_key
+  const idempotencyKey = metadata?.idempotency_key;
+  if (idempotencyKey) {
+    for (const notif of inMemoryNotifications.values()) {
+      if (notif.metadata?.idempotency_key === idempotencyKey) {
+        return notif;
+      }
+    }
+  }
+
+  if (type === 'POST_INSTALLATION_REPORT_SUBMITTED' && checklistId) {
+    for (const notif of inMemoryNotifications.values()) {
+      if (
+        (notif.type === 'POST_INSTALLATION_REPORT_SUBMITTED' && notif.checklist_id === checklistId) ||
+        notif.metadata?.idempotency_key === `post-install-report-${checklistId}`
+      ) {
+        return notif;
+      }
+    }
+    try {
+      const { data: existingDb } = await supabase
+        .from('app_notifications')
+        .select('*')
+        .eq('type', 'POST_INSTALLATION_REPORT_SUBMITTED')
+        .eq('checklist_id', checklistId)
+        .maybeSingle();
+      if (existingDb) {
+        inMemoryNotifications.set(existingDb.id, existingDb);
+        return existingDb;
+      }
+    } catch (e) {
+      // Non-blocking fallback
+    }
+  }
+
   const notifId = uuidv4();
   const notifRecord = {
     id: notifId,

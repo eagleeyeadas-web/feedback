@@ -128,6 +128,14 @@ export default function StoreWorkspace({ onSelectChecklist }) {
   const [adjustMaterialModal, setAdjustMaterialModal] = useState(null);
   const [verifyReturnModal, setVerifyReturnModal] = useState(null);
   const [issueModalJob, setIssueModalJob] = useState(null);
+  const [addDeviceModalOpen, setAddDeviceModalOpen] = useState(false);
+  const [newDeviceForm, setNewDeviceForm] = useState({
+    device_type: '',
+    device_name: '',
+    sku: '',
+    opening_quantity: '',
+    min_stock_level: '5',
+  });
 
   // Form States
   const [modalQty, setModalQty] = useState('');
@@ -971,6 +979,23 @@ export default function StoreWorkspace({ onSelectChecklist }) {
                 Maintain actual physical loose camera and display stock ledger. Manage stock levels for physical cameras, live displays, and recording displays.
               </p>
             </div>
+            <button
+              onClick={() => {
+                setModalError('');
+                setNewDeviceForm({
+                  device_type: '',
+                  device_name: '',
+                  sku: '',
+                  opening_quantity: '',
+                  min_stock_level: '5',
+                });
+                setAddDeviceModalOpen(true);
+              }}
+              className="px-3.5 py-2 text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 rounded-xl transition-colors cursor-pointer flex items-center gap-1.5 shadow-2xs shrink-0 self-start sm:self-auto"
+            >
+              <Plus size={14} />
+              <span>Add Camera Model</span>
+            </button>
           </div>
 
           {/* Loose Component Stock Overview Cards */}

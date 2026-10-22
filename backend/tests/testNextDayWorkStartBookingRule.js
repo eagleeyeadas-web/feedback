@@ -4,6 +4,7 @@ import config from '../src/config.js';
 import supabase from '../src/services/supabase.js';
 import installationRoutes from '../src/routes/installation.js';
 import {
+  getBusinessToday,
   getBusinessTomorrow,
   createChecklist,
   updateChecklist,
@@ -15,12 +16,12 @@ import {
 
 async function runTests() {
   console.log('================================================================');
-  console.log('TEST SUITE: Strict Next-Day-Only Work-Start Booking Rule');
+  console.log('TEST SUITE: Installation Checklist Work-Start Booking Rule (Today or Future Allowed)');
   console.log('Business Timezone:', config.timezone);
   console.log('================================================================\n');
 
   const tz = config.timezone || 'Asia/Kolkata';
-  const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: tz });
+  const todayStr = getBusinessToday(tz);
   const tomorrowStr = getBusinessTomorrow(tz);
 
   const [y, m, d] = todayStr.split('-').map(Number);
@@ -49,7 +50,7 @@ async function runTests() {
     client_name: 'Next-Day Rule Test Client',
     client_mobile: '9876543210',
     client_location: 'Chennai Ambattur',
-    device_type: '2 Channel Live',
+    device_type: '2 Channel Recording',
     number_of_devices: 1,
     number_of_vehicles: 1,
     confirmed_price: 15000,
@@ -57,7 +58,7 @@ async function runTests() {
     installation_duration: '1 Day',
     vehicle_type: 'Truck',
     expected_arrival_time: '10:00 AM',
-    installation_or_service: 'Installation',
+    installation_or_service: 'Service',
     service_engineer: 'Sakthivel',
     installation_status: 'Assigned',
   };
@@ -85,9 +86,9 @@ async function runTests() {
 
   try {
     // --------------------------------------------------------------------------
-    // TEST 1: Direct API Attempt - Starting Today (NOT ALLOWED -> HTTP 400)
+    // TEST 1: Direct API Attempt - Starting Today (Urgent Fix -> ALLOWED HTTP 201)
     // --------------------------------------------------------------------------
-    console.log('-> Test 1: Direct API Attempt - Work starting today (must be rejected with HTTP 400)...');
+    console.log('-> Test 1: Direct API Attempt - Work starting today for urgent fix (must be accepted with HTTP 201)...');
     const resToday = await fetch(baseUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -95,14 +96,15 @@ async function runTests() {
         ...baseChecklistData,
         client_name: 'API Today Test Client',
         expected_arrival_date: todayStr,
+        service_engineer: 'Sakthivel',
       }),
     });
     const bodyToday = await resToday.json();
-    assert.strictEqual(resToday.status, 400, 'HTTP status must be 400');
-    assert.strictEqual(bodyToday.error, 'Jobs can only be scheduled to start tomorrow. Advance pre-booking is not allowed.');
-    assert.strictEqual(bodyToday.business_tomorrow, tomorrowStr);
-    assert.strictEqual(bodyToday.provided_date, todayStr);
-    console.log('   ✓ Direct API call starting today rejected with HTTP 400 and exact error message.');
+    assert.strictEqual(resToday.status, 201, `HTTP status must be 201, got ${resToday.status}: ${JSON.stringify(bodyToday)}`);
+    assert.ok(bodyToday && bodyToday.id, 'Checklist ID must be returned');
+    assert.strictEqual(bodyToday.expected_arrival_date, todayStr);
+    createdChecklistIds.push(bodyToday.id);
+    console.log('   ✓ Direct API call starting today accepted with HTTP 201.');
 
     // --------------------------------------------------------------------------
     // TEST 2: Direct API Attempt - Starting in the Past / Yesterday (NOT ALLOWED -> HTTP 400)
@@ -119,13 +121,15 @@ async function runTests() {
     });
     const bodyYesterday = await resYesterday.json();
     assert.strictEqual(resYesterday.status, 400, 'HTTP status must be 400');
-    assert.strictEqual(bodyYesterday.error, 'Jobs can only be scheduled to start tomorrow. Advance pre-booking is not allowed.');
+    assert.strictEqual(bodyYesterday.error, 'Installation jobs cannot be scheduled in the past. Please select today or a future date.');
+    assert.strictEqual(bodyYesterday.business_today, todayStr);
+    assert.strictEqual(bodyYesterday.provided_date, yesterdayStr);
     console.log('   ✓ Direct API call starting in past rejected with HTTP 400 and exact error message.');
 
     // --------------------------------------------------------------------------
-    // TEST 3: Direct API Attempt - Two or More Days Ahead (NOT ALLOWED -> HTTP 400)
+    // TEST 3: Direct API Attempt - Two or More Days Ahead (ALLOWED -> HTTP 201)
     // --------------------------------------------------------------------------
-    console.log('-> Test 3: Direct API Attempt - Work starting 2 days ahead (must be rejected with HTTP 400)...');
+    console.log('-> Test 3: Direct API Attempt - Work starting 2 days ahead (must be accepted with HTTP 201)...');
     const resDayAfter = await fetch(baseUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -133,14 +137,15 @@ async function runTests() {
         ...baseChecklistData,
         client_name: 'API 2-Days Ahead Test Client',
         expected_arrival_date: dayAfterTomorrowStr,
+        service_engineer: 'Mathi',
       }),
     });
     const bodyDayAfter = await resDayAfter.json();
-    assert.strictEqual(resDayAfter.status, 400, 'HTTP status must be 400');
-    assert.strictEqual(bodyDayAfter.error, 'Jobs can only be scheduled to start tomorrow. Advance pre-booking is not allowed.');
-    console.log('   ✓ Direct API call starting 2 days ahead rejected with HTTP 400.');
+    assert.strictEqual(resDayAfter.status, 201, `HTTP status must be 201, got ${resDayAfter.status}: ${JSON.stringify(bodyDayAfter)}`);
+    createdChecklistIds.push(bodyDayAfter.id);
+    console.log('   ✓ Direct API call starting 2 days ahead accepted with HTTP 201.');
 
-    console.log('-> Test 3b: Direct API Attempt - Work starting next week (must be rejected with HTTP 400)...');
+    console.log('-> Test 3b: Direct API Attempt - Work starting next week (must be accepted with HTTP 201)...');
     const resNextWeek = await fetch(baseUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -148,12 +153,13 @@ async function runTests() {
         ...baseChecklistData,
         client_name: 'API Next Week Test Client',
         expected_arrival_date: nextWeekStr,
+        service_engineer: 'Guna',
       }),
     });
     const bodyNextWeek = await resNextWeek.json();
-    assert.strictEqual(resNextWeek.status, 400, 'HTTP status must be 400');
-    assert.strictEqual(bodyNextWeek.error, 'Jobs can only be scheduled to start tomorrow. Advance pre-booking is not allowed.');
-    console.log('   ✓ Direct API call starting next week rejected with HTTP 400.');
+    assert.strictEqual(resNextWeek.status, 201, `HTTP status must be 201, got ${resNextWeek.status}: ${JSON.stringify(bodyNextWeek)}`);
+    createdChecklistIds.push(bodyNextWeek.id);
+    console.log('   ✓ Direct API call starting next week accepted with HTTP 201.');
 
     // --------------------------------------------------------------------------
     // TEST 4: Direct API Attempt - Starting Exactly Tomorrow (ALLOWED -> HTTP 201)
@@ -167,7 +173,7 @@ async function runTests() {
         client_name: 'API Tomorrow Success Test Client',
         expected_arrival_date: tomorrowStr,
         installation_duration: '1 Day',
-        service_engineer: 'Sakthivel',
+        service_engineer: 'Kamalesh',
       }),
     });
     const bodyTomorrow = await resTomorrow.json();
@@ -189,7 +195,7 @@ async function runTests() {
         client_name: 'API 3-Day Multi-Day Test Client',
         expected_arrival_date: tomorrowStr,
         installation_duration: '3 Days',
-        service_engineer: 'Mathi',
+        service_engineer: 'Sakthivel',
       }),
     });
     const bodyMultiDay = await resMultiDay.json();
@@ -204,67 +210,50 @@ async function runTests() {
     const expectedEndStr = expectedEndUtc.toISOString().split('T')[0];
     assert.strictEqual(calculatedEnd, expectedEndStr);
     console.log(`   ✓ Multi-day job: Starts ${tomorrowStr}, Duration: 3 Days, Calculated End Date: ${calculatedEnd} (Verified).`);
-
-    // Release Mathi immediately so Test 6b can use him
-    await releaseEngineerBooking({ checklistId: bodyMultiDay.id });
-    await supabase.from('installation_checklists').delete().eq('id', bodyMultiDay.id);
-    await supabase.from('engineer_bookings').delete().eq('checklist_id', bodyMultiDay.id);
-    await supabase.from('store_material_requirements').delete().eq('checklist_id', bodyMultiDay.id);
+    createdChecklistIds.push(bodyMultiDay.id);
 
     // --------------------------------------------------------------------------
-    // TEST 6: Service Jobs (Next-day rule enforced, no BOM by default)
+    // TEST 6: Service Jobs Starting Today (Allowed for urgent fixes, no BOM by default)
     // --------------------------------------------------------------------------
-    console.log('-> Test 6a: Service job starting today (must be rejected with HTTP 400)...');
+    console.log('-> Test 6a: Service job starting today (must be accepted with HTTP 201 for available engineer)...');
     const resServToday = await fetch(baseUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         ...baseChecklistData,
-        client_name: 'Service Today Test Client',
+        client_name: 'Service Urgent Today Test Client',
         installation_or_service: 'Service',
         expected_arrival_date: todayStr,
-      }),
-    });
-    assert.strictEqual(resServToday.status, 400);
-    const bodyServToday = await resServToday.json();
-    assert.strictEqual(bodyServToday.error, 'Jobs can only be scheduled to start tomorrow. Advance pre-booking is not allowed.');
-    console.log('   ✓ Service job starting today correctly rejected.');
-
-    console.log('-> Test 6b: Service job starting tomorrow (must be accepted with HTTP 201, no BOM)...');
-    const resServTomorrow = await fetch(baseUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        ...baseChecklistData,
-        client_name: 'Service Tomorrow Test Client',
-        installation_or_service: 'Service',
-        expected_arrival_date: tomorrowStr,
         service_engineer: 'Mathi',
       }),
     });
-    const bodyServTomorrow = await resServTomorrow.json();
-    assert.strictEqual(resServTomorrow.status, 201, `Service job must be created, got ${resServTomorrow.status}: ${JSON.stringify(bodyServTomorrow)}`);
-    assert.strictEqual(bodyServTomorrow.installation_or_service, 'Service');
-    assert.strictEqual(bodyServTomorrow.bom_snapshot, null);
-    createdChecklistIds.push(bodyServTomorrow.id);
-    console.log(`   ✓ Service checklist ${bodyServTomorrow.checklist_number} created starting tomorrow with BOM = null.`);
+    assert.strictEqual(resServToday.status, 201, `Service job today must be created with 201`);
+    const bodyServToday = await resServToday.json();
+    assert.strictEqual(bodyServToday.installation_or_service, 'Service');
+    assert.strictEqual(bodyServToday.bom_snapshot, null);
+    createdChecklistIds.push(bodyServToday.id);
+    console.log(`   ✓ Service job starting today accepted with HTTP 201.`);
 
     // --------------------------------------------------------------------------
     // TEST 7: Timezone Boundary Calculations
     // --------------------------------------------------------------------------
     console.log('-> Test 7: Timezone Boundary Scenarios...');
     // Check midnight boundary in Asia/Kolkata (UTC+5:30)
-    // 18:29:59 UTC on Oct 17 -> 23:59:59 IST on Oct 17 -> Tomorrow is Oct 18
+    // 18:29:59 UTC on Oct 17 -> 23:59:59 IST on Oct 17 -> Today is Oct 17, Tomorrow is Oct 18
     const dtBeforeMidnight = new Date('2026-10-17T18:29:59Z');
+    const tTodayBefore = getBusinessToday(config.timezone, dtBeforeMidnight);
     const tBefore = getBusinessTomorrow(config.timezone, dtBeforeMidnight);
+    assert.strictEqual(tTodayBefore, '2026-10-17');
     assert.strictEqual(tBefore, '2026-10-18');
-    console.log('   ✓ 23:59:59 IST boundary: Tomorrow evaluates to 2026-10-18.');
+    console.log('   ✓ 23:59:59 IST boundary: Today evaluates to 2026-10-17, Tomorrow evaluates to 2026-10-18.');
 
-    // 18:30:00 UTC on Oct 17 -> 00:00:00 IST on Oct 18 -> Tomorrow is Oct 19
+    // 18:30:00 UTC on Oct 17 -> 00:00:00 IST on Oct 18 -> Today is Oct 18, Tomorrow is Oct 19
     const dtAtMidnight = new Date('2026-10-17T18:30:00Z');
+    const tTodayAt = getBusinessToday(config.timezone, dtAtMidnight);
     const tAt = getBusinessTomorrow(config.timezone, dtAtMidnight);
+    assert.strictEqual(tTodayAt, '2026-10-18');
     assert.strictEqual(tAt, '2026-10-19');
-    console.log('   ✓ 00:00:00 IST midnight roll-over: Tomorrow evaluates to 2026-10-19.');
+    console.log('   ✓ 00:00:00 IST midnight roll-over: Today evaluates to 2026-10-18, Tomorrow evaluates to 2026-10-19.');
 
     // Leap year roll-over: Feb 28, 2028 (leap year) -> Tomorrow is Feb 29
     const dtLeapYear = new Date('2028-02-28T05:00:00Z');
@@ -287,6 +276,7 @@ async function runTests() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         ...baseChecklistData,
+        service_engineer: bodyTomorrow.service_engineer,
         expected_arrival_date: bodyTomorrow.expected_arrival_date,
         remarks: 'Customer updated delivery gate instructions via PUT API',
       }),
@@ -294,7 +284,7 @@ async function runTests() {
     assert.strictEqual(resUpdate.status, 200, 'PUT update must return HTTP 200');
     const bodyUpdate = await resUpdate.json();
     assert.strictEqual(bodyUpdate.remarks, 'Customer updated delivery gate instructions via PUT API');
-    console.log('   ✓ Existing job updated successfully via PUT API without being blocked by next-day rule.');
+    console.log('   ✓ Existing job updated successfully via PUT API without being blocked.');
 
   } finally {
     // Clean up test server
@@ -303,10 +293,12 @@ async function runTests() {
     // Clean up test records
     console.log('\n-> Cleaning up test records...');
     for (const id of createdChecklistIds) {
-      await releaseEngineerBooking({ checklistId: id });
-      await supabase.from('installation_checklists').delete().eq('id', id);
-      await supabase.from('store_material_requirements').delete().eq('checklist_id', id);
-      await supabase.from('engineer_bookings').delete().eq('checklist_id', id);
+      try {
+        await releaseEngineerBooking({ checklistId: id });
+        await supabase.from('installation_checklists').delete().eq('id', id);
+        await supabase.from('store_material_requirements').delete().eq('checklist_id', id);
+        await supabase.from('engineer_bookings').delete().eq('checklist_id', id);
+      } catch (e) {}
     }
     console.log('   ✓ Cleanup completed.');
   }
