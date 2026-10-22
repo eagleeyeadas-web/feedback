@@ -600,6 +600,14 @@ export async function dispatchChecklistViaCourier(
       .eq('checklist_id', checklist_id);
   } catch (e) {}
 
+  // Fulfill any reserved device stock allocations for this checklist
+  try {
+    const { fulfillDeviceAllocationsForChecklist } = await import('./deviceSetService.js');
+    await fulfillDeviceAllocationsForChecklist({ checklist_id, user });
+  } catch (allocErr) {
+    console.warn('Could not fulfill device allocations on courier dispatch:', allocErr.message);
+  }
+
   // Audit Log
   await logAudit({
     actor_id: user?.id || '00000000-0000-0000-0000-000000000001',

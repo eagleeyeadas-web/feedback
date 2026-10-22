@@ -26,6 +26,7 @@ export const STANDARD_DEVICE_CONFIGURATIONS = [
     components: [
       { component_name: 'Camera', quantity_required: 2, unit: 'Nos.' },
       { component_name: 'Live Display', quantity_required: 1, unit: 'Nos.' },
+      { component_name: 'Memory Card', quantity_required: 1, unit: 'Nos.' },
     ],
   },
   {
@@ -33,6 +34,7 @@ export const STANDARD_DEVICE_CONFIGURATIONS = [
     components: [
       { component_name: 'Camera', quantity_required: 2, unit: 'Nos.' },
       { component_name: 'Recording Display', quantity_required: 1, unit: 'Nos.' },
+      { component_name: 'Memory Card', quantity_required: 1, unit: 'Nos.' },
     ],
   },
   {
@@ -40,6 +42,7 @@ export const STANDARD_DEVICE_CONFIGURATIONS = [
     components: [
       { component_name: 'Camera', quantity_required: 4, unit: 'Nos.' },
       { component_name: 'Live Display', quantity_required: 1, unit: 'Nos.' },
+      { component_name: 'Memory Card', quantity_required: 1, unit: 'Nos.' },
     ],
   },
   {
@@ -47,6 +50,7 @@ export const STANDARD_DEVICE_CONFIGURATIONS = [
     components: [
       { component_name: 'Camera', quantity_required: 4, unit: 'Nos.' },
       { component_name: 'Recording Display', quantity_required: 1, unit: 'Nos.' },
+      { component_name: 'Memory Card', quantity_required: 1, unit: 'Nos.' },
     ],
   },
   {
@@ -54,6 +58,7 @@ export const STANDARD_DEVICE_CONFIGURATIONS = [
     components: [
       { component_name: 'Camera', quantity_required: 6, unit: 'Nos.' },
       { component_name: 'Live Display', quantity_required: 1, unit: 'Nos.' },
+      { component_name: 'Memory Card', quantity_required: 1, unit: 'Nos.' },
     ],
   },
   {
@@ -61,6 +66,7 @@ export const STANDARD_DEVICE_CONFIGURATIONS = [
     components: [
       { component_name: 'Camera', quantity_required: 6, unit: 'Nos.' },
       { component_name: 'Recording Display', quantity_required: 1, unit: 'Nos.' },
+      { component_name: 'Memory Card', quantity_required: 1, unit: 'Nos.' },
     ],
   },
   {
@@ -68,6 +74,7 @@ export const STANDARD_DEVICE_CONFIGURATIONS = [
     components: [
       { component_name: 'Camera', quantity_required: 8, unit: 'Nos.' },
       { component_name: 'Live Display', quantity_required: 1, unit: 'Nos.' },
+      // Note: According to existing BOM rules, 8 Channel Live does not require a Memory Card
     ],
   },
 ];
@@ -124,6 +131,7 @@ loadAllocationsStorage();
 /**
  * Dynamically resolves component requirements for any device type, supporting
  * the standard configurations plus any custom {N} Channel Live / Recording models.
+ * Conforms to BOM rules (including Memory Card rules).
  */
 export function getComponentRequirementsForDevice(deviceType) {
   if (!deviceType || typeof deviceType !== 'string') return [];
@@ -144,23 +152,197 @@ export function getComponentRequirementsForDevice(deviceType) {
     const isLive = channelMatch[2].toLowerCase() === 'live';
     const displayItem = isLive ? 'Live Display' : 'Recording Display';
 
-    return [
+    const comps = [
       { component_name: 'Camera', quantity_required: numChannels, unit: 'Nos.' },
       { component_name: displayItem, quantity_required: 1, unit: 'Nos.' },
     ];
+    // Existing BOM rule: 8 Channel Live does not require a Memory Card
+    if (!(numChannels === 8 && isLive)) {
+      comps.push({ component_name: 'Memory Card', quantity_required: 1, unit: 'Nos.' });
+    }
+    return comps;
   }
 
-  // Fallback: Default to 2 cameras and 1 live display if undefined
+  // Fallback: Default to 2 cameras, 1 live display, 1 memory card if undefined
   return [
     { component_name: 'Camera', quantity_required: 2, unit: 'Nos.' },
     { component_name: 'Live Display', quantity_required: 1, unit: 'Nos.' },
+    { component_name: 'Memory Card', quantity_required: 1, unit: 'Nos.' },
   ];
+}
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+let lastReconcileTime = 0;
+const RECONCILE_THROTTLE_MS = 3000;
+
+/**
+ * Reconcile device stock allocations against authoritative installation checklists:
+ * 1. Checks if associated checklist still exists.
+ * 2. If checklist no longer exists in database (and allocation was created >15s ago), release orphan allocation.
+ * 3. If checklist was cancelled, release allocation.
+ * 4. If checklist had materials or devices physically issued, mark as FULFILLED (prevent double deduction).
+ */
+export async function reconcileDeviceAllocations() {
+  const allAllocations = inMemoryAllocations;
+  const activeAllocations = allAllocations.filter((a) => a.status === 'ALLOCATED');
+  if (activeAllocations.length === 0) return { modified: 0 };
+
+  const checklistAllocMap = new Map();
+  for (const alloc of activeAllocations) {
+    if (alloc.checklist_id) {
+      const cId = String(alloc.checklist_id).trim();
+      if (!checklistAllocMap.has(cId)) checklistAllocMap.set(cId, []);
+      checklistAllocMap.get(cId).push(alloc);
+    }
+  }
+
+  if (checklistAllocMap.size === 0) return { modified: 0 };
+
+  const checklistIds = Array.from(checklistAllocMap.keys());
+  const uuidIds = checklistIds.filter((id) => UUID_REGEX.test(id));
+  const nonUuidIds = checklistIds.filter((id) => !UUID_REGEX.test(id));
+
+  let dbChecklists = [];
+  try {
+    if (uuidIds.length > 0) {
+      const { data, error } = await supabase
+        .from('installation_checklists')
+        .select('id, checklist_number, installation_status')
+        .in('id', uuidIds);
+      if (!error && Array.isArray(data)) {
+        dbChecklists.push(...data);
+      }
+    }
+    if (nonUuidIds.length > 0) {
+      const { data, error } = await supabase
+        .from('installation_checklists')
+        .select('id, checklist_number, installation_status')
+        .in('checklist_number', nonUuidIds);
+      if (!error && Array.isArray(data)) {
+        dbChecklists.push(...data);
+      }
+    }
+  } catch (err) {
+    console.warn('Reconcile device allocations query error:', err.message);
+    return { modified: 0 };
+  }
+
+  const dbMapById = new Map(dbChecklists.map((c) => [String(c.id), c]));
+  const dbMapByNumber = new Map(dbChecklists.map((c) => [String(c.checklist_number), c]));
+
+  let inMemoryReqs = null;
+  let inMemoryDispatches = null;
+  try {
+    const { inMemoryStoreRequirements } = await import('./storeRequirementService.js');
+    inMemoryReqs = inMemoryStoreRequirements;
+  } catch (e) {}
+  try {
+    const { inMemoryCourierDispatches } = await import('./courierService.js');
+    inMemoryDispatches = inMemoryCourierDispatches;
+  } catch (e) {}
+
+  let modifiedCount = 0;
+  const now = new Date().toISOString();
+  const nowTs = Date.now();
+  const GRACE_PERIOD_MS = 15000; // 15 seconds grace period for brand new in-flight allocations
+
+  for (const [key, allocs] of checklistAllocMap.entries()) {
+    const chk = dbMapById.get(key) || dbMapByNumber.get(key);
+    const req = inMemoryReqs?.get(key);
+    const dispatch = inMemoryDispatches
+      ? Array.from(inMemoryDispatches.values()).find((d) => String(d.checklist_id) === key)
+      : null;
+
+    const isIssued =
+      req?.issuance_status === 'ISSUED' ||
+      req?.devices_issuance_status === 'ISSUED' ||
+      (dispatch && ['Dispatched', 'In Transit', 'Delivered'].includes(dispatch.delivery_status));
+
+    if (!chk) {
+      // Checklist does not exist in DB
+      for (const alloc of allocs) {
+        const allocAge = alloc.created_at ? nowTs - new Date(alloc.created_at).getTime() : Infinity;
+        if (allocAge > GRACE_PERIOD_MS) {
+          alloc.status = 'RELEASED';
+          alloc.released_at = now;
+          alloc.release_reason = 'Automatic reconciliation: associated checklist was deleted or does not exist';
+          alloc.updated_at = now;
+          modifiedCount++;
+
+          try {
+            await supabase
+              .from('device_stock_allocations')
+              .update({
+                status: 'RELEASED',
+                released_at: now,
+                release_reason: alloc.release_reason,
+                updated_at: now,
+              })
+              .eq('id', alloc.id);
+          } catch (e) {}
+        }
+      }
+    } else if (chk.installation_status === 'Cancelled') {
+      // Checklist is Cancelled
+      for (const alloc of allocs) {
+        alloc.status = 'RELEASED';
+        alloc.released_at = now;
+        alloc.release_reason = `Automatic reconciliation: checklist ${chk.checklist_number} was cancelled`;
+        alloc.updated_at = now;
+        modifiedCount++;
+
+        try {
+          await supabase
+            .from('device_stock_allocations')
+            .update({
+              status: 'RELEASED',
+              released_at: now,
+              release_reason: alloc.release_reason,
+              updated_at: now,
+            })
+            .eq('id', alloc.id);
+        } catch (e) {}
+      }
+    } else if (isIssued) {
+      // Items were physically issued/dispatched: mark FULFILLED to prevent double-deducting against material_inventory
+      for (const alloc of allocs) {
+        alloc.status = 'FULFILLED';
+        alloc.updated_at = now;
+        modifiedCount++;
+
+        try {
+          await supabase
+            .from('device_stock_allocations')
+            .update({
+              status: 'FULFILLED',
+              updated_at: now,
+            })
+            .eq('id', alloc.id);
+        } catch (e) {}
+      }
+    }
+  }
+
+  if (modifiedCount > 0) {
+    saveAllocationsStorage();
+  }
+
+  return { modified: modifiedCount };
+}
+
+export async function reconcileDeviceAllocationsThrottled() {
+  const now = Date.now();
+  if (now - lastReconcileTime < RECONCILE_THROTTLE_MS) {
+    return { modified: 0 };
+  }
+  lastReconcileTime = now;
+  return await reconcileDeviceAllocations();
 }
 
 /**
  * Fetch all device stock allocations from Supabase with local memory fallback
  */
-export async function getDeviceStockAllocations() {
+export async function getDeviceStockAllocations({ forceReconcile = false } = {}) {
   try {
     const { data, error } = await supabase
       .from('device_stock_allocations')
@@ -172,10 +354,15 @@ export async function getDeviceStockAllocations() {
       inMemoryAllocations.length = 0;
       inMemoryAllocations.push(...data);
       saveAllocationsStorage();
-      return data;
     }
   } catch (err) {
     // Database table might not be migrated yet; fallback to persistent local cache
+  }
+
+  if (forceReconcile) {
+    await reconcileDeviceAllocations();
+  } else {
+    await reconcileDeviceAllocationsThrottled();
   }
 
   return [...inMemoryAllocations];
@@ -252,7 +439,7 @@ export async function getCalculatedDeviceAvailability() {
   };
 
   // Compile core loose components status
-  const trackedComponents = ['Camera', 'Live Display', 'Recording Display'];
+  const trackedComponents = ['Camera', 'Live Display', 'Recording Display', 'Memory Card'];
   const looseComponentsStatus = trackedComponents.map((name) => getComponentStock(name));
 
   // 4. Calculate for every standard device configuration

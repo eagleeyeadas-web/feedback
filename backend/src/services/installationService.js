@@ -1309,7 +1309,7 @@ export async function safeDeleteChecklist(id, user = null) {
   try {
     const { releaseDeviceAllocation, getDeviceStockAllocations } = await import('./deviceSetService.js');
     const allocations = await getDeviceStockAllocations();
-    const active = allocations.filter((a) => a.checklist_id === checklistId && a.status === 'ALLOCATED');
+    const active = allocations.filter((a) => String(a.checklist_id) === String(checklistId) && a.status === 'ALLOCATED');
     for (const alloc of active) {
       await releaseDeviceAllocation({
         allocation_id: alloc.id,
@@ -1567,6 +1567,24 @@ export async function cancelChecklist({ checklistId, user, reason = 'Cancelled b
     installation_status: 'Cancelled',
     remarks: updatedRemarks,
   });
+
+  // Release any reserved device stock allocations for the cancelled checklist
+  try {
+    const { releaseDeviceAllocation, getDeviceStockAllocations } = await import('./deviceSetService.js');
+    const allocations = await getDeviceStockAllocations();
+    const active = allocations.filter(
+      (a) => String(a.checklist_id) === String(existing.id) && a.status === 'ALLOCATED'
+    );
+    for (const alloc of active) {
+      await releaseDeviceAllocation({
+        allocation_id: alloc.id,
+        reason: `Released due to checklist ${existing.checklist_number} cancellation: ${reason}`,
+        user,
+      });
+    }
+  } catch (err) {
+    console.warn(`[ChecklistCancellation] Notice releasing allocations: ${err.message}`);
+  }
 
   try {
     await logAudit({

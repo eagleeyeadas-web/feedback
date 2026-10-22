@@ -1143,27 +1143,46 @@ export default function StoreWorkspace({ onSelectChecklist }) {
                 <thead>
                   <tr className="bg-gray-50 border-b border-gray-200 text-[11px] font-bold text-gray-600 uppercase tracking-wider">
                     <th className="py-3.5 px-6">Item</th>
-                    <th className="py-3.5 px-6 text-center">Stock Remaining</th>
+                    <th className="py-3.5 px-6 text-center">Total Stock</th>
+                    <th className="py-3.5 px-6 text-center">Reserved for Jobs</th>
+                    <th className="py-3.5 px-6 text-center">Available (Free)</th>
                     <th className="py-3.5 px-6 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {materials.length === 0 ? (
                     <tr>
-                      <td colSpan="3" className="py-8 text-center text-gray-400">
+                      <td colSpan="5" className="py-8 text-center text-gray-400">
                         No installation materials found.
                       </td>
                     </tr>
                   ) : (
                     materials.map((m) => {
                       const stock = Number(m.current_stock) || 0;
+                      const res = getReservedForComponent(m.material_name);
+                      const free = Math.max(0, stock - res);
                       return (
                         <tr key={m.id || m.material_name} className="hover:bg-amber-50/20 transition-colors">
                           <td className="py-3.5 px-6 font-bold text-gray-900 text-xs sm:text-sm">
-                            {m.material_name}
+                            <div>
+                              <span>{m.material_name}</span>
+                              {m.sku && (
+                                <span className="block text-[10px] font-mono font-normal text-gray-400">
+                                  SKU: {m.sku}
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td className="py-3.5 px-6 text-center font-bold font-mono text-xs sm:text-sm text-gray-900">
                             {stock} {m.unit || 'Nos.'}
+                          </td>
+                          <td className="py-3.5 px-6 text-center font-mono text-xs text-amber-800 font-bold">
+                            {res > 0 ? `${res} ${m.unit || 'Nos.'}` : `0 ${m.unit || 'Nos.'}`}
+                          </td>
+                          <td className="py-3.5 px-6 text-center">
+                            <span className="inline-block px-2.5 py-1 rounded-md font-bold font-mono text-xs bg-emerald-50 text-emerald-900 border border-emerald-200">
+                              {free} {m.unit || 'Nos.'}
+                            </span>
                           </td>
                           <td className="py-3.5 px-6 text-right">
                             <button

@@ -918,6 +918,14 @@ export async function issueFullJobStock({
     }
   }
 
+  // 4. Fulfill device allocations so component reservations are completed and not double-deducted
+  try {
+    const { fulfillDeviceAllocationsForChecklist } = await import('./deviceSetService.js');
+    await fulfillDeviceAllocationsForChecklist({ checklist_id, user });
+  } catch (allocErr) {
+    console.warn('Could not fulfill device allocations on full job stock issuance:', allocErr.message);
+  }
+
   return {
     success: true,
     checklist_id,
