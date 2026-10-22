@@ -107,22 +107,165 @@ export function cleanupTestCoordinatorBookingsForYear(year = '2028') {
 }
 
 /**
+ * Determine if a travel record has confirmed tickets or independent travel commitment
+ */
+export function isIndependentConfirmedTravel(booking, travelType = 'ANY') {
+  if (!booking) return false;
+
+  const isOutboundConfirmed =
+    ['Booked', 'Confirmed'].includes(booking.outbound_status) ||
+    Boolean(booking.outbound_ticket_reference || booking.ticket_reference) ||
+    (Boolean(booking.outbound_operator) && Number(booking.outbound_fare) > 0);
+
+  const isReturnConfirmed =
+    ['Booked', 'Confirmed', 'Booking Confirmed'].includes(booking.return_status) ||
+    Boolean(booking.return_ticket_reference) ||
+    (Boolean(booking.return_operator) && Number(booking.return_fare) > 0);
+
+  if (travelType === 'OUTBOUND') return isOutboundConfirmed;
+  if (travelType === 'RETURN') return isReturnConfirmed;
+  return isOutboundConfirmed || isReturnConfirmed;
+}
+
+/**
  * Permanently delete coordinator booking and audit logs for a deleted checklist
+ * Preserves independent confirmed travel records by unlinking them from the deleted checklist.
  */
 export function deleteCoordinatorBookingForChecklist(checklistId) {
+  if (!checklistId) return;
+  const idStr = String(checklistId).trim().toLowerCase();
+
+  try {
+    supabase.from('coordinator_booking_audit_logs').delete().eq('checklist_id', checklistId).catch(() => {});
+    supabase.from('coordinator_bookings').delete().eq('checklist_id', checklistId).catch(() => {});
+  } catch (err) {}
+
   let changed = false;
-  if (inMemoryBookings.has(checklistId)) {
-    inMemoryBookings.delete(checklistId);
-    changed = true;
+  for (const [k, b] of inMemoryBookings.entries()) {
+    if (
+      String(k).toLowerCase() === idStr ||
+      (b?.checklist_id && String(b.checklist_id).toLowerCase() === idStr) ||
+      (b?.id && String(b.id).toLowerCase() === idStr)
+    ) {
+      if (isIndependentConfirmedTravel(b)) {
+        b.checklist_id = null;
+        b.notes = (b.notes ? b.notes + ' ' : '') + `[Preserved independent travel from deleted checklist ${checklistId}]`;
+        changed = true;
+      } else {
+        inMemoryBookings.delete(k);
+        changed = true;
+      }
+    }
   }
-  if (inMemoryAuditLogs.has(checklistId)) {
-    inMemoryAuditLogs.delete(checklistId);
-    changed = true;
+
+  for (const [k] of inMemoryAuditLogs.entries()) {
+    if (String(k).toLowerCase() === idStr) {
+      inMemoryAuditLogs.delete(k);
+      changed = true;
+    }
   }
+
   if (changed) {
     saveFallbackStorage();
   }
 }
+
+/**
+ * Cancel dependent unbooked travel for a cancelled checklist
+ */
+export function cancelDependentTravelForChecklist(checklistId) {
+  if (!checklistId) return;
+  const idStr = String(checklistId).trim().toLowerCase();
+  let changed = false;
+
+  for (const [k, b] of inMemoryBookings.entries()) {
+    if (
+      String(k).toLowerCase() === idStr ||
+      (b?.checklist_id && String(b.checklist_id).toLowerCase() === idStr)
+    ) {
+      if (!isIndependentConfirmedTravel(b, 'OUTBOUND') && b.outbound_status !== 'Cancelled') {
+        b.outbound_status = 'Cancelled';
+        changed = true;
+      }
+      if (!isIndependentConfirmedTravel(b, 'RETURN') && b.return_status !== 'Cancelled') {
+        b.return_status = 'Cancelled';
+        changed = true;
+      }
+    }
+  }
+
+  if (changed) {
+    saveFallbackStorage();
+  }
+}
+
+/**
+ * Reconcile coordinator bookings against database checklists
+ * Prunes orphaned pending travel bookings for deleted checklists while preserving
+ * valid independent confirmed travel records.
+ */
+export async function reconcileCoordinatorBookings() {
+  let changed = false;
+  try {
+    const { data: dbChecklists, error } = await supabase
+      .from('installation_checklists')
+      .select('id, checklist_number, installation_status');
+
+    if (error || !Array.isArray(dbChecklists)) {
+      return false;
+    }
+
+    const checklistMap = new Map();
+    dbChecklists.forEach((c) => checklistMap.set(String(c.id).toLowerCase(), c));
+
+    const now = Date.now();
+    for (const [k, b] of inMemoryBookings.entries()) {
+      if (!b || !b.checklist_id) continue;
+
+      const chkId = String(b.checklist_id).toLowerCase();
+      const existingChecklist = checklistMap.get(chkId);
+
+      // Grace period for brand-new bookings (30 seconds)
+      const ageMs = b.created_at ? (now - new Date(b.created_at).getTime()) : Infinity;
+      if (ageMs < 30000) continue;
+
+      if (!existingChecklist) {
+        if (isIndependentConfirmedTravel(b)) {
+          if (b.checklist_id) {
+            b.checklist_id = null;
+            b.notes = (b.notes ? b.notes + ' ' : '') + `[Preserved independent travel from deleted checklist ${chkId}]`;
+            changed = true;
+          }
+        } else {
+          inMemoryBookings.delete(k);
+          inMemoryAuditLogs.delete(k);
+          changed = true;
+        }
+      } else if (existingChecklist.installation_status === 'Cancelled') {
+        if (!isIndependentConfirmedTravel(b, 'OUTBOUND') && b.outbound_status !== 'Cancelled') {
+          b.outbound_status = 'Cancelled';
+          changed = true;
+        }
+        if (!isIndependentConfirmedTravel(b, 'RETURN') && b.return_status !== 'Cancelled') {
+          b.return_status = 'Cancelled';
+          changed = true;
+        }
+      }
+    }
+
+    if (changed) {
+      saveFallbackStorage();
+    }
+  } catch (err) {
+    console.warn('Coordinator bookings reconciliation error:', err.message);
+  }
+  return changed;
+}
+
+// Trigger initial async reconciliation
+setTimeout(() => {
+  reconcileCoordinatorBookings().catch(() => {});
+}, 500);
 
 /**
  * Validate booking status updates.

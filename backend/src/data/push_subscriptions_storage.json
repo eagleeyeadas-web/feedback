@@ -1,21 +1,6 @@
 {
   "subscriptions": [
     {
-      "id": "0ec9b997-4745-45f5-a1fe-945c7507f460",
-      "user_id": "abaff860-05b2-44fa-9139-b14d92e3fa19",
-      "user_email": "tech@gmail.com",
-      "user_role": "TECHNICAL",
-      "endpoint": "https://fcm.googleapis.com/fcm/send/cJoeUfuRoQA:APA91bGdWXgAhye6iJ1h4nl46GZHfLDnn2TWUpSTA-9aGP1CWcJZly5BUp7UeR0_LWlP_PCKBN2bUQrn0KbE5QFLs4m0uCogDaZ01Waesjf3RTA8lu0FucUqVqhq4IOB6nFVaFhK05Wl",
-      "p256dh": "BD9I8cPXsUJFf13ZhdftpAnlhMyDggccEHDeyyC-xFhgcwSF6kwBuy9wkgJQwg4sdaYeezRGDI9K-Lo82e8gZCE",
-      "auth": "jj_M8wuOlJQPGXedARV6Sw",
-      "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36",
-      "device_type": "Desktop",
-      "is_active": true,
-      "created_at": "2026-10-21T10:32:28.794+00:00",
-      "updated_at": "2026-10-21T10:32:28.794+00:00",
-      "last_used_at": "2026-10-21T12:59:01.583Z"
-    },
-    {
       "id": "d0f7e585-4546-488a-b5e9-38373063e5a7",
       "user_id": "abaff860-05b2-44fa-9139-b14d92e3fa19",
       "user_email": "tech@gmail.com",
@@ -28,7 +13,7 @@
       "is_active": true,
       "created_at": "2026-10-21T10:32:59.831+00:00",
       "updated_at": "2026-10-21T10:32:59.831+00:00",
-      "last_used_at": "2026-10-21T12:59:01.572Z"
+      "last_used_at": "2026-10-22T09:19:13.126Z"
     },
     {
       "id": "e442d528-777c-4680-b97b-760257066956",
@@ -89,7 +74,22 @@
       "created_at": "2026-10-22T05:53:18.872Z",
       "updated_at": "2026-10-22T05:53:18.872Z",
       "last_used_at": "2026-10-22T05:53:18.872Z"
+    },
+    {
+      "id": "675915fc-e5b8-444f-8448-ca625356fd60",
+      "user_id": "abaff860-05b2-44fa-9139-b14d92e3fa19",
+      "user_email": "tech@gmail.com",
+      "user_role": "TECHNICAL",
+      "endpoint": "https://fcm.googleapis.com/fcm/send/eNmvEVJRDcc:APA91bHC0Q2SDaYiXFnrLCBH5Y-fSJhAF88gog4Sal4Evte2qoMgTtOREsnLSFjQEFiLRmm6pxE1GWf3ye4zRHNu1VZ9aFD8HQ2X_WTX6D4qpMZGmw5ClpT2SPS1gYyX8SrBXxx-NnHr",
+      "p256dh": "BAkEiPPrcppCb0Vu4tw5jp4W5pXsQel4YZul3P6wQM1LOOiwGV_XaBoySGuX1Ic8wn3iFFHWxI8X8L9gzPIb-5c",
+      "auth": "WBzz8IF_3uHcefflhotw6A",
+      "user_agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36",
+      "device_type": "Android",
+      "is_active": true,
+      "created_at": "2026-10-22T08:40:19.325+00:00",
+      "updated_at": "2026-10-22T08:40:19.325+00:00",
+      "last_used_at": "2026-10-22T09:19:13.217Z"
     }
   ],
-  "updated_at": "2026-10-22T05:53:19.135Z"
+  "updated_at": "2026-10-22T09:19:13.905Z"
 }

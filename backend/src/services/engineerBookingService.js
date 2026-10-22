@@ -259,13 +259,14 @@ export async function getEngineerCommitments(engineerIdOrName) {
   const commitments = [];
   const seenIds = new Set();
 
-  // 1-5. Concurrently Fetch Bookings, Active Checklists, Rest Days, Leaves, and Travel from Supabase
+  // 1-5. Concurrently Fetch Bookings, All Checklists, Rest Days, Leaves, and Travel from Supabase
   const [
     dbBookingsRes,
     checklistsRes,
     dbRestRes,
     dbLeavesRes,
     dbCoordRes,
+    allChecklistsRes,
   ] = await Promise.all([
     (async () => {
       try {
@@ -324,13 +325,35 @@ export async function getEngineerCommitments(engineerIdOrName) {
           .not('travel_datetime', 'is', null);
       } catch (e) { return { data: null }; }
     })(),
+    (async () => {
+      try {
+        return await supabase
+          .from('installation_checklists')
+          .select('id, checklist_number, client_name, installation_status, service_engineer, current_expected_arrival_date, expected_arrival_date, current_booking_end_date, booking_end_date, installation_duration, actual_completion_datetime, actual_start_datetime');
+      } catch (e) { return { data: null }; }
+    })(),
   ]);
+
+  const allChecklists = allChecklistsRes?.data;
+  const checklistMap = new Map();
+  if (Array.isArray(allChecklists)) {
+    allChecklists.forEach((c) => checklistMap.set(String(c.id).toLowerCase(), c));
+  }
 
   // Process 1: Job Bookings from engineer_bookings
   const dbBookings = dbBookingsRes?.data;
   if (Array.isArray(dbBookings)) {
     dbBookings.forEach((b) => {
       seenIds.add(b.id);
+      if (b.checklist_id && allChecklists) {
+        const chk = checklistMap.get(String(b.checklist_id).toLowerCase());
+        if (!chk) {
+          const ageMs = b.created_at ? (Date.now() - new Date(b.created_at).getTime()) : Infinity;
+          if (ageMs > 30000) return; // Orphaned assignment of deleted checklist
+        } else if (chk.installation_status === 'Cancelled') {
+          return; // Cancelled checklist
+        }
+      }
       commitments.push({
         id: b.id,
         type: 'JOB',
@@ -352,6 +375,15 @@ export async function getEngineerCommitments(engineerIdOrName) {
     const bStatus = String(b.status || '').toUpperCase();
     const isActive = ['ASSIGNED', 'IN_PROGRESS', 'COMPLETED', 'SITE WORK COMPLETED'].includes(bStatus);
     if (isMatching && isActive) {
+      if (b.checklist_id && allChecklists) {
+        const chk = checklistMap.get(String(b.checklist_id).toLowerCase());
+        if (!chk) {
+          const ageMs = b.created_at ? (Date.now() - new Date(b.created_at).getTime()) : Infinity;
+          if (ageMs > 30000) return; // Orphaned assignment of deleted checklist
+        } else if (chk.installation_status === 'Cancelled' || chk.installation_status === 'Assign Later' || chk.remarks?.includes('[CANCELLED')) {
+          return; // Cancelled or unscheduled checklist
+        }
+      }
       commitments.push({
         id: b.id,
         type: 'JOB',
@@ -367,11 +399,13 @@ export async function getEngineerCommitments(engineerIdOrName) {
   });
 
   // Process 2: Active Checklists
-  const checklists = checklistsRes?.data;
+  const checklists = Array.isArray(allChecklists)
+    ? allChecklists.filter((ch) => (ch.service_engineer || '').toLowerCase().includes(engName.toLowerCase()))
+    : (checklistsRes?.data || []);
   if (Array.isArray(checklists)) {
     checklists.forEach((ch) => {
       const instStatus = String(ch.installation_status || '').toUpperCase();
-      if (!['ASSIGNED', 'IN PROGRESS', 'COMPLETED', 'SITE WORK COMPLETED'].includes(instStatus)) return;
+      if (!['ASSIGNED', 'IN PROGRESS', 'COMPLETED', 'SITE WORK COMPLETED'].includes(instStatus) || ch.remarks?.includes('[CANCELLED')) return;
       const sched = inMemoryChecklistSchedules?.get(ch.id);
       const start = sched?.current_expected_arrival_date || ch.current_expected_arrival_date || ch.expected_arrival_date;
       const end = sched?.current_booking_end_date || ch.current_booking_end_date || ch.booking_end_date || calculateBookingEndDate(start, ch.installation_duration || '1 Day');
@@ -480,6 +514,29 @@ export async function getEngineerCommitments(engineerIdOrName) {
   }
 
   // Process 5: Recorded Travel Commitments (Outbound and Return)
+  const isConfirmedTravel = (cb, type) => {
+    if (type === 'OUTBOUND') {
+      return ['Booked', 'Confirmed'].includes(cb.outbound_status) ||
+        Boolean(cb.outbound_ticket_reference || cb.ticket_reference) ||
+        (Boolean(cb.outbound_operator) && Number(cb.outbound_fare) > 0);
+    } else {
+      return ['Booked', 'Confirmed', 'Booking Confirmed'].includes(cb.return_status) ||
+        Boolean(cb.return_ticket_reference) ||
+        (Boolean(cb.return_operator) && Number(cb.return_fare) > 0);
+    }
+  };
+
+  const isOrphanedOrCancelledTravel = (cb, type) => {
+    if (isConfirmedTravel(cb, type)) return false; // Independent confirmed tickets are always preserved!
+    if (!cb.checklist_id || !allChecklists) return false;
+    const chk = checklistMap.get(String(cb.checklist_id).toLowerCase());
+    if (!chk) {
+      const ageMs = cb.created_at ? (Date.now() - new Date(cb.created_at).getTime()) : Infinity;
+      return ageMs > 30000; // Orphaned unbooked travel from deleted checklist
+    }
+    return chk.installation_status === 'Cancelled';
+  };
+
   const dbCoord = dbCoordRes?.data;
   if (Array.isArray(dbCoord)) {
     dbCoord.forEach((cb) => {
@@ -487,7 +544,7 @@ export async function getEngineerCommitments(engineerIdOrName) {
       if (assigned.includes(engName.toLowerCase())) {
         // Outbound Travel
         const outTime = cb.outbound_departure_datetime || cb.travel_datetime;
-        if (outTime && cb.outbound_status !== 'Cancelled') {
+        if (outTime && cb.outbound_status !== 'Cancelled' && !isOrphanedOrCancelledTravel(cb, 'OUTBOUND')) {
           const travelDate = outTime.split('T')[0];
           commitments.push({
             id: `travel-out-${cb.id}`,
@@ -502,7 +559,7 @@ export async function getEngineerCommitments(engineerIdOrName) {
           });
         }
         // Return Travel
-        if (cb.return_departure_datetime && cb.return_status !== 'Cancelled') {
+        if (cb.return_departure_datetime && cb.return_status !== 'Cancelled' && !isOrphanedOrCancelledTravel(cb, 'RETURN')) {
           const retDate = cb.return_departure_datetime.split('T')[0];
           commitments.push({
             id: `travel-ret-${cb.id}`,
@@ -538,7 +595,7 @@ export async function getEngineerCommitments(engineerIdOrName) {
     if (assigned.includes(engName.toLowerCase())) {
       // Outbound Travel
       const outTime = cb.outbound_departure_datetime || cb.travel_datetime;
-      if (outTime && cb.outbound_status !== 'Cancelled') {
+      if (outTime && cb.outbound_status !== 'Cancelled' && !isOrphanedOrCancelledTravel(cb, 'OUTBOUND')) {
         const travelDate = outTime.split('T')[0];
         const outId = `travel-out-${cb.id || cb.checklist_id}`;
         if (!commitments.some((c) => c.id === outId)) {
@@ -556,7 +613,7 @@ export async function getEngineerCommitments(engineerIdOrName) {
         }
       }
       // Return Travel
-      if (cb.return_departure_datetime && cb.return_status !== 'Cancelled') {
+      if (cb.return_departure_datetime && cb.return_status !== 'Cancelled' && !isOrphanedOrCancelledTravel(cb, 'RETURN')) {
         const retDate = cb.return_departure_datetime.split('T')[0];
         const retId = `travel-ret-${cb.id || cb.checklist_id}`;
         if (!commitments.some((c) => c.id === retId)) {
@@ -1170,24 +1227,34 @@ export async function reserveEngineerAtomic({
 /**
  * Release / Cancel an engineer booking
  */
-export async function releaseEngineerBooking({ checklistId }) {
+export async function releaseEngineerBooking(checklistIdOrObj) {
+  const checklistId = typeof checklistIdOrObj === 'object' && checklistIdOrObj !== null
+    ? (checklistIdOrObj.checklistId || checklistIdOrObj.checklist_id || checklistIdOrObj.id)
+    : checklistIdOrObj;
   if (!checklistId) return;
+
+  const idStr = String(checklistId).trim().toLowerCase();
+  const nowIso = new Date().toISOString();
 
   try {
     await supabase
       .from('engineer_bookings')
-      .update({ status: 'RELEASED', updated_at: new Date().toISOString() })
+      .update({ status: 'RELEASED', updated_at: nowIso })
       .eq('checklist_id', checklistId);
   } catch (err) {}
 
   let found = false;
-  inMemoryBookings.forEach((b, k) => {
-    if (b.checklist_id === checklistId || k === checklistId) {
+  for (const [k, b] of inMemoryBookings.entries()) {
+    if (
+      String(k).toLowerCase() === idStr ||
+      (b?.checklist_id && String(b.checklist_id).toLowerCase() === idStr) ||
+      (b?.id && String(b.id).toLowerCase() === idStr)
+    ) {
       b.status = 'RELEASED';
-      b.updated_at = new Date().toISOString();
+      b.updated_at = nowIso;
       found = true;
     }
-  });
+  }
 
   if (found) {
     saveStorage();
@@ -1199,23 +1266,76 @@ export async function releaseEngineerBooking({ checklistId }) {
  */
 export async function deleteEngineerBookingForChecklist(checklistId) {
   if (!checklistId) return;
+  const idStr = String(checklistId).trim().toLowerCase();
 
   try {
     await supabase.from('engineer_bookings').delete().eq('checklist_id', checklistId);
   } catch (err) {}
 
   let found = false;
-  inMemoryBookings.forEach((b, k) => {
-    if (b.checklist_id === checklistId || k === checklistId) {
+  for (const [k, b] of inMemoryBookings.entries()) {
+    if (
+      String(k).toLowerCase() === idStr ||
+      (b?.checklist_id && String(b.checklist_id).toLowerCase() === idStr) ||
+      (b?.id && String(b.id).toLowerCase() === idStr)
+    ) {
       inMemoryBookings.delete(k);
       found = true;
     }
-  });
+  }
 
   if (found) {
     saveStorage();
   }
 }
+
+/**
+ * Reconcile engineer bookings against database checklists
+ * Prunes orphaned bookings for deleted checklists and releases cancelled assignments.
+ */
+export async function reconcileEngineerBookings() {
+  let changed = false;
+  try {
+    const { data: dbChecklists, error } = await supabase
+      .from('installation_checklists')
+      .select('id, checklist_number, installation_status');
+
+    if (error || !Array.isArray(dbChecklists)) return false;
+
+    const checklistMap = new Map();
+    dbChecklists.forEach((c) => checklistMap.set(String(c.id).toLowerCase(), c));
+
+    const now = Date.now();
+    for (const [k, b] of inMemoryBookings.entries()) {
+      if (!b || !b.checklist_id) continue;
+      const chkId = String(b.checklist_id).toLowerCase();
+      const existingChecklist = checklistMap.get(chkId);
+
+      const ageMs = b.created_at ? (now - new Date(b.created_at).getTime()) : Infinity;
+      if (ageMs < 30000) continue;
+
+      if (!existingChecklist) {
+        inMemoryBookings.delete(k);
+        changed = true;
+      } else if (existingChecklist.installation_status === 'Cancelled' && b.status !== 'RELEASED' && b.status !== 'CANCELLED') {
+        b.status = 'RELEASED';
+        changed = true;
+      }
+    }
+
+    if (changed) {
+      saveStorage();
+    }
+  } catch (err) {
+    console.warn('Engineer bookings reconciliation error:', err.message);
+  }
+  return changed;
+}
+
+// Trigger initial async reconciliation
+setTimeout(() => {
+  reconcileEngineerBookings().catch(() => {});
+}, 600);
 
 /**
  * Update active date range for an engineer booking upon approved schedule extension

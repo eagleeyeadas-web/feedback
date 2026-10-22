@@ -421,11 +421,10 @@ export async function setTechnicianManualAvailability(params) {
   const overrideId = uuidv4();
   const manualStatus = normalizedStatus;
 
-  const record = {
+  const dbRecord = {
     id: overrideId,
     engineer_id: resolved.id,
     engineer_name: resolved.name,
-    previous_status: previousStatus,
     manual_status: normalizedStatus,
     reason: effectiveReason,
     effective_start_datetime: startIso,
@@ -442,9 +441,14 @@ export async function setTechnicianManualAvailability(params) {
     updated_at: nowIso,
   };
 
-  // Attempt DB persist
+  const record = {
+    ...dbRecord,
+    previous_status: previousStatus,
+  };
+
+  // Attempt DB persist with matching database columns
   try {
-    await supabase.from('technician_availability_overrides').insert([record]);
+    await supabase.from('technician_availability_overrides').insert([dbRecord]);
   } catch (err) {
     console.warn('DB insert technician_availability_overrides exception:', err.message);
   }

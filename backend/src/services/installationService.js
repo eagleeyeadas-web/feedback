@@ -764,7 +764,7 @@ export async function updateChecklist(id, data) {
   }
 
   // If previously Assign Later or unscheduled and now both engineer and date are provided, ensure status is Assigned
-  if (newEngName && newStartDate && newStatus !== 'Completed') {
+  if (newEngName && newStartDate && newStatus !== 'Completed' && newStatus !== 'Cancelled' && newStatus !== 'Assign Later') {
     newStatus = 'Assigned';
   } else if (!newEngName && !newStartDate && newStatus !== 'Completed') {
     newStatus = 'Assign Later';
@@ -896,7 +896,7 @@ export async function updateChecklist(id, data) {
     courier_dispatch_status: data.courier_dispatch_status !== undefined ? data.courier_dispatch_status : (existing.courier_dispatch_status || 'NOT_APPLICABLE'),
     installation_status: (existing.installation_status === 'Completed' || newStatus === 'Completed')
       ? 'Completed'
-      : (newStatus === 'Assign Later' ? 'Assign Later' : 'Assigned'),
+      : (newStatus === 'Assign Later' || newStatus === 'Cancelled' ? 'Assign Later' : 'Assigned'),
     payment_status: paymentStatus,
     bom_snapshot: updatedBomSnapshot,
     material_issuance_status: isInstallation
@@ -1172,29 +1172,11 @@ export async function checkChecklistDeletionEligibility(checklistIdOrObj) {
 /**
  * Safely and permanently deletes an installation checklist and its entire workflow.
  * Propagates through all dependent records (BOM, bookings, technician assignments,
- * reports, expenses, returns, declarations, notifications, and local storage caches)
- * so that no orphaned records remain.
+/**
+ * Clean up all dependent records and caches for a checklist (used by both safe deletion and orphan cleanup)
  */
-export async function safeDeleteChecklist(id, user = null) {
-  const existing = await getChecklistById(id, { enrich: false });
-  if (!existing) {
-    const err = new Error(`Checklist with ID "${id}" not found.`);
-    err.statusCode = 404;
-    throw err;
-  }
-
-  const checklistId = existing.id;
-  const checklistNumber = existing.checklist_number;
-
-  // 1. Evaluate impact prior to deletion for reporting and audit
-  let impactData = null;
-  try {
-    impactData = await getChecklistDeletionImpact(checklistId);
-  } catch (e) {
-    impactData = { impact: { totalDependentRecords: 0 }, dependentRecordsBreakdown: [] };
-  }
-
-  // 2. Cascade delete dependent child records in strict reverse dependency order:
+export async function cleanupChecklistOrphanedData(checklistId, checklistNumber = '', user = null) {
+  if (!checklistId) return;
 
   // a. Technical report items and reports
   try {
@@ -1313,7 +1295,7 @@ export async function safeDeleteChecklist(id, user = null) {
     for (const alloc of active) {
       await releaseDeviceAllocation({
         allocation_id: alloc.id,
-        reason: `Released due to checklist ${checklistNumber} deletion`,
+        reason: `Released due to checklist ${checklistNumber || checklistId} deletion`,
         user,
       });
     }
@@ -1333,8 +1315,46 @@ export async function safeDeleteChecklist(id, user = null) {
   inMemoryChecklistExtraConfigs.delete(checklistId);
   inMemoryChecklistBomSnapshots.delete(checklistId);
   inMemoryChecklistSchedules.delete(checklistId);
+}
 
-  // n. Permanently delete the checklist row from installation_checklists
+/**
+ * Permanently and safely delete a checklist and all its associated workflow records
+ * (reports, expenses, returns, declarations, notifications, and local storage caches)
+ * so that no orphaned records remain.
+ */
+export async function safeDeleteChecklist(id, user = null) {
+  let existing = null;
+  try {
+    existing = await getChecklistById(id, { enrich: false });
+  } catch (err) {
+    existing = null;
+  }
+
+  if (!existing) {
+    // If the checklist was already removed from DB, clean up any remaining orphaned child records
+    await cleanupChecklistOrphanedData(id, '', user);
+    return {
+      success: true,
+      deletedId: id,
+      message: `Cleaned up orphaned records for checklist ${id}.`,
+    };
+  }
+
+  const checklistId = existing.id;
+  const checklistNumber = existing.checklist_number;
+
+  // 1. Evaluate impact prior to deletion for reporting and audit
+  let impactData = null;
+  try {
+    impactData = await getChecklistDeletionImpact(checklistId);
+  } catch (e) {
+    impactData = { impact: { totalDependentRecords: 0 }, dependentRecordsBreakdown: [] };
+  }
+
+  // 2. Cascade delete dependent child records in strict reverse dependency order:
+  await cleanupChecklistOrphanedData(checklistId, checklistNumber, user);
+
+  // 3. Permanently delete the checklist row from installation_checklists
   const { error: delErr } = await supabase
     .from('installation_checklists')
     .delete()
@@ -1551,11 +1571,11 @@ export async function safeDeleteAllEligibleChecklists({ user, confirmedCount, pa
 export async function cancelChecklist({ checklistId, user, reason = 'Cancelled by Coordinator' }) {
   const existing = await getChecklistById(checklistId, { enrich: false });
 
-  if (existing.installation_status === 'Cancelled') {
+  if ((existing.installation_status === 'Assign Later' && existing.remarks?.includes('[CANCELLED')) || existing.installation_status === 'Cancelled') {
     return {
       success: true,
       message: `Checklist ${existing.checklist_number} is already cancelled.`,
-      checklist: existing,
+      checklist: { ...existing, installation_status: 'Cancelled' },
     };
   }
 
@@ -1563,8 +1583,16 @@ export async function cancelChecklist({ checklistId, user, reason = 'Cancelled b
     ? `${existing.remarks} [CANCELLED: ${reason}]`
     : `[CANCELLED: ${reason}]`;
 
+  // Note: Database constraint installation_checklists_installation_status_check enforces
+  // installation_status IN ('Assigned', 'Assign Later', 'Completed').
+  // When an assignment is cancelled, the status is set to 'Assign Later' (unassigned) and
+  // the engineer and arrival dates are unlinked, releasing the engineer completely.
   const updated = await updateChecklist(existing.id, {
-    installation_status: 'Cancelled',
+    installation_status: 'Assign Later',
+    service_engineer: null,
+    service_engineer_id: null,
+    expected_arrival_date: null,
+    booking_end_date: null,
     remarks: updatedRemarks,
   });
 
@@ -1584,6 +1612,22 @@ export async function cancelChecklist({ checklistId, user, reason = 'Cancelled b
     }
   } catch (err) {
     console.warn(`[ChecklistCancellation] Notice releasing allocations: ${err.message}`);
+  }
+
+  // Release engineer booking
+  try {
+    const { releaseEngineerBooking } = await import('./engineerBookingService.js');
+    await releaseEngineerBooking(existing.id);
+  } catch (err) {
+    console.warn(`[ChecklistCancellation] Notice releasing engineer booking: ${err.message}`);
+  }
+
+  // Cancel dependent unbooked travel for cancelled checklist
+  try {
+    const { cancelDependentTravelForChecklist } = await import('./coordinatorBookingService.js');
+    cancelDependentTravelForChecklist(existing.id);
+  } catch (err) {
+    console.warn(`[ChecklistCancellation] Notice cancelling dependent travel: ${err.message}`);
   }
 
   try {
