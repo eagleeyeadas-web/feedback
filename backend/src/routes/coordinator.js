@@ -56,6 +56,13 @@ import {
   safeDeleteChecklist,
   cancelChecklist,
 } from '../services/installationService.js';
+import {
+  generateConflictId,
+  isConflictDeleted,
+  deleteConflictId,
+  deleteConflictIds,
+  resetDeletedConflicts,
+} from '../services/conflictHistoryService.js';
 
 const router = Router();
 
@@ -833,14 +840,22 @@ router.get('/schedule/conflicts', async (req, res) => {
           const endA = a.effective_end_date || a.end_date;
           const endB = b.effective_end_date || b.end_date;
           if (a.start_date <= endB && endA >= b.start_date) {
-            conflicts.push({
+            const overlap_start = a.start_date > b.start_date ? a.start_date : b.start_date;
+            const overlap_end = endA < endB ? endA : endB;
+            const conflictObj = {
               engineer_id: eng.id,
               engineer_name: eng.name,
               commitment_a: a,
               commitment_b: b,
-              overlap_start: a.start_date > b.start_date ? a.start_date : b.start_date,
-              overlap_end: endA < endB ? endA : endB,
-            });
+              overlap_start,
+              overlap_end,
+            };
+            conflictObj.id = generateConflictId(conflictObj);
+
+            // Filter out conflict history items that were deleted by the coordinator
+            if (!isConflictDeleted(conflictObj.id)) {
+              conflicts.push(conflictObj);
+            }
           }
         }
       }
@@ -850,6 +865,69 @@ router.get('/schedule/conflicts', async (req, res) => {
   } catch (err) {
     console.error('Error detecting conflicts:', err);
     return res.status(500).json({ error: err.message || 'Failed to detect conflicts' });
+  }
+});
+
+/**
+ * DELETE /api/admin/coordinator/schedule/conflicts/:id
+ * Delete a specific schedule conflict entry from conflict history
+ */
+router.delete('/schedule/conflicts/:id', async (req, res) => {
+  try {
+    const conflictId = req.params.id;
+    if (!conflictId) {
+      return res.status(400).json({ error: 'Conflict ID is required' });
+    }
+    deleteConflictId(conflictId);
+    return res.json({ success: true, message: 'Conflict deleted from history', id: conflictId });
+  } catch (err) {
+    console.error('Error deleting schedule conflict:', err);
+    return res.status(500).json({ error: err.message || 'Failed to delete schedule conflict' });
+  }
+});
+
+/**
+ * DELETE /api/admin/coordinator/schedule/conflicts
+ * Delete multiple or all schedule conflicts from history
+ */
+router.delete('/schedule/conflicts', async (req, res) => {
+  try {
+    let idsToDelete = req.body?.ids;
+
+    // If specific IDs not passed in body, collect all currently detected conflict IDs
+    if (!Array.isArray(idsToDelete) || idsToDelete.length === 0) {
+      const engineers = await getAllServiceEngineers();
+      idsToDelete = [];
+      for (const eng of engineers) {
+        const comms = await getEngineerCommitments(eng.id);
+        for (let i = 0; i < comms.length; i++) {
+          for (let j = i + 1; j < comms.length; j++) {
+            const a = comms[i];
+            const b = comms[j];
+            const endA = a.effective_end_date || a.end_date;
+            const endB = b.effective_end_date || b.end_date;
+            if (a.start_date <= endB && endA >= b.start_date) {
+              const overlap_start = a.start_date > b.start_date ? a.start_date : b.start_date;
+              const overlap_end = endA < endB ? endA : endB;
+              const cId = generateConflictId({
+                engineer_id: eng.id,
+                commitment_a: a,
+                commitment_b: b,
+                overlap_start,
+                overlap_end,
+              });
+              idsToDelete.push(cId);
+            }
+          }
+        }
+      }
+    }
+
+    const count = deleteConflictIds(idsToDelete);
+    return res.json({ success: true, message: `Deleted ${count} conflict history entries`, count });
+  } catch (err) {
+    console.error('Error clearing conflict history:', err);
+    return res.status(500).json({ error: err.message || 'Failed to clear schedule conflict history' });
   }
 });
 

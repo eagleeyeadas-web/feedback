@@ -1433,6 +1433,27 @@ export async function fetchCoordinatorScheduleConflicts(token) {
   return json;
 }
 
+export async function deleteCoordinatorScheduleConflict(token, conflictId) {
+  const res = await fetch(`${API_BASE}/admin/coordinator/schedule/conflicts/${encodeURIComponent(conflictId)}`, {
+    method: 'DELETE',
+    headers: adminHeaders(token),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to delete schedule conflict');
+  return json;
+}
+
+export async function clearAllCoordinatorScheduleConflicts(token, conflictIds = []) {
+  const res = await fetch(`${API_BASE}/admin/coordinator/schedule/conflicts`, {
+    method: 'DELETE',
+    headers: adminHeaders(token),
+    body: JSON.stringify({ ids: conflictIds }),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to clear schedule conflict history');
+  return json;
+}
+
 export async function fetchCoordinatorAffectedBookings(token) {
   const res = await fetch(`${API_BASE}/admin/coordinator/schedule/affected-bookings`, {
     headers: adminHeaders(token),
