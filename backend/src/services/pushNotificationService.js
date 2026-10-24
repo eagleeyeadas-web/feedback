@@ -109,6 +109,33 @@ export function getVapidPublicKey() {
 }
 
 /**
+ * Determine the canonical application base URL for generating absolute push notification links.
+ * Avoids hardcoded localhost in production and respects deployment environment settings.
+ */
+export function getNotificationBaseUrl() {
+  if (process.env.FRONTEND_URL) return process.env.FRONTEND_URL.replace(/\/+$/, '');
+  if (process.env.APP_URL) return process.env.APP_URL.replace(/\/+$/, '');
+  
+  const corsOrigin = config.cors?.origin;
+  if (corsOrigin && typeof corsOrigin === 'string' && !corsOrigin.includes('localhost') && !corsOrigin.includes('127.0.0.1')) {
+    return corsOrigin.replace(/\/+$/, '');
+  }
+
+  // Canonical production deployment URL for SafDrive
+  return 'https://eagleeyesafdrive.vercel.app';
+}
+
+/**
+ * Format a canonical hash-based absolute URL for push notifications.
+ * e.g. "/admin/installation-checklists/uuid" -> "https://eagleeyesafdrive.vercel.app/#/admin/installation-checklists/uuid"
+ */
+export function buildNotificationUrl(relativePath) {
+  const baseUrl = getNotificationBaseUrl();
+  const cleanPath = (relativePath || '/').replace(/^\/+/, '').replace(/^#\/?/, '');
+  return `${baseUrl}/#/${cleanPath}`;
+}
+
+/**
  * Save or update a Web Push subscription
  */
 export async function saveSubscription({
@@ -360,6 +387,10 @@ export async function notifyChecklistCreated(checklist, options = {}) {
 
   const body = `A new installation checklist has been created.\nJob #${checklistNumber} • ${detailsParts.join(' • ')}`;
 
+  // Valid canonical hash-based absolute URL for push notifications matching HashRouter structure
+  const relativePath = `/admin/installation-checklists/${checklistId}`;
+  const absoluteUrl = buildNotificationUrl(relativePath);
+
   const pushPayload = {
     title,
     body,
@@ -368,7 +399,8 @@ export async function notifyChecklistCreated(checklist, options = {}) {
     tag: `checklist-${checklistId || checklistNumber}`,
     renotify: true,
     data: {
-      url: `/admin/installation-checklists/${checklistId}`,
+      url: absoluteUrl,
+      path: relativePath,
       checklistId,
       checklistNumber,
       timestamp: Date.now(),
@@ -416,7 +448,7 @@ export async function notifyChecklistCreated(checklist, options = {}) {
     checklist_number: checklistNumber,
     title,
     body,
-    url: `/admin/installation-checklists/${checklistId}`,
+    url: relativePath,
     recipients_attempted: subscriptions.length,
     recipients_succeeded: succeeded,
     recipients_failed: failed,
@@ -424,7 +456,7 @@ export async function notifyChecklistCreated(checklist, options = {}) {
     created_at: new Date().toISOString(),
   };
 
-  inMemoryHistory.push(historyRecord);
+  inMemoryHistory.push({ ...historyRecord, full_url: absoluteUrl });
   saveHistoryStorage();
 
   // Try DB audit recording
@@ -462,6 +494,9 @@ export async function sendTestNotificationToUser({ userId, userEmail = null }) {
   const title = 'Eagle Eye SafDrive — Test Push Notification';
   const body = 'Real mobile push notifications are successfully active on your device! You will receive system alerts when new checklists are created.';
 
+  const relativePath = '/admin/installation-checklists';
+  const absoluteUrl = buildNotificationUrl(relativePath);
+
   const payload = {
     title,
     body,
@@ -469,7 +504,8 @@ export async function sendTestNotificationToUser({ userId, userEmail = null }) {
     badge: '/icon-192.png',
     tag: `test-push-${Date.now()}`,
     data: {
-      url: '/',
+      url: absoluteUrl,
+      path: relativePath,
       timestamp: Date.now(),
       isTest: true,
     },
@@ -564,7 +600,9 @@ export async function notifyCoordinatorReportSubmitted({
   const title = 'Post-Installation Report Submitted';
   const body = `Technician ${techName} has submitted the post-installation report for checklist ${checklistNumber}. Please review the report and return-ticket details.`;
 
-  const targetUrl = `/coordinator?tab=return&checklist=${checklistId}&openReport=true`;
+  // Canonical absolute URL with both view and checklist parameters for deep linking
+  const relativePath = `/coordinator?view=${checklistId}&checklist=${checklistId}&tab=return&openReport=true`;
+  const absoluteUrl = buildNotificationUrl(relativePath);
 
   const pushPayload = {
     title,
@@ -574,7 +612,8 @@ export async function notifyCoordinatorReportSubmitted({
     tag: `post-install-${checklistId || checklistNumber}`,
     renotify: true,
     data: {
-      url: targetUrl,
+      url: absoluteUrl,
+      path: relativePath,
       checklistId,
       checklistNumber,
       action: 'review_report',
@@ -622,7 +661,7 @@ export async function notifyCoordinatorReportSubmitted({
     checklist_number: checklistNumber,
     title,
     body,
-    url: targetUrl,
+    url: relativePath,
     recipients_attempted: coordinatorSubs.length,
     recipients_succeeded: succeeded,
     recipients_failed: failed,
@@ -630,7 +669,7 @@ export async function notifyCoordinatorReportSubmitted({
     created_at: new Date().toISOString(),
   };
 
-  inMemoryHistory.push(historyRecord);
+  inMemoryHistory.push({ ...historyRecord, full_url: absoluteUrl });
   saveHistoryStorage();
 
   try {

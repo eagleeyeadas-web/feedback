@@ -69,8 +69,8 @@ const inMemoryMaterials = new Map(
 );
 
 const inMemoryMaterialTransactions = [];
-const processedChecklistMaterialIssuances = new Set();
-const processedMaterialReturnCredits = new Set();
+export const processedChecklistMaterialIssuances = new Set();
+export const processedMaterialReturnCredits = new Set();
 let dbSeeded = false;
 
 /**

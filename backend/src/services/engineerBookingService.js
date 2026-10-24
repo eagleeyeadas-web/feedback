@@ -4,6 +4,14 @@ import { fileURLToPath } from 'url';
 import supabase from './supabase.js';
 import { logAudit } from './auditService.js';
 import { inMemoryChecklistSchedules, getBusinessToday } from './installationService.js';
+import {
+  getAllServiceEngineers as getDynamicServiceEngineers,
+  inMemoryServiceEngineers,
+  getServiceEngineerById,
+  getActiveServiceEngineersSync,
+} from './serviceEngineerService.js';
+
+export { getActiveServiceEngineersSync };
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -53,7 +61,7 @@ export const MAIN_SERVICE_ENGINEERS = [
 /**
  * In-memory storage of bookings and concurrency lock map
  */
-const inMemoryBookings = new Map(); // key: booking id or checklist_id -> booking object
+export const inMemoryBookings = new Map(); // key: booking id or checklist_id -> booking object
 const engineerMutexQueues = new Map(); // key: engineer_id -> Promise chain for concurrency serialization
 
 function loadStorage() {
@@ -175,12 +183,19 @@ export function isDateRangeOverlapping(startA, endA, startB, endB) {
 }
 
 /**
- * Resolve engineer from ID or Name against MAIN_SERVICE_ENGINEERS
+/**
+ * Resolve engineer from ID or Name dynamically across all active and seeded engineers
  */
 export function resolveEngineer(idOrName) {
   if (!idOrName) return null;
   const query = String(idOrName).trim().toLowerCase();
 
+  // 1. Check in-memory service engineers map (includes all active and newly added engineers)
+  if (inMemoryServiceEngineers.has(query)) {
+    return inMemoryServiceEngineers.get(query);
+  }
+
+  // 2. Check MAIN_SERVICE_ENGINEERS seed
   const byId = MAIN_SERVICE_ENGINEERS.find((e) => e.id.toLowerCase() === query);
   if (byId) return byId;
 
@@ -192,6 +207,13 @@ export function resolveEngineer(idOrName) {
   );
   if (byPartial) return byPartial;
 
+  // 3. Check for any in-memory engineer by partial name
+  for (const [k, eng] of inMemoryServiceEngineers.entries()) {
+    if (eng.name?.toLowerCase().includes(query) || query.includes(eng.name?.toLowerCase())) {
+      return eng;
+    }
+  }
+
   return {
     id: `eng-${query.replace(/\s+/g, '-').toLowerCase()}`,
     name: idOrName.trim(),
@@ -201,32 +223,10 @@ export function resolveEngineer(idOrName) {
 }
 
 /**
- * Fetch all configured service engineers (strictly restricted to the four authorized engineers)
+ * Fetch all configured active service engineers dynamically from authoritative records
  */
 export async function getAllServiceEngineers() {
-  const map = new Map();
-  MAIN_SERVICE_ENGINEERS.forEach((eng) => {
-    map.set(eng.name.toLowerCase(), { ...eng });
-  });
-
-  try {
-    const { data: dbEngineers, error } = await supabase
-      .from('service_engineers')
-      .select('*')
-      .in('name', SERVICE_ENGINEER_OPTIONS)
-      .eq('is_active', true);
-
-    if (!error && Array.isArray(dbEngineers)) {
-      dbEngineers.forEach((dbE) => {
-        const key = dbE.name.toLowerCase();
-        if (map.has(key)) {
-          map.set(key, { ...map.get(key), ...dbE });
-        }
-      });
-    }
-  } catch (err) {}
-
-  return SERVICE_ENGINEER_OPTIONS.map((name) => map.get(name.toLowerCase())).filter(Boolean);
+  return await getDynamicServiceEngineers({ includeInactive: false });
 }
 
 /**
@@ -1037,8 +1037,9 @@ export async function getEngineersAvailabilityForRange({
   duration = '1 Day',
   excludeChecklistId = null,
 }) {
+  const engineers = await getAllServiceEngineers();
   if (!startDate) {
-    return MAIN_SERVICE_ENGINEERS.map((eng) => ({
+    return engineers.map((eng) => ({
       id: eng.id,
       name: eng.name,
       role: eng.role,
@@ -1050,7 +1051,6 @@ export async function getEngineersAvailabilityForRange({
   }
 
   const finalEndDate = endDate || calculateBookingEndDate(startDate, duration);
-  const engineers = await getAllServiceEngineers();
 
   const results = await Promise.all(
     engineers.map(async (eng) => {

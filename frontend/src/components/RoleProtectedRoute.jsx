@@ -1,4 +1,4 @@
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import AccessDenied from './AccessDenied';
 
@@ -13,7 +13,7 @@ function PageLoader() {
 /**
  * RoleProtectedRoute enforces authentication and role-based authorization:
  * 1. Shows PageLoader while session and profile are loading (preserves session on page refresh).
- * 2. Unauthenticated users are redirected directly to /login.
+ * 2. Unauthenticated users are redirected to /login with ?redirect= preserving their destination.
  * 3. Unauthorized users see the AccessDenied page.
  * 4. Authorized users see the protected workspace children.
  */
@@ -23,14 +23,18 @@ export default function RoleProtectedRoute({
   children,
 }) {
   const { session, role, loading } = useAuth();
+  const location = useLocation();
 
   if (loading) {
     return <PageLoader />;
   }
 
-  // 1. Unauthenticated: Redirect to login page
+  // 1. Unauthenticated: Redirect to login, preserving the intended destination
   if (!session) {
-    return <Navigate to="/login" replace />;
+    // Encode current hash path so Login can restore it after sign-in
+    const currentPath = location.pathname + location.search + location.hash;
+    const redirectParam = currentPath && currentPath !== '/' ? `?redirect=${encodeURIComponent(currentPath)}` : '';
+    return <Navigate to={`/login${redirectParam}`} replace />;
   }
 
   // 2. Unauthorized: Render Access Denied page
@@ -49,3 +53,4 @@ export default function RoleProtectedRoute({
   // 3. Authorized
   return children;
 }
+

@@ -418,19 +418,24 @@ export default function CoordinatorWorkspace() {
     };
   }, [token]);
 
-  // Deep link support: auto-open report if query parameters exist (?tab=return&checklist=...&openReport=true)
+  // Deep link support: auto-open report if query parameters exist (?tab=return&checklist=...&openReport=true or ?view=...)
   useEffect(() => {
-    const chkParam = searchParams.get('checklist');
+    const chkParam = searchParams.get('checklist') || searchParams.get('view') || searchParams.get('id');
     const openReportParam = searchParams.get('openReport');
     const actionParam = searchParams.get('action');
-    if (chkParam && (openReportParam === 'true' || actionParam === 'review_report')) {
-      const match = checklists.find((c) => c.id === chkParam);
-      openReportModal(
-        chkParam,
-        match?.checklist_number || '',
-        match?.client_name || '',
-        match?.service_engineer || ''
-      );
+
+    if (chkParam) {
+      const match = checklists.find((c) => c.id === chkParam || c.checklist_number === chkParam);
+      if (openReportParam === 'true' || actionParam === 'review_report') {
+        openReportModal(
+          chkParam,
+          match?.checklist_number || '',
+          match?.client_name || '',
+          match?.service_engineer || ''
+        );
+      } else if (match?.checklist_number) {
+        setSearchTerm(match.checklist_number);
+      }
     }
   }, [searchParams, checklists, openReportModal]);
 

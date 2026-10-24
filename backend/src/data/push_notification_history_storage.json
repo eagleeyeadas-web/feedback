@@ -1913,7 +1913,1009 @@
         }
       ],
       "created_at": "2026-10-22T10:09:42.436Z"
+    },
+    {
+      "id": "80af92e8-96b9-463f-a174-912dde7f5bb1",
+      "event_id": "checklist-created-23f5cab4-bf01-4303-accc-bd1bfa487de5",
+      "checklist_id": "23f5cab4-bf01-4303-accc-bd1bfa487de5",
+      "checklist_number": "EE-INST-20261022-0062",
+      "title": "Eagle Eye SafDrive — New Installation Checklist",
+      "body": "A new installation checklist has been created.\nJob #EE-INST-20261022-0062 • Tech: Sakthivel • Loc: Coimbatore • Time: 04:42 pm",
+      "url": "/admin/installation-checklists/23f5cab4-bf01-4303-accc-bd1bfa487de5",
+      "recipients_attempted": 7,
+      "recipients_succeeded": 3,
+      "recipients_failed": 4,
+      "delivery_details": [
+        {
+          "userId": "abaff860-05b2-44fa-9139-b14d92e3fa19",
+          "userEmail": "tech@gmail.com",
+          "status": "SUCCESS",
+          "statusCode": 201
+        },
+        {
+          "userId": "00000000-0000-0000-0000-000000000001",
+          "userEmail": "sales@eagleeyesafdrive.com",
+          "status": "FAILED",
+          "error": "The subscription auth key should be at least 16 bytes long",
+          "statusCode": 0
+        },
+        {
+          "userId": "00000000-0000-0000-0000-000000000001",
+          "userEmail": "sales@eagleeyesafdrive.com",
+          "status": "FAILED",
+          "error": "The subscription auth key should be at least 16 bytes long",
+          "statusCode": 0
+        },
+        {
+          "userId": "b641c67b-2707-4fda-a251-3f2610ba063f",
+          "userEmail": "coordinator@example.com",
+          "status": "FAILED",
+          "error": "Public key is not valid for specified curve",
+          "statusCode": 0
+        },
+        {
+          "userId": "8242b3cd-ba5f-4149-bbc6-a3a30738485d",
+          "userEmail": "coordinator@example.com",
+          "status": "FAILED",
+          "error": "Public key is not valid for specified curve",
+          "statusCode": 0
+        },
+        {
+          "userId": "abaff860-05b2-44fa-9139-b14d92e3fa19",
+          "userEmail": "tech@gmail.com",
+          "status": "SUCCESS",
+          "statusCode": 201
+        },
+        {
+          "userId": "5598cef6-0095-4403-a664-98d0f7666987",
+          "userEmail": "hr@gmail.com",
+          "status": "SUCCESS",
+          "statusCode": 201
+        }
+      ],
+      "created_at": "2026-10-22T11:12:33.309Z"
+    },
+    {
+      "id": "7870f86e-bcbb-4dce-88cd-3e50ed1efae9",
+      "event_id": "post-install-push-23f5cab4-bf01-4303-accc-bd1bfa487de5",
+      "checklist_id": "23f5cab4-bf01-4303-accc-bd1bfa487de5",
+      "checklist_number": "EE-INST-20261022-0062",
+      "title": "Post-Installation Report Submitted",
+      "body": "Technician Sakthivel has submitted the post-installation report for checklist EE-INST-20261022-0062. Please review the report and return-ticket details.",
+      "url": "/coordinator?tab=return&checklist=23f5cab4-bf01-4303-accc-bd1bfa487de5&openReport=true",
+      "recipients_attempted": 2,
+      "recipients_succeeded": 0,
+      "recipients_failed": 2,
+      "delivery_details": [
+        {
+          "userId": "b641c67b-2707-4fda-a251-3f2610ba063f",
+          "userEmail": "coordinator@example.com",
+          "status": "FAILED",
+          "error": "Public key is not valid for specified curve",
+          "statusCode": 0
+        },
+        {
+          "userId": "8242b3cd-ba5f-4149-bbc6-a3a30738485d",
+          "userEmail": "coordinator@example.com",
+          "status": "FAILED",
+          "error": "Public key is not valid for specified curve",
+          "statusCode": 0
+        }
+      ],
+      "created_at": "2026-10-22T11:15:40.919Z"
+    },
+    {
+      "id": "68e27c32-627b-4c60-8ea2-4f2d6fa76f54",
+      "event_id": "checklist-created-4f3c174f-a7b0-4cbc-b1fb-5d46461298ab",
+      "checklist_id": "4f3c174f-a7b0-4cbc-b1fb-5d46461298ab",
+      "checklist_number": "EE-INST-20261022-0064",
+      "title": "Eagle Eye SafDrive — New Installation Checklist",
+      "body": "A new installation checklist has been created.\nJob #EE-INST-20261022-0064 • Tech: Sakthivel • Loc: Coimbatore • Time: 05:08 pm",
+      "url": "/admin/installation-checklists/4f3c174f-a7b0-4cbc-b1fb-5d46461298ab",
+      "recipients_attempted": 7,
+      "recipients_succeeded": 3,
+      "recipients_failed": 4,
+      "delivery_details": [
+        {
+          "userId": "abaff860-05b2-44fa-9139-b14d92e3fa19",
+          "userEmail": "tech@gmail.com",
+          "status": "SUCCESS",
+          "statusCode": 201
+        },
+        {
+          "userId": "00000000-0000-0000-0000-000000000001",
+          "userEmail": "sales@eagleeyesafdrive.com",
+          "status": "FAILED",
+          "error": "The subscription auth key should be at least 16 bytes long",
+          "statusCode": 0
+        },
+        {
+          "userId": "00000000-0000-0000-0000-000000000001",
+          "userEmail": "sales@eagleeyesafdrive.com",
+          "status": "FAILED",
+          "error": "The subscription auth key should be at least 16 bytes long",
+          "statusCode": 0
+        },
+        {
+          "userId": "b641c67b-2707-4fda-a251-3f2610ba063f",
+          "userEmail": "coordinator@example.com",
+          "status": "FAILED",
+          "error": "Public key is not valid for specified curve",
+          "statusCode": 0
+        },
+        {
+          "userId": "8242b3cd-ba5f-4149-bbc6-a3a30738485d",
+          "userEmail": "coordinator@example.com",
+          "status": "FAILED",
+          "error": "Public key is not valid for specified curve",
+          "statusCode": 0
+        },
+        {
+          "userId": "abaff860-05b2-44fa-9139-b14d92e3fa19",
+          "userEmail": "tech@gmail.com",
+          "status": "SUCCESS",
+          "statusCode": 201
+        },
+        {
+          "userId": "5598cef6-0095-4403-a664-98d0f7666987",
+          "userEmail": "hr@gmail.com",
+          "status": "SUCCESS",
+          "statusCode": 201
+        }
+      ],
+      "created_at": "2026-10-22T11:38:30.143Z"
+    },
+    {
+      "id": "7a80bce3-470e-41eb-a49f-b36e36b1938c",
+      "event_id": "checklist-created-chk-test-1792830471653",
+      "checklist_id": "chk-test-1792830471653",
+      "checklist_number": "EE-INST-20261021-9999",
+      "title": "Eagle Eye SafDrive — New Installation Checklist",
+      "body": "A new installation checklist has been created.\nJob #EE-INST-20261021-9999 • Tech: Mathi • Loc: Coimbatore Airport Road Hub • Time: 01:57 pm",
+      "url": "/admin/installation-checklists/chk-test-1792830471653",
+      "recipients_attempted": 8,
+      "recipients_succeeded": 3,
+      "recipients_failed": 5,
+      "delivery_details": [
+        {
+          "userId": "abaff860-05b2-44fa-9139-b14d92e3fa19",
+          "userEmail": "tech@gmail.com",
+          "status": "SUCCESS",
+          "statusCode": 201
+        },
+        {
+          "userId": "00000000-0000-0000-0000-000000000001",
+          "userEmail": "sales@eagleeyesafdrive.com",
+          "status": "FAILED",
+          "error": "The subscription auth key should be at least 16 bytes long",
+          "statusCode": 0
+        },
+        {
+          "userId": "00000000-0000-0000-0000-000000000001",
+          "userEmail": "sales@eagleeyesafdrive.com",
+          "status": "FAILED",
+          "error": "The subscription auth key should be at least 16 bytes long",
+          "statusCode": 0
+        },
+        {
+          "userId": "b641c67b-2707-4fda-a251-3f2610ba063f",
+          "userEmail": "coordinator@example.com",
+          "status": "FAILED",
+          "error": "Public key is not valid for specified curve",
+          "statusCode": 0
+        },
+        {
+          "userId": "8242b3cd-ba5f-4149-bbc6-a3a30738485d",
+          "userEmail": "coordinator@example.com",
+          "status": "FAILED",
+          "error": "Public key is not valid for specified curve",
+          "statusCode": 0
+        },
+        {
+          "userId": "abaff860-05b2-44fa-9139-b14d92e3fa19",
+          "userEmail": "tech@gmail.com",
+          "status": "SUCCESS",
+          "statusCode": 201
+        },
+        {
+          "userId": "5598cef6-0095-4403-a664-98d0f7666987",
+          "userEmail": "hr@gmail.com",
+          "status": "SUCCESS",
+          "statusCode": 201
+        },
+        {
+          "userId": "00000000-0000-0000-0000-000000000001",
+          "userEmail": "sales@eagleeyesafdrive.com",
+          "status": "FAILED",
+          "error": "Received unexpected response code",
+          "statusCode": 410
+        }
+      ],
+      "created_at": "2026-10-24T08:27:52.958Z"
+    },
+    {
+      "id": "8196fbe6-0a92-442b-8d67-92dd0d3f8d0d",
+      "event_id": "checklist-created-chk-idemp-1792830473553",
+      "checklist_id": "chk-idemp-1792830473553",
+      "checklist_number": "EE-INST-IDEMP-001",
+      "title": "Eagle Eye SafDrive — New Installation Checklist",
+      "body": "A new installation checklist has been created.\nJob #EE-INST-IDEMP-001 • Tech: Guna • Loc: Madurai Ring Road • Time: 01:57 pm",
+      "url": "/admin/installation-checklists/chk-idemp-1792830473553",
+      "recipients_attempted": 8,
+      "recipients_succeeded": 3,
+      "recipients_failed": 5,
+      "delivery_details": [
+        {
+          "userId": "abaff860-05b2-44fa-9139-b14d92e3fa19",
+          "userEmail": "tech@gmail.com",
+          "status": "SUCCESS",
+          "statusCode": 201
+        },
+        {
+          "userId": "00000000-0000-0000-0000-000000000001",
+          "userEmail": "sales@eagleeyesafdrive.com",
+          "status": "FAILED",
+          "error": "The subscription auth key should be at least 16 bytes long",
+          "statusCode": 0
+        },
+        {
+          "userId": "00000000-0000-0000-0000-000000000001",
+          "userEmail": "sales@eagleeyesafdrive.com",
+          "status": "FAILED",
+          "error": "The subscription auth key should be at least 16 bytes long",
+          "statusCode": 0
+        },
+        {
+          "userId": "b641c67b-2707-4fda-a251-3f2610ba063f",
+          "userEmail": "coordinator@example.com",
+          "status": "FAILED",
+          "error": "Public key is not valid for specified curve",
+          "statusCode": 0
+        },
+        {
+          "userId": "8242b3cd-ba5f-4149-bbc6-a3a30738485d",
+          "userEmail": "coordinator@example.com",
+          "status": "FAILED",
+          "error": "Public key is not valid for specified curve",
+          "statusCode": 0
+        },
+        {
+          "userId": "abaff860-05b2-44fa-9139-b14d92e3fa19",
+          "userEmail": "tech@gmail.com",
+          "status": "SUCCESS",
+          "statusCode": 201
+        },
+        {
+          "userId": "5598cef6-0095-4403-a664-98d0f7666987",
+          "userEmail": "hr@gmail.com",
+          "status": "SUCCESS",
+          "statusCode": 201
+        },
+        {
+          "userId": "00000000-0000-0000-0000-000000000001",
+          "userEmail": "sales@eagleeyesafdrive.com",
+          "status": "FAILED",
+          "error": "The subscription auth key should be at least 16 bytes long",
+          "statusCode": 0
+        }
+      ],
+      "created_at": "2026-10-24T08:27:53.848Z"
+    },
+    {
+      "id": "be13f2ff-d9f9-456a-abcd-14fee0280b1c",
+      "event_id": "checklist-created-1a949c2f-689b-4ca4-b751-6865339a6b39",
+      "checklist_id": "1a949c2f-689b-4ca4-b751-6865339a6b39",
+      "checklist_number": "EE-INST-20261024-0001",
+      "title": "Eagle Eye SafDrive — New Installation Checklist",
+      "body": "A new installation checklist has been created.\nJob #EE-INST-20261024-0001 • Tech: Kamalesh • Loc: Salem Bypass Transport Hub • Time: 01:57 pm",
+      "url": "/admin/installation-checklists/1a949c2f-689b-4ca4-b751-6865339a6b39",
+      "recipients_attempted": 9,
+      "recipients_succeeded": 3,
+      "recipients_failed": 6,
+      "delivery_details": [
+        {
+          "userId": "abaff860-05b2-44fa-9139-b14d92e3fa19",
+          "userEmail": "tech@gmail.com",
+          "status": "SUCCESS",
+          "statusCode": 201
+        },
+        {
+          "userId": "00000000-0000-0000-0000-000000000001",
+          "userEmail": "sales@eagleeyesafdrive.com",
+          "status": "FAILED",
+          "error": "The subscription auth key should be at least 16 bytes long",
+          "statusCode": 0
+        },
+        {
+          "userId": "00000000-0000-0000-0000-000000000001",
+          "userEmail": "sales@eagleeyesafdrive.com",
+          "status": "FAILED",
+          "error": "The subscription auth key should be at least 16 bytes long",
+          "statusCode": 0
+        },
+        {
+          "userId": "b641c67b-2707-4fda-a251-3f2610ba063f",
+          "userEmail": "coordinator@example.com",
+          "status": "FAILED",
+          "error": "Public key is not valid for specified curve",
+          "statusCode": 0
+        },
+        {
+          "userId": "8242b3cd-ba5f-4149-bbc6-a3a30738485d",
+          "userEmail": "coordinator@example.com",
+          "status": "FAILED",
+          "error": "Public key is not valid for specified curve",
+          "statusCode": 0
+        },
+        {
+          "userId": "abaff860-05b2-44fa-9139-b14d92e3fa19",
+          "userEmail": "tech@gmail.com",
+          "status": "SUCCESS",
+          "statusCode": 201
+        },
+        {
+          "userId": "5598cef6-0095-4403-a664-98d0f7666987",
+          "userEmail": "hr@gmail.com",
+          "status": "SUCCESS",
+          "statusCode": 201
+        },
+        {
+          "userId": "00000000-0000-0000-0000-000000000001",
+          "userEmail": "sales@eagleeyesafdrive.com",
+          "status": "FAILED",
+          "error": "The subscription auth key should be at least 16 bytes long",
+          "statusCode": 0
+        },
+        {
+          "userId": "00000000-0000-0000-0000-000000000001",
+          "userEmail": "sales@eagleeyesafdrive.com",
+          "status": "FAILED",
+          "error": "The subscription auth key should be at least 16 bytes long",
+          "statusCode": 0
+        }
+      ],
+      "created_at": "2026-10-24T08:28:04.371Z"
+    },
+    {
+      "id": "8433d2d1-ba66-414c-9969-755dc098f94e",
+      "event_id": "checklist-created-chk-test-1792830912911",
+      "checklist_id": "chk-test-1792830912911",
+      "checklist_number": "EE-INST-20261021-9999",
+      "title": "Eagle Eye SafDrive — New Installation Checklist",
+      "body": "A new installation checklist has been created.\nJob #EE-INST-20261021-9999 • Tech: Mathi • Loc: Coimbatore Airport Road Hub • Time: 02:05 pm",
+      "url": "/admin/installation-checklists/chk-test-1792830912911",
+      "full_url": "https://eagleeyesafdrive.vercel.app/#/admin/installation-checklists/chk-test-1792830912911",
+      "recipients_attempted": 10,
+      "recipients_succeeded": 3,
+      "recipients_failed": 7,
+      "delivery_details": [
+        {
+          "userId": "abaff860-05b2-44fa-9139-b14d92e3fa19",
+          "userEmail": "tech@gmail.com",
+          "status": "SUCCESS",
+          "statusCode": 201
+        },
+        {
+          "userId": "00000000-0000-0000-0000-000000000001",
+          "userEmail": "sales@eagleeyesafdrive.com",
+          "status": "FAILED",
+          "error": "The subscription auth key should be at least 16 bytes long",
+          "statusCode": 0
+        },
+        {
+          "userId": "00000000-0000-0000-0000-000000000001",
+          "userEmail": "sales@eagleeyesafdrive.com",
+          "status": "FAILED",
+          "error": "The subscription auth key should be at least 16 bytes long",
+          "statusCode": 0
+        },
+        {
+          "userId": "b641c67b-2707-4fda-a251-3f2610ba063f",
+          "userEmail": "coordinator@example.com",
+          "status": "FAILED",
+          "error": "Public key is not valid for specified curve",
+          "statusCode": 0
+        },
+        {
+          "userId": "8242b3cd-ba5f-4149-bbc6-a3a30738485d",
+          "userEmail": "coordinator@example.com",
+          "status": "FAILED",
+          "error": "Public key is not valid for specified curve",
+          "statusCode": 0
+        },
+        {
+          "userId": "abaff860-05b2-44fa-9139-b14d92e3fa19",
+          "userEmail": "tech@gmail.com",
+          "status": "SUCCESS",
+          "statusCode": 201
+        },
+        {
+          "userId": "5598cef6-0095-4403-a664-98d0f7666987",
+          "userEmail": "hr@gmail.com",
+          "status": "SUCCESS",
+          "statusCode": 201
+        },
+        {
+          "userId": "00000000-0000-0000-0000-000000000001",
+          "userEmail": "sales@eagleeyesafdrive.com",
+          "status": "FAILED",
+          "error": "The subscription auth key should be at least 16 bytes long",
+          "statusCode": 0
+        },
+        {
+          "userId": "00000000-0000-0000-0000-000000000001",
+          "userEmail": "sales@eagleeyesafdrive.com",
+          "status": "FAILED",
+          "error": "The subscription auth key should be at least 16 bytes long",
+          "statusCode": 0
+        },
+        {
+          "userId": "00000000-0000-0000-0000-000000000001",
+          "userEmail": "sales@eagleeyesafdrive.com",
+          "status": "FAILED",
+          "error": "Received unexpected response code",
+          "statusCode": 410
+        }
+      ],
+      "created_at": "2026-10-24T08:35:14.084Z"
+    },
+    {
+      "id": "cdbba7fe-948d-416d-b185-3dd72e55933a",
+      "event_id": "checklist-created-chk-idemp-1792830914606",
+      "checklist_id": "chk-idemp-1792830914606",
+      "checklist_number": "EE-INST-IDEMP-001",
+      "title": "Eagle Eye SafDrive — New Installation Checklist",
+      "body": "A new installation checklist has been created.\nJob #EE-INST-IDEMP-001 • Tech: Guna • Loc: Madurai Ring Road • Time: 02:05 pm",
+      "url": "/admin/installation-checklists/chk-idemp-1792830914606",
+      "full_url": "https://eagleeyesafdrive.vercel.app/#/admin/installation-checklists/chk-idemp-1792830914606",
+      "recipients_attempted": 10,
+      "recipients_succeeded": 3,
+      "recipients_failed": 7,
+      "delivery_details": [
+        {
+          "userId": "abaff860-05b2-44fa-9139-b14d92e3fa19",
+          "userEmail": "tech@gmail.com",
+          "status": "SUCCESS",
+          "statusCode": 201
+        },
+        {
+          "userId": "00000000-0000-0000-0000-000000000001",
+          "userEmail": "sales@eagleeyesafdrive.com",
+          "status": "FAILED",
+          "error": "The subscription auth key should be at least 16 bytes long",
+          "statusCode": 0
+        },
+        {
+          "userId": "00000000-0000-0000-0000-000000000001",
+          "userEmail": "sales@eagleeyesafdrive.com",
+          "status": "FAILED",
+          "error": "The subscription auth key should be at least 16 bytes long",
+          "statusCode": 0
+        },
+        {
+          "userId": "b641c67b-2707-4fda-a251-3f2610ba063f",
+          "userEmail": "coordinator@example.com",
+          "status": "FAILED",
+          "error": "Public key is not valid for specified curve",
+          "statusCode": 0
+        },
+        {
+          "userId": "8242b3cd-ba5f-4149-bbc6-a3a30738485d",
+          "userEmail": "coordinator@example.com",
+          "status": "FAILED",
+          "error": "Public key is not valid for specified curve",
+          "statusCode": 0
+        },
+        {
+          "userId": "abaff860-05b2-44fa-9139-b14d92e3fa19",
+          "userEmail": "tech@gmail.com",
+          "status": "SUCCESS",
+          "statusCode": 201
+        },
+        {
+          "userId": "5598cef6-0095-4403-a664-98d0f7666987",
+          "userEmail": "hr@gmail.com",
+          "status": "SUCCESS",
+          "statusCode": 201
+        },
+        {
+          "userId": "00000000-0000-0000-0000-000000000001",
+          "userEmail": "sales@eagleeyesafdrive.com",
+          "status": "FAILED",
+          "error": "The subscription auth key should be at least 16 bytes long",
+          "statusCode": 0
+        },
+        {
+          "userId": "00000000-0000-0000-0000-000000000001",
+          "userEmail": "sales@eagleeyesafdrive.com",
+          "status": "FAILED",
+          "error": "The subscription auth key should be at least 16 bytes long",
+          "statusCode": 0
+        },
+        {
+          "userId": "00000000-0000-0000-0000-000000000001",
+          "userEmail": "sales@eagleeyesafdrive.com",
+          "status": "FAILED",
+          "error": "The subscription auth key should be at least 16 bytes long",
+          "statusCode": 0
+        }
+      ],
+      "created_at": "2026-10-24T08:35:14.933Z"
+    },
+    {
+      "id": "a1acb481-0d45-49fa-a851-1b49759998ce",
+      "event_id": "checklist-created-46f54232-7f8d-483a-a177-1f3d8c958d62",
+      "checklist_id": "46f54232-7f8d-483a-a177-1f3d8c958d62",
+      "checklist_number": "EE-INST-20261024-0002",
+      "title": "Eagle Eye SafDrive — New Installation Checklist",
+      "body": "A new installation checklist has been created.\nJob #EE-INST-20261024-0002 • Tech: Kamalesh • Loc: Salem Bypass Transport Hub • Time: 02:05 pm",
+      "url": "/admin/installation-checklists/46f54232-7f8d-483a-a177-1f3d8c958d62",
+      "full_url": "https://eagleeyesafdrive.vercel.app/#/admin/installation-checklists/46f54232-7f8d-483a-a177-1f3d8c958d62",
+      "recipients_attempted": 11,
+      "recipients_succeeded": 3,
+      "recipients_failed": 8,
+      "delivery_details": [
+        {
+          "userId": "abaff860-05b2-44fa-9139-b14d92e3fa19",
+          "userEmail": "tech@gmail.com",
+          "status": "SUCCESS",
+          "statusCode": 201
+        },
+        {
+          "userId": "00000000-0000-0000-0000-000000000001",
+          "userEmail": "sales@eagleeyesafdrive.com",
+          "status": "FAILED",
+          "error": "The subscription auth key should be at least 16 bytes long",
+          "statusCode": 0
+        },
+        {
+          "userId": "00000000-0000-0000-0000-000000000001",
+          "userEmail": "sales@eagleeyesafdrive.com",
+          "status": "FAILED",
+          "error": "The subscription auth key should be at least 16 bytes long",
+          "statusCode": 0
+        },
+        {
+          "userId": "b641c67b-2707-4fda-a251-3f2610ba063f",
+          "userEmail": "coordinator@example.com",
+          "status": "FAILED",
+          "error": "Public key is not valid for specified curve",
+          "statusCode": 0
+        },
+        {
+          "userId": "8242b3cd-ba5f-4149-bbc6-a3a30738485d",
+          "userEmail": "coordinator@example.com",
+          "status": "FAILED",
+          "error": "Public key is not valid for specified curve",
+          "statusCode": 0
+        },
+        {
+          "userId": "abaff860-05b2-44fa-9139-b14d92e3fa19",
+          "userEmail": "tech@gmail.com",
+          "status": "SUCCESS",
+          "statusCode": 201
+        },
+        {
+          "userId": "5598cef6-0095-4403-a664-98d0f7666987",
+          "userEmail": "hr@gmail.com",
+          "status": "SUCCESS",
+          "statusCode": 201
+        },
+        {
+          "userId": "00000000-0000-0000-0000-000000000001",
+          "userEmail": "sales@eagleeyesafdrive.com",
+          "status": "FAILED",
+          "error": "The subscription auth key should be at least 16 bytes long",
+          "statusCode": 0
+        },
+        {
+          "userId": "00000000-0000-0000-0000-000000000001",
+          "userEmail": "sales@eagleeyesafdrive.com",
+          "status": "FAILED",
+          "error": "The subscription auth key should be at least 16 bytes long",
+          "statusCode": 0
+        },
+        {
+          "userId": "00000000-0000-0000-0000-000000000001",
+          "userEmail": "sales@eagleeyesafdrive.com",
+          "status": "FAILED",
+          "error": "The subscription auth key should be at least 16 bytes long",
+          "statusCode": 0
+        },
+        {
+          "userId": "00000000-0000-0000-0000-000000000001",
+          "userEmail": "sales@eagleeyesafdrive.com",
+          "status": "FAILED",
+          "error": "The subscription auth key should be at least 16 bytes long",
+          "statusCode": 0
+        }
+      ],
+      "created_at": "2026-10-24T08:35:25.442Z"
+    },
+    {
+      "id": "a5437d2b-c24d-4e29-b5af-00d3f693e081",
+      "event_id": "checklist-created-fc2b2b13-ca64-483b-a9d9-956d06877d8e",
+      "checklist_id": "fc2b2b13-ca64-483b-a9d9-956d06877d8e",
+      "checklist_number": "EE-INST-1792831180472",
+      "title": "Eagle Eye SafDrive — New Installation Checklist",
+      "body": "A new installation checklist has been created.\nJob #EE-INST-1792831180472 • Tech: Sakthivel • Loc: Chennai Central Depot • Time: 02:09 pm",
+      "url": "/admin/installation-checklists/fc2b2b13-ca64-483b-a9d9-956d06877d8e",
+      "recipients_attempted": 12,
+      "recipients_succeeded": 3,
+      "recipients_failed": 9,
+      "delivery_details": [
+        {
+          "userId": "abaff860-05b2-44fa-9139-b14d92e3fa19",
+          "userEmail": "tech@gmail.com",
+          "status": "SUCCESS",
+          "statusCode": 201
+        },
+        {
+          "userId": "00000000-0000-0000-0000-000000000001",
+          "userEmail": "sales@eagleeyesafdrive.com",
+          "status": "FAILED",
+          "error": "The subscription auth key should be at least 16 bytes long",
+          "statusCode": 0
+        },
+        {
+          "userId": "00000000-0000-0000-0000-000000000001",
+          "userEmail": "sales@eagleeyesafdrive.com",
+          "status": "FAILED",
+          "error": "The subscription auth key should be at least 16 bytes long",
+          "statusCode": 0
+        },
+        {
+          "userId": "b641c67b-2707-4fda-a251-3f2610ba063f",
+          "userEmail": "coordinator@example.com",
+          "status": "FAILED",
+          "error": "Public key is not valid for specified curve",
+          "statusCode": 0
+        },
+        {
+          "userId": "8242b3cd-ba5f-4149-bbc6-a3a30738485d",
+          "userEmail": "coordinator@example.com",
+          "status": "FAILED",
+          "error": "Public key is not valid for specified curve",
+          "statusCode": 0
+        },
+        {
+          "userId": "abaff860-05b2-44fa-9139-b14d92e3fa19",
+          "userEmail": "tech@gmail.com",
+          "status": "SUCCESS",
+          "statusCode": 201
+        },
+        {
+          "userId": "5598cef6-0095-4403-a664-98d0f7666987",
+          "userEmail": "hr@gmail.com",
+          "status": "SUCCESS",
+          "statusCode": 201
+        },
+        {
+          "userId": "00000000-0000-0000-0000-000000000001",
+          "userEmail": "sales@eagleeyesafdrive.com",
+          "status": "FAILED",
+          "error": "The subscription auth key should be at least 16 bytes long",
+          "statusCode": 0
+        },
+        {
+          "userId": "00000000-0000-0000-0000-000000000001",
+          "userEmail": "sales@eagleeyesafdrive.com",
+          "status": "FAILED",
+          "error": "The subscription auth key should be at least 16 bytes long",
+          "statusCode": 0
+        },
+        {
+          "userId": "00000000-0000-0000-0000-000000000001",
+          "userEmail": "sales@eagleeyesafdrive.com",
+          "status": "FAILED",
+          "error": "The subscription auth key should be at least 16 bytes long",
+          "statusCode": 0
+        },
+        {
+          "userId": "00000000-0000-0000-0000-000000000001",
+          "userEmail": "sales@eagleeyesafdrive.com",
+          "status": "FAILED",
+          "error": "The subscription auth key should be at least 16 bytes long",
+          "statusCode": 0
+        },
+        {
+          "userId": "80d6baf9-a881-4dec-9c33-fd50cc5495a5",
+          "userEmail": "team.test@eagleeye.com",
+          "status": "FAILED",
+          "error": "The subscription p256dh value should be 65 bytes long.",
+          "statusCode": 0
+        }
+      ],
+      "created_at": "2026-10-24T08:39:41.434Z",
+      "full_url": "https://eagleeyesafdrive.vercel.app/#/admin/installation-checklists/fc2b2b13-ca64-483b-a9d9-956d06877d8e"
+    },
+    {
+      "id": "76982a71-ea31-4116-a611-50dd2edb7644",
+      "event_id": "post-install-push-20b1ca86-d029-412d-8327-ca0651582e77",
+      "checklist_id": "20b1ca86-d029-412d-8327-ca0651582e77",
+      "checklist_number": "EE-INST-COORD-001",
+      "title": "Post-Installation Report Submitted",
+      "body": "Technician Guna has submitted the post-installation report for checklist EE-INST-COORD-001. Please review the report and return-ticket details.",
+      "url": "/coordinator?view=20b1ca86-d029-412d-8327-ca0651582e77&checklist=20b1ca86-d029-412d-8327-ca0651582e77&tab=return&openReport=true",
+      "recipients_attempted": 3,
+      "recipients_succeeded": 0,
+      "recipients_failed": 3,
+      "delivery_details": [
+        {
+          "userId": "b641c67b-2707-4fda-a251-3f2610ba063f",
+          "userEmail": "coordinator@example.com",
+          "status": "FAILED",
+          "error": "Public key is not valid for specified curve",
+          "statusCode": 0
+        },
+        {
+          "userId": "8242b3cd-ba5f-4149-bbc6-a3a30738485d",
+          "userEmail": "coordinator@example.com",
+          "status": "FAILED",
+          "error": "Public key is not valid for specified curve",
+          "statusCode": 0
+        },
+        {
+          "userId": "4c8ad922-05c9-4058-9339-4abffd853d18",
+          "userEmail": "coordinator.fleet@eagleeye.com",
+          "status": "FAILED",
+          "error": "The subscription p256dh value should be 65 bytes long.",
+          "statusCode": 0
+        }
+      ],
+      "created_at": "2026-10-24T08:39:41.996Z",
+      "full_url": "https://eagleeyesafdrive.vercel.app/#/coordinator?view=20b1ca86-d029-412d-8327-ca0651582e77&checklist=20b1ca86-d029-412d-8327-ca0651582e77&tab=return&openReport=true"
+    },
+    {
+      "id": "22e25fe3-a9e0-4fc9-9434-2d803e2d7bc0",
+      "event_id": "checklist-created-017f87fa-d728-419f-804d-877e94f18d8e",
+      "checklist_id": "017f87fa-d728-419f-804d-877e94f18d8e",
+      "checklist_number": "EE-INST-1792831203896",
+      "title": "Eagle Eye SafDrive — New Installation Checklist",
+      "body": "A new installation checklist has been created.\nJob #EE-INST-1792831203896 • Tech: Sakthivel • Loc: Chennai Central Depot • Time: 02:10 pm",
+      "url": "/admin/installation-checklists/017f87fa-d728-419f-804d-877e94f18d8e",
+      "recipients_attempted": 14,
+      "recipients_succeeded": 3,
+      "recipients_failed": 11,
+      "delivery_details": [
+        {
+          "userId": "abaff860-05b2-44fa-9139-b14d92e3fa19",
+          "userEmail": "tech@gmail.com",
+          "status": "SUCCESS",
+          "statusCode": 201
+        },
+        {
+          "userId": "00000000-0000-0000-0000-000000000001",
+          "userEmail": "sales@eagleeyesafdrive.com",
+          "status": "FAILED",
+          "error": "The subscription auth key should be at least 16 bytes long",
+          "statusCode": 0
+        },
+        {
+          "userId": "00000000-0000-0000-0000-000000000001",
+          "userEmail": "sales@eagleeyesafdrive.com",
+          "status": "FAILED",
+          "error": "The subscription auth key should be at least 16 bytes long",
+          "statusCode": 0
+        },
+        {
+          "userId": "b641c67b-2707-4fda-a251-3f2610ba063f",
+          "userEmail": "coordinator@example.com",
+          "status": "FAILED",
+          "error": "Public key is not valid for specified curve",
+          "statusCode": 0
+        },
+        {
+          "userId": "8242b3cd-ba5f-4149-bbc6-a3a30738485d",
+          "userEmail": "coordinator@example.com",
+          "status": "FAILED",
+          "error": "Public key is not valid for specified curve",
+          "statusCode": 0
+        },
+        {
+          "userId": "abaff860-05b2-44fa-9139-b14d92e3fa19",
+          "userEmail": "tech@gmail.com",
+          "status": "SUCCESS",
+          "statusCode": 201
+        },
+        {
+          "userId": "5598cef6-0095-4403-a664-98d0f7666987",
+          "userEmail": "hr@gmail.com",
+          "status": "SUCCESS",
+          "statusCode": 201
+        },
+        {
+          "userId": "00000000-0000-0000-0000-000000000001",
+          "userEmail": "sales@eagleeyesafdrive.com",
+          "status": "FAILED",
+          "error": "The subscription auth key should be at least 16 bytes long",
+          "statusCode": 0
+        },
+        {
+          "userId": "00000000-0000-0000-0000-000000000001",
+          "userEmail": "sales@eagleeyesafdrive.com",
+          "status": "FAILED",
+          "error": "The subscription auth key should be at least 16 bytes long",
+          "statusCode": 0
+        },
+        {
+          "userId": "00000000-0000-0000-0000-000000000001",
+          "userEmail": "sales@eagleeyesafdrive.com",
+          "status": "FAILED",
+          "error": "The subscription auth key should be at least 16 bytes long",
+          "statusCode": 0
+        },
+        {
+          "userId": "00000000-0000-0000-0000-000000000001",
+          "userEmail": "sales@eagleeyesafdrive.com",
+          "status": "FAILED",
+          "error": "The subscription auth key should be at least 16 bytes long",
+          "statusCode": 0
+        },
+        {
+          "userId": "80d6baf9-a881-4dec-9c33-fd50cc5495a5",
+          "userEmail": "team.test@eagleeye.com",
+          "status": "FAILED",
+          "error": "The subscription p256dh value should be 65 bytes long.",
+          "statusCode": 0
+        },
+        {
+          "userId": "4c8ad922-05c9-4058-9339-4abffd853d18",
+          "userEmail": "coordinator.fleet@eagleeye.com",
+          "status": "FAILED",
+          "error": "The subscription p256dh value should be 65 bytes long.",
+          "statusCode": 0
+        },
+        {
+          "userId": "4e4f4da2-81a0-40a3-9868-c4b063f9f0f8",
+          "userEmail": "team.test@eagleeye.com",
+          "status": "FAILED",
+          "error": "The subscription p256dh value should be 65 bytes long.",
+          "statusCode": 0
+        }
+      ],
+      "created_at": "2026-10-24T08:40:04.746Z",
+      "full_url": "https://eagleeyesafdrive.vercel.app/#/admin/installation-checklists/017f87fa-d728-419f-804d-877e94f18d8e"
+    },
+    {
+      "id": "b2da3a96-dd48-4af8-b8bd-95021ff62da4",
+      "event_id": "post-install-push-a78a9b36-84e6-4ea7-b0f3-be10264cd119",
+      "checklist_id": "a78a9b36-84e6-4ea7-b0f3-be10264cd119",
+      "checklist_number": "EE-INST-COORD-001",
+      "title": "Post-Installation Report Submitted",
+      "body": "Technician Guna has submitted the post-installation report for checklist EE-INST-COORD-001. Please review the report and return-ticket details.",
+      "url": "/coordinator?view=a78a9b36-84e6-4ea7-b0f3-be10264cd119&checklist=a78a9b36-84e6-4ea7-b0f3-be10264cd119&tab=return&openReport=true",
+      "recipients_attempted": 4,
+      "recipients_succeeded": 0,
+      "recipients_failed": 4,
+      "delivery_details": [
+        {
+          "userId": "b641c67b-2707-4fda-a251-3f2610ba063f",
+          "userEmail": "coordinator@example.com",
+          "status": "FAILED",
+          "error": "Public key is not valid for specified curve",
+          "statusCode": 0
+        },
+        {
+          "userId": "8242b3cd-ba5f-4149-bbc6-a3a30738485d",
+          "userEmail": "coordinator@example.com",
+          "status": "FAILED",
+          "error": "Public key is not valid for specified curve",
+          "statusCode": 0
+        },
+        {
+          "userId": "4c8ad922-05c9-4058-9339-4abffd853d18",
+          "userEmail": "coordinator.fleet@eagleeye.com",
+          "status": "FAILED",
+          "error": "The subscription p256dh value should be 65 bytes long.",
+          "statusCode": 0
+        },
+        {
+          "userId": "87458072-d848-49a0-891b-6e346d3bae35",
+          "userEmail": "coordinator.fleet@eagleeye.com",
+          "status": "FAILED",
+          "error": "The subscription p256dh value should be 65 bytes long.",
+          "statusCode": 0
+        }
+      ],
+      "created_at": "2026-10-24T08:40:05.364Z",
+      "full_url": "https://eagleeyesafdrive.vercel.app/#/coordinator?view=a78a9b36-84e6-4ea7-b0f3-be10264cd119&checklist=a78a9b36-84e6-4ea7-b0f3-be10264cd119&tab=return&openReport=true"
+    },
+    {
+      "id": "d57c46f9-dc4e-4f9c-b030-dd4fc90863da",
+      "event_id": "post-install-push-9f1a6fef-a4e5-4e7b-8b5e-1ee0862009db",
+      "checklist_id": "9f1a6fef-a4e5-4e7b-8b5e-1ee0862009db",
+      "checklist_number": "EE-INST-20261021-0091",
+      "title": "Post-Installation Report Submitted",
+      "body": "Technician Kamalesh has submitted the post-installation report for checklist EE-INST-20261021-0091. Please review the report and return-ticket details.",
+      "url": "/coordinator?view=9f1a6fef-a4e5-4e7b-8b5e-1ee0862009db&checklist=9f1a6fef-a4e5-4e7b-8b5e-1ee0862009db&tab=return&openReport=true",
+      "recipients_attempted": 4,
+      "recipients_succeeded": 0,
+      "recipients_failed": 4,
+      "delivery_details": [
+        {
+          "userId": "b641c67b-2707-4fda-a251-3f2610ba063f",
+          "userEmail": "coordinator@example.com",
+          "status": "FAILED",
+          "error": "Public key is not valid for specified curve",
+          "statusCode": 0
+        },
+        {
+          "userId": "8242b3cd-ba5f-4149-bbc6-a3a30738485d",
+          "userEmail": "coordinator@example.com",
+          "status": "FAILED",
+          "error": "Public key is not valid for specified curve",
+          "statusCode": 0
+        },
+        {
+          "userId": "4c8ad922-05c9-4058-9339-4abffd853d18",
+          "userEmail": "coordinator.fleet@eagleeye.com",
+          "status": "FAILED",
+          "error": "The subscription p256dh value should be 65 bytes long.",
+          "statusCode": 0
+        },
+        {
+          "userId": "87458072-d848-49a0-891b-6e346d3bae35",
+          "userEmail": "coordinator.fleet@eagleeye.com",
+          "status": "FAILED",
+          "error": "The subscription p256dh value should be 65 bytes long.",
+          "statusCode": 0
+        }
+      ],
+      "created_at": "2026-10-24T08:40:40.761Z",
+      "full_url": "https://eagleeyesafdrive.vercel.app/#/coordinator?view=9f1a6fef-a4e5-4e7b-8b5e-1ee0862009db&checklist=9f1a6fef-a4e5-4e7b-8b5e-1ee0862009db&tab=return&openReport=true"
+    },
+    {
+      "id": "968be8b9-e5e3-4f06-a01a-55ac61ab6d08",
+      "event_id": "post-install-push-9f1a6fef-a4e5-4e7b-8b5e-1ee0862009db",
+      "checklist_id": "9f1a6fef-a4e5-4e7b-8b5e-1ee0862009db",
+      "checklist_number": "EE-INST-20261021-0091",
+      "title": "Post-Installation Report Submitted",
+      "body": "Technician Kamalesh has submitted the post-installation report for checklist EE-INST-20261021-0091. Please review the report and return-ticket details.",
+      "url": "/coordinator?view=9f1a6fef-a4e5-4e7b-8b5e-1ee0862009db&checklist=9f1a6fef-a4e5-4e7b-8b5e-1ee0862009db&tab=return&openReport=true",
+      "recipients_attempted": 5,
+      "recipients_succeeded": 0,
+      "recipients_failed": 5,
+      "delivery_details": [
+        {
+          "userId": "b641c67b-2707-4fda-a251-3f2610ba063f",
+          "userEmail": "coordinator@example.com",
+          "status": "FAILED",
+          "error": "Public key is not valid for specified curve",
+          "statusCode": 0
+        },
+        {
+          "userId": "8242b3cd-ba5f-4149-bbc6-a3a30738485d",
+          "userEmail": "coordinator@example.com",
+          "status": "FAILED",
+          "error": "Public key is not valid for specified curve",
+          "statusCode": 0
+        },
+        {
+          "userId": "4c8ad922-05c9-4058-9339-4abffd853d18",
+          "userEmail": "coordinator.fleet@eagleeye.com",
+          "status": "FAILED",
+          "error": "The subscription p256dh value should be 65 bytes long.",
+          "statusCode": 0
+        },
+        {
+          "userId": "87458072-d848-49a0-891b-6e346d3bae35",
+          "userEmail": "coordinator.fleet@eagleeye.com",
+          "status": "FAILED",
+          "error": "The subscription p256dh value should be 65 bytes long.",
+          "statusCode": 0
+        },
+        {
+          "userId": "2f0dd9da-91e0-434e-a40d-0c1d3879ad76",
+          "userEmail": "coordinator@example.com",
+          "status": "FAILED",
+          "error": "Public key is not valid for specified curve",
+          "statusCode": 0
+        }
+      ],
+      "created_at": "2026-10-24T08:40:42.721Z",
+      "full_url": "https://eagleeyesafdrive.vercel.app/#/coordinator?view=9f1a6fef-a4e5-4e7b-8b5e-1ee0862009db&checklist=9f1a6fef-a4e5-4e7b-8b5e-1ee0862009db&tab=return&openReport=true"
     }
   ],
-  "updated_at": "2026-10-22T10:09:42.437Z"
+  "updated_at": "2026-10-24T08:40:42.721Z"
 }

@@ -9,7 +9,7 @@
       "reason": "Medical checkup and personal emergency",
       "effective_start_datetime": "2029-05-01T00:00:00.000Z",
       "effective_end_datetime": "2029-05-03T23:59:59.999Z",
-      "is_active": true,
+      "is_active": false,
       "created_by": "5598cef6-0095-4403-a664-98d0f7666987",
       "created_by_email": "hr@gmail.com",
       "created_by_role": "HR",
@@ -18,7 +18,7 @@
       "reversed_by": null,
       "reversed_by_email": null,
       "created_at": "2026-10-21T13:00:09.582Z",
-      "updated_at": "2026-10-21T13:00:09.582Z"
+      "updated_at": "2026-10-22T11:12:22.443Z"
     },
     {
       "id": "162efb37-dd5f-468e-ac76-f3e38006173c",
@@ -29,7 +29,7 @@
       "reason": "Special client request",
       "effective_start_datetime": "2033-04-23T00:00:00.000Z",
       "effective_end_datetime": "2033-04-23T23:59:59.999Z",
-      "is_active": true,
+      "is_active": false,
       "created_by": "5598cef6-0095-4403-a664-98d0f7666987",
       "created_by_email": "hr@gmail.com",
       "created_by_role": "HR",
@@ -38,7 +38,7 @@
       "reversed_by": null,
       "reversed_by_email": null,
       "created_at": "2026-10-21T13:00:24.166Z",
-      "updated_at": "2026-10-21T13:00:24.166Z"
+      "updated_at": "2026-10-22T11:12:34.371Z"
     },
     {
       "id": "7cae65f1-8698-4d31-ad8d-9f19b41fe817",
@@ -293,7 +293,86 @@
       "created_at": "2026-10-22T10:09:11.360Z",
       "updated_at": "2026-10-22T10:09:15.969Z",
       "previous_status": "Calculated"
+    },
+    {
+      "id": "0000e3ad-35ed-48a6-9098-c66c01ce1c5f",
+      "engineer_id": "e1000000-0000-0000-0000-000000000001",
+      "engineer_name": "Mathi",
+      "manual_status": "Not Available",
+      "reason": "Medical checkup and personal emergency",
+      "effective_start_datetime": "2029-05-01T00:00:00.000Z",
+      "effective_end_datetime": "2029-05-03T23:59:59.999Z",
+      "is_active": false,
+      "created_by": "5598cef6-0095-4403-a664-98d0f7666987",
+      "created_by_email": "hr@gmail.com",
+      "created_by_role": "HR",
+      "reversal_reason": null,
+      "reversed_at": null,
+      "reversed_by": null,
+      "reversed_by_email": null,
+      "created_at": "2026-10-22T11:12:22.443Z",
+      "updated_at": "2026-10-22T11:38:19.483Z",
+      "previous_status": "Not Available"
+    },
+    {
+      "id": "bc4897db-2932-4a21-b80e-1cad8792b760",
+      "engineer_id": "e1000000-0000-0000-0000-000000000004",
+      "engineer_name": "Sakthivel",
+      "manual_status": "Available",
+      "reason": "Special client request",
+      "effective_start_datetime": "2033-04-23T00:00:00+00:00",
+      "effective_end_datetime": "2033-04-23T23:59:59.999+00:00",
+      "is_active": true,
+      "created_by": "5598cef6-0095-4403-a664-98d0f7666987",
+      "created_by_email": "hr@gmail.com",
+      "created_by_role": "HR",
+      "reversal_reason": null,
+      "reversed_at": null,
+      "reversed_by": null,
+      "reversed_by_email": null,
+      "created_at": "2026-10-22T11:12:34.371+00:00",
+      "updated_at": "2026-10-22T11:12:34.371+00:00"
+    },
+    {
+      "id": "4cba8ca4-0e0c-4e5f-96d0-573c36b11158",
+      "engineer_id": "e1000000-0000-0000-0000-000000000001",
+      "engineer_name": "Mathi",
+      "manual_status": "Not Available",
+      "reason": "Medical checkup and personal emergency",
+      "effective_start_datetime": "2029-05-01T00:00:00.000Z",
+      "effective_end_datetime": "2029-05-03T23:59:59.999Z",
+      "is_active": true,
+      "created_by": "5598cef6-0095-4403-a664-98d0f7666987",
+      "created_by_email": "hr@gmail.com",
+      "created_by_role": "HR",
+      "reversal_reason": null,
+      "reversed_at": null,
+      "reversed_by": null,
+      "reversed_by_email": null,
+      "created_at": "2026-10-22T11:38:19.483Z",
+      "updated_at": "2026-10-22T11:38:19.483Z",
+      "previous_status": "Not Available"
+    },
+    {
+      "id": "93dc974e-96e5-4cf4-a484-594c09b7a3a4",
+      "engineer_id": "e1000000-0000-0000-0000-000000000004",
+      "engineer_name": "Sakthivel",
+      "manual_status": "Available",
+      "reason": "Special client request",
+      "effective_start_datetime": "2033-04-14T00:00:00.000Z",
+      "effective_end_datetime": "2033-04-14T23:59:59.999Z",
+      "is_active": true,
+      "created_by": "5598cef6-0095-4403-a664-98d0f7666987",
+      "created_by_email": "hr@gmail.com",
+      "created_by_role": "HR",
+      "reversal_reason": null,
+      "reversed_at": null,
+      "reversed_by": null,
+      "reversed_by_email": null,
+      "created_at": "2026-10-22T11:38:30.872Z",
+      "updated_at": "2026-10-22T11:38:30.872Z",
+      "previous_status": "Calculated"
     }
   ],
-  "updated_at": "2026-10-22T10:09:16.161Z"
+  "updated_at": "2026-10-22T11:38:31.086Z"
 }

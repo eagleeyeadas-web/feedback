@@ -67,6 +67,9 @@ export async function getServiceWorkerRegistration() {
   let reg = await navigator.serviceWorker.getRegistration();
   if (!reg) {
     reg = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+  } else {
+    // Proactively check for service worker updates so latest click handler is always active
+    reg.update().catch(() => {});
   }
 
   // Wait for service worker to be active

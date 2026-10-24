@@ -21,6 +21,13 @@ import {
   markNotificationRead,
   markAllNotificationsRead,
 } from '../services/appNotificationService.js';
+import {
+  getAllServiceEngineers as getManagedServiceEngineers,
+  checkServiceEngineerImpact,
+  addServiceEngineer,
+  updateServiceEngineer,
+  deactivateOrRemoveServiceEngineer,
+} from '../services/serviceEngineerService.js';
 
 const router = Router();
 
@@ -217,6 +224,136 @@ router.post('/overdue/check', async (req, res) => {
   } catch (err) {
     console.error('Error in POST /hr/overdue/check:', err);
     return res.status(500).json({ error: err.message || 'Failed to execute overdue detection check' });
+  }
+});
+
+/**
+ * SERVICE ENGINEER MANAGEMENT ENDPOINTS
+ * Dynamic management of service engineers for HR Workspace
+ */
+
+/**
+ * GET /api/admin/hr/service-engineers
+ * List all service engineers (active and deactivated)
+ */
+router.get('/service-engineers', async (req, res) => {
+  try {
+    const includeInactive = req.query.include_inactive !== 'false';
+    const engineers = await getManagedServiceEngineers({ includeInactive });
+    return res.json({ success: true, engineers });
+  } catch (err) {
+    console.error('Error fetching service engineers for HR:', err);
+    return res.status(500).json({ error: err.message || 'Failed to fetch service engineers' });
+  }
+});
+
+/**
+ * GET /api/admin/hr/service-engineers/:id/impact
+ * Check active commitments and historical records for an engineer
+ */
+router.get('/service-engineers/:id/impact', async (req, res) => {
+  try {
+    const impact = await checkServiceEngineerImpact(req.params.id);
+    return res.json({ success: true, ...impact });
+  } catch (err) {
+    console.error('Error checking service engineer impact:', err);
+    const status = err.statusCode || 500;
+    return res.status(status).json({ error: err.message || 'Failed to check service engineer impact' });
+  }
+});
+
+/**
+ * POST /api/admin/hr/service-engineers
+ * Add a new service engineer (or reactivate if inactive)
+ */
+router.post('/service-engineers', async (req, res) => {
+  try {
+    const user = req.profile || req.user;
+    const { name, employee_id, phone, email, role } = req.body;
+    const engineer = await addServiceEngineer({
+      name,
+      employee_id,
+      phone,
+      email,
+      role,
+      user,
+    });
+    return res.status(201).json({ success: true, engineer });
+  } catch (err) {
+    console.error('Error adding service engineer:', err);
+    const status = err.statusCode || 400;
+    return res.status(status).json({ error: err.message || 'Failed to add service engineer' });
+  }
+});
+
+/**
+ * PUT /api/admin/hr/service-engineers/:id
+ * Edit service engineer name and details
+ */
+router.put('/service-engineers/:id', async (req, res) => {
+  try {
+    const user = req.profile || req.user;
+    const { name, employee_id, phone, email, role, is_active } = req.body;
+    const engineer = await updateServiceEngineer(req.params.id, {
+      name,
+      employee_id,
+      phone,
+      email,
+      role,
+      is_active,
+      user,
+    });
+    return res.json({ success: true, engineer });
+  } catch (err) {
+    console.error('Error updating service engineer:', err);
+    const status = err.statusCode || 400;
+    return res.status(status).json({ error: err.message || 'Failed to update service engineer' });
+  }
+});
+
+/**
+ * DELETE /api/admin/hr/service-engineers/:id
+ * Safely deactivates (if historical records exist) or permanently removes (if zero records)
+ */
+router.delete('/service-engineers/:id', async (req, res) => {
+  try {
+    const user = req.profile || req.user;
+    const { reason } = req.body || {};
+    const result = await deactivateOrRemoveServiceEngineer(req.params.id, {
+      reason,
+      user,
+    });
+    return res.json(result);
+  } catch (err) {
+    console.error('Error removing/deactivating service engineer:', err);
+    const status = err.statusCode || 400;
+    return res.status(status).json({
+      error: err.message || 'Failed to deactivate or remove service engineer',
+      activeCommitments: err.activeCommitments || [],
+    });
+  }
+});
+
+/**
+ * POST /api/admin/hr/service-engineers/:id/deactivate
+ * Explicit deactivation route
+ */
+router.post('/service-engineers/:id/deactivate', async (req, res) => {
+  try {
+    const user = req.profile || req.user;
+    const { reason } = req.body || {};
+    const result = await deactivateOrRemoveServiceEngineer(req.params.id, {
+      reason,
+      user,
+    });
+    return res.json(result);
+  } catch (err) {
+    console.error('Error deactivating service engineer:', err);
+    const status = err.statusCode || 400;
+    return res.status(status).json({
+      error: err.message || 'Failed to deactivate service engineer',
+      activeCommitments: err.activeCommitments || [],
+    });
   }
 });
 

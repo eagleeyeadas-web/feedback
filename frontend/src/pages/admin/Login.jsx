@@ -109,12 +109,41 @@ const PORTALS = {
   },
 };
 
+function resolveAppNavigationPath(rawPath) {
+  if (!rawPath) return null;
+  let pathStr = String(rawPath).trim();
+  try {
+    if (pathStr.startsWith('http://') || pathStr.startsWith('https://')) {
+      const u = new URL(pathStr);
+      pathStr = u.hash ? u.hash.replace(/^#/, '') : (u.pathname + u.search);
+    }
+  } catch {}
+  let clean = pathStr.replace(/^#+/, '').trim();
+  if (!clean.startsWith('/')) {
+    clean = '/' + clean;
+  }
+  return clean;
+}
+
 export default function Login() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { signIn, signOut, session, role } = useAuth();
 
-  const portalParam = (searchParams.get('portal') || '').toLowerCase();
+  // Redirect destination passed via ?redirect=<path> when opening from a notification
+  // e.g. ?redirect=%2Fadmin%2Finstallation-checklists%2Fuuid
+  const redirectAfterLogin = searchParams.get('redirect') || null;
+
+  // Auto-detect portal from query param or redirect path
+  let portalParam = (searchParams.get('portal') || '').toLowerCase();
+  if (!portalParam && redirectAfterLogin) {
+    const lower = redirectAfterLogin.toLowerCase();
+    if (lower.includes('/coordinator')) portalParam = 'coordinator';
+    else if (lower.includes('/technical')) portalParam = 'technical';
+    else if (lower.includes('/store')) portalParam = 'store';
+    else if (lower.includes('/hr')) portalParam = 'hr';
+    else if (lower.includes('/sales')) portalParam = 'sales';
+  }
   const activePortalKey = PORTALS[portalParam] ? portalParam : 'sales';
   const portalConfig = PORTALS[activePortalKey];
 
@@ -138,20 +167,25 @@ export default function Login() {
   };
 
   // If already authenticated with a role that matches the targeted portal (or admin), redirect immediately.
-  // If the active role does NOT match the requested portal, DO NOT auto-redirect to /sales.
-  // Instead, allow the user to see the mismatch banner and choose to switch accounts or continue.
   useEffect(() => {
     if (session && role) {
       const userRole = String(role).toUpperCase();
       const targetRole = portalConfig.role;
 
-      // When the user's role matches the requested portal (or user is an Admin), redirect to that workspace
+      // Honour notification-origin redirect destination if authenticated
+      if (redirectAfterLogin) {
+        const targetPath = resolveAppNavigationPath(redirectAfterLogin);
+        if (targetPath && targetPath !== '/login') {
+          navigate(targetPath, { replace: true });
+          return;
+        }
+      }
+
       if (userRole === targetRole) {
         navigate(portalConfig.targetPath, { replace: true });
       } else if (userRole === 'ADMIN') {
         navigate(portalConfig.targetPath, { replace: true });
       } else if (!searchParams.get('portal')) {
-        // If no explicit portal requested, route to user's assigned workspace
         if (userRole === 'SALES') navigate('/sales', { replace: true });
         else if (userRole === 'TECHNICAL') navigate('/technical', { replace: true });
         else if (userRole === 'STORE_MANAGER') navigate('/store-manager', { replace: true });
@@ -159,7 +193,7 @@ export default function Login() {
         else if (userRole === 'HR') navigate('/hr', { replace: true });
       }
     }
-  }, [session, role, portalConfig, searchParams, navigate]);
+  }, [session, role, portalConfig, searchParams, navigate, redirectAfterLogin]);
 
   const handleSwitchAccount = async () => {
     setLoading(true);
@@ -202,6 +236,15 @@ export default function Login() {
 
       if (!userRole) {
         throw new Error('Your account does not have an authorized staff role assigned. Access denied.');
+      }
+
+      // After login, if a notification redirect was preserved, navigate there cleanly
+      if (redirectAfterLogin) {
+        const targetPath = resolveAppNavigationPath(redirectAfterLogin);
+        if (targetPath && targetPath !== '/login') {
+          navigate(targetPath, { replace: true });
+          return;
+        }
       }
 
       // Route strictly to the user's authorized department workspace

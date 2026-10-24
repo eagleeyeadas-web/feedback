@@ -1953,6 +1953,90 @@ export async function triggerHrOverdueCheck(token, body = {}) {
   return json;
 }
 
+// ============================================================
+// SERVICE ENGINEER MANAGEMENT APIS (HR & WORKSPACE)
+// ============================================================
+
+export async function fetchServiceEngineersAdmin(token, includeInactive = true) {
+  const query = includeInactive ? '?include_inactive=true' : '?include_inactive=false';
+  const res = await fetch(`${API_BASE}/admin/hr/service-engineers${query}`, {
+    headers: adminHeaders(token),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to fetch service engineers');
+  return json.engineers || [];
+}
+
+export async function fetchServiceEngineerImpact(token, id) {
+  const res = await fetch(`${API_BASE}/admin/hr/service-engineers/${encodeURIComponent(id)}/impact`, {
+    headers: adminHeaders(token),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to check service engineer commitments');
+  return json;
+}
+
+export async function addServiceEngineer(token, data) {
+  const res = await fetch(`${API_BASE}/admin/hr/service-engineers`, {
+    method: 'POST',
+    headers: adminHeaders(token),
+    body: JSON.stringify(data),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to add service engineer');
+  return json.engineer;
+}
+
+export async function updateServiceEngineer(token, id, data) {
+  const res = await fetch(`${API_BASE}/admin/hr/service-engineers/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    headers: adminHeaders(token),
+    body: JSON.stringify(data),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to update service engineer');
+  return json.engineer;
+}
+
+export async function deleteServiceEngineer(token, id, reason = '') {
+  const res = await fetch(`${API_BASE}/admin/hr/service-engineers/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    headers: adminHeaders(token),
+    body: JSON.stringify({ reason }),
+  });
+  const json = await res.json();
+  if (!res.ok) {
+    const err = new Error(json.error || 'Failed to remove or deactivate service engineer');
+    err.activeCommitments = json.activeCommitments;
+    throw err;
+  }
+  return json;
+}
+
+export async function deactivateServiceEngineer(token, id, reason = '') {
+  const res = await fetch(`${API_BASE}/admin/hr/service-engineers/${encodeURIComponent(id)}/deactivate`, {
+    method: 'POST',
+    headers: adminHeaders(token),
+    body: JSON.stringify({ reason }),
+  });
+  const json = await res.json();
+  if (!res.ok) {
+    const err = new Error(json.error || 'Failed to deactivate service engineer');
+    err.activeCommitments = json.activeCommitments;
+    throw err;
+  }
+  return json;
+}
+
+export async function fetchActiveServiceEngineersDropdown(token) {
+  const res = await fetch(`${API_BASE}/admin/installations/service-engineers`, {
+    headers: adminHeaders(token),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to fetch active service engineer dropdown');
+  return Array.isArray(json) ? json : [];
+}
+
 /**
  * Product Courier Workflow API Helpers
  */

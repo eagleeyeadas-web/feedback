@@ -493,11 +493,13 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
         }
         if (!formData.expected_arrival_time) return 'Expected Time of Arrival is required for Technician Carries';
 
+        const effectiveEngineers = engineersList.length > 0 ? engineersList : SERVICE_ENGINEER_OPTIONS;
         if (!formData.service_engineer || !formData.service_engineer.trim()) {
-          return 'Service Engineer is required. Please select one of the authorized engineers: Mathi, Guna, Sakthivel, or Kamalesh.';
+          return 'Service Engineer is required. Please select an active service engineer.';
         }
-        if (!SERVICE_ENGINEER_OPTIONS.includes(formData.service_engineer.trim())) {
-          return 'Please select a valid Service Engineer: Mathi, Guna, Sakthivel, or Kamalesh.';
+        const hasValidEng = effectiveEngineers.some(e => e.toLowerCase() === formData.service_engineer.trim().toLowerCase());
+        if (!hasValidEng) {
+          return 'Please select a valid active Service Engineer.';
         }
 
         // Availability validation: check if chosen Service Engineer has a conflicting booking
@@ -522,8 +524,10 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
       } else {
         // Product Couriered with technician assigned
         if (formData.service_engineer && formData.service_engineer.trim()) {
-          if (!SERVICE_ENGINEER_OPTIONS.includes(formData.service_engineer.trim())) {
-            return 'Please select a valid Service Engineer: Mathi, Guna, Sakthivel, or Kamalesh.';
+          const effectiveEngineers = engineersList.length > 0 ? engineersList : SERVICE_ENGINEER_OPTIONS;
+          const hasValidEng = effectiveEngineers.some(e => e.toLowerCase() === formData.service_engineer.trim().toLowerCase());
+          if (!hasValidEng) {
+            return 'Please select a valid active Service Engineer.';
           }
           if (!formData.expected_arrival_date) {
             return 'Expected Arrival Date is required when assigning a technician to a couriered order';
@@ -1739,7 +1743,7 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
                     ? '-- Leave Unassigned (Assign Later) --'
                     : '-- Select Service Engineer --'}
                 </option>
-                {SERVICE_ENGINEER_OPTIONS.map((name) => {
+                {(engineersList.length > 0 ? engineersList : SERVICE_ENGINEER_OPTIONS).map((name) => {
                   const eng = engineersAvailability?.find(
                     (e) => e.name.toLowerCase() === name.toLowerCase()
                   );
@@ -1789,7 +1793,7 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
                   Service Engineers Availability Status:
                 </span>
                 <div className="flex flex-wrap gap-2">
-                  {SERVICE_ENGINEER_OPTIONS.map((name) => {
+                  {(engineersList.length > 0 ? engineersList : SERVICE_ENGINEER_OPTIONS).map((name) => {
                     const eng = engineersAvailability?.find(
                       (e) => e.name.toLowerCase() === name.toLowerCase()
                     );

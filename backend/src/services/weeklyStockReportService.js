@@ -19,6 +19,7 @@ import {
   inMemoryMaterialReturns,
   inMemoryCompletionReports,
 } from './workflowService.js';
+import { getActiveServiceEngineerNames } from './serviceEngineerService.js';
 
 export const AUTHORIZED_SERVICE_ENGINEERS = [
   'Mathi',
@@ -479,9 +480,17 @@ export async function generateWeeklyStockReport({
   // ============================================================
   // SECTION 3: TECHNICIAN-WISE MATERIAL ISSUANCE SUMMARY
   // ============================================================
-  // Groups: Mathi, Guna, Sakthivel, Kamalesh, Unassigned Recipient
+  // Dynamically group all active service engineers, plus any engineers with movements, plus unassigned
+  const dynamicActiveEngineers = await getActiveServiceEngineerNames().catch(() => AUTHORIZED_SERVICE_ENGINEERS);
+  const allEngNamesSet = new Set(dynamicActiveEngineers.map((n) => n.trim()));
+  weekMovements.forEach((mov) => {
+    const chk = mov.checklist_id ? checklistMap.get(mov.checklist_id) : null;
+    const assignedEng = (chk?.service_engineer || '').trim();
+    if (assignedEng) allEngNamesSet.add(assignedEng);
+  });
+
   const technicianGroupsMap = new Map();
-  AUTHORIZED_SERVICE_ENGINEERS.forEach((name) => {
+  Array.from(allEngNamesSet).sort().forEach((name) => {
     technicianGroupsMap.set(name.toLowerCase(), {
       engineer_name: name,
       is_unassigned: false,
@@ -506,11 +515,8 @@ export async function generateWeeklyStockReport({
     const assignedEng = (chk?.service_engineer || '').trim();
 
     let targetGroup = technicianGroupsMap.get('unassigned');
-    if (assignedEng) {
-      const matched = AUTHORIZED_SERVICE_ENGINEERS.find((e) => e.toLowerCase() === assignedEng.toLowerCase());
-      if (matched) {
-        targetGroup = technicianGroupsMap.get(matched.toLowerCase());
-      }
+    if (assignedEng && technicianGroupsMap.has(assignedEng.toLowerCase())) {
+      targetGroup = technicianGroupsMap.get(assignedEng.toLowerCase());
     }
 
     const qty = Number(mov.quantity) || 0;

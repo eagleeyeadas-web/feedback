@@ -1,11 +1,41 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Wrench, ChevronLeft } from 'lucide-react';
 import StaffWorkspaceLayout from '../../components/layout/StaffWorkspaceLayout';
 import TechnicalWorkspace from '../admin/workspaces/TechnicalWorkspace';
 import InstallationChecklistDetails from '../admin/installation/InstallationChecklistDetails';
 
 export default function TechnicalWorkspacePage() {
-  const [viewChecklistId, setViewChecklistId] = useState(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const urlViewId = searchParams.get('view');
+  const [viewChecklistId, setViewChecklistId] = useState(urlViewId || null);
+
+  useEffect(() => {
+    if (urlViewId) {
+      setViewChecklistId(urlViewId);
+    } else {
+      setViewChecklistId(null);
+    }
+  }, [urlViewId]);
+
+  const handleBack = () => {
+    setViewChecklistId(null);
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete('view');
+      next.delete('action');
+      return next;
+    }, { replace: true });
+  };
+
+  const handleSelectChecklist = (id) => {
+    setViewChecklistId(id);
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set('view', id);
+      return next;
+    }, { replace: true });
+  };
 
   return (
     <StaffWorkspaceLayout
@@ -19,7 +49,7 @@ export default function TechnicalWorkspacePage() {
           <div className="flex items-center justify-between pb-3 border-b border-gray-200">
             <button
               type="button"
-              onClick={() => setViewChecklistId(null)}
+              onClick={handleBack}
               className="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-700 hover:text-navy bg-white hover:bg-gray-50 border border-gray-300 px-3 py-1.5 rounded-lg transition-colors cursor-pointer shadow-xs"
             >
               <ChevronLeft size={16} />
@@ -32,11 +62,11 @@ export default function TechnicalWorkspacePage() {
 
           <InstallationChecklistDetails
             id={viewChecklistId}
-            onBack={() => setViewChecklistId(null)}
+            onBack={handleBack}
           />
         </div>
       ) : (
-        <TechnicalWorkspace onSelectChecklist={(id) => setViewChecklistId(id)} />
+        <TechnicalWorkspace onSelectChecklist={handleSelectChecklist} />
       )}
     </StaffWorkspaceLayout>
   );

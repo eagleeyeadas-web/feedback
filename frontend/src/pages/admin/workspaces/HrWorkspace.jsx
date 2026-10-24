@@ -28,6 +28,12 @@ import {
   Wrench,
   Bus,
   CheckSquare,
+  UserPlus,
+  Edit2,
+  Trash2,
+  PowerOff,
+  ShieldCheck,
+  Search,
 } from 'lucide-react';
 import { useAuth } from '../../../hooks/useAuth';
 import {
@@ -40,6 +46,12 @@ import {
   rejectHrExtensionRequest,
   fetchHrOverdueRecords,
   triggerHrOverdueCheck,
+  fetchServiceEngineersAdmin,
+  fetchServiceEngineerImpact,
+  addServiceEngineer,
+  updateServiceEngineer,
+  deleteServiceEngineer,
+  deactivateServiceEngineer,
 } from '../../../lib/api';
 
 const FOUR_AUTHORIZED_ENGINEERS = ['Mathi', 'Guna', 'Sakthivel', 'Kamalesh'];
@@ -121,10 +133,226 @@ export default function HrWorkspace() {
   const [overdueFilter, setOverdueFilter] = useState('ALL');
   const [overdueScanning, setOverdueScanning] = useState(false);
 
+  // Service Engineers tab state
+  const [managedEngineers, setManagedEngineers] = useState([]);
+  const [managedEngineersLoading, setManagedEngineersLoading] = useState(false);
+  const [managedEngineersError, setManagedEngineersError] = useState(null);
+  const [engineerSearch, setEngineerSearch] = useState('');
+  const [engineerStatusFilter, setEngineerStatusFilter] = useState('ALL'); // 'ALL' | 'ACTIVE' | 'DEACTIVATED'
+
+  // Add Engineer Modal State
+  const [isAddEngineerModalOpen, setIsAddEngineerModalOpen] = useState(false);
+  const [addEngineerForm, setAddEngineerForm] = useState({
+    name: '',
+    employee_id: '',
+    phone: '',
+    email: '',
+    role: 'Service Engineer',
+  });
+  const [addEngineerErrors, setAddEngineerErrors] = useState({});
+  const [addEngineerSaving, setAddEngineerSaving] = useState(false);
+
+  // Edit Engineer Name / Details Modal State
+  const [editEngineerTarget, setEditEngineerTarget] = useState(null);
+  const [editEngineerForm, setEditEngineerForm] = useState({
+    name: '',
+    employee_id: '',
+    phone: '',
+    email: '',
+    role: 'Service Engineer',
+  });
+  const [editEngineerErrors, setEditEngineerErrors] = useState({});
+  const [editEngineerSaving, setEditEngineerSaving] = useState(false);
+
+  // Deactivate / Remove Confirmation Modal State
+  const [removeEngineerTarget, setRemoveEngineerTarget] = useState(null);
+  const [removeImpactData, setRemoveImpactData] = useState(null);
+  const [removeImpactLoading, setRemoveImpactLoading] = useState(false);
+  const [removeReason, setRemoveReason] = useState('');
+  const [removeSaving, setRemoveSaving] = useState(false);
+  const [removeError, setRemoveError] = useState(null);
+
   // Flash message helper
   const showFlash = (msg) => {
     setSuccessMessage(msg);
     setTimeout(() => setSuccessMessage(null), 5000);
+  };
+
+  // Sync event helper to refresh other workspaces / tabs
+  const broadcastSync = () => {
+    try {
+      window.dispatchEvent(new Event('ee_technician_availability_updated'));
+      localStorage.setItem('ee_technician_availability_sync', String(Date.now()));
+    } catch (e) {}
+  };
+
+  // Load Managed Service Engineers
+  const loadManagedEngineers = useCallback(async () => {
+    if (!token) return;
+    setManagedEngineersLoading(true);
+    setManagedEngineersError(null);
+    try {
+      const data = await fetchServiceEngineersAdmin(token, true);
+      setManagedEngineers(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error('Failed to load managed service engineers:', err);
+      setManagedEngineersError(err.message || 'Could not load service engineers.');
+    } finally {
+      setManagedEngineersLoading(false);
+    }
+  }, [token]);
+
+  useEffect(() => {
+    loadManagedEngineers();
+  }, [loadManagedEngineers]);
+
+  // Add Engineer Submit
+  const handleAddEngineerSubmit = async (e) => {
+    e.preventDefault();
+    const trimmed = (addEngineerForm.name || '').trim();
+    if (!trimmed) {
+      setAddEngineerErrors({ name: 'Full name is required and cannot be blank.' });
+      return;
+    }
+    if (trimmed.length < 2) {
+      setAddEngineerErrors({ name: 'Name must be at least 2 characters long.' });
+      return;
+    }
+    const dup = managedEngineers.find(
+      (eng) => eng.name.trim().toLowerCase() === trimmed.toLowerCase() && eng.is_active !== false
+    );
+    if (dup) {
+      setAddEngineerErrors({ name: `A service engineer named "${trimmed}" already exists.` });
+      return;
+    }
+
+    setAddEngineerSaving(true);
+    setAddEngineerErrors({});
+    try {
+      const newRec = await addServiceEngineer(token, {
+        name: trimmed,
+        employee_id: addEngineerForm.employee_id ? addEngineerForm.employee_id.trim() : null,
+        phone: addEngineerForm.phone ? addEngineerForm.phone.trim() : null,
+        email: addEngineerForm.email ? addEngineerForm.email.trim() : null,
+        role: addEngineerForm.role || 'Service Engineer',
+      });
+      showFlash(`Service Engineer "${newRec.name}" added successfully. Now available across all workspaces.`);
+      setIsAddEngineerModalOpen(false);
+      setAddEngineerForm({ name: '', employee_id: '', phone: '', email: '', role: 'Service Engineer' });
+      await Promise.all([loadManagedEngineers(), loadSummaryData(), loadCalendarData()]);
+      broadcastSync();
+    } catch (err) {
+      setAddEngineerErrors({ submit: err.message || 'Failed to add service engineer' });
+    } finally {
+      setAddEngineerSaving(false);
+    }
+  };
+
+  // Open Edit Modal
+  const handleOpenEditModal = (engineer) => {
+    setEditEngineerTarget(engineer);
+    setEditEngineerForm({
+      name: engineer.name || '',
+      employee_id: engineer.employee_id || '',
+      phone: engineer.phone || '',
+      email: engineer.email || '',
+      role: engineer.role || 'Service Engineer',
+    });
+    setEditEngineerErrors({});
+  };
+
+  // Edit Engineer Submit
+  const handleEditEngineerSubmit = async (e) => {
+    e.preventDefault();
+    if (!editEngineerTarget) return;
+    const trimmed = (editEngineerForm.name || '').trim();
+    if (!trimmed) {
+      setEditEngineerErrors({ name: 'Full name is required and cannot be blank.' });
+      return;
+    }
+    if (trimmed.length < 2) {
+      setEditEngineerErrors({ name: 'Name must be at least 2 characters long.' });
+      return;
+    }
+    const dup = managedEngineers.find(
+      (eng) => eng.id !== editEngineerTarget.id && eng.name.trim().toLowerCase() === trimmed.toLowerCase()
+    );
+    if (dup) {
+      setEditEngineerErrors({ name: `Another service engineer named "${trimmed}" already exists.` });
+      return;
+    }
+
+    setEditEngineerSaving(true);
+    setEditEngineerErrors({});
+    try {
+      const updated = await updateServiceEngineer(token, editEngineerTarget.id, {
+        name: trimmed,
+        employee_id: editEngineerForm.employee_id ? editEngineerForm.employee_id.trim() : null,
+        phone: editEngineerForm.phone ? editEngineerForm.phone.trim() : null,
+        email: editEngineerForm.email ? editEngineerForm.email.trim() : null,
+        role: editEngineerForm.role || 'Service Engineer',
+      });
+      showFlash(`Service Engineer name updated to "${updated.name}". All references updated throughout the application.`);
+      setEditEngineerTarget(null);
+      await Promise.all([loadManagedEngineers(), loadSummaryData(), loadCalendarData()]);
+      broadcastSync();
+    } catch (err) {
+      setEditEngineerErrors({ submit: err.message || 'Failed to update service engineer' });
+    } finally {
+      setEditEngineerSaving(false);
+    }
+  };
+
+  // Open Remove / Deactivate Modal
+  const handleOpenRemoveModal = async (engineer) => {
+    setRemoveEngineerTarget(engineer);
+    setRemoveImpactLoading(true);
+    setRemoveImpactData(null);
+    setRemoveError(null);
+    setRemoveReason('');
+    try {
+      const impact = await fetchServiceEngineerImpact(token, engineer.id);
+      setRemoveImpactData(impact);
+    } catch (err) {
+      console.error('Failed to check engineer impact:', err);
+      setRemoveError(err.message || 'Could not inspect engineer commitments.');
+    } finally {
+      setRemoveImpactLoading(false);
+    }
+  };
+
+  // Confirm Remove / Deactivate
+  const handleConfirmRemove = async () => {
+    if (!removeEngineerTarget) return;
+    setRemoveSaving(true);
+    setRemoveError(null);
+    try {
+      const res = await deleteServiceEngineer(token, removeEngineerTarget.id, removeReason);
+      if (res.action === 'DEACTIVATED') {
+        showFlash(`Engineer "${removeEngineerTarget.name}" has been deactivated. Historical records and reports are preserved.`);
+      } else {
+        showFlash(`Engineer "${removeEngineerTarget.name}" has been permanently removed.`);
+      }
+      setRemoveEngineerTarget(null);
+      await Promise.all([loadManagedEngineers(), loadSummaryData(), loadCalendarData()]);
+      broadcastSync();
+    } catch (err) {
+      setRemoveError(err.message || 'Failed to remove or deactivate service engineer');
+    } finally {
+      setRemoveSaving(false);
+    }
+  };
+
+  // Reactivate Engineer
+  const handleReactivateEngineer = async (engineer) => {
+    try {
+      await updateServiceEngineer(token, engineer.id, { is_active: true });
+      showFlash(`Engineer "${engineer.name}" has been reactivated and is now available for assignments.`);
+      await Promise.all([loadManagedEngineers(), loadSummaryData(), loadCalendarData()]);
+      broadcastSync();
+    } catch (err) {
+      setError(err.message || 'Failed to reactivate engineer');
+    }
   };
 
   // 1. Load Overview summary data (counts, pending extensions, overdue jobs)
@@ -487,20 +715,33 @@ export default function HrWorkspace() {
           </p>
         </div>
 
-        {/* Compact Summary Row (Engineers: 4, Pending Extensions, Overdue Jobs) */}
+        {/* Compact Summary Row (Engineers, Pending Extensions, Overdue Jobs) */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t border-gray-100">
-          <div className="flex items-center gap-3 px-4 py-2.5 bg-gray-50/90 rounded-xl border border-gray-200">
-            <div className="w-9 h-9 rounded-lg bg-gray-200/80 flex items-center justify-center text-gray-700 shrink-0">
-              <Users className="w-5 h-5" />
-            </div>
-            <div>
-              <span className="text-[11px] text-gray-500 uppercase font-bold block">Engineers</span>
-              <div className="flex items-baseline gap-2">
-                <span className="text-xl font-black text-gray-900">4</span>
-                <span className="text-[10px] text-gray-500 font-medium">(Mathi, Guna, Sakthivel, Kamalesh)</span>
+          <button
+            type="button"
+            onClick={() => setActiveTab('engineers')}
+            className={`flex items-center justify-between px-4 py-2.5 rounded-xl border text-left transition cursor-pointer group ${
+              activeTab === 'engineers'
+                ? 'bg-emerald-50/80 border-emerald-300 ring-2 ring-emerald-600/20'
+                : 'bg-gray-50 hover:bg-gray-100/80 border-gray-200'
+            }`}
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-emerald-100 text-emerald-800 flex items-center justify-center shrink-0">
+                <Users className="w-5 h-5" />
+              </div>
+              <div>
+                <span className="text-[11px] text-gray-600 uppercase font-bold block">Service Engineers</span>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-xl font-black text-gray-900">
+                    {managedEngineers.filter((e) => e.is_active !== false).length || engineersList.length || 4}
+                  </span>
+                  <span className="text-[10px] text-emerald-700 font-semibold">Active (Manage)</span>
+                </div>
               </div>
             </div>
-          </div>
+            <ChevronRight className="w-4 h-4 text-gray-400 group-hover:translate-x-0.5 transition" />
+          </button>
 
           <button
             type="button"
@@ -625,6 +866,22 @@ export default function HrWorkspace() {
               {activeOverdueCount}
             </span>
           )}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('engineers')}
+          className={`py-3 px-5 text-xs sm:text-sm font-bold border-b-2 flex items-center gap-2 transition cursor-pointer whitespace-nowrap ${
+            activeTab === 'engineers'
+              ? 'border-emerald-600 text-emerald-800 bg-emerald-50/60 rounded-t-lg'
+              : 'border-transparent text-gray-500 hover:text-gray-900'
+          }`}
+        >
+          <Users size={16} />
+          <span>Service Engineers</span>
+          <span className="ml-1 px-2 py-0.5 rounded-full text-[10px] font-mono font-black bg-emerald-100 text-emerald-900">
+            {managedEngineers.filter((e) => e.is_active !== false).length}
+          </span>
         </button>
       </div>
 
@@ -1297,6 +1554,750 @@ export default function HrWorkspace() {
               </table>
             </div>
           )}
+        </div>
+      )}
+
+      {/* ============================================================
+          TAB 4: SERVICE ENGINEER MANAGEMENT
+          Dynamic service engineer addition, name updates, and safe deactivation
+          ============================================================ */}
+      {activeTab === 'engineers' && (
+        <div className="bg-white rounded-2xl border border-gray-200 shadow-xs p-5 space-y-5">
+          {/* Section Header */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-gray-100">
+            <div>
+              <div className="flex items-center gap-2">
+                <Users className="w-5 h-5 text-emerald-600" />
+                <h3 className="text-base sm:text-lg font-black text-gray-900">
+                  Service Engineer Management
+                </h3>
+              </div>
+              <p className="text-xs text-gray-500 mt-1 max-w-2xl">
+                Add new service engineers, correct names, and safely deactivate former staff. Changes immediately take effect across Sales checklists, HR calendars, Coordinator travel, and Store reports.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={loadManagedEngineers}
+                disabled={managedEngineersLoading}
+                className="p-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl transition cursor-pointer disabled:opacity-50"
+                title="Refresh Engineer List"
+              >
+                <RefreshCw size={15} className={managedEngineersLoading ? 'animate-spin' : ''} />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setAddEngineerForm({ name: '', employee_id: '', phone: '', email: '', role: 'Service Engineer' });
+                  setAddEngineerErrors({});
+                  setIsAddEngineerModalOpen(true);
+                }}
+                className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer shadow-xs"
+              >
+                <UserPlus size={16} />
+                <span>Add Service Engineer</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Filters & Search Bar */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="relative flex-1 max-w-md">
+              <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={engineerSearch}
+                onChange={(e) => setEngineerSearch(e.target.value)}
+                placeholder="Search by engineer name, employee ID, or contact..."
+                className="w-full pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs text-gray-800 focus:outline-hidden focus:border-emerald-600 focus:bg-white"
+              />
+            </div>
+
+            <div className="flex items-center gap-2 text-xs">
+              <span className="text-gray-500 font-semibold">Status:</span>
+              <div className="flex items-center bg-gray-100 p-0.5 rounded-xl border border-gray-200 font-bold">
+                <button
+                  type="button"
+                  onClick={() => setEngineerStatusFilter('ALL')}
+                  className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                    engineerStatusFilter === 'ALL'
+                      ? 'bg-white text-emerald-800 shadow-2xs font-extrabold'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  All ({managedEngineers.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEngineerStatusFilter('ACTIVE')}
+                  className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                    engineerStatusFilter === 'ACTIVE'
+                      ? 'bg-white text-emerald-800 shadow-2xs font-extrabold'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  Active ({managedEngineers.filter((e) => e.is_active !== false).length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEngineerStatusFilter('DEACTIVATED')}
+                  className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                    engineerStatusFilter === 'DEACTIVATED'
+                      ? 'bg-white text-emerald-800 shadow-2xs font-extrabold'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  Deactivated ({managedEngineers.filter((e) => e.is_active === false).length})
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Engineers Table */}
+          {managedEngineersLoading && managedEngineers.length === 0 ? (
+            <div className="py-12 flex flex-col items-center justify-center text-gray-500 text-xs gap-2">
+              <RefreshCw className="w-6 h-6 animate-spin text-emerald-600" />
+              <span>Loading service engineers...</span>
+            </div>
+          ) : managedEngineers.length === 0 ? (
+            <div className="text-center py-12 text-gray-400">
+              <Users className="w-10 h-10 mx-auto text-gray-300 mb-2" />
+              <p className="text-xs font-semibold text-gray-600">No service engineers found.</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto pb-2">
+              <table className="w-full text-left border-collapse text-xs min-w-[700px]">
+                <thead>
+                  <tr className="bg-gray-50/80 border-b border-gray-200">
+                    <th className="py-3 px-3.5 font-bold text-gray-700 uppercase text-[10px] tracking-wider">
+                      Service Engineer Name
+                    </th>
+                    <th className="py-3 px-3.5 font-bold text-gray-700 uppercase text-[10px] tracking-wider">
+                      Account / Assignment Status
+                    </th>
+                    <th className="py-3 px-3.5 font-bold text-gray-700 uppercase text-[10px] tracking-wider">
+                      Created Date
+                    </th>
+                    <th className="py-3 px-3.5 font-bold text-gray-700 uppercase text-[10px] tracking-wider text-right">
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {managedEngineers
+                    .filter((eng) => {
+                      if (engineerStatusFilter === 'ACTIVE' && eng.is_active === false) return false;
+                      if (engineerStatusFilter === 'DEACTIVATED' && eng.is_active !== false) return false;
+                      if (engineerSearch.trim()) {
+                        const q = engineerSearch.trim().toLowerCase();
+                        const n = (eng.name || '').toLowerCase();
+                        const em = (eng.employee_id || '').toLowerCase();
+                        const ph = (eng.phone || '').toLowerCase();
+                        const email = (eng.email || '').toLowerCase();
+                        return n.includes(q) || em.includes(q) || ph.includes(q) || email.includes(q);
+                      }
+                      return true;
+                    })
+                    .map((eng) => {
+                      const isActive = eng.is_active !== false;
+                      const initials = eng.name
+                        ? eng.name
+                            .split(' ')
+                            .map((p) => p[0])
+                            .join('')
+                            .slice(0, 2)
+                            .toUpperCase()
+                        : 'SE';
+
+                      return (
+                        <tr
+                          key={eng.id}
+                          className={`hover:bg-gray-50/80 transition-colors ${
+                            !isActive ? 'opacity-70 bg-gray-50/40' : ''
+                          }`}
+                        >
+                          {/* Column 1: Service Engineer Name */}
+                          <td className="py-3.5 px-3.5">
+                            <div className="flex items-center gap-3">
+                              <div
+                                className={`w-9 h-9 rounded-full flex items-center justify-center font-black text-xs shrink-0 ${
+                                  isActive
+                                    ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                    : 'bg-gray-200 text-gray-600 border border-gray-300'
+                                }`}
+                              >
+                                {initials}
+                              </div>
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <span className="font-black text-gray-900 text-sm">
+                                    {eng.name}
+                                  </span>
+                                  {eng.employee_id && (
+                                    <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-gray-100 text-gray-700 border border-gray-200">
+                                      {eng.employee_id}
+                                    </span>
+                                  )}
+                                  {['Mathi', 'Guna', 'Sakthivel', 'Kamalesh'].includes(eng.name) && (
+                                    <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">
+                                      Core
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="text-[11px] text-gray-500 flex items-center gap-2 mt-0.5">
+                                  <span>{eng.role || 'Service Engineer'}</span>
+                                  {eng.phone && <span>• {eng.phone}</span>}
+                                  {eng.email && <span className="hidden sm:inline">• {eng.email}</span>}
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+
+                          {/* Column 2: Account / Assignment Status */}
+                          <td className="py-3.5 px-3.5">
+                            <div className="flex flex-col items-start gap-1">
+                              {isActive ? (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-300">
+                                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                                  <span>Active</span>
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-gray-100 text-gray-600 border border-gray-300">
+                                  <span className="w-2 h-2 rounded-full bg-gray-400" />
+                                  <span>Deactivated</span>
+                                </span>
+                              )}
+                              <span className="text-[10px] text-gray-400">
+                                {isActive ? 'Available for new job assignments' : 'Excluded from new assignments'}
+                              </span>
+                            </div>
+                          </td>
+
+                          {/* Column 3: Created Date */}
+                          <td className="py-3.5 px-3.5 text-gray-600">
+                            {eng.created_at ? (
+                              <div>
+                                <span className="font-semibold block text-gray-800">
+                                  {new Date(eng.created_at).toLocaleDateString('en-GB', {
+                                    day: '2-digit',
+                                    month: 'short',
+                                    year: 'numeric',
+                                  })}
+                                </span>
+                                <span className="text-[10px] text-gray-400">
+                                  {new Date(eng.created_at).toLocaleTimeString('en-US', {
+                                    hour: '2-digit',
+                                    minute: '2-digit',
+                                  })}
+                                </span>
+                              </div>
+                            ) : (
+                              <span className="text-[11px] text-gray-400 italic">Established Core</span>
+                            )}
+                          </td>
+
+                          {/* Column 4: Actions */}
+                          <td className="py-3.5 px-3.5 text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              <button
+                                type="button"
+                                onClick={() => handleOpenEditModal(eng)}
+                                className="px-3 py-1.5 bg-gray-50 hover:bg-gray-100 text-gray-700 border border-gray-200 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1"
+                                title="Edit engineer name and details"
+                              >
+                                <Edit2 size={13} />
+                                <span>Edit Name</span>
+                              </button>
+
+                              {isActive ? (
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenRemoveModal(eng)}
+                                  className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1"
+                                  title="Safe deactivation or permanent removal"
+                                >
+                                  <UserX size={13} />
+                                  <span>Deactivate / Remove</span>
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => handleReactivateEngineer(eng)}
+                                  className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1"
+                                  title="Reactivate this service engineer"
+                                >
+                                  <UserCheck size={13} />
+                                  <span>Reactivate</span>
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ============================================================
+          MODAL 1: ADD SERVICE ENGINEER
+          ============================================================ */}
+      {isAddEngineerModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl space-y-4">
+            <div className="flex items-start justify-between pb-2 border-b border-gray-100">
+              <div>
+                <h3 className="text-base font-black text-gray-900 flex items-center gap-2">
+                  <UserPlus className="w-5 h-5 text-emerald-600" />
+                  <span>Add Service Engineer</span>
+                </h3>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Register a new service engineer into the company workforce roster.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsAddEngineerModalOpen(false)}
+                className="text-gray-400 hover:text-gray-700 p-1 rounded-lg"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <form onSubmit={handleAddEngineerSubmit} className="space-y-4">
+              {addEngineerErrors.submit && (
+                <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-800 text-xs font-semibold flex items-center gap-2">
+                  <AlertCircle size={16} className="shrink-0 text-rose-600" />
+                  <span>{addEngineerErrors.submit}</span>
+                </div>
+              )}
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-gray-700 flex items-center gap-1">
+                  <span>Full Name</span>
+                  <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  autoFocus
+                  value={addEngineerForm.name}
+                  onChange={(e) => {
+                    setAddEngineerForm((p) => ({ ...p, name: e.target.value }));
+                    if (addEngineerErrors.name) setAddEngineerErrors((p) => ({ ...p, name: '' }));
+                  }}
+                  placeholder="e.g. Suresh Kumar"
+                  className={`w-full p-2.5 bg-gray-50 border rounded-xl text-xs text-gray-900 font-semibold focus:outline-hidden focus:bg-white ${
+                    addEngineerErrors.name
+                      ? 'border-rose-400 focus:border-rose-600'
+                      : 'border-gray-200 focus:border-emerald-600'
+                  }`}
+                />
+                {addEngineerErrors.name && (
+                  <p className="text-[11px] text-rose-600 font-semibold mt-0.5">
+                    {addEngineerErrors.name}
+                  </p>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-gray-700">
+                    Employee ID <span className="text-gray-400 font-normal">(Optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={addEngineerForm.employee_id}
+                    onChange={(e) => setAddEngineerForm((p) => ({ ...p, employee_id: e.target.value }))}
+                    placeholder="e.g. EMP-ENG-005"
+                    className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs text-gray-900 font-mono focus:outline-hidden focus:border-emerald-600 focus:bg-white"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-gray-700">
+                    Phone <span className="text-gray-400 font-normal">(Optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={addEngineerForm.phone}
+                    onChange={(e) => setAddEngineerForm((p) => ({ ...p, phone: e.target.value }))}
+                    placeholder="e.g. +91 98401 11005"
+                    className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs text-gray-900 focus:outline-hidden focus:border-emerald-600 focus:bg-white"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-gray-700">
+                  Email Address <span className="text-gray-400 font-normal">(Optional)</span>
+                </label>
+                <input
+                  type="email"
+                  value={addEngineerForm.email}
+                  onChange={(e) => setAddEngineerForm((p) => ({ ...p, email: e.target.value }))}
+                  placeholder="e.g. suresh@eagleeyesafdrive.com"
+                  className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs text-gray-900 focus:outline-hidden focus:border-emerald-600 focus:bg-white"
+                />
+              </div>
+
+              <div className="p-3 bg-emerald-50/70 rounded-xl border border-emerald-200 text-[11px] text-emerald-900 flex items-start gap-2">
+                <Info size={15} className="shrink-0 text-emerald-700 mt-0.5" />
+                <span>
+                  The newly added engineer will immediately appear in Sales checklist assignments, the HR Availability Calendar, Coordinator travel bookings, and material reports without requiring code changes or application redeployment.
+                </span>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => setIsAddEngineerModalOpen(false)}
+                  className="px-4 py-2 border border-gray-200 hover:bg-gray-100 text-gray-700 rounded-xl text-xs font-bold transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={addEngineerSaving}
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1.5 shadow-xs"
+                >
+                  {addEngineerSaving ? (
+                    <RefreshCw size={14} className="animate-spin" />
+                  ) : (
+                    <Check size={14} />
+                  )}
+                  <span>Save Engineer</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================
+          MODAL 2: EDIT SERVICE ENGINEER NAME & DETAILS
+          ============================================================ */}
+      {editEngineerTarget && (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl space-y-4">
+            <div className="flex items-start justify-between pb-2 border-b border-gray-100">
+              <div>
+                <h3 className="text-base font-black text-gray-900 flex items-center gap-2">
+                  <Edit2 className="w-5 h-5 text-indigo-600" />
+                  <span>Edit Service Engineer Name</span>
+                </h3>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Update engineer details. Stable database ID is preserved.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditEngineerTarget(null)}
+                className="text-gray-400 hover:text-gray-700 p-1 rounded-lg"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <form onSubmit={handleEditEngineerSubmit} className="space-y-4">
+              {editEngineerErrors.submit && (
+                <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-800 text-xs font-semibold flex items-center gap-2">
+                  <AlertCircle size={16} className="shrink-0 text-rose-600" />
+                  <span>{editEngineerErrors.submit}</span>
+                </div>
+              )}
+
+              <div className="p-2.5 bg-gray-50 rounded-xl border border-gray-200 text-[11px] text-gray-600 flex items-center justify-between">
+                <span>Database ID (Preserved):</span>
+                <span className="font-mono font-bold text-gray-800 text-[10px]">
+                  {editEngineerTarget.id}
+                </span>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-gray-700 flex items-center gap-1">
+                  <span>Full Name</span>
+                  <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  autoFocus
+                  value={editEngineerForm.name}
+                  onChange={(e) => {
+                    setEditEngineerForm((p) => ({ ...p, name: e.target.value }));
+                    if (editEngineerErrors.name) setEditEngineerErrors((p) => ({ ...p, name: '' }));
+                  }}
+                  className={`w-full p-2.5 bg-gray-50 border rounded-xl text-xs text-gray-900 font-semibold focus:outline-hidden focus:bg-white ${
+                    editEngineerErrors.name
+                      ? 'border-rose-400 focus:border-rose-600'
+                      : 'border-gray-200 focus:border-indigo-600'
+                  }`}
+                />
+                {editEngineerErrors.name && (
+                  <p className="text-[11px] text-rose-600 font-semibold mt-0.5">
+                    {editEngineerErrors.name}
+                  </p>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-gray-700">Employee ID</label>
+                  <input
+                    type="text"
+                    value={editEngineerForm.employee_id}
+                    onChange={(e) => setEditEngineerForm((p) => ({ ...p, employee_id: e.target.value }))}
+                    placeholder="EMP-ENG-..."
+                    className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs text-gray-900 font-mono focus:outline-hidden focus:border-indigo-600 focus:bg-white"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-gray-700">Phone</label>
+                  <input
+                    type="text"
+                    value={editEngineerForm.phone}
+                    onChange={(e) => setEditEngineerForm((p) => ({ ...p, phone: e.target.value }))}
+                    placeholder="+91..."
+                    className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs text-gray-900 focus:outline-hidden focus:border-indigo-600 focus:bg-white"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-gray-700">Email</label>
+                <input
+                  type="email"
+                  value={editEngineerForm.email}
+                  onChange={(e) => setEditEngineerForm((p) => ({ ...p, email: e.target.value }))}
+                  placeholder="engineer@eagleeyesafdrive.com"
+                  className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs text-gray-900 focus:outline-hidden focus:border-indigo-600 focus:bg-white"
+                />
+              </div>
+
+              <div className="p-3 bg-blue-50/70 rounded-xl border border-blue-200 text-[11px] text-blue-900 flex items-start gap-2">
+                <Info size={15} className="shrink-0 text-blue-700 mt-0.5" />
+                <span>
+                  When you update this name, all existing checklist assignments, booking records, and historical references will automatically reflect the corrected name without creating a duplicate person.
+                </span>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => setEditEngineerTarget(null)}
+                  className="px-4 py-2 border border-gray-200 hover:bg-gray-100 text-gray-700 rounded-xl text-xs font-bold transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={editEngineerSaving}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1.5 shadow-xs"
+                >
+                  {editEngineerSaving ? (
+                    <RefreshCw size={14} className="animate-spin" />
+                  ) : (
+                    <Check size={14} />
+                  )}
+                  <span>Save Changes</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================
+          MODAL 3: DEACTIVATE / SAFE REMOVAL CONFIRMATION
+          ============================================================ */}
+      {removeEngineerTarget && (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl space-y-4">
+            <div className="flex items-start justify-between pb-2 border-b border-gray-100">
+              <div>
+                <h3 className="text-base font-black text-gray-900 flex items-center gap-2">
+                  <UserX className="w-5 h-5 text-rose-600" />
+                  <span>Deactivate / Remove Service Engineer</span>
+                </h3>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Engineer: <strong className="text-gray-800">{removeEngineerTarget.name}</strong>
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setRemoveEngineerTarget(null)}
+                className="text-gray-400 hover:text-gray-700 p-1 rounded-lg"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {removeError && (
+              <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-800 text-xs font-semibold flex items-center gap-2">
+                <AlertCircle size={16} className="shrink-0 text-rose-600" />
+                <span>{removeError}</span>
+              </div>
+            )}
+
+            {removeImpactLoading ? (
+              <div className="py-8 flex flex-col items-center justify-center text-gray-500 text-xs gap-2">
+                <RefreshCw className="w-6 h-6 animate-spin text-rose-600" />
+                <span>Inspecting active commitments, travel bookings, and historical records...</span>
+              </div>
+            ) : removeImpactData ? (
+              <div className="space-y-4 text-xs">
+                {/* CASE 1: Active Commitments Exist (BLOCKED) */}
+                {removeImpactData.hasActiveCommitments ? (
+                  <div className="space-y-3">
+                    <div className="p-4 bg-rose-50 border border-rose-300 rounded-xl text-rose-900 space-y-2">
+                      <div className="flex items-center gap-2 font-black text-sm text-rose-900">
+                        <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0" />
+                        <span>Action Blocked: Active Commitments Detected</span>
+                      </div>
+                      <p className="text-xs text-rose-800 leading-relaxed">
+                        Engineer &quot;{removeEngineerTarget.name}&quot; cannot be removed or deactivated because they currently have{' '}
+                        <strong>{removeImpactData.activeCommitments.length} active commitment(s)</strong>.
+                      </p>
+                      <p className="text-[11px] text-rose-700 font-semibold">
+                        Jobs must never be silently cancelled or reassigned. Please complete or reassign these commitments first through the appropriate workspace:
+                      </p>
+                    </div>
+
+                    <div className="max-h-48 overflow-y-auto space-y-2 pr-1">
+                      {removeImpactData.activeCommitments.map((cmt, idx) => (
+                        <div
+                          key={idx}
+                          className="p-2.5 rounded-xl bg-gray-50 border border-gray-200 flex items-start gap-2.5 text-[11px]"
+                        >
+                          <span className="px-1.5 py-0.5 rounded bg-rose-100 text-rose-800 font-extrabold uppercase text-[9px] shrink-0 mt-0.5">
+                            {cmt.type.replace('_', ' ')}
+                          </span>
+                          <span className="font-semibold text-gray-800">{cmt.description}</span>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100">
+                      <button
+                        type="button"
+                        onClick={() => setRemoveEngineerTarget(null)}
+                        className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-xl text-xs font-bold transition cursor-pointer"
+                      >
+                        Close & Resolve Commitments
+                      </button>
+                    </div>
+                  </div>
+                ) : removeImpactData.hasHistoricalRecords ? (
+                  /* CASE 2: Historical Records Exist -> Safe Deactivation */
+                  <div className="space-y-3">
+                    <div className="p-4 bg-amber-50 border border-amber-300 rounded-xl text-amber-950 space-y-2">
+                      <div className="flex items-center gap-2 font-black text-sm text-amber-900">
+                        <Shield className="w-5 h-5 text-amber-600 shrink-0" />
+                        <span>Audit Preservation: Deactivation will be applied</span>
+                      </div>
+                      <p className="text-xs text-amber-900 leading-relaxed">
+                        Engineer &quot;{removeEngineerTarget.name}&quot; has{' '}
+                        <strong>{removeImpactData.historicalRecordsCount} historical record(s)</strong>{' '}
+                        (completed installation checklists, technical reports, or expense submissions).
+                      </p>
+                      <p className="text-[11px] text-amber-800">
+                        To preserve data integrity and prevent breaking historical reports, this engineer will be{' '}
+                        <strong>Deactivated</strong> rather than deleted. They will immediately disappear from future assignment dropdowns.
+                      </p>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-gray-700">
+                        Reason for Deactivation <span className="text-gray-400 font-normal">(Optional)</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={removeReason}
+                        onChange={(e) => setRemoveReason(e.target.value)}
+                        placeholder="e.g. Left organization / Transferred"
+                        className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs text-gray-800 focus:outline-hidden focus:border-amber-600 focus:bg-white"
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100">
+                      <button
+                        type="button"
+                        onClick={() => setRemoveEngineerTarget(null)}
+                        className="px-4 py-2 border border-gray-200 hover:bg-gray-100 text-gray-700 rounded-xl text-xs font-bold transition cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleConfirmRemove}
+                        disabled={removeSaving}
+                        className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1.5 shadow-xs"
+                      >
+                        {removeSaving ? <RefreshCw size={14} className="animate-spin" /> : <PowerOff size={14} />}
+                        <span>Confirm Deactivation</span>
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  /* CASE 3: Clean Record -> Safe Permanent Deletion */
+                  <div className="space-y-3">
+                    <div className="p-4 bg-emerald-50 border border-emerald-300 rounded-xl text-emerald-950 space-y-2">
+                      <div className="flex items-center gap-2 font-black text-sm text-emerald-900">
+                        <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+                        <span>Safe Removal Allowed</span>
+                      </div>
+                      <p className="text-xs text-emerald-900 leading-relaxed">
+                        Engineer &quot;{removeEngineerTarget.name}&quot; has no active commitments, travel bookings, or historical records.
+                      </p>
+                      <p className="text-[11px] text-emerald-800">
+                        This engineer record can be safely permanently removed from the database.
+                      </p>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-gray-700">
+                        Reason for Removal <span className="text-gray-400 font-normal">(Optional)</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={removeReason}
+                        onChange={(e) => setRemoveReason(e.target.value)}
+                        placeholder="e.g. Created by mistake"
+                        className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs text-gray-800 focus:outline-hidden focus:border-rose-600 focus:bg-white"
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100">
+                      <button
+                        type="button"
+                        onClick={() => setRemoveEngineerTarget(null)}
+                        className="px-4 py-2 border border-gray-200 hover:bg-gray-100 text-gray-700 rounded-xl text-xs font-bold transition cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleConfirmRemove}
+                        disabled={removeSaving}
+                        className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1.5 shadow-xs"
+                      >
+                        {removeSaving ? <RefreshCw size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                        <span>Permanently Remove</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : null}
+          </div>
         </div>
       )}
 

@@ -86,6 +86,10 @@ import {
   requestTechnicianForCourieredChecklist,
   scheduleTechnicianForCourieredChecklist,
 } from '../services/courierService.js';
+import {
+  getActiveServiceEngineerNames,
+  inMemoryServiceEngineers,
+} from '../services/serviceEngineerService.js';
 
 const uploadReceipt = multer({
   storage: multer.memoryStorage(),
@@ -220,20 +224,32 @@ export const checklistValidationSchema = z.object({
         message: 'Expected arrival time is required',
       });
     }
-    if (!data.service_engineer || !SERVICE_ENGINEER_OPTIONS.includes(data.service_engineer.trim())) {
+    const isValidEngineer = (name) => {
+      if (!name) return false;
+      const lower = name.trim().toLowerCase();
+      const activeEngs = Array.from(inMemoryServiceEngineers.values()).filter(e => e.is_active !== false);
+      return activeEngs.some(e => e.name.toLowerCase() === lower) || SERVICE_ENGINEER_OPTIONS.some(o => o.toLowerCase() === lower);
+    };
+
+    if (!data.service_engineer || !isValidEngineer(data.service_engineer)) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['service_engineer'],
-        message: 'Service Engineer is required. Please select one of: Mathi, Guna, Sakthivel, or Kamalesh.',
+        message: 'Service Engineer is required. Please select an active service engineer.',
       });
     }
   } else {
-    if (data.service_engineer && data.service_engineer.trim() && !SERVICE_ENGINEER_OPTIONS.includes(data.service_engineer.trim())) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['service_engineer'],
-        message: 'Please select one of the authorized service engineers: Mathi, Guna, Sakthivel, or Kamalesh.',
-      });
+    if (data.service_engineer && data.service_engineer.trim()) {
+      const lower = data.service_engineer.trim().toLowerCase();
+      const activeEngs = Array.from(inMemoryServiceEngineers.values()).filter(e => e.is_active !== false);
+      const isValid = activeEngs.some(e => e.name.toLowerCase() === lower) || SERVICE_ENGINEER_OPTIONS.some(o => o.toLowerCase() === lower);
+      if (!isValid) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['service_engineer'],
+          message: 'Please select an active service engineer.',
+        });
+      }
     }
   }
   // If device_configurations is not provided, enforce legacy device fields
@@ -287,10 +303,15 @@ router.get('/stats', requireRole('ADMIN', 'SALES', 'TECHNICAL', 'STORE_MANAGER')
 
 /**
  * GET /api/admin/installations/service-engineers
- * Dropdown options for authorized Service Engineers
+ * Dropdown options for authorized Service Engineers (dynamic active list)
  */
-router.get('/service-engineers', requireRole('ADMIN', 'SALES', 'TECHNICAL', 'STORE_MANAGER'), (req, res) => {
-  return res.json(SERVICE_ENGINEER_OPTIONS);
+router.get('/service-engineers', requireRole('ADMIN', 'SALES', 'TECHNICAL', 'STORE_MANAGER', 'HR', 'COORDINATOR'), async (req, res) => {
+  try {
+    const names = await getActiveServiceEngineerNames();
+    return res.json(names);
+  } catch (err) {
+    return res.json(SERVICE_ENGINEER_OPTIONS);
+  }
 });
 
 /**

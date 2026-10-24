@@ -135,7 +135,75 @@
       },
       "is_read": true,
       "created_at": "2026-10-22T05:44:28.340Z"
+    },
+    {
+      "id": "4fd3c847-2e67-4c8a-9bc2-569e27a97c9a",
+      "target_role": "COORDINATOR",
+      "target_user_id": null,
+      "title": "Post-Installation Report Submitted",
+      "message": "Technician Sakthivel has submitted the post-installation report for checklist EE-INST-20261022-0062. Please review the report and return-ticket details.",
+      "type": "POST_INSTALLATION_REPORT_SUBMITTED",
+      "checklist_id": "23f5cab4-bf01-4303-accc-bd1bfa487de5",
+      "checklist_number": "EE-INST-20261022-0062",
+      "metadata": {
+        "task_type": "POST_INSTALLATION_REPORT",
+        "checklist_id": "23f5cab4-bf01-4303-accc-bd1bfa487de5",
+        "checklist_number": "EE-INST-20261022-0062",
+        "client_name": "Conflict Test Client",
+        "technician_name": "Sakthivel",
+        "submitted_at": "2026-10-22T11:15:39.705Z",
+        "actual_completion_datetime": "2026-10-22T11:15:39.705Z",
+        "action_label": "Review Report",
+        "action_url": "/coordinator?tab=return&checklist=23f5cab4-bf01-4303-accc-bd1bfa487de5&openReport=true",
+        "idempotency_key": "post-install-report-23f5cab4-bf01-4303-accc-bd1bfa487de5"
+      },
+      "is_read": true,
+      "created_at": "2026-10-22T11:15:40.526Z"
+    },
+    {
+      "id": "30f418a3-c89c-4535-901e-19b59b681b33",
+      "target_role": "COORDINATOR",
+      "target_user_id": null,
+      "title": "Return ticket task created — awaiting technician booking",
+      "message": "Installation completed for checklist EE-INST-20261022-0062 (Conflict Test Client). Return-ticket booking task created and awaiting technician booking & verification. Completed: 2026-10-22T11:15:39.705Z",
+      "type": "RETURN_TICKET_AWAITING_BOOKING",
+      "checklist_id": "23f5cab4-bf01-4303-accc-bd1bfa487de5",
+      "checklist_number": "EE-INST-20261022-0062",
+      "metadata": {
+        "task_id": "RET-TASK-EE-INST-20261022-0062",
+        "checklist_id": "23f5cab4-bf01-4303-accc-bd1bfa487de5",
+        "checklist_number": "EE-INST-20261022-0062",
+        "client_name": "Conflict Test Client",
+        "location": "Coimbatore",
+        "technician_name": "Sakthivel",
+        "actual_completion_datetime": "2026-10-22T11:15:39.705Z",
+        "report_submission_datetime": "2026-10-22T11:15:39.705Z",
+        "urgency": "Normal",
+        "booking_link": "/coordinator?view=23f5cab4-bf01-4303-accc-bd1bfa487de5&action=return_ticket"
+      },
+      "is_read": true,
+      "created_at": "2026-10-22T11:15:43.747Z"
+    },
+    {
+      "id": "fb972294-84a8-413d-a0db-19bc5002af82",
+      "target_role": "TECHNICAL",
+      "target_user_id": "e1000000-0000-0000-0000-000000000004",
+      "title": "Return ticket booking required",
+      "message": "Installation completed for checklist EE-INST-20261022-0062 (Conflict Test Client). Please book your return ticket and submit details for coordinator verification.",
+      "type": "RETURN_TICKET_BOOKING_REQUIRED",
+      "checklist_id": "23f5cab4-bf01-4303-accc-bd1bfa487de5",
+      "checklist_number": "EE-INST-20261022-0062",
+      "metadata": {
+        "task_id": "RET-TASK-EE-INST-20261022-0062",
+        "checklist_id": "23f5cab4-bf01-4303-accc-bd1bfa487de5",
+        "checklist_number": "EE-INST-20261022-0062",
+        "client_name": "Conflict Test Client",
+        "location": "Coimbatore",
+        "actual_completion_datetime": "2026-10-22T11:15:39.705Z"
+      },
+      "is_read": true,
+      "created_at": "2026-10-22T11:15:43.947Z"
     }
   ],
-  "updated_at": "2026-10-22T10:09:06.651Z"
+  "updated_at": "2026-10-24T08:40:43.687Z"
 }

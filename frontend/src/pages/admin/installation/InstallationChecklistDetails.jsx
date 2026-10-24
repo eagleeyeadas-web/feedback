@@ -183,15 +183,25 @@ export default function InstallationChecklistDetails({ id: propId, onEdit, onBac
 
   if (error || !checklist) {
     return (
-      <div className="bg-white p-8 rounded-2xl border border-rose-100 shadow-sm text-center text-rose-600 space-y-3">
-        <AlertTriangle className="mx-auto" size={32} />
-        <p className="text-sm font-semibold">{error || 'Checklist not found'}</p>
-        <button
-          onClick={handleBackClick}
-          className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-xl transition-colors cursor-pointer"
-        >
-          Back to List
-        </button>
+      <div className="bg-white p-8 max-w-lg mx-auto my-8 rounded-2xl border border-rose-100 shadow-sm text-center space-y-4">
+        <div className="w-12 h-12 rounded-full bg-rose-50 border border-rose-100 text-rose-600 flex items-center justify-center mx-auto">
+          <AlertTriangle size={24} />
+        </div>
+        <div>
+          <h3 className="text-base font-bold text-gray-900">Checklist Not Found or Inaccessible</h3>
+          <p className="text-xs text-gray-500 mt-1 max-w-sm mx-auto">
+            {error || `The installation checklist with ID "${checklistId || 'unknown'}" could not be located. It may have been archived, deleted, or you may lack access permissions.`}
+          </p>
+        </div>
+        <div className="pt-2">
+          <button
+            onClick={handleBackClick}
+            className="text-xs font-semibold bg-navy hover:bg-slate-800 text-white px-5 py-2.5 rounded-xl transition-colors cursor-pointer shadow-xs inline-flex items-center gap-1.5"
+          >
+            <ArrowLeft size={14} />
+            <span>Return to Workspace</span>
+          </button>
+        </div>
       </div>
     );
   }

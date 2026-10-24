@@ -73,7 +73,7 @@ const inMemoryProducts = new Map(
 
 const inMemoryTransactions = [];
 const processedCarryDeductions = new Set();
-const processedChecklistDeviceIssuances = new Set();
+export const processedChecklistDeviceIssuances = new Set();
 let devicesDbSeeded = false;
 
 /**
@@ -913,6 +913,22 @@ export async function issueDevicesForChecklist({
     throw new Error(`Devices have already been issued for checklist ${checklist_id}. Duplicate issuance is prevented.`);
   }
 
+  // Database check: verify devices have not already been issued in store_material_requirements
+  try {
+    const { data: storeReq } = await supabase
+      .from('store_material_requirements')
+      .select('devices_issuance_status')
+      .eq('checklist_id', checklist_id)
+      .maybeSingle();
+
+    if (storeReq && storeReq.devices_issuance_status === 'ISSUED') {
+      processedChecklistDeviceIssuances.add(checklist_id);
+      throw new Error(`Devices have already been issued for checklist ${checklist_id}. Duplicate issuance is prevented.`);
+    }
+  } catch (err) {
+    if (err.message && err.message.includes('already been issued')) throw err;
+  }
+
   if (!devices || !Array.isArray(devices) || devices.length === 0) {
     throw new Error('No camera devices specified for issuance.');
   }
@@ -1070,6 +1086,35 @@ export async function issueDevicesForChecklist({
 
   processedChecklistDeviceIssuances.add(checklist_id);
   saveInventoryStorage();
+
+  // Update devices_issuance_status in store_material_requirements and installation_checklists
+  try {
+    await supabase
+      .from('store_material_requirements')
+      .update({
+        devices_issuance_status: 'ISSUED',
+        devices_issued_at: new Date().toISOString(),
+        devices_issued_by: user?.id || null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('checklist_id', checklist_id);
+  } catch (dbDevErr) {
+    console.warn('DB store_material_requirements update error for devices:', dbDevErr.message);
+  }
+
+  try {
+    await supabase
+      .from('installation_checklists')
+      .update({
+        devices_issuance_status: 'ISSUED',
+        devices_issued_at: new Date().toISOString(),
+        devices_issued_by: user?.id || null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', checklist_id);
+  } catch (chkDevErr) {
+    // Ignore if column not present yet
+  }
 
   if (user) {
     await logAudit({

@@ -1260,11 +1260,13 @@ export async function scheduleTechnicianForCourieredChecklist({
     throw new Error('Checklist ID is required.');
   }
 
-  const { SERVICE_ENGINEER_OPTIONS, resolveEngineer, reserveEngineerAtomic, calculateBookingEndDate } = await import('./engineerBookingService.js');
+  const { resolveEngineer, reserveEngineerAtomic, calculateBookingEndDate } = await import('./engineerBookingService.js');
+  const { getActiveServiceEngineerNames } = await import('./serviceEngineerService.js');
   const { getBusinessToday, getBusinessTomorrow } = await import('./installationService.js');
 
-  if (!service_engineer || !SERVICE_ENGINEER_OPTIONS.includes(service_engineer.trim())) {
-    throw new Error('Please select one of the authorized service engineers: Mathi, Guna, Sakthivel, or Kamalesh.');
+  const activeNames = await getActiveServiceEngineerNames();
+  if (!service_engineer || !activeNames.some((n) => n.toLowerCase() === service_engineer.trim().toLowerCase())) {
+    throw new Error(`Please select one of the active service engineers: ${activeNames.join(', ')}.`);
   }
 
   const engName = service_engineer.trim();

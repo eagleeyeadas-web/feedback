@@ -1,7 +1,8 @@
 import { useEffect, lazy, Suspense } from 'react';
-import { HashRouter, Routes, Route, Navigate, useParams, useSearchParams } from 'react-router-dom';
+import { HashRouter, Routes, Route, Navigate, useParams, useSearchParams, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './hooks/useAuth';
 import RoleProtectedRoute from './components/RoleProtectedRoute';
+import AccessDenied from './components/AccessDenied';
 import ActiveSessionCleanupTracker from './components/ActiveSessionCleanupTracker';
 import { pingServerWakeup } from './lib/api';
 
@@ -13,6 +14,7 @@ const TechnicalWorkspacePage = lazy(() => import('./pages/staff/TechnicalWorkspa
 const StoreWorkspacePage = lazy(() => import('./pages/staff/StoreWorkspacePage'));
 const CoordinatorWorkspacePage = lazy(() => import('./pages/staff/CoordinatorWorkspacePage'));
 const HrWorkspacePage = lazy(() => import('./pages/staff/HrWorkspacePage'));
+const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
 
 function PageLoader() {
   return (
@@ -28,13 +30,16 @@ function PageLoader() {
  */
 function DashboardRedirect() {
   const { session, role, loading } = useAuth();
+  const location = useLocation();
 
   if (loading) {
     return <PageLoader />;
   }
 
   if (!session) {
-    return <Navigate to="/login" replace />;
+    const currentPath = location.pathname + location.search + location.hash;
+    const redirectParam = currentPath && currentPath !== '/' ? `?redirect=${encodeURIComponent(currentPath)}` : '?redirect=%2Fadmin%2Fdashboard';
+    return <Navigate to={`/login${redirectParam}`} replace />;
   }
 
   const userRole = (role || '').toUpperCase();
@@ -59,7 +64,8 @@ function DashboardRedirect() {
 }
 
 /**
- * Helper to route checklist detail links to the user's authorized workspace
+ * Helper to route checklist detail links to the user's authorized workspace.
+ * Preserves the exact checklist ID and destination when authentication is required.
  */
 function ChecklistDetailRedirect() {
   const { id } = useParams();
@@ -67,11 +73,16 @@ function ChecklistDetailRedirect() {
   const { session, role, loading } = useAuth();
 
   if (loading) return <PageLoader />;
-  if (!session) return <Navigate to="/login" replace />;
 
-  const userRole = (role || '').toUpperCase();
   const action = searchParams.get('action');
   const actionQuery = action ? `&action=${action}` : '';
+
+  if (!session) {
+    const targetUrl = `/admin/installation-checklists/${id}${action ? `?action=${action}` : ''}`;
+    return <Navigate to={`/login?redirect=${encodeURIComponent(targetUrl)}`} replace />;
+  }
+
+  const userRole = (role || '').toUpperCase();
 
   if (userRole === 'TECHNICAL') {
     return <Navigate to={`/technical?view=${id}${actionQuery}`} replace />;
@@ -80,12 +91,20 @@ function ChecklistDetailRedirect() {
     return <Navigate to={`/store-manager?view=${id}${actionQuery}`} replace />;
   }
   if (userRole === 'COORDINATOR') {
-    return <Navigate to={`/coordinator?view=${id}${actionQuery}`} replace />;
+    return <Navigate to={`/coordinator?view=${id}&checklist=${id}${actionQuery}`} replace />;
   }
   if (userRole === 'HR') {
     return <Navigate to={`/hr?view=${id}${actionQuery}`} replace />;
   }
-  return <Navigate to={`/sales?view=${id}${actionQuery}`} replace />;
+  if (userRole === 'SALES' || userRole === 'ADMIN') {
+    return <Navigate to={`/sales?view=${id}${actionQuery}`} replace />;
+  }
+
+  return (
+    <main className="min-h-screen bg-gray-50 p-4 sm:p-6 flex items-center justify-center">
+      <AccessDenied targetResource="Installation Checklist Details" />
+    </main>
+  );
 }
 
 function AppRoutes() {
@@ -234,8 +253,8 @@ function AppRoutes() {
         <Route path="/admin/dashboard" element={<DashboardRedirect />} />
         <Route path="/admin" element={<DashboardRedirect />} />
 
-        {/* 7. 404 Fallback */}
-        <Route path="*" element={<Navigate to="/" replace />} />
+        {/* 7. 404 Fallback: Informative screen instead of silent redirect */}
+        <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </Suspense>
   );
@@ -245,6 +264,36 @@ export default function App() {
   // Proactively wake up backend on initial boot
   useEffect(() => {
     pingServerWakeup();
+  }, []);
+
+  // Listen for service worker notification click messages when app is already open
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+      const handleMessage = (event) => {
+        if (event.data?.type === 'SAFDRIVE_NOTIFICATION_CLICK' && event.data.url) {
+          try {
+            const rawUrl = event.data.url;
+            let targetHash = '';
+            if (rawUrl.includes('#')) {
+              targetHash = '#' + rawUrl.split('#')[1];
+            } else {
+              const u = new URL(rawUrl, window.location.origin);
+              targetHash = `#${u.pathname}${u.search}`;
+            }
+            if (targetHash && targetHash !== window.location.hash) {
+              window.location.hash = targetHash;
+            }
+          } catch (e) {
+            console.warn('[App] Error navigating from push notification message:', e);
+          }
+        }
+      };
+
+      navigator.serviceWorker.addEventListener('message', handleMessage);
+      return () => {
+        navigator.serviceWorker.removeEventListener('message', handleMessage);
+      };
+    }
   }, []);
 
   return (

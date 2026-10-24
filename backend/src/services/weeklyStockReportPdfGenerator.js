@@ -448,7 +448,7 @@ export async function generateWeeklyStockReportPdf(reportData) {
   // ============================================================
   // SECTION 3: TECHNICIAN-WISE MATERIAL ISSUANCE SUMMARY
   // ============================================================
-  drawSectionTitle('3. TECHNICIAN-WISE MATERIAL ISSUANCE SUMMARY', 'Attributed material issuance for Mathi, Guna, Sakthivel, Kamalesh, and Unassigned Recipient');
+  drawSectionTitle('3. TECHNICIAN-WISE MATERIAL ISSUANCE SUMMARY', 'Attributed material issuance across authorized service engineers and unassigned recipients');
 
   techIssuance.forEach((tech) => {
     checkPageBreak(16);

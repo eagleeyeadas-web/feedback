@@ -208,7 +208,7 @@ export default function EngineerAvailabilityCalendar({
             <span>Technician Availability Calendar</span>
           </h3>
           <p className="text-xs text-gray-500 mt-0.5">
-            Real-time multi-dimensional schedule for Mathi, Guna, Sakthivel, and Kamalesh across assignments, extensions, rest, and leave.
+            Real-time multi-dimensional schedule across assignments, extensions, rest, and leave.
           </p>
         </div>
 
@@ -355,8 +355,8 @@ export default function EngineerAvailabilityCalendar({
           onChange={(e) => setSelectedEngineer(e.target.value)}
           className="px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-lg font-medium text-gray-700 focus:outline-hidden focus:border-indigo-500 cursor-pointer"
         >
-          <option value="ALL">All 4 Engineers</option>
-          {SERVICE_ENGINEERS.map((name) => (
+          <option value="ALL">All Engineers</option>
+          {(calendarData?.engineers?.length ? calendarData.engineers.map((e) => e.name) : SERVICE_ENGINEERS).map((name) => (
             <option key={name} value={name}>{name}</option>
           ))}
         </select>

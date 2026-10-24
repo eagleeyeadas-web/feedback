@@ -14,7 +14,21 @@
     <link rel="apple-touch-icon" href="/icon-192.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <!-- Immediate Path-to-Hash Router Bridge for Direct Navigation & Mobile Push Notification Clicks -->
+    <script>
+      (function() {
+        try {
+          var p = window.location.pathname;
+          if (p && p !== '/' && !p.startsWith('/assets/') && !p.startsWith('/api/') && !p.includes('.')) {
+            var search = window.location.search || '';
+            var hash = window.location.hash || '';
+            if (!hash || hash === '#' || hash === '#/') {
+              window.location.replace('/#' + p + search);
+            }
+          }
+        } catch (e) {}
+      })();
+    </script>
     <title>Eagle Eye SafDrive - Customer Feedback</title>
   </head>
   <body>

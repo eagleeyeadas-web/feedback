@@ -10,6 +10,8 @@ import {
   resolveEngineer,
   getEngineerCommitments,
   calculateEarliestAvailabilityDate,
+  getAllServiceEngineers,
+  getActiveServiceEngineersSync,
 } from './engineerBookingService.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -50,19 +52,23 @@ function saveStorage() {
 loadStorage();
 
 /**
- * Validate that an engineer belongs strictly to the 4 authorized main service engineers:
- * Mathi, Guna, Sakthivel, Kamalesh
+ * Validate that an engineer belongs to the authorized active service engineers
  */
 export function validateAuthorizedServiceEngineer(engineerIdOrName) {
   const resolved = resolveEngineer(engineerIdOrName);
-  if (!resolved || !SERVICE_ENGINEER_OPTIONS.includes(resolved.name)) {
+  const activeEngineers = getActiveServiceEngineersSync();
+  const found = resolved && activeEngineers.find(
+    (e) => e.id === resolved.id || e.name.toLowerCase() === resolved.name.toLowerCase()
+  );
+  if (!found) {
+    const activeNames = activeEngineers.map((e) => e.name).join(', ');
     const err = new Error(
-      `HR Availability Management is restricted strictly to the four authorized service engineers: ${SERVICE_ENGINEER_OPTIONS.join(', ')}.`
+      `HR Availability Management is restricted to authorized service engineers: ${activeNames}.`
     );
     err.statusCode = 400;
     throw err;
   }
-  return resolved;
+  return found;
 }
 
 /**
@@ -123,7 +129,9 @@ export async function getActiveOverrideForEngineer(engineerIdOrName, referenceDa
   // Find most recent active override that encompasses the reference date
   const matches = all.filter((o) => {
     if (!o.is_active) return false;
-    const isMatchingEng = o.engineer_id === resolved.id || o.engineer_name.toLowerCase() === resolved.name.toLowerCase();
+    const isMatchingEng =
+      (resolved.id && o.engineer_id === resolved.id) ||
+      (Boolean(o.engineer_name) && Boolean(resolved.name) && String(o.engineer_name).toLowerCase() === String(resolved.name).toLowerCase());
     if (!isMatchingEng) return false;
 
     const oStartStr = o.effective_start_datetime ? o.effective_start_datetime.split('T')[0] : '';
@@ -150,7 +158,9 @@ export async function getManualOverridesForEngineerRange(engineerIdOrName, start
 
   const matches = all.filter((o) => {
     if (!o.is_active) return false;
-    const isMatchingEng = o.engineer_id === resolved.id || o.engineer_name.toLowerCase() === resolved.name.toLowerCase();
+    const isMatchingEng =
+      (resolved.id && o.engineer_id === resolved.id) ||
+      (Boolean(o.engineer_name) && Boolean(resolved.name) && String(o.engineer_name).toLowerCase() === String(resolved.name).toLowerCase());
     if (!isMatchingEng) return false;
 
     const oStartStr = o.effective_start_datetime ? o.effective_start_datetime.split('T')[0] : '';
@@ -201,9 +211,10 @@ export async function getHardConflictsForRange(engineerIdOrName, startDatetime, 
 export async function getTechnicianAvailabilityOverview(referenceDatetime = new Date().toISOString()) {
   const todayStr = referenceDatetime.split('T')[0];
   const allOverrides = await getAllOverrides();
+  const allEngineers = await getAllServiceEngineers();
 
   const overview = await Promise.all(
-    MAIN_SERVICE_ENGINEERS.map(async (eng) => {
+    allEngineers.map(async (eng) => {
       // 1. Fetch commitments and calculate schedule status
       const commitments = await getEngineerCommitments(eng.id);
 

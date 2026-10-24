@@ -1,6 +1,6 @@
 import supabase from './supabase.js';
-import { getMaterialInventory, issueMaterialsForChecklist } from './materialStockService.js';
-import { getInventoryProducts } from './inventoryService.js';
+import { getMaterialInventory, issueMaterialsForChecklist, processedChecklistMaterialIssuances } from './materialStockService.js';
+import { getInventoryProducts, issueDevicesForChecklist, processedChecklistDeviceIssuances } from './inventoryService.js';
 import {
   calculateBomRequirements,
   parseDeviceConfigurations,
@@ -229,6 +229,10 @@ export async function syncStoreRequirementForChecklist(checklistOrId) {
     'number_of_devices',
     'number_of_vehicles',
     'device_configurations',
+    'device_items',
+    'devices_issuance_status',
+    'devices_issued_at',
+    'devices_issued_by',
     'bom_snapshot',
     'material_items',
     'material_issuance_status',
@@ -268,6 +272,8 @@ export async function syncStoreRequirementForChecklist(checklistOrId) {
     number_of_devices: combinedAllocation.reduce((s, c) => s + (Number(c.quantity_carried) || 0), 0) || Number(checklist.number_of_devices) || 1,
     number_of_vehicles: Number(checklist.number_of_vehicles) || Number(checklist.number_of_devices) || 1,
     device_configurations: deviceConfigs,
+    device_items: deviceItems,
+    devices_issuance_status: devicesIssuanceStatus,
     bom_snapshot: isInstallation ? bomSnapshot : null,
     material_items: isInstallation ? materialItems : [],
     material_issuance_status: materialIssuanceStatus,
@@ -277,6 +283,8 @@ export async function syncStoreRequirementForChecklist(checklistOrId) {
     shortage_details: shortageDetails.length > 0 ? shortageDetails : null,
     material_issued_at: checklist.material_issued_at || null,
     material_issued_by: isValidUuid(checklist.material_issued_by) ? checklist.material_issued_by : null,
+    devices_issued_at: checklist.devices_issued_at || null,
+    devices_issued_by: isValidUuid(checklist.devices_issued_by) ? checklist.devices_issued_by : null,
     salesperson_name: checklist.salesperson_name || null,
     service_engineer: checklist.service_engineer || null,
     service_assistant: checklist.service_assistant || null,
@@ -811,6 +819,12 @@ export async function getStoreMaterialRequirementById(id) {
 export async function updateRequirementIssuanceStatus(checklistId, { status, issued_at, issued_by }) {
   if (!checklistId) return;
 
+  const currentReq = inMemoryStoreRequirements.get(checklistId);
+  const devicesStatus = currentReq?.devices_issuance_status || 'PENDING';
+  const overallStatus = (status === 'ISSUED' && devicesStatus === 'ISSUED')
+    ? 'ISSUED'
+    : (status === 'ISSUED' ? 'MATERIALS_ISSUED' : 'READY_FOR_ISSUANCE');
+
   try {
     await supabase
       .from('store_material_requirements')
@@ -818,7 +832,7 @@ export async function updateRequirementIssuanceStatus(checklistId, { status, iss
         material_issuance_status: status,
         material_issued_at: issued_at || new Date().toISOString(),
         material_issued_by: issued_by || null,
-        status: status === 'ISSUED' ? 'ISSUED' : 'READY_FOR_ISSUANCE',
+        status: overallStatus,
         updated_at: new Date().toISOString(),
       })
       .eq('checklist_id', checklistId);
@@ -826,17 +840,18 @@ export async function updateRequirementIssuanceStatus(checklistId, { status, iss
     console.warn('Error updating requirement issuance status:', err.message);
   }
 
-  const inMem = inMemoryStoreRequirements.get(checklistId);
-  if (inMem) {
-    inMem.material_issuance_status = status;
-    inMem.material_issued_at = issued_at || new Date().toISOString();
-    inMem.status = status === 'ISSUED' ? 'ISSUED' : 'READY_FOR_ISSUANCE';
+  if (currentReq) {
+    currentReq.material_issuance_status = status;
+    currentReq.material_issued_at = issued_at || new Date().toISOString();
+    currentReq.status = overallStatus;
   }
 }
 
 /**
  * Server-side atomic unified issuance of BOTH camera devices AND installation materials for a job
  */
+const inFlightJobIssuances = new Set();
+
 export async function issueFullJobStock({
   checklist_id,
   issue_devices = true,
@@ -849,87 +864,331 @@ export async function issueFullJobStock({
     throw new Error('Checklist ID is required.');
   }
 
-  const req = await getStoreMaterialRequirementById(checklist_id);
-  if (!req) {
-    throw new Error(`Job requirement "${checklist_id}" not found.`);
+  if (inFlightJobIssuances.has(checklist_id)) {
+    throw new Error(`Stock issuance for checklist ${checklist_id} is already in progress. Please wait.`);
   }
 
-  if (req.job_type === 'Service') {
-    throw new Error(`Job ${req.checklist_number} is a Service job. Installation BOM issuance does not apply.`);
-  }
+  inFlightJobIssuances.add(checklist_id);
 
-  if (req.delivery_method === 'Product Couriered' && req.is_courier_dispatched) {
-    throw new Error(`Job ${req.checklist_number} has already been dispatched via Courier. Normal technician carry stock issuance is not applicable.`);
-  }
+  try {
+    const shouldIssueDevices = Boolean(issue_devices);
+    const shouldIssueMaterials = Boolean(issue_materials);
+    const shouldIssueBackup = Boolean(issue_backup_items);
 
-  const results = {};
+    if (!shouldIssueDevices && !shouldIssueMaterials && !shouldIssueBackup) {
+      throw new Error('Please select at least one component (Devices, Materials, or Backup Items) to issue.');
+    }
 
-  // 1. Issue Camera Devices if requested
-  if (issue_devices && req.device_items?.length > 0) {
-    const devResults = await issueDevicesForChecklist({
-      checklist_id,
-      devices: req.device_items,
-      remarks: remarks || `Camera devices issued for job ${req.checklist_number}`,
-      user,
-    });
-    results.devices = devResults;
+    const req = await getStoreMaterialRequirementById(checklist_id);
+    if (!req) {
+      throw new Error(`Job requirement "${checklist_id}" not found.`);
+    }
 
+    if (req.job_type === 'Service') {
+      throw new Error(`Job ${req.checklist_number} is a Service job. Installation BOM issuance does not apply.`);
+    }
+
+    if (req.delivery_method === 'Product Couriered' && req.is_courier_dispatched) {
+      throw new Error(`Job ${req.checklist_number} has already been dispatched via Courier. Normal technician carry stock issuance is not applicable.`);
+    }
+
+    // Check existing issuance statuses to prevent double deductions
+    const devicesAlreadyIssued = (
+      processedChecklistDeviceIssuances.has(checklist_id) ||
+      req.devices_issuance_status === 'ISSUED'
+    );
+    const materialsAlreadyIssued = (
+      processedChecklistMaterialIssuances.has(checklist_id) ||
+      req.material_issuance_status === 'ISSUED'
+    );
+
+    // Resolve devices to issue
+    let deviceItemsToIssue = req.device_items;
+    if (!deviceItemsToIssue || !Array.isArray(deviceItemsToIssue) || deviceItemsToIssue.length === 0) {
+      const configs = Array.isArray(req.device_configurations) && req.device_configurations.length > 0
+        ? req.device_configurations
+        : [{ device_type: req.device_type || '2 Channel Live', number_of_devices: req.number_of_devices || 1 }];
+      deviceItemsToIssue = configs.map((c) => ({
+        device_type: c.device_type,
+        required_quantity: Number(c.number_of_devices !== undefined ? c.number_of_devices : c.required_quantity) || 1,
+        unit: 'Nos.',
+      }));
+    }
+
+    // Resolve materials to issue
+    let materialItemsToIssue = req.material_items;
+    if (!materialItemsToIssue || !Array.isArray(materialItemsToIssue) || materialItemsToIssue.length === 0) {
+      if (req.bom_snapshot?.items && Array.isArray(req.bom_snapshot.items)) {
+        materialItemsToIssue = req.bom_snapshot.items.map((m) => ({
+          material_name: m.material_name,
+          total_required_quantity: Number(m.total_quantity !== undefined ? m.total_quantity : m.required_quantity) || 0,
+          unit: m.unit || 'Nos.',
+        }));
+      }
+    }
+
+    // Resolve declared backup items
+    let backupItemsToIssue = [];
+    if (shouldIssueBackup) {
+      try {
+        const declaration = await getBackupDeclaration(checklist_id);
+        if (declaration?.has_backup_items && Array.isArray(declaration.items)) {
+          backupItemsToIssue = declaration.items;
+        }
+      } catch (bErr) {
+        // Ignore declaration fetch error
+      }
+    }
+
+    const willIssueDevices = shouldIssueDevices && !devicesAlreadyIssued && deviceItemsToIssue.length > 0;
+    const willIssueMaterials = shouldIssueMaterials && !materialsAlreadyIssued && materialItemsToIssue.length > 0;
+    const willIssueBackup = shouldIssueBackup && backupItemsToIssue.length > 0;
+
+    // Check if everything requested was already completed
+    if (shouldIssueDevices && !willIssueDevices && !willIssueMaterials && !willIssueBackup && devicesAlreadyIssued && !shouldIssueMaterials) {
+      throw new Error(`Camera devices have already been issued for checklist ${req.checklist_number}. Duplicate issuance is prevented.`);
+    }
+    if (shouldIssueMaterials && !willIssueMaterials && !willIssueDevices && !willIssueBackup && materialsAlreadyIssued && !shouldIssueDevices) {
+      throw new Error(`Materials have already been issued for checklist ${req.checklist_number}. Duplicate issuance is prevented.`);
+    }
+    if (!willIssueDevices && !willIssueMaterials && !willIssueBackup) {
+      if (devicesAlreadyIssued && materialsAlreadyIssued) {
+        throw new Error(`All stock items have already been issued for checklist ${req.checklist_number}. Duplicate issuance is prevented.`);
+      }
+      throw new Error('No pending stock items found to issue for this checklist.');
+    }
+
+    // ============================================================
+    // ATOMIC PRE-VALIDATION ACROSS ALL SELECTED CATEGORIES
+    // Strictly validate usable inventory BEFORE executing any deductions
+    // ============================================================
+
+    // 1. Validate Camera Devices stock
+    if (willIssueDevices) {
+      const allProducts = await getInventoryProducts();
+      const prodMap = new Map(allProducts.map((p) => [p.device_type, p]));
+
+      for (const item of deviceItemsToIssue) {
+        const devType = (item.device_type || '').trim();
+        const qty = parseInt(
+          item.required_quantity !== undefined
+            ? item.required_quantity
+            : (item.number_of_devices !== undefined ? item.number_of_devices : item.quantity),
+          10
+        ) || 0;
+        if (qty <= 0) continue;
+
+        const prod = prodMap.get(devType);
+        const available = prod ? Number(prod.usable_stock) || 0 : 0;
+
+        if (qty > available) {
+          throw new Error(
+            `Insufficient usable stock for camera device "${devType}". Available: ${available} Nos., Required: ${qty} Nos. Negative stock is strictly prevented.`
+          );
+        }
+      }
+    }
+
+    // 2. Validate Installation Materials stock
+    if (willIssueMaterials) {
+      const allMaterials = await getMaterialInventory();
+      const matMap = new Map(allMaterials.map((m) => [m.material_name.toLowerCase(), m]));
+
+      for (const item of materialItemsToIssue) {
+        const matName = (item.material_name || '').trim();
+        const qtyRequired = parseFloat(
+          item.total_quantity !== undefined
+            ? item.total_quantity
+            : (item.total_required_quantity !== undefined ? item.total_required_quantity : item.quantity)
+        );
+        if (isNaN(qtyRequired) || qtyRequired <= 0) continue;
+
+        const existingMat = matMap.get(matName.toLowerCase());
+        const available = existingMat ? Number(existingMat.current_stock) || 0 : 0;
+        const unit = existingMat?.unit || item.unit || 'Nos.';
+
+        if (qtyRequired > available) {
+          throw new Error(
+            `Insufficient stock for "${matName}". Available: ${available} ${unit}, Required: ${qtyRequired} ${unit}. Negative stock prevented. Please replenish stock before issuing.`
+          );
+        }
+      }
+    }
+
+    // 3. Validate Declared Backup Items stock
+    if (willIssueBackup) {
+      const [allMats, allDevs] = await Promise.all([
+        getMaterialInventory().catch(() => []),
+        getInventoryProducts().catch(() => []),
+      ]);
+      const matMap = new Map(allMats.map((m) => [m.material_name.toLowerCase(), m]));
+      const devMap = new Map(allDevs.map((d) => [d.device_type.toLowerCase(), d]));
+
+      for (const it of backupItemsToIssue) {
+        const name = (it.item_name || '').trim();
+        const qty = Number(it.quantity) || 0;
+        if (qty <= 0) continue;
+        if (Number(it.quantity_issued) >= qty) continue;
+
+        const mat = matMap.get(name.toLowerCase());
+        const dev = devMap.get(name.toLowerCase());
+
+        if (mat) {
+          const cur = Number(mat.current_stock) || 0;
+          if (qty > cur) {
+            throw new Error(`Insufficient stock for backup material "${name}". In store: ${cur} ${mat.unit || 'Nos.'}, required: ${qty} ${mat.unit || 'Nos.'}.`);
+          }
+        } else if (dev) {
+          const cur = Number(dev.usable_stock) || 0;
+          if (qty > cur) {
+            throw new Error(`Insufficient stock for backup device "${name}". In store: ${cur} Nos., required: ${qty} Nos.`);
+          }
+        }
+      }
+    }
+
+    // ============================================================
+    // EXECUTE DEDUCTIONS (Only reaches here if ALL items are available)
+    // ============================================================
+    const results = {};
+
+    // 1. Issue Camera Devices
+    if (willIssueDevices) {
+      const devResults = await issueDevicesForChecklist({
+        checklist_id,
+        devices: deviceItemsToIssue,
+        remarks: remarks || `Camera devices issued for job ${req.checklist_number}`,
+        user,
+      });
+      results.devices = devResults;
+    } else if (devicesAlreadyIssued && shouldIssueDevices) {
+      results.devices = { status: 'ALREADY_ISSUED', message: 'Camera devices were already issued previously.' };
+    }
+
+    // 2. Issue Installation Materials
+    if (willIssueMaterials) {
+      const matResults = await issueMaterialsForChecklist({
+        checklist_id,
+        items: materialItemsToIssue.map((m) => ({
+          material_name: m.material_name,
+          total_quantity: m.total_quantity !== undefined ? m.total_quantity : m.total_required_quantity,
+          unit: m.unit,
+        })),
+        remarks: remarks || `Materials issued for job ${req.checklist_number}`,
+        user,
+      });
+      results.materials = matResults;
+    } else if (materialsAlreadyIssued && shouldIssueMaterials) {
+      results.materials = { status: 'ALREADY_ISSUED', message: 'Installation materials were already issued previously.' };
+    }
+
+    // 3. Issue Declared Loose Backup Items
+    if (willIssueBackup) {
+      try {
+        const backupResults = await issueBackupItemsForChecklist({
+          checklist_id,
+          user,
+          remarks: remarks || `Loose backup items issued for job ${req.checklist_number}`,
+        });
+        if (backupResults?.issued_items?.length > 0) {
+          results.backup_items = backupResults;
+        }
+      } catch (bErr) {
+        console.warn('Backup items issuance notice during job stock issuance:', bErr.message);
+      }
+    }
+
+    // 4. Fulfill device allocations so component reservations are completed and not double-deducted
+    try {
+      const { fulfillDeviceAllocationsForChecklist } = await import('./deviceSetService.js');
+      await fulfillDeviceAllocationsForChecklist({ checklist_id, user });
+    } catch (allocErr) {
+      console.warn('Could not fulfill device allocations on full job stock issuance:', allocErr.message);
+    }
+
+    // ============================================================
+    // SYNCHRONIZE ISSUANCE STATUSES
+    // ============================================================
+    const finalDevicesIssued = willIssueDevices || devicesAlreadyIssued;
+    const finalMaterialsIssued = willIssueMaterials || materialsAlreadyIssued;
+
+    const devicesStatus = finalDevicesIssued ? 'ISSUED' : (req.devices_issuance_status || 'PENDING');
+    const materialsStatus = finalMaterialsIssued ? 'ISSUED' : (req.material_issuance_status || 'PENDING');
+    const overallStatus = (devicesStatus === 'ISSUED' && materialsStatus === 'ISSUED')
+      ? 'ISSUED'
+      : (materialsStatus === 'ISSUED'
+        ? 'MATERIALS_ISSUED'
+        : (devicesStatus === 'ISSUED' ? 'DEVICES_ISSUED' : 'READY_FOR_ISSUANCE'));
+
+    // Persist to store_material_requirements in Supabase
     try {
       await supabase
         .from('store_material_requirements')
         .update({
-          devices_issuance_status: 'ISSUED',
+          devices_issuance_status: devicesStatus,
+          material_issuance_status: materialsStatus,
+          status: overallStatus,
+          material_issued_at: new Date().toISOString(),
+          material_issued_by: user?.id || null,
+          devices_issued_at: new Date().toISOString(),
+          devices_issued_by: user?.id || null,
           updated_at: new Date().toISOString(),
         })
         .eq('checklist_id', checklist_id);
     } catch (e) {
-      // Ignore
+      console.warn('Could not update store_material_requirements after issuance:', e.message);
     }
-  }
 
-  // 2. Issue Installation Materials if requested
-  if (issue_materials && req.material_items?.length > 0) {
-    const matResults = await issueMaterialsForChecklist({
-      checklist_id,
-      items: req.material_items.map((m) => ({
-        material_name: m.material_name,
-        total_quantity: m.total_required_quantity,
-        unit: m.unit,
-      })),
-      remarks: remarks || `Materials issued for job ${req.checklist_number}`,
-      user,
-    });
-    results.materials = matResults;
-  }
+    // Update inMemoryStoreRequirements
+    const inMem = inMemoryStoreRequirements.get(checklist_id);
+    if (inMem) {
+      inMem.devices_issuance_status = devicesStatus;
+      inMem.material_issuance_status = materialsStatus;
+      inMem.status = overallStatus;
+      inMem.material_issued_at = new Date().toISOString();
+      inMem.material_issued_by = user?.id || null;
+      inMem.devices_issued_at = new Date().toISOString();
+      inMem.devices_issued_by = user?.id || null;
+    }
 
-  // 3. Issue Declared Loose Backup Items (if declared by technician and requested)
-  if (issue_backup_items) {
+    // Update installation_checklists in Supabase
     try {
-      const backupResults = await issueBackupItemsForChecklist({
-        checklist_id,
-        user,
-        remarks: remarks || `Loose backup items issued for job ${req.checklist_number}`,
-      });
-      if (backupResults?.issued_items?.length > 0) {
-        results.backup_items = backupResults;
+      const chkUpdate = {
+        material_issuance_status: materialsStatus,
+        material_issued_at: new Date().toISOString(),
+        material_issued_by: user?.id || null,
+        updated_at: new Date().toISOString(),
+      };
+      try {
+        await supabase
+          .from('installation_checklists')
+          .update({
+            ...chkUpdate,
+            devices_issuance_status: devicesStatus,
+            devices_issued_at: new Date().toISOString(),
+            devices_issued_by: user?.id || null,
+          })
+          .eq('id', checklist_id);
+      } catch {
+        await supabase
+          .from('installation_checklists')
+          .update(chkUpdate)
+          .eq('id', checklist_id);
       }
-    } catch (bErr) {
-      console.warn('Backup items issuance notice during job stock issuance:', bErr.message);
+    } catch (chkErr) {
+      console.warn('Could not update installation_checklists status:', chkErr.message);
     }
-  }
 
-  // 4. Fulfill device allocations so component reservations are completed and not double-deducted
-  try {
-    const { fulfillDeviceAllocationsForChecklist } = await import('./deviceSetService.js');
-    await fulfillDeviceAllocationsForChecklist({ checklist_id, user });
-  } catch (allocErr) {
-    console.warn('Could not fulfill device allocations on full job stock issuance:', allocErr.message);
+    return {
+      success: true,
+      checklist_id,
+      checklist_number: req.checklist_number,
+      devices_issuance_status: devicesStatus,
+      material_issuance_status: materialsStatus,
+      status: overallStatus,
+      results,
+    };
+  } finally {
+    inFlightJobIssuances.delete(checklist_id);
   }
-
-  return {
-    success: true,
-    checklist_id,
-    checklist_number: req.checklist_number,
-    results,
-  };
 }

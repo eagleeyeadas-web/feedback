@@ -16,8 +16,11 @@ export default function IssueMaterialsModal({ checklist, token, onClose, onSucce
   const [remarks, setRemarks] = useState('');
   const [error, setError] = useState('');
 
-  const [issueDevices, setIssueDevices] = useState(true);
-  const [issueMaterials, setIssueMaterials] = useState(true);
+  const devicesAlreadyIssued = checklist.devices_issuance_status === 'ISSUED';
+  const materialsAlreadyIssued = checklist.material_issuance_status === 'ISSUED';
+
+  const [issueDevices, setIssueDevices] = useState(!devicesAlreadyIssued);
+  const [issueMaterials, setIssueMaterials] = useState(!materialsAlreadyIssued);
   const [issueBackupItems, setIssueBackupItems] = useState(true);
 
   useEffect(() => {
@@ -43,15 +46,15 @@ export default function IssueMaterialsModal({ checklist, token, onClose, onSucce
   const matMap = new Map(materialInventory.map((m) => [m.material_name.toLowerCase(), m]));
 
   // 1. Camera Devices to Issue
-  const rawConfigs = Array.isArray(checklist.device_configurations) && checklist.device_configurations.length > 0
-    ? checklist.device_configurations
-    : (checklist.device_items && checklist.device_items.length > 0
-      ? checklist.device_items
+  const rawConfigs = Array.isArray(checklist.device_items) && checklist.device_items.length > 0
+    ? checklist.device_items
+    : (Array.isArray(checklist.device_configurations) && checklist.device_configurations.length > 0
+      ? checklist.device_configurations
       : [{ device_type: checklist.device_type || '2 Channel Live', number_of_devices: checklist.number_of_devices || 1 }]);
 
   const deviceList = rawConfigs.map((c) => {
     const dType = c.device_type || '';
-    const req = Number(c.number_of_devices !== undefined ? c.number_of_devices : c.required_quantity) || 1;
+    const req = Number(c.required_quantity !== undefined ? c.required_quantity : (c.quantity_carried !== undefined ? c.quantity_carried : c.number_of_devices)) || 1;
     const prod = devMap.get(dType);
     const available = prod ? Number(prod.usable_stock) || 0 : 0;
     const shortage = Math.max(0, req - available);
@@ -59,6 +62,8 @@ export default function IssueMaterialsModal({ checklist, token, onClose, onSucce
       device_type: dType,
       sku: prod?.sku || 'N/A',
       required: req,
+      required_for_installation: c.required_for_installation,
+      extra_quantity: c.extra_quantity,
       available,
       shortage,
       unit: 'Nos.',
@@ -114,15 +119,25 @@ export default function IssueMaterialsModal({ checklist, token, onClose, onSucce
   const matDeficits = materialList.filter((m) => m.shortage > 0);
   const backupDeficits = backupList.filter((b) => b.shortage > 0);
 
-  const hasDeviceDeficit = issueDevices && devDeficits.length > 0;
-  const hasMaterialDeficit = issueMaterials && matDeficits.length > 0;
-  const hasBackupDeficit = issueBackupItems && backupDeficits.length > 0;
+  const willIssueDevices = !devicesAlreadyIssued && issueDevices;
+  const willIssueMaterials = !materialsAlreadyIssued && issueMaterials;
+  const willIssueBackup = declaredBackupItems.length > 0 && issueBackupItems;
+
+  const hasDeviceDeficit = willIssueDevices && devDeficits.length > 0;
+  const hasMaterialDeficit = willIssueMaterials && matDeficits.length > 0;
+  const hasBackupDeficit = willIssueBackup && backupDeficits.length > 0;
   const hasDeficit = hasDeviceDeficit || hasMaterialDeficit || hasBackupDeficit;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!issueDevices && !issueMaterials && (!declaredBackupItems.length || !issueBackupItems)) {
-      setError('Please select at least one component (Devices, Materials, or Backup Items) to issue.');
+    if (submitting) return;
+
+    if (!willIssueDevices && !willIssueMaterials && !willIssueBackup) {
+      if (devicesAlreadyIssued && materialsAlreadyIssued) {
+        setError('All stock components have already been issued for this job.');
+      } else {
+        setError('Please select at least one pending component (Devices, Materials, or Backup Items) to issue.');
+      }
       return;
     }
 
@@ -137,9 +152,9 @@ export default function IssueMaterialsModal({ checklist, token, onClose, onSucce
     try {
       await issueFullJobStockApi(token, {
         checklist_id: checklist.id || checklist.checklist_id,
-        issue_devices: issueDevices,
-        issue_materials: issueMaterials,
-        issue_backup_items: issueBackupItems,
+        issue_devices: willIssueDevices,
+        issue_materials: willIssueMaterials,
+        issue_backup_items: willIssueBackup,
         remarks: remarks.trim() || `Authorized stock issuance for job ${checklist.checklist_number}`,
       });
       onSuccess();
@@ -185,26 +200,45 @@ export default function IssueMaterialsModal({ checklist, token, onClose, onSucce
           </div>
         )}
 
+        {devicesAlreadyIssued && materialsAlreadyIssued && (
+          <div className="p-3.5 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-xs flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span>All camera devices and installation materials have already been authorized and issued for this job.</span>
+          </div>
+        )}
+
         {/* Issuance Checkbox Toggles */}
         <div className="bg-amber-50/50 p-3 rounded-xl border border-amber-200/60 flex flex-wrap items-center gap-6 text-xs font-semibold text-gray-800">
           <span className="text-[11px] font-bold text-amber-900 uppercase tracking-wider">Components to Issue:</span>
-          <label className="flex items-center gap-2 cursor-pointer">
+          <label className={`flex items-center gap-2 ${devicesAlreadyIssued ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}>
             <input
               type="checkbox"
-              checked={issueDevices}
+              checked={devicesAlreadyIssued ? false : issueDevices}
+              disabled={devicesAlreadyIssued}
               onChange={(e) => setIssueDevices(e.target.checked)}
               className="w-4 h-4 text-amber-600 rounded border-gray-300 focus:ring-amber-500"
             />
             <span>Camera Devices ({deviceList.length})</span>
+            {devicesAlreadyIssued && (
+              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
+                Already Issued
+              </span>
+            )}
           </label>
-          <label className="flex items-center gap-2 cursor-pointer">
+          <label className={`flex items-center gap-2 ${materialsAlreadyIssued ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}>
             <input
               type="checkbox"
-              checked={issueMaterials}
+              checked={materialsAlreadyIssued ? false : issueMaterials}
+              disabled={materialsAlreadyIssued}
               onChange={(e) => setIssueMaterials(e.target.checked)}
               className="w-4 h-4 text-amber-600 rounded border-gray-300 focus:ring-amber-500"
             />
             <span>Installation Materials ({materialList.length})</span>
+            {materialsAlreadyIssued && (
+              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
+                Already Issued
+              </span>
+            )}
           </label>
           {declaredBackupItems.length > 0 && (
             <label className="flex items-center gap-2 cursor-pointer bg-purple-100/70 text-purple-900 px-2 py-0.5 rounded-lg border border-purple-200">
@@ -409,7 +443,7 @@ export default function IssueMaterialsModal({ checklist, token, onClose, onSucce
             </button>
             <button
               type="submit"
-              disabled={submitting || hasDeficit || (!issueDevices && !issueMaterials && (!declaredBackupItems.length || !issueBackupItems))}
+              disabled={submitting || hasDeficit || (!willIssueDevices && !willIssueMaterials && !willIssueBackup)}
               className="px-5 py-2 text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 rounded-xl transition-all shadow-xs flex items-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {submitting ? (
