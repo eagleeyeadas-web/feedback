@@ -223,81 +223,121 @@ async function runTestSuite() {
   });
 
   // -------------------------------------------------------------
-  // TEST 11: Courier dispatch deduplication
+  // TEST 11: The four unwanted sections are absent from the report object
   // -------------------------------------------------------------
-  console.log('-> Scenario 11: Courier dispatch does not double-deduct...');
-  // In weeklyStockReportService, processedCourierChecklistKeys avoids double counting
-  const courierDeductions = report.stockMovements.filter((m) => m.type === 'COURIER_DISPATCH');
-  assert(Array.isArray(courierDeductions), 'Courier deductions processed in movement history');
-
-  // -------------------------------------------------------------
-  // TEST 12 & 13: Voided / reversed movements
-  // -------------------------------------------------------------
-  console.log('-> Scenario 12 & 13: Voided issuance excluded from normal totals & reversals visible...');
-  const voidMovements = report.stockMovements.filter((m) => m.isVoid || m.type === 'REVERSAL_VOID');
-  // Reversals remain visible in movements table
+  console.log('-> Scenario 11: Four unwanted sections are absent from report data...');
   assert(
-    Array.isArray(report.stockMovements),
-    'Stock movements list preserved as complete audit trail'
+    report.stock_movement_history === undefined && report.stockMovements === undefined,
+    'Stock Movement History is absent from weekly report object'
+  );
+  assert(
+    report.material_reconciliation === undefined && report.materialReconciliation === undefined,
+    'Material Usage & Return Reconciliation is absent from weekly report object'
+  );
+  assert(
+    report.stock_alerts === undefined && report.lowStockAlerts === undefined,
+    'Low-Stock and Zero-Stock Alerts is absent from weekly report object'
+  );
+  assert(
+    report.reconciliation_variances === undefined && report.stockReconciliation === undefined,
+    'Stock Reconciliation and Variance Detection is absent from weekly report object'
+  );
+  assert(
+    report.technician_issuance_summary === undefined && report.technicianIssuance === undefined,
+    'Old Technician-Wise Material Issuance Summary is replaced and absent'
   );
 
   // -------------------------------------------------------------
-  // TEST 14 & 15: Technician attribution (Mathi, Guna, Sakthivel, Kamalesh, Unassigned)
+  // TEST 12 & 13: Technician-Wise Installation Report structure
+  // -------------------------------------------------------------
+  console.log('-> Scenario 12 & 13: Technician-Wise Installation Report structure...');
+  const techReport = report.technician_installation_report || report.technicianInstallationReport;
+  assert(Boolean(techReport), 'Technician-Wise Installation Report exists in payload');
+  assert(
+    typeof techReport.summary?.total_completed_installations === 'number' ||
+    typeof techReport.summary?.totalCompletedInstallations === 'number',
+    'Summary contains total_completed_installations count'
+  );
+  assert(
+    typeof techReport.summary?.total_devices_installed === 'number' ||
+    typeof techReport.summary?.totalDevicesInstalled === 'number',
+    'Summary contains total_devices_installed count'
+  );
+
+  // -------------------------------------------------------------
+  // TEST 14 & 15: Technician attribution (Mathi, Guna, Sakthivel, Kamalesh)
   // -------------------------------------------------------------
   console.log('-> Scenario 14 & 15: Technician attribution...');
-  const techNames = report.technicianIssuance.map((t) => t.technicianName);
-  const expectedTechs = ['Mathi', 'Guna', 'Sakthivel', 'Kamalesh', 'Unassigned Recipient'];
+  const techList = techReport.technicians || [];
+  const techNames = techList.map((t) => t.technician_name || t.technicianName);
+  const expectedTechs = ['Mathi', 'Guna', 'Sakthivel', 'Kamalesh'];
   expectedTechs.forEach((name) => {
-    assert(techNames.includes(name), `Technician section includes ${name}`);
+    assert(techNames.includes(name), `Technician section dynamically includes ${name}`);
   });
 
   // -------------------------------------------------------------
-  // TEST 16: Units are never combined incompatibly
+  // TEST 16: Technician counts and badges
   // -------------------------------------------------------------
-  console.log('-> Scenario 16: Incompatible units are kept separate...');
-  report.technicianIssuance.forEach((tech) => {
-    tech.itemTotals.forEach((it) => {
+  console.log('-> Scenario 16: Technician counts and badges...');
+  techList.forEach((tech) => {
+    const instCount = tech.completed_installations_count ?? tech.completedInstallationsCount;
+    const devCount = tech.total_devices_installed ?? tech.totalDevicesInstalled;
+    assert(
+      typeof instCount === 'number' && instCount >= 0,
+      `Technician ${tech.technician_name} has valid completed installations count: ${instCount}`
+    );
+    assert(
+      typeof devCount === 'number' && devCount >= 0,
+      `Technician ${tech.technician_name} has valid devices installed count: ${devCount}`
+    );
+    assert(
+      Array.isArray(tech.installations),
+      `Technician ${tech.technician_name} has installations array`
+    );
+  });
+
+  // -------------------------------------------------------------
+  // TEST 17 & 18: Installation details schema (Serial, Client, Date, Devices, Location)
+  // -------------------------------------------------------------
+  console.log('-> Scenario 17 & 18: Installation details schema...');
+  techList.forEach((tech) => {
+    tech.installations.forEach((inst) => {
+      assert(Boolean(inst.client_name || inst.clientName), 'Installation has client name');
+      assert(Boolean(inst.installed_date || inst.installedDate), 'Installation has installed date');
+      assert(Array.isArray(inst.devices), 'Installation has devices array');
       assert(
-        Boolean(it.unit) && Boolean(it.name),
-        `Item total for ${tech.technicianName} preserves distinct unit: ${it.name} (${it.unit})`
+        inst.location !== undefined || inst.installation_location !== undefined,
+        'Installation has location field'
       );
     });
   });
 
   // -------------------------------------------------------------
-  // TEST 17 & 18: Material usage & return reconciliation, Screws non-returnable
+  // TEST 19: No device-count limit (all device types and quantities present)
   // -------------------------------------------------------------
-  console.log('-> Scenario 17 & 18: Material reconciliation & screw non-returnable rule...');
-  const screwRecon = report.materialReconciliation.filter((m) => m.isScrew);
-  screwRecon.forEach((screw) => {
-    assert(
-      screw.reportedReturned === 'Not Tracked' && screw.verifiedUsable === 'Not Tracked',
-      `${screw.name} is explicitly marked 'Not Tracked' for returns`
-    );
+  console.log('-> Scenario 19: No device-count limit...');
+  techList.forEach((tech) => {
+    tech.installations.forEach((inst) => {
+      inst.devices.forEach((dev) => {
+        assert(
+          Boolean(dev.device_type || dev.deviceType) && typeof dev.quantity === 'number',
+          'Every device row contains device_type and numeric quantity'
+        );
+      });
+    });
   });
 
   // -------------------------------------------------------------
-  // TEST 19: Low-stock alerts use configured thresholds only
+  // TEST 20: KPI summary integration
   // -------------------------------------------------------------
-  console.log('-> Scenario 19: Low-stock alerts use configured thresholds only...');
-  report.lowStockAlerts.forEach((alert) => {
-    assert(
-      alert.minStock > 0,
-      `Alert for ${alert.name} has configured minStock > 0 (${alert.minStock})`
-    );
-  });
-
-  // -------------------------------------------------------------
-  // TEST 20: Reconciliation discrepancies detected accurately
-  // -------------------------------------------------------------
-  console.log('-> Scenario 20: Mathematical stock reconciliation verification...');
+  console.log('-> Scenario 20: KPI summary integration...');
   assert(
-    typeof report.stockReconciliation?.isFullyReconciled === 'boolean',
-    'Reconciliation status is evaluated and boolean'
+    typeof report.summary_kpis?.total_completed_installations === 'number',
+    'summary_kpis has total_completed_installations'
   );
   assert(
-    Array.isArray(report.stockReconciliation?.itemsWithVariance),
-    'Items with variance is an array'
+    typeof report.summary_kpis?.total_devices_installed === 'number',
+    'summary_kpis has total_devices_installed'
   );
 
   // -------------------------------------------------------------
@@ -337,47 +377,40 @@ async function runTestSuite() {
   const pdfGenPath = path.resolve(__dirname, '../src/services/weeklyStockReportPdfGenerator.js');
   const pdfGenCode = fs.readFileSync(pdfGenPath, 'utf8');
   assert(
-    pdfGenCode.includes('drawStockSummaryTableHeader()') &&
-    pdfGenCode.includes('drawMovementTableHeader()') &&
+    pdfGenCode.includes('drawInstallationTableHeader()') &&
     pdfGenCode.includes('checkPageBreak'),
     'PDF draws repeated table headers upon page breaks'
   );
 
-
   // -------------------------------------------------------------
   // TEST 25: Stress test large transaction history in PDF
   // -------------------------------------------------------------
-  console.log('-> Scenario 25: Stress test PDF with 60 simulated transactions...');
+  console.log('-> Scenario 25: Stress test PDF with simulated installations and devices...');
   const stressReport = JSON.parse(JSON.stringify(report));
-  stressReport.stockMovements = stressReport.stockMovements || [];
-  stressReport.stock_movement_history = stressReport.stock_movement_history || [];
-
-  for (let i = 1; i <= 60; i++) {
-    const stressItem = {
-      index: stressReport.stockMovements.length + 1,
-      id: `stress-${i}`,
-      dateTime: '15 Oct 2026, 02:30 PM',
-      date_time_formatted: '15 Oct 2026, 02:30 PM',
-      itemName: i % 2 === 0 ? 'Camera' : '0.5 mm Wire',
-      item_name: i % 2 === 0 ? 'Camera' : '0.5 mm Wire',
-      type: 'STOCK_ISSUED',
-      movement_type: 'STOCK_ISSUED',
-      quantity: 5,
-      unit: 'Nos.',
-      balanceBefore: 50,
-      balance_before: 50,
-      balanceAfter: 45,
-      balance_after: 45,
-      technicianName: 'Sakthivel',
-      technician_recipient: 'Sakthivel',
-      checklistNumber: `CHK-STRESS-${1000 + i}`,
-      checklist_number: `CHK-STRESS-${1000 + i}`,
-      performedBy: 'Store Manager',
-      performed_by_name: 'Store Manager',
-      remarks: 'Stress test multi-page table wrapping across pages',
-    };
-    stressReport.stockMovements.push(stressItem);
-    stressReport.stock_movement_history.push(stressItem);
+  const stressTechs = stressReport.technician_installation_report?.technicians || stressReport.technicianInstallationReport?.technicians || [];
+  if (stressTechs.length > 0) {
+    const targetTech = stressTechs[0];
+    for (let i = 1; i <= 20; i++) {
+      targetTech.installations.push({
+        serial_number: targetTech.installations.length + 1,
+        serialNumber: targetTech.installations.length + 1,
+        checklist_id: `chk-stress-${i}`,
+        checklist_number: `CHK-STR-${i}`,
+        client_name: `Stress Test Logistics Client ${i}`,
+        installed_date: '20 Oct 2026',
+        installedDate: '20 Oct 2026',
+        installation_location: 'Coimbatore Hub',
+        devices: [
+          { device_type: '4 Channel Live', quantity: 2 },
+          { device_type: '2 Channel Recording', quantity: 1 },
+          { device_type: 'TPMS Sensor', quantity: 4 },
+          { device_type: 'Memory Card', quantity: 2 },
+        ],
+        total_devices_installed: 9,
+      });
+      targetTech.completed_installations_count++;
+      targetTech.total_devices_installed += 9;
+    }
   }
   const stressPdfBuffer = await generateWeeklyStockReportPdf(stressReport);
   assert(
@@ -395,12 +428,14 @@ async function runTestSuite() {
     endDate: '2020-01-12',
     user: { full_name: 'Store Manager' },
   });
+  const emptyTechReport = emptyReport.technician_installation_report || emptyReport.technicianInstallationReport;
   assert(
-    emptyReport.stockMovements.length === 0,
-    'Empty period reports 0 movements cleanly without throwing'
+    emptyTechReport.summary.total_completed_installations === 0,
+    'Empty period reports 0 installations cleanly without throwing'
   );
   const emptyPdf = await generateWeeklyStockReportPdf(emptyReport);
   assert(Buffer.isBuffer(emptyPdf) && emptyPdf.length > 3000, 'Empty period PDF generates cleanly');
+
 
   // -------------------------------------------------------------
   // TEST 27: Rapid click protection

@@ -1,21 +1,6 @@
 {
   "subscriptions": [
     {
-      "id": "d0f7e585-4546-488a-b5e9-38373063e5a7",
-      "user_id": "abaff860-05b2-44fa-9139-b14d92e3fa19",
-      "user_email": "tech@gmail.com",
-      "user_role": "TECHNICAL",
-      "endpoint": "https://fcm.googleapis.com/fcm/send/dRiBRBreJeg:APA91bFIt2YBzah6_XNmq3nS_fV2XsE6ghM1D7D4qfcK2Evw8599lVr7xwOHFJShrIyyENvpt2maTS0ORNy6McAmwwoQo1P2p3F5KaW0MZn71hfFaRv0cKDPZxNqy_XyZE7Ms8zPpZUN",
-      "p256dh": "BC8nXy7wTWhwcrhbFqKhBEqRsMWE9s4IEBJiIYxgRGhLQDLmmpgEdmT07ePwKFbHSma7syPOCt-hTFtiwADASS8",
-      "auth": "P1-AF03MMAlXPdDZVe-_dQ",
-      "user_agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36",
-      "device_type": "Android",
-      "is_active": true,
-      "created_at": "2026-10-21T10:32:59.831+00:00",
-      "updated_at": "2026-10-21T10:32:59.831+00:00",
-      "last_used_at": "2026-10-24T08:40:04.491Z"
-    },
-    {
       "id": "e442d528-777c-4680-b97b-760257066956",
       "user_id": "00000000-0000-0000-0000-000000000001",
       "user_email": "sales@eagleeyesafdrive.com",
@@ -88,7 +73,7 @@
       "is_active": true,
       "created_at": "2026-10-22T08:40:19.325+00:00",
       "updated_at": "2026-10-22T08:40:19.325+00:00",
-      "last_used_at": "2026-10-24T08:40:04.490Z"
+      "last_used_at": "2026-10-24T09:39:13.917Z"
     },
     {
       "id": "ce68f58b-0c42-4d48-9e70-00b7a04f22dc",
@@ -103,7 +88,7 @@
       "is_active": true,
       "created_at": "2026-10-22T10:37:43.113+00:00",
       "updated_at": "2026-10-22T10:37:43.113+00:00",
-      "last_used_at": "2026-10-24T08:40:04.746Z"
+      "last_used_at": "2026-10-24T09:39:14.115Z"
     },
     {
       "id": "648459bf-accb-4355-b5d8-777fc0ff839b",
@@ -239,7 +224,22 @@
       "created_at": "2026-10-24T08:40:42.403Z",
       "updated_at": "2026-10-24T08:40:42.403Z",
       "last_used_at": "2026-10-24T08:40:42.403Z"
+    },
+    {
+      "id": "47317de7-e394-497a-bb9c-82f0b1542cae",
+      "user_id": "abaff860-05b2-44fa-9139-b14d92e3fa19",
+      "user_email": "tech@gmail.com",
+      "user_role": "TECHNICAL",
+      "endpoint": "https://fcm.googleapis.com/fcm/send/fqYOoFnOoOs:APA91bHZsxKqTrMRbLQPEcWIFCtEIulsX0zkfwF9rOy6yO6lEw-nON5HKsprknNNKdco2v7C6Ti3CewTbsdkSkCVu0cGTEw1_-VU2BvSfAg-ytggUp5bqZcCKNfagZFdVPvYRqtTXwpJ",
+      "p256dh": "BOl-9EoFuu1ESgnGVGQ3AjkHTwLW82inJioLPFnJo0ul4Xec6TvmULFD-ToZ-7-EFFo7Z8ZaN1UplGFzYUfA-V8",
+      "auth": "Lyipqr1mgVZG5U9Twk9oxw",
+      "user_agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36",
+      "device_type": "Android",
+      "is_active": true,
+      "created_at": "2026-10-24T09:31:17.002+00:00",
+      "updated_at": "2026-10-24T09:31:17.002+00:00",
+      "last_used_at": "2026-10-24T09:39:14.022Z"
     }
   ],
-  "updated_at": "2026-10-24T08:40:42.559Z"
+  "updated_at": "2026-10-24T09:39:14.366Z"
 }

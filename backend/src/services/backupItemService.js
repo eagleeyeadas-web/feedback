@@ -580,11 +580,56 @@ export async function reconcileBackupItems({ checklistId, user, items = [] }) {
       continue;
     }
 
-    const rep = inputMap.get(key) || {};
-    const qtyUsed = Math.max(0, Number(rep.quantity_used || rep.quantity_installed || 0));
-    const qtyReturned = Math.max(0, Number(rep.quantity_returned || rep.quantity_to_return || 0));
-    const qtyDamaged = Math.max(0, Number(rep.quantity_damaged || 0));
-    const qtyMissing = Math.max(0, Number(rep.quantity_missing || 0));
+    let rep = inputMap.get(key);
+    if (!rep) {
+      for (const [k, v] of inputMap.entries()) {
+        if (k.trim() === key || k.includes(key) || key.includes(k)) {
+          rep = v;
+          break;
+        }
+      }
+    }
+    rep = rep || {};
+
+    const rawUsed = Number(rep.quantity_used ?? rep.quantity_installed);
+    const rawRet = Number(rep.quantity_returned ?? rep.quantity_to_return);
+    const rawDam = Number(rep.quantity_damaged);
+    const rawMis = Number(rep.quantity_missing);
+
+    if (
+      (!isNaN(rawUsed) && rawUsed < 0) ||
+      (!isNaN(rawRet) && rawRet < 0) ||
+      (!isNaN(rawDam) && rawDam < 0) ||
+      (!isNaN(rawMis) && rawMis < 0)
+    ) {
+      throw new Error(`Quantities for backup item "${decItem.item_name}" cannot be negative numbers.`);
+    }
+
+    const qtyUsed = Math.max(0, Number(rep.quantity_used ?? rep.quantity_installed ?? 0));
+    const qtyReturned = Math.max(0, Number(rep.quantity_returned ?? rep.quantity_to_return ?? 0));
+    const qtyDamaged = Math.max(0, Number(rep.quantity_damaged ?? 0));
+    const qtyMissing = Math.max(0, Number(rep.quantity_missing ?? 0));
+
+    if (qtyUsed > qtyCarried) {
+      throw new Error(
+        `Extra used quantity (${qtyUsed}) cannot exceed extra carried quantity (${qtyCarried}) for backup item "${decItem.item_name}".`
+      );
+    }
+    if (qtyReturned > qtyCarried) {
+      throw new Error(
+        `Extra returned quantity (${qtyReturned}) cannot exceed extra carried quantity (${qtyCarried}) for backup item "${decItem.item_name}".`
+      );
+    }
+    if (qtyDamaged > qtyCarried) {
+      throw new Error(
+        `Extra damaged quantity (${qtyDamaged}) cannot exceed extra carried quantity (${qtyCarried}) for backup item "${decItem.item_name}".`
+      );
+    }
+    if (qtyMissing > qtyCarried) {
+      throw new Error(
+        `Extra missing quantity (${qtyMissing}) cannot exceed extra carried quantity (${qtyCarried}) for backup item "${decItem.item_name}".`
+      );
+    }
 
     const totalAccounted = qtyUsed + qtyReturned + qtyDamaged + qtyMissing;
     if (totalAccounted !== qtyCarried) {

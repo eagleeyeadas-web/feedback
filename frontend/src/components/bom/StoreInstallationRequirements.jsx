@@ -23,6 +23,7 @@ import {
   Calendar,
   ShieldCheck,
   X,
+  Truck,
 } from 'lucide-react';
 import {
   fetchStoreMaterialRequirements,
@@ -1251,6 +1252,259 @@ export default function StoreInstallationRequirements({ token, onSelectChecklist
                         </div>
                       </div>
                     )}
+
+                    {/* SECTION 4: Extra Device Installations for Other Customers */}
+                    {(() => {
+                      const extraInstallations = req.extra_installations || req.completion_report?.extra_installations || [];
+                      const submissionDateTime = req.completion_report?.submitted_at || req.post_installation_submitted_at || req.actual_completion_datetime || null;
+                      const formattedSubmission = submissionDateTime
+                        ? new Date(submissionDateTime).toLocaleString('en-IN', {
+                            timeZone: 'Asia/Kolkata',
+                            day: 'numeric',
+                            month: 'short',
+                            year: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })
+                        : 'Pending Post-Installation Report';
+
+                      return (
+                        <div className="space-y-4 pt-4 border-t border-gray-200">
+                          {/* Section Header */}
+                          <div className="bg-gradient-to-r from-purple-900 to-indigo-950 p-4 rounded-xl text-white space-y-3">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                              <div className="flex items-center gap-2.5">
+                                <span className="p-2 rounded-lg bg-purple-500/30 text-purple-200 border border-purple-400/30">
+                                  <Truck className="w-4 h-4" />
+                                </span>
+                                <div>
+                                  <h4 className="text-sm font-black text-white flex items-center gap-2">
+                                    <span>Extra Device Installations for Other Customers</span>
+                                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
+                                      extraInstallations.length > 0
+                                        ? 'bg-purple-400/30 text-purple-200 border border-purple-300/40'
+                                        : 'bg-slate-700/60 text-slate-300'
+                                    }`}>
+                                      {extraInstallations.length} {extraInstallations.length === 1 ? 'Installation' : 'Installations'} Recorded
+                                    </span>
+                                  </h4>
+                                  <span className="text-[11px] text-purple-200 block">
+                                    Audit extra carried loose devices installed on site for other customer fleets instead of returning to warehouse stock.
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Section Header Metadata Grid */}
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-2 border-t border-purple-800/60 text-xs">
+                              <div className="bg-purple-950/50 p-2 rounded-lg border border-purple-800/40">
+                                <span className="text-[10px] text-purple-300 font-semibold uppercase block">Original Checklist</span>
+                                <span className="font-mono font-bold text-white text-[11px] block">{req.checklist_number}</span>
+                              </div>
+                              <div className="bg-purple-950/50 p-2 rounded-lg border border-purple-800/40">
+                                <span className="text-[10px] text-purple-300 font-semibold uppercase block">Original Customer</span>
+                                <span className="font-bold text-white text-[11px] truncate block">{req.client_name}</span>
+                              </div>
+                              <div className="bg-purple-950/50 p-2 rounded-lg border border-purple-800/40">
+                                <span className="text-[10px] text-purple-300 font-semibold uppercase block">Assigned Technician</span>
+                                <span className="font-bold text-white text-[11px] truncate block">{req.service_engineer || req.completion_report?.technician_name || 'Technician'}</span>
+                              </div>
+                              <div className="bg-purple-950/50 p-2 rounded-lg border border-purple-800/40">
+                                <span className="text-[10px] text-purple-300 font-semibold uppercase block">Report Submitted At</span>
+                                <span className="font-medium text-purple-100 text-[11px] block">{formattedSubmission}</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Installations List or Clear Empty State */}
+                          {extraInstallations.length === 0 ? (
+                            <div className="p-5 bg-slate-50 border border-dashed border-gray-300 rounded-xl text-center text-gray-500 text-xs space-y-1">
+                              <Package className="w-6 h-6 mx-auto text-gray-400 opacity-60" />
+                              <span className="font-bold text-gray-800 block text-xs">
+                                No extra devices were installed for other customers on this checklist.
+                              </span>
+                              <span className="text-[11px] text-gray-500 block max-w-lg mx-auto">
+                                All extra carried backup items were either installed for the original customer ({req.client_name}) or accounted for in physical returns to the store.
+                              </span>
+                            </div>
+                          ) : (
+                            <div className="space-y-3">
+                              {extraInstallations.map((inst, instIdx) => {
+                                const isOther = inst.recipient_customer_type === 'ANOTHER_CUSTOMER';
+                                const comps = Array.isArray(inst.components_used) ? inst.components_used : [];
+
+                                return (
+                                  <div
+                                    key={inst.id || instIdx}
+                                    className="p-4 bg-white border border-purple-200 rounded-xl shadow-xs space-y-3 hover:border-purple-300 transition-colors"
+                                  >
+                                    {/* Card Title & Badges */}
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2.5 border-b border-gray-100">
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        <span className="w-6 h-6 rounded-full bg-purple-100 text-purple-900 font-mono text-xs flex items-center justify-center font-bold">
+                                          {instIdx + 1}
+                                        </span>
+                                        <span className="font-bold text-gray-900 text-sm">
+                                          {inst.recipient_customer_name || 'Unnamed Recipient'}
+                                        </span>
+                                        <span
+                                          className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
+                                            isOther
+                                              ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                                              : 'bg-purple-100 text-purple-900 border border-purple-200'
+                                          }`}
+                                        >
+                                          {isOther ? 'Another Customer' : 'Original Customer'}
+                                        </span>
+                                        {inst.device_configuration && (
+                                          <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-slate-100 text-slate-800 border border-slate-200">
+                                            {inst.device_configuration}
+                                          </span>
+                                        )}
+                                      </div>
+
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-[11px] font-semibold text-gray-500">
+                                          Status: <strong className="text-emerald-700 font-bold">{inst.status || 'COMPLETED'}</strong>
+                                        </span>
+                                      </div>
+                                    </div>
+
+                                    {/* Metadata Grid */}
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs bg-slate-50/70 p-3 rounded-lg border border-slate-200/70">
+                                      <div>
+                                        <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide block">
+                                          Recipient Customer
+                                        </span>
+                                        <span className="font-bold text-gray-900 block truncate">
+                                          {inst.recipient_customer_name}
+                                        </span>
+                                      </div>
+
+                                      <div>
+                                        <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide block">
+                                          Customer Mobile
+                                        </span>
+                                        <span className="font-mono text-gray-800 block">
+                                          {inst.recipient_mobile || 'Not Provided'}
+                                        </span>
+                                      </div>
+
+                                      <div>
+                                        <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide block">
+                                          Installation Date
+                                        </span>
+                                        <span className="font-medium text-gray-800 block">
+                                          {inst.installation_date || 'Not Provided'}
+                                        </span>
+                                      </div>
+
+                                      <div>
+                                        <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide block">
+                                          Technician
+                                        </span>
+                                        <span className="font-medium text-gray-800 block truncate">
+                                          {inst.technician_name || req.service_engineer || 'Technician'}
+                                        </span>
+                                      </div>
+
+                                      <div className="sm:col-span-2">
+                                        <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide block">
+                                          Installation Location
+                                        </span>
+                                        <span className="text-gray-800 block truncate">
+                                          {inst.installation_location || 'Not Provided'}
+                                        </span>
+                                      </div>
+
+                                      <div>
+                                        <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide block">
+                                          Google Maps
+                                        </span>
+                                        {inst.maps_link ? (
+                                          <a
+                                            href={inst.maps_link}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="text-blue-600 hover:underline font-semibold flex items-center gap-1"
+                                          >
+                                            <ExternalLink size={12} />
+                                            <span>Open Location</span>
+                                          </a>
+                                        ) : (
+                                          <span className="text-gray-400">Not Provided</span>
+                                        )}
+                                      </div>
+
+                                      <div>
+                                        <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide block">
+                                          Recipient Checklist
+                                        </span>
+                                        {inst.recipient_checklist_number ? (
+                                          <span className="font-mono font-bold text-blue-900 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">
+                                            {inst.recipient_checklist_number}
+                                          </span>
+                                        ) : (
+                                          <span className="text-gray-500 font-medium">Not Linked</span>
+                                        )}
+                                      </div>
+                                    </div>
+
+                                    {/* Components Breakdown Table */}
+                                    <div className="space-y-1.5">
+                                      <span className="text-[11px] font-bold text-gray-700 uppercase tracking-wider block">
+                                        Installed Component Quantities
+                                      </span>
+                                      <div className="border border-purple-100 rounded-lg overflow-hidden">
+                                        <table className="w-full text-left border-collapse text-xs">
+                                          <thead className="bg-purple-50/70 border-b border-purple-100 text-[10px] font-bold text-purple-900 uppercase">
+                                            <tr>
+                                              <th className="py-2 px-3">#</th>
+                                              <th className="py-2 px-3">Component / Device</th>
+                                              <th className="py-2 px-3 text-center">Quantity Installed</th>
+                                              <th className="py-2 px-3 text-center">Unit</th>
+                                            </tr>
+                                          </thead>
+                                          <tbody className="divide-y divide-purple-50">
+                                            {comps.map((comp, cIdx) => (
+                                              <tr key={cIdx} className="hover:bg-purple-50/30">
+                                                <td className="py-2 px-3 text-gray-400 font-mono w-10 text-center">{cIdx + 1}</td>
+                                                <td className="py-2 px-3 font-semibold text-gray-900">{comp.component_name}</td>
+                                                <td className="py-2 px-3 text-center font-mono font-bold text-purple-900 bg-purple-50/40">
+                                                  {comp.quantity}
+                                                </td>
+                                                <td className="py-2 px-3 text-center text-gray-500">{comp.unit || 'Nos.'}</td>
+                                              </tr>
+                                            ))}
+                                            {comps.length === 0 && (
+                                              <tr>
+                                                <td colSpan="4" className="py-2.5 px-3 text-center text-gray-400 italic">
+                                                  No component details recorded
+                                                </td>
+                                              </tr>
+                                            )}
+                                          </tbody>
+                                        </table>
+                                      </div>
+                                    </div>
+
+                                    {/* Notes */}
+                                    <div className="text-xs">
+                                      <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide block">
+                                        Technician Notes
+                                      </span>
+                                      <p className="text-gray-700 bg-slate-50 p-2 rounded-lg border border-slate-200 mt-0.5 italic">
+                                        {inst.notes || 'No Notes'}
+                                      </p>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
                 )}
               </div>

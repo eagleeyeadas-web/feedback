@@ -1027,7 +1027,7 @@ router.get('/:id/completion-report', requireRole('ADMIN', 'SALES', 'TECHNICAL', 
  * GET /api/admin/installations/:id/additional-installations
  * Get additional customer installations for a checklist
  */
-router.get('/:id/additional-installations', requireRole('TECHNICAL', 'COORDINATOR', 'ADMIN', 'SUPER_ADMIN'), async (req, res) => {
+router.get('/:id/additional-installations', requireRole('TECHNICAL', 'COORDINATOR', 'ADMIN', 'SUPER_ADMIN', 'STORE_MANAGER', 'SALES'), async (req, res) => {
   try {
     const list = await getAdditionalCustomerInstallations({ checklist_id: req.params.id });
     return res.json(list);

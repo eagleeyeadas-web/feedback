@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../../hooks/useAuth';
-import { fetchInstallationChecklistDetail, downloadInstallationPDF, fetchBackupDeclaration, API_BASE } from '../../../lib/api';
+import { fetchInstallationChecklistDetail, downloadInstallationPDF, fetchBackupDeclaration, fetchAdditionalCustomerInstallations, API_BASE } from '../../../lib/api';
 import InstallationCompletionModal from '../../../components/workspaces/InstallationCompletionModal';
 import IssueMaterialsModal from '../../../components/bom/IssueMaterialsModal';
 import { downloadInstallationExcel } from '../../../lib/excelHelper';
@@ -26,6 +26,7 @@ import {
   Wrench,
   ShieldCheck,
   Layers,
+  Truck,
 } from 'lucide-react';
 
 export default function InstallationChecklistDetails({ id: propId, onEdit, onBack }) {
@@ -46,6 +47,7 @@ export default function InstallationChecklistDetails({ id: propId, onEdit, onBac
   const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [toastMessage, setToastMessage] = useState(null);
   const [backupDeclaration, setBackupDeclaration] = useState(null);
+  const [extraInstallations, setExtraInstallations] = useState([]);
 
   // Workflow Modal States
   const [showIssueModal, setShowIssueModal] = useState(false);
@@ -73,6 +75,11 @@ export default function InstallationChecklistDetails({ id: propId, onEdit, onBac
         fetchBackupDeclaration(token, checklistId)
           .then((bData) => setBackupDeclaration(bData))
           .catch(() => setBackupDeclaration(null));
+
+        // Fetch extra customer installations
+        fetchAdditionalCustomerInstallations(token, checklistId)
+          .then((ext) => setExtraInstallations(Array.isArray(ext) ? ext : []))
+          .catch(() => setExtraInstallations([]));
 
         // Auto trigger action if query param present
         const action = searchParams.get('action');
@@ -953,6 +960,126 @@ export default function InstallationChecklistDetails({ id: propId, onEdit, onBac
               </span>
             </div>
           </div>
+        </div>
+
+        {/* EXTRA DEVICE INSTALLATIONS FOR OTHER CUSTOMERS */}
+        <div className="space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-1 border-b border-gray-200 gap-2">
+            <h3 className="text-xs font-black text-navy uppercase tracking-wider flex items-center gap-2">
+              <Truck size={15} className="text-purple-600" />
+              Extra Device Installations for Other Customers
+            </h3>
+            <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border ${
+              extraInstallations.length > 0
+                ? 'bg-purple-100 text-purple-900 border-purple-300'
+                : 'bg-gray-100 text-gray-600 border-gray-200'
+            }`}>
+              {extraInstallations.length} Installation{extraInstallations.length === 1 ? '' : 's'} Recorded
+            </span>
+          </div>
+
+          {extraInstallations.length > 0 ? (
+            <div className="space-y-3">
+              {extraInstallations.map((item, idx) => (
+                <div key={item.id || idx} className="rounded-xl border border-purple-200 bg-purple-50/20 p-4 space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-purple-100 pb-2">
+                    <div>
+                      <span className="text-[10px] font-black uppercase tracking-wider text-purple-700">Recipient Customer</span>
+                      <div className="text-sm font-bold text-gray-900">{item.customer_name || '—'}</div>
+                      <span className="inline-block mt-0.5 text-[10px] font-bold px-2 py-0.5 rounded bg-purple-100 text-purple-800">
+                        {item.recipient_customer_type === 'ANOTHER_CUSTOMER' ? 'Another Customer' : 'Original Customer (Extra Devices)'}
+                      </span>
+                    </div>
+                    <div className="text-left sm:text-right text-xs">
+                      <span className="text-gray-500 block text-[10px] font-semibold">Recipient Checklist</span>
+                      <span className={`inline-block px-2 py-0.5 rounded font-mono font-bold text-xs ${
+                        item.recipient_checklist_number && item.recipient_checklist_number !== 'Not Linked'
+                          ? 'bg-blue-100 text-blue-800 border border-blue-200'
+                          : 'bg-gray-100 text-gray-600 border border-gray-200'
+                      }`}>
+                        {item.recipient_checklist_number || 'Not Linked'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs bg-white/80 p-3 rounded-lg border border-purple-100">
+                    <div>
+                      <span className="text-gray-500 block text-[10px]">Customer Mobile</span>
+                      <span className="font-semibold text-gray-800">{item.customer_mobile || 'Not Provided'}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-500 block text-[10px]">Installation Date</span>
+                      <span className="font-semibold text-gray-800">{item.installation_date ? formatDate(item.installation_date) : '—'}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-500 block text-[10px]">Configuration</span>
+                      <span className="font-bold text-purple-900">{item.device_configuration || '—'}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-500 block text-[10px]">Technician</span>
+                      <span className="font-semibold text-gray-800">{item.technician_name || checklist.service_engineer || '—'}</span>
+                    </div>
+                  </div>
+
+                  {(item.location || item.google_maps_link) && (
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-3 text-xs text-gray-600 bg-white/60 p-2.5 rounded-lg border border-purple-100">
+                      <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                        <MapPin size={13} className="text-purple-600 shrink-0" />
+                        <span className="truncate">{item.location || 'Location Not Provided'}</span>
+                      </div>
+                      {item.google_maps_link && (
+                        <a
+                          href={item.google_maps_link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 font-bold text-blue-600 hover:text-blue-800 hover:underline shrink-0"
+                        >
+                          <ExternalLink size={12} /> Google Maps
+                        </a>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Component Quantities Table */}
+                  {Array.isArray(item.components) && item.components.length > 0 && (
+                    <div className="overflow-x-auto rounded-lg border border-purple-200 bg-white">
+                      <table className="w-full text-left border-collapse text-xs">
+                        <thead>
+                          <tr className="bg-purple-100/60 border-b border-purple-200 text-[10px] font-bold text-purple-900 uppercase">
+                            <th className="py-2 px-3">Component / Device</th>
+                            <th className="py-2 px-3 text-center">Quantity Installed</th>
+                            <th className="py-2 px-3 text-center">Unit</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-purple-100">
+                          {item.components.map((comp, cIdx) => (
+                            <tr key={cIdx} className="hover:bg-purple-50/40">
+                              <td className="py-2 px-3 font-semibold text-gray-900">{comp.component_name}</td>
+                              <td className="py-2 px-3 text-center font-mono font-bold text-purple-800">
+                                {comp.quantity_installed || comp.quantity || 0}
+                              </td>
+                              <td className="py-2 px-3 text-center text-gray-500">{comp.unit || 'Nos.'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+
+                  {item.notes && (
+                    <div className="text-xs bg-white/70 p-2.5 rounded-lg border border-purple-100 text-gray-600">
+                      <span className="font-bold text-gray-700">Notes: </span>
+                      {item.notes}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="p-4 rounded-xl border border-dashed border-gray-200 bg-gray-50 text-center text-xs text-gray-500">
+              No extra devices were installed for other customers on this checklist.
+            </div>
+          )}
         </div>
 
         {/* REMARKS & NOTES */}

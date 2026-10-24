@@ -7,7 +7,7 @@ import {
   parseExtraDeviceConfigurations,
   combineCarriedDevicesAllocation,
 } from './bomService.js';
-import { enrichChecklistsWithWorkflowStatus } from './workflowService.js';
+import { enrichChecklistsWithWorkflowStatus, getAdditionalCustomerInstallations, getInstallationCompletionReport } from './workflowService.js';
 import { getBackupDeclaration, issueBackupItemsForChecklist } from './backupItemService.js';
 
 // In-memory fallback cache
@@ -436,15 +436,23 @@ export async function getStoreMaterialRequirements(params = {}) {
     console.warn('Could not query store_material_requirements table:', err.message);
   }
 
-  if (dbRecords === null) {
+  if (dbRecords === null || dbRecords.length === 0) {
     try {
-      const { data: chkList, count: chkCount } = await supabase
+      let chkQuery = supabase
         .from('installation_checklists')
         .select('*', { count: 'exact' })
-        .order('created_at', { ascending: false })
-        .range(offset, offset + limitNum - 1);
+        .order('created_at', { ascending: false });
 
-      if (Array.isArray(chkList)) {
+      if (search && search.trim()) {
+        const s = search.trim();
+        chkQuery = chkQuery.or(
+          `checklist_number.ilike.%${s}%,client_name.ilike.%${s}%,client_mobile.ilike.%${s}%,client_location.ilike.%${s}%`
+        );
+      }
+
+      const { data: chkList, count: chkCount } = await chkQuery.range(offset, offset + limitNum - 1);
+
+      if (Array.isArray(chkList) && chkList.length > 0) {
         dbRecords = await Promise.all(chkList.map((c) => syncStoreRequirementForChecklist(c)));
         totalCount = chkCount || chkList.length;
       }
@@ -678,7 +686,16 @@ export async function getStoreMaterialRequirements(params = {}) {
       liveStatus = 'READY_FOR_ISSUANCE';
     }
 
-    const backupDecl = await getBackupDeclaration(rec.checklist_id || rec.id).catch(() => null);
+    const chkId = rec.checklist_id || rec.id;
+    const [backupDecl, extraInstList, compReport] = await Promise.all([
+      getBackupDeclaration(chkId).catch(() => null),
+      getAdditionalCustomerInstallations({ checklist_id: chkId }).catch(() => []),
+      (rec.completion_report ? Promise.resolve(rec.completion_report) : getInstallationCompletionReport(chkId).catch(() => null)),
+    ]);
+
+    const finalExtraInst = (Array.isArray(extraInstList) && extraInstList.length > 0)
+      ? extraInstList
+      : (Array.isArray(compReport?.extra_installations) ? compReport.extra_installations : (Array.isArray(rec.extra_installations) ? rec.extra_installations : []));
 
     return {
       ...rec,
@@ -688,6 +705,9 @@ export async function getStoreMaterialRequirements(params = {}) {
       extra_device_configurations: rec.extra_device_configurations || extraConfigs,
       material_items: enrichedMaterials,
       backup_declaration: backupDecl,
+      extra_installations: finalExtraInst,
+      extra_installations_count: finalExtraInst.length,
+      completion_report: compReport || rec.completion_report || null,
       has_shortage: liveHasShortage,
       shortage_count: liveShortageCount,
       shortage_details: liveShortageDetails,
@@ -767,6 +787,8 @@ export async function getStoreMaterialRequirements(params = {}) {
 export async function getStoreMaterialRequirementById(id) {
   if (!id) throw new Error('Requirement ID is required');
 
+  let baseRecord = null;
+
   try {
     const { data, error } = await supabase
       .from('store_material_requirements')
@@ -776,41 +798,62 @@ export async function getStoreMaterialRequirementById(id) {
 
     if (!error && data) {
       const enriched = await getStoreMaterialRequirements({ limit: 1, search: data.checklist_number });
-      return enriched.requirements[0] || data;
+      baseRecord = enriched?.requirements?.[0] || data;
     }
   } catch (err) {
     console.warn('Error fetching store requirement detail:', err.message);
   }
 
-  const fallback = inMemoryStoreRequirements.get(id);
-  if (fallback) {
-    if (fallback.job_type === 'Installation' && (!fallback.material_items || fallback.material_items.length === 0)) {
-      const enriched = await getStoreMaterialRequirements({ limit: 1, search: fallback.checklist_number });
-      if (enriched?.requirements?.[0]) return enriched.requirements[0];
+  if (!baseRecord) {
+    const fallback = inMemoryStoreRequirements.get(id);
+    if (fallback) {
+      baseRecord = fallback;
     }
-    return fallback;
   }
 
-  // Resilient fallback: look up installation_checklists directly by ID or checklist_number and sync
-  try {
-    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
-    let chkQuery = supabase.from('installation_checklists').select('*');
-    if (isUuid) {
-      chkQuery = chkQuery.eq('id', id);
-    } else {
-      chkQuery = chkQuery.eq('checklist_number', id);
+  if (!baseRecord) {
+    // Resilient fallback: look up installation_checklists directly by ID or checklist_number and sync
+    try {
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+      let chkQuery = supabase.from('installation_checklists').select('*');
+      if (isUuid) {
+        chkQuery = chkQuery.eq('id', id);
+      } else {
+        chkQuery = chkQuery.eq('checklist_number', id);
+      }
+      const { data: chk, error: chkErr } = await chkQuery.maybeSingle();
+      if (!chkErr && chk) {
+        const synced = await syncStoreRequirementForChecklist(chk);
+        baseRecord = synced;
+      }
+    } catch (chkFallbackErr) {
+      console.warn('Checklist fallback lookup for requirement failed:', chkFallbackErr.message);
     }
-    const { data: chk, error: chkErr } = await chkQuery.maybeSingle();
-    if (!chkErr && chk) {
-      const synced = await syncStoreRequirementForChecklist(chk);
-      const enriched = await getStoreMaterialRequirements({ limit: 1, search: chk.checklist_number });
-      return enriched.requirements[0] || synced;
-    }
-  } catch (chkFallbackErr) {
-    console.warn('Checklist fallback lookup for requirement failed:', chkFallbackErr.message);
   }
 
-  throw new Error(`Requirement with ID "${id}" not found.`);
+  if (!baseRecord) {
+    throw new Error(`Requirement with ID "${id}" not found.`);
+  }
+
+  // Ensure extra_installations and completion_report are always enriched
+  const chkId = baseRecord.checklist_id || baseRecord.id;
+  const [backupDecl, extraInstList, compReport] = await Promise.all([
+    getBackupDeclaration(chkId).catch(() => null),
+    getAdditionalCustomerInstallations({ checklist_id: chkId }).catch(() => []),
+    getInstallationCompletionReport(chkId).catch(() => null),
+  ]);
+
+  const finalExtraInst = (Array.isArray(extraInstList) && extraInstList.length > 0)
+    ? extraInstList
+    : (Array.isArray(compReport?.extra_installations) ? compReport.extra_installations : (Array.isArray(baseRecord.extra_installations) ? baseRecord.extra_installations : []));
+
+  return {
+    ...baseRecord,
+    backup_declaration: backupDecl || baseRecord.backup_declaration || null,
+    extra_installations: finalExtraInst,
+    extra_installations_count: finalExtraInst.length,
+    completion_report: compReport || baseRecord.completion_report || null,
+  };
 }
 
 /**

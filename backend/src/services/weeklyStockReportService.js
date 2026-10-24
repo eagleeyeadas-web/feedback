@@ -15,11 +15,13 @@ import supabase from './supabase.js';
 import { getMaterialInventory, ACTIVE_REQUIRED_MATERIALS_ORDER } from './materialStockService.js';
 import { inMemoryStockMovements } from './stockMovementService.js';
 import {
-  inMemoryReturns,
-  inMemoryMaterialReturns,
   inMemoryCompletionReports,
+  inMemoryAdditionalInstallations,
 } from './workflowService.js';
-import { getActiveServiceEngineerNames } from './serviceEngineerService.js';
+import {
+  getAllServiceEngineers,
+  getActiveServiceEngineerNames,
+} from './serviceEngineerService.js';
 
 export const AUTHORIZED_SERVICE_ENGINEERS = [
   'Mathi',
@@ -130,7 +132,496 @@ export function formatKolkataDateTime(dateInput) {
 }
 
 /**
- * Generate Complete Authoritative Weekly Stock Report
+ * Converts an ISO or timestamp into an Asia/Kolkata date string (YYYY-MM-DD)
+ */
+export function toKolkataDateString(dateInput) {
+  if (!dateInput) return null;
+  if (typeof dateInput === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateInput)) {
+    return dateInput;
+  }
+  const d = new Date(dateInput);
+  if (isNaN(d.getTime())) return null;
+  return d.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+}
+
+/**
+ * Formats a date into a clean Asia/Kolkata display string: "22 Oct 2026"
+ */
+export function formatKolkataDateDisplay(dateInput) {
+  if (!dateInput) return 'Not recorded';
+  let d;
+  if (typeof dateInput === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateInput)) {
+    d = new Date(`${dateInput}T12:00:00+05:30`);
+  } else {
+    d = new Date(dateInput);
+  }
+  if (isNaN(d.getTime())) return String(dateInput);
+  return d.toLocaleDateString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'Asia/Kolkata',
+  });
+}
+
+/**
+ * Checks if an item or component represents a device (not non-returnable screws or consumable fitting materials)
+ */
+function isDeviceItem(name, category) {
+  if (!name) return false;
+  if (category === 'Device Component' || category === 'Camera Device') return true;
+  const lower = name.toLowerCase();
+  if (
+    lower.includes('screw') ||
+    lower.includes('wire') ||
+    lower.includes('cable') ||
+    lower.includes('tape') ||
+    lower.includes('tie') ||
+    lower.includes('conduit')
+  ) {
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Get Technician-Wise Installation Report for the selected reporting week
+ */
+export async function getTechnicianWiseInstallationReport({ startDate, endDate }) {
+  // 1. Fetch active service engineers dynamically
+  let serviceEngineersList = [];
+  try {
+    serviceEngineersList = await getAllServiceEngineers({ includeInactive: false });
+  } catch (err) {
+    serviceEngineersList = AUTHORIZED_SERVICE_ENGINEERS.map((name, i) => ({
+      id: `eng-${i + 1}`,
+      name,
+      role: 'Service Engineer',
+      is_active: true,
+    }));
+  }
+
+  // 2. Fetch all installation checklists
+  let allChecklists = [];
+  try {
+    const { data: dbChecklists, error } = await supabase
+      .from('installation_checklists')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (!error && Array.isArray(dbChecklists)) {
+      allChecklists = dbChecklists;
+    }
+  } catch (err) {
+    console.warn('Error fetching installation_checklists in weekly report:', err.message);
+  }
+
+  // 3. Fetch completion reports from DB and merge with inMemory store
+  let dbReports = [];
+  try {
+    const { data: repData, error } = await supabase
+      .from('technical_installation_reports')
+      .select('*');
+    if (!error && Array.isArray(repData)) {
+      dbReports = repData;
+    }
+  } catch (err) {
+    console.warn('Error fetching technical_installation_reports in weekly report:', err.message);
+  }
+
+  const reportsByChecklistId = new Map();
+  dbReports.forEach((r) => reportsByChecklistId.set(r.checklist_id, r));
+  for (const [chkId, rep] of inMemoryCompletionReports.entries()) {
+    reportsByChecklistId.set(chkId, rep);
+  }
+
+  // Synthesize or ensure any checklists present in completion reports are included in allChecklists
+  const knownChecklistIds = new Set(allChecklists.map((c) => c.id));
+  for (const [chkId, rep] of reportsByChecklistId.entries()) {
+    if (!knownChecklistIds.has(chkId)) {
+      allChecklists.push({
+        id: chkId,
+        checklist_number: rep.checklist_number || `CHK-${String(chkId).slice(0, 8)}`,
+        client_name: rep.client_name || 'Client',
+        client_location: rep.installation_location || rep.client_location || rep.location || '',
+        google_maps_location: rep.google_maps_link || rep.google_maps_location || null,
+        google_maps_link: rep.google_maps_link || null,
+        service_engineer: rep.technician_name || rep.service_engineer,
+        installation_status: rep.completion_status || 'Completed',
+        actual_completion_datetime: rep.actual_installation_date || rep.actual_completion_datetime,
+      });
+      knownChecklistIds.add(chkId);
+    }
+  }
+
+  // 4. Fetch completion report items from DB
+  let dbReportItems = [];
+  try {
+    const { data: itemData, error } = await supabase
+      .from('technical_installation_report_items')
+      .select('*');
+    if (!error && Array.isArray(itemData)) {
+      dbReportItems = itemData;
+    }
+  } catch (err) {
+    // Ignore
+  }
+
+  const itemsByReportId = new Map();
+  const itemsByChecklistId = new Map();
+  dbReportItems.forEach((it) => {
+    if (it.report_id) {
+      if (!itemsByReportId.has(it.report_id)) itemsByReportId.set(it.report_id, []);
+      itemsByReportId.get(it.report_id).push(it);
+    }
+    if (it.checklist_id) {
+      if (!itemsByChecklistId.has(it.checklist_id)) itemsByChecklistId.set(it.checklist_id, []);
+      itemsByChecklistId.get(it.checklist_id).push(it);
+    }
+  });
+
+  // 5. Fetch additional customer installations (extra device installations for another customer)
+  let dbExtraInstallations = [];
+  try {
+    const { data: extraData, error } = await supabase
+      .from('additional_customer_installations')
+      .select('*');
+    if (!error && Array.isArray(extraData)) {
+      dbExtraInstallations = extraData;
+    }
+  } catch (err) {
+    // Ignore
+  }
+
+  const allExtraInstallations = [...dbExtraInstallations];
+  for (const [, list] of inMemoryAdditionalInstallations.entries()) {
+    if (Array.isArray(list)) {
+      list.forEach((extra) => {
+        if (!allExtraInstallations.some((e) => e.id && e.id === extra.id)) {
+          allExtraInstallations.push(extra);
+        }
+      });
+    }
+  }
+
+  // 6. Process completed installations
+  const completedInstallationsByTech = new Map(); // techKey -> Array of installation objects
+  const processedChecklistIds = new Set();
+  const processedExtraInstallationIds = new Set();
+
+  for (const chk of allChecklists) {
+    if (processedChecklistIds.has(chk.id)) continue;
+
+    const report = reportsByChecklistId.get(chk.id);
+
+    // Exclusion Criterion: Exclude assigned, in-progress, cancelled, failed, and incomplete installations
+    const instStatus = (chk.installation_status || '').toLowerCase();
+    const repStatus = (report?.completion_status || '').toLowerCase();
+
+    const isSuccessfullyCompleted =
+      instStatus === 'completed' ||
+      repStatus === 'completed' ||
+      repStatus === 'site work completed';
+
+    if (!isSuccessfullyCompleted) {
+      continue;
+    }
+
+    // Accurate completion date recorded by Post-Installation Form in Asia/Kolkata
+    const actualCompletionDate =
+      report?.actual_installation_date ||
+      report?.actual_completion_datetime ||
+      report?.submitted_at ||
+      chk?.actual_completion_datetime ||
+      chk?.actual_installation_date ||
+      report?.created_at;
+
+    const completionDateKolkata = toKolkataDateString(actualCompletionDate);
+    if (!completionDateKolkata) {
+      continue;
+    }
+
+    // Inclusive reporting period check [startDate, endDate]
+    if (completionDateKolkata < startDate || completionDateKolkata > endDate) {
+      continue;
+    }
+
+    processedChecklistIds.add(chk.id);
+
+    // Technician attribution
+    const techName = (chk.service_engineer || chk.technician_name || report?.technician_name || 'Unassigned').trim();
+
+    // Devices installed for the original customer
+    let reportItems = report?.items || report?.device_items || [];
+    if (reportItems.length === 0 && report?.id && itemsByReportId.has(report.id)) {
+      reportItems = itemsByReportId.get(report.id);
+    }
+    if (reportItems.length === 0 && itemsByChecklistId.has(chk.id)) {
+      reportItems = itemsByChecklistId.get(chk.id);
+    }
+
+    // Group & aggregate identical device types for this installation
+    const deviceMap = new Map();
+
+    for (const item of reportItems) {
+      const qtyInstalled = Number(item.quantity_installed) || 0;
+      // Strict rule: Only count actual confirmed installed devices (never Sales-required, carried, returned, or damaged)
+      if (qtyInstalled > 0) {
+        const rawDeviceType = item.device_type || item.item_name || 'Device';
+        const cur = deviceMap.get(rawDeviceType) || 0;
+        deviceMap.set(rawDeviceType, cur + qtyInstalled);
+      }
+    }
+
+    // Include loose backup items used for ORIGINAL_CUSTOMER
+    const backupItems = report?.backup_items || [];
+    for (const b of backupItems) {
+      const usedQty = Number(b.quantity_used) || 0;
+      if (usedQty > 0) {
+        const bName = b.item_name || b.material_name || 'Device';
+        if (isDeviceItem(bName, b.category)) {
+          const cur = deviceMap.get(bName) || 0;
+          deviceMap.set(bName, cur + usedQty);
+        }
+      }
+    }
+
+    // Fallback: If no Post-Installation Form items were recorded but checklist was marked completed
+    if (deviceMap.size === 0 && chk.device_type && !report) {
+      const devCount = Number(chk.device_count || chk.quantity || 1);
+      deviceMap.set(chk.device_type, devCount);
+    }
+
+    const deviceRows = Array.from(deviceMap.entries()).map(([deviceType, quantity]) => ({
+      device_type: deviceType,
+      deviceType,
+      quantity,
+    }));
+
+    const totalDevicesInThisJob = deviceRows.reduce((sum, d) => sum + d.quantity, 0);
+
+    const clientName = (chk.client_name || report?.client_name || '').trim() || 'Not recorded';
+    const loc = (chk.client_location || chk.installation_location || report?.installation_location || report?.location || chk.location || chk.district || chk.address || '').trim() || 'Not recorded';
+    const mapsLink = chk.google_maps_location || chk.google_maps_link || report?.google_maps_link || report?.maps_link || chk.maps_link || null;
+
+    const installationObj = {
+      checklist_id: chk.id,
+      checklistId: chk.id,
+      checklist_number: chk.checklist_number || `CHK-${String(chk.id).slice(0, 8)}`,
+      checklistNumber: chk.checklist_number || `CHK-${String(chk.id).slice(0, 8)}`,
+      client_name: clientName,
+      clientName: clientName,
+      installed_date: formatKolkataDateDisplay(completionDateKolkata),
+      installedDate: formatKolkataDateDisplay(completionDateKolkata),
+      installed_date_raw: completionDateKolkata,
+      installedDateRaw: completionDateKolkata,
+      installation_location: loc,
+      installationLocation: loc,
+      location: loc,
+      google_maps_link: mapsLink,
+      googleMapsLink: mapsLink,
+      devices: deviceRows,
+      total_devices_installed: totalDevicesInThisJob,
+      totalDevicesInstalled: totalDevicesInThisJob,
+      is_additional_customer: false,
+    };
+
+    const techKey = techName.toLowerCase();
+    if (!completedInstallationsByTech.has(techKey)) {
+      completedInstallationsByTech.set(techKey, []);
+    }
+    completedInstallationsByTech.get(techKey).push(installationObj);
+  }
+
+  // 7. Process extra device installations completed for another customer
+  for (const extra of allExtraInstallations) {
+    const extraId = extra.id || `extra-${extra.checklist_id}-${extra.recipient_customer_name || extra.customer_name}`;
+    if (processedExtraInstallationIds.has(extraId)) continue;
+
+    // Check date in Asia/Kolkata
+    const extraDateRaw = extra.installation_date || extra.installed_date || extra.created_at;
+    const extraDateKolkata = toKolkataDateString(extraDateRaw);
+    if (!extraDateKolkata) continue;
+
+    if (extraDateKolkata < startDate || extraDateKolkata > endDate) {
+      continue;
+    }
+
+    // Determine technician
+    let extraTech = extra.service_engineer || extra.technician_name;
+    if (!extraTech && extra.checklist_id) {
+      const parentChk = allChecklists.find((c) => c.id === extra.checklist_id);
+      extraTech = parentChk?.service_engineer || parentChk?.technician_name;
+    }
+    extraTech = (extraTech || 'Unassigned').trim();
+
+    processedExtraInstallationIds.add(extraId);
+
+    // Extract device components installed
+    const devMap = new Map();
+    const comps = extra.components || extra.components_used || extra.devices || [];
+    for (const c of comps) {
+      const q = Number(c.quantity_installed ?? c.quantity) || 0;
+      if (q > 0) {
+        const dType = c.component_name || c.device_type || c.name || 'Device';
+        devMap.set(dType, (devMap.get(dType) || 0) + q);
+      }
+    }
+
+    if (devMap.size === 0 && extra.device_type) {
+      devMap.set(extra.device_type, Number(extra.quantity || 1));
+    }
+
+    const deviceRows = Array.from(devMap.entries()).map(([deviceType, quantity]) => ({
+      device_type: deviceType,
+      deviceType,
+      quantity,
+    }));
+
+    const totalDev = deviceRows.reduce((sum, d) => sum + d.quantity, 0);
+    const clientName = (extra.recipient_customer_name || extra.customer_name || 'Additional Customer').trim() || 'Not recorded';
+    const loc = (extra.installation_location || extra.location || '').trim() || 'Not recorded';
+    const mapsLink = extra.google_maps_link || extra.maps_link || null;
+
+    const extraInstallationObj = {
+      checklist_id: extraId,
+      checklistId: extraId,
+      checklist_number: extra.recipient_checklist_number || extra.checklist_number || 'Extra Installation',
+      checklistNumber: extra.recipient_checklist_number || extra.checklist_number || 'Extra Installation',
+      client_name: clientName,
+      clientName,
+      installed_date: formatKolkataDateDisplay(extraDateKolkata),
+      installedDate: formatKolkataDateDisplay(extraDateKolkata),
+      installed_date_raw: extraDateKolkata,
+      installedDateRaw: extraDateKolkata,
+      installation_location: loc,
+      installationLocation: loc,
+      location: loc,
+      google_maps_link: mapsLink,
+      googleMapsLink: mapsLink,
+      devices: deviceRows,
+      total_devices_installed: totalDev,
+      totalDevicesInstalled: totalDev,
+      is_additional_customer: true,
+      original_checklist_id: extra.checklist_id || extra.original_checklist_id || null,
+    };
+
+    const techKey = extraTech.toLowerCase();
+    if (!completedInstallationsByTech.has(techKey)) {
+      completedInstallationsByTech.set(techKey, []);
+    }
+    completedInstallationsByTech.get(techKey).push(extraInstallationObj);
+  }
+
+  // 8. Group by technician (dynamic engineers + historical records)
+  const allEngineersMap = new Map();
+
+  serviceEngineersList.forEach((eng) => {
+    allEngineersMap.set(eng.name.toLowerCase(), {
+      id: eng.id,
+      name: eng.name,
+      is_active: eng.is_active !== false,
+    });
+  });
+
+  // Ensure Core 4 engineers exist
+  AUTHORIZED_SERVICE_ENGINEERS.forEach((name) => {
+    if (!allEngineersMap.has(name.toLowerCase())) {
+      allEngineersMap.set(name.toLowerCase(), {
+        id: `eng-${name.toLowerCase()}`,
+        name,
+        is_active: true,
+      });
+    }
+  });
+
+  // Add any historical/inactive technician who has installations in this period
+  for (const techKey of completedInstallationsByTech.keys()) {
+    if (!allEngineersMap.has(techKey) && techKey !== 'unassigned') {
+      const origName = completedInstallationsByTech.get(techKey)[0]?.service_engineer || techKey;
+      allEngineersMap.set(techKey, {
+        id: `eng-${techKey}`,
+        name: origName.charAt(0).toUpperCase() + origName.slice(1),
+        is_active: false,
+      });
+    }
+  }
+
+  // Sort technicians: Core 4 first, then other active, then historical, then Unassigned (if any)
+  const sortedTechList = Array.from(allEngineersMap.values()).sort((a, b) => {
+    const idxA = AUTHORIZED_SERVICE_ENGINEERS.indexOf(a.name);
+    const idxB = AUTHORIZED_SERVICE_ENGINEERS.indexOf(b.name);
+    if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+    if (idxA !== -1) return -1;
+    if (idxB !== -1) return 1;
+    return a.name.localeCompare(b.name);
+  });
+
+  if (completedInstallationsByTech.has('unassigned') && completedInstallationsByTech.get('unassigned').length > 0) {
+    sortedTechList.push({
+      id: 'eng-unassigned',
+      name: 'Unassigned Recipient',
+      is_active: false,
+    });
+  }
+
+  let grandTotalCompletedInstallations = 0;
+  let grandTotalDevicesInstalled = 0;
+
+  const technicianGroups = sortedTechList.map((eng) => {
+    const techKey = eng.name.toLowerCase();
+    const installations = completedInstallationsByTech.get(techKey) || [];
+
+    // Sort installations by date descending, then assign serial numbers: 1, 2, 3...
+    installations.sort((a, b) => (b.installed_date_raw || '').localeCompare(a.installed_date_raw || ''));
+    installations.forEach((inst, idx) => {
+      inst.serial_number = idx + 1;
+      inst.serialNumber = idx + 1;
+    });
+
+    const totalDevicesForTech = installations.reduce((sum, inst) => sum + inst.total_devices_installed, 0);
+
+    grandTotalCompletedInstallations += installations.length;
+    grandTotalDevicesInstalled += totalDevicesForTech;
+
+    return {
+      technician_id: eng.id,
+      technicianId: eng.id,
+      technician_name: eng.name,
+      technicianName: eng.name,
+      is_active: eng.is_active,
+      isActive: eng.is_active,
+      completed_installations_count: installations.length,
+      completedInstallationsCount: installations.length,
+      total_devices_installed: totalDevicesForTech,
+      totalDevicesInstalled: totalDevicesForTech,
+      has_installations: installations.length > 0,
+      hasInstallations: installations.length > 0,
+      installations,
+    };
+  });
+
+  return {
+    summary: {
+      total_completed_installations: grandTotalCompletedInstallations,
+      total_devices_installed: grandTotalDevicesInstalled,
+      active_technicians_count: sortedTechList.filter((t) => t.is_active).length,
+      reporting_period: {
+        start_date: startDate,
+        end_date: endDate,
+        formatted_range: formatWeekRangeDisplay(startDate, endDate),
+        timezone: 'Asia/Kolkata',
+      },
+      // camelCase aliases
+      totalCompletedInstallations: grandTotalCompletedInstallations,
+      totalDevicesInstalled: grandTotalDevicesInstalled,
+      activeTechniciansCount: sortedTechList.filter((t) => t.is_active).length,
+    },
+    technicians: technicianGroups,
+  };
+}
+
+/**
+ * Generate Complete Authoritative Weekly Stock Maintenance Report
  */
 export async function generateWeeklyStockReport({
   startDate: inputStartDate,
@@ -149,24 +640,31 @@ export async function generateWeeklyStockReport({
 
   const { startDate, endDate, startUtcIso, endUtcIso } = getWeekUtcBoundaries(targetStart, targetEnd);
 
-  // 2. Fetch authoritative physical inventory products & loose materials
-  const rawMaterials = await getMaterialInventory();
-  // Filter active physical items matching canonical order or active status
-  const physicalItems = ACTIVE_REQUIRED_MATERIALS_ORDER.map((name) => {
-    const matched = rawMaterials.find((m) => m.material_name.toLowerCase() === name.toLowerCase());
-    return matched || {
-      id: `mat-${name.toLowerCase().replace(/\s+/g, '-')}`,
-      material_name: name,
-      sku: `MAT-${name.toUpperCase().replace(/\s+/g, '-')}`,
-      category: ['Camera', 'Live Display', 'Recording Display'].includes(name) ? 'Camera Device' : 'Installation Material',
-      unit: name.includes('Wire') ? 'Metres' : (name.includes('Tie') ? 'Packets' : 'Nos.'),
-      current_stock: 0,
-      opening_stock: 0,
-      min_stock_level: name.includes('Screw') ? 50 : 10,
-    };
+  // 2. Build the Technician-Wise Installation Report
+  const technicianInstallationReport = await getTechnicianWiseInstallationReport({
+    startDate,
+    endDate,
   });
 
-  // 3. Fetch all stock movements (Supabase with in-memory fallback)
+  // 3. Fetch physical inventory items for summary preservation in JSON
+  const rawMaterials = await getMaterialInventory();
+  const physicalItems = ACTIVE_REQUIRED_MATERIALS_ORDER.map((name) => {
+    const matched = rawMaterials.find((m) => m.material_name.toLowerCase() === name.toLowerCase());
+    return (
+      matched || {
+        id: `mat-${name.toLowerCase().replace(/\s+/g, '-')}`,
+        material_name: name,
+        sku: `MAT-${name.toUpperCase().replace(/\s+/g, '-')}`,
+        category: ['Camera', 'Live Display', 'Recording Display'].includes(name) ? 'Camera Device' : 'Installation Material',
+        unit: name.includes('Wire') ? 'Metres' : name.includes('Tie') ? 'Packets' : 'Nos.',
+        current_stock: 0,
+        opening_stock: 0,
+        min_stock_level: name.includes('Screw') ? 50 : 10,
+      }
+    );
+  });
+
+  // 4. Stock Movements for physical summary
   let allMovements = [];
   try {
     const { data: dbMovements, error } = await supabase
@@ -181,66 +679,18 @@ export async function generateWeeklyStockReport({
     console.warn('DB stock_movements fetch error in weekly report:', err.message);
   }
 
-  // Merge with in-memory fallback if any missing
   for (const m of inMemoryStockMovements) {
     if (!allMovements.some((existing) => existing.id === m.id)) {
       allMovements.push(m);
     }
   }
-  // Sort chronologically ascending
   allMovements.sort((a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0));
 
-  // 4. Fetch related installation checklists to enrich technician details and checklist numbers
-  let allChecklists = [];
-  try {
-    const { data: dbChecklists, error } = await supabase
-      .from('installation_checklists')
-      .select('id, checklist_number, client_name, service_engineer, delivery_method, installation_status, material_issuance_status, created_at');
-
-    if (!error && Array.isArray(dbChecklists)) {
-      allChecklists = dbChecklists;
-    }
-  } catch (err) {
-    console.warn('DB checklists fetch error in weekly report:', err.message);
-  }
-  const checklistMap = new Map(allChecklists.map((c) => [c.id, c]));
-
-  // 5. Fetch returns (devices and materials) for reconciliation
-  let allDeviceReturns = [];
-  try {
-    const { data: dbDevRet } = await supabase.from('job_device_returns').select('*');
-    if (Array.isArray(dbDevRet)) allDeviceReturns = dbDevRet;
-  } catch (e) {}
-  for (const [id, r] of inMemoryReturns.entries()) {
-    if (!allDeviceReturns.some((existing) => existing.id === id)) {
-      allDeviceReturns.push(r);
-    }
-  }
-
-  let allMaterialReturns = [];
-  try {
-    const { data: dbMatRet } = await supabase.from('job_material_returns').select('*');
-    if (Array.isArray(dbMatRet)) allMaterialReturns = dbMatRet;
-  } catch (e) {}
-  for (const [id, r] of inMemoryMaterialReturns.entries()) {
-    if (!allMaterialReturns.some((existing) => existing.id === id)) {
-      allMaterialReturns.push(r);
-    }
-  }
-
-  // 6. Filter movements strictly within reporting week
   const weekMovements = allMovements.filter((m) => {
     const t = new Date(m.created_at).getTime();
     return t >= new Date(startUtcIso).getTime() && t < new Date(endUtcIso).getTime();
   });
 
-  // Track deduplicated movements to prevent double-counting of linked courier dispatch / adjustments
-  const processedMovementIds = new Set();
-  const processedCourierChecklistKeys = new Set();
-
-  // ============================================================
-  // SECTION 1: WEEKLY PHYSICAL STOCK SUMMARY
-  // ============================================================
   const physicalStockSummary = [];
   let totalSummaryOpening = 0;
   let totalSummaryAdded = 0;
@@ -248,18 +698,13 @@ export async function generateWeeklyStockReport({
   let totalSummaryReturned = 0;
   let totalSummaryAdjustments = 0;
   let totalSummaryClosing = 0;
-  let varianceCount = 0;
-  let lowStockCount = 0;
 
   for (let idx = 0; idx < physicalItems.length; idx++) {
     const item = physicalItems[idx];
     const itemName = item.material_name;
     const itemKey = itemName.toLowerCase();
 
-    // Movements for this specific physical item
-    const itemMovementsAll = allMovements.filter(
-      (m) => (m.item_name || '').toLowerCase() === itemKey
-    );
+    const itemMovementsAll = allMovements.filter((m) => (m.item_name || '').toLowerCase() === itemKey);
     const itemMovementsBeforeWeek = itemMovementsAll.filter(
       (m) => new Date(m.created_at).getTime() < new Date(startUtcIso).getTime()
     );
@@ -268,33 +713,21 @@ export async function generateWeeklyStockReport({
       return t >= new Date(startUtcIso).getTime() && t < new Date(endUtcIso).getTime();
     });
 
-    // --- Calculate Opening Stock ---
     let openingStock = 0;
-    let hasHistoricalOpening = false;
-
     if (itemMovementsBeforeWeek.length > 0) {
-      // Last movement before start of Monday provides exact balance_after
       const lastBefore = itemMovementsBeforeWeek[itemMovementsBeforeWeek.length - 1];
       if (lastBefore.balance_after !== null && lastBefore.balance_after !== undefined) {
         openingStock = Number(lastBefore.balance_after);
-        hasHistoricalOpening = true;
       }
     } else if (itemMovementsInWeek.length > 0) {
-      // First movement in week provides exact balance_before
       const firstInWeek = itemMovementsInWeek[0];
       if (firstInWeek.balance_before !== null && firstInWeek.balance_before !== undefined) {
         openingStock = Number(firstInWeek.balance_before);
-        hasHistoricalOpening = true;
       }
-    }
-
-    if (!hasHistoricalOpening) {
-      // Fallback: If no movements occurred before this period, opening is current stock
-      // or configured opening stock
+    } else {
       openingStock = Number(item.current_stock) || 0;
     }
 
-    // --- Calculate Movements in the Week ---
     let stockAdded = 0;
     let stockIssued = 0;
     let stockReturned = 0;
@@ -303,83 +736,18 @@ export async function generateWeeklyStockReport({
     for (const mov of itemMovementsInWeek) {
       const qty = Number(mov.quantity) || 0;
       const type = (mov.movement_type || mov.transaction_type || '').toUpperCase();
-      const remarks = (mov.reason_or_remarks || mov.remarks || '').trim();
-
-      // Check for duplicate courier dispatch records
-      if (type === 'COURIER_DISPATCH' || type === 'COURIER_DISPATCHED') {
-        const courierKey = `courier-${mov.checklist_id}-${itemKey}`;
-        if (processedCourierChecklistKeys.has(courierKey)) {
-          continue; // Prevent double-counting
-        }
-        processedCourierChecklistKeys.add(courierKey);
-        stockIssued += qty;
-        continue;
-      }
-
-      // Check for linked stock adjustment from courier dispatch
-      if (type === 'STOCK_ADJUSTMENT' && remarks.includes('Courier Dispatch for checklist')) {
-        const match = remarks.match(/checklist\s+([A-Z0-9-]+)/i);
-        const chkRef = match ? match[1] : (mov.checklist_id || mov.id);
-        const courierKey = `courier-${chkRef}-${itemKey}`;
-        if (processedCourierChecklistKeys.has(courierKey)) {
-          continue; // Already counted via COURIER_DISPATCH record
-        }
-        processedCourierChecklistKeys.add(courierKey);
-        stockIssued += qty;
-        continue;
-      }
-
-      // Reversals & Voids (Audit only, do not count as normal issuance)
-      if (type === 'STOCK_REVERSAL' || remarks.toLowerCase().includes('void') || remarks.toLowerCase().includes('reversal')) {
-        // Adjustments handle reversals appropriately
-        if (mov.balance_after !== null && mov.balance_before !== null) {
-          adjustmentsNet += (Number(mov.balance_after) - Number(mov.balance_before));
-        }
-        continue;
-      }
-
       if (type === 'STOCK_RECEIVED' || type === 'OPENING_STOCK') {
         stockAdded += qty;
-      } else if (type === 'STOCK_ISSUED') {
+      } else if (type === 'STOCK_ISSUED' || type === 'COURIER_DISPATCH' || type === 'COURIER_DISPATCHED') {
         stockIssued += qty;
       } else if (type === 'USABLE_STOCK_RETURNED' || type === 'RETURNED_USABLE') {
         stockReturned += qty;
       } else if (type === 'STOCK_ADJUSTMENT') {
-        // Net signed adjustment based on recorded balance change or prefix
-        if (mov.balance_after !== null && mov.balance_before !== null) {
-          adjustmentsNet += (Number(mov.balance_after) - Number(mov.balance_before));
-        } else if (remarks.startsWith('[ADD]')) {
-          adjustmentsNet += qty;
-        } else if (remarks.startsWith('[REMOVE]')) {
-          adjustmentsNet -= qty;
-        } else {
-          adjustmentsNet += qty;
-        }
+        adjustmentsNet += qty;
       }
     }
 
-    // --- Calculate Closing Stock ---
-    let closingStock = openingStock;
-    if (itemMovementsInWeek.length > 0) {
-      const lastInWeek = itemMovementsInWeek[itemMovementsInWeek.length - 1];
-      if (lastInWeek.balance_after !== null && lastInWeek.balance_after !== undefined) {
-        closingStock = Number(lastInWeek.balance_after);
-      } else {
-        closingStock = openingStock + stockAdded + stockReturned - stockIssued + adjustmentsNet;
-      }
-    } else {
-      closingStock = openingStock;
-    }
-
-    // --- Reconciliation Verification ---
-    const expectedClosingStock = openingStock + stockAdded + stockReturned - stockIssued + adjustmentsNet;
-    const variance = closingStock - expectedClosingStock;
-    const isReconciled = variance === 0;
-    if (!isReconciled) varianceCount++;
-
-    const minLevel = Number(item.min_stock_level) || 0;
-    const isLowStock = minLevel > 0 && closingStock <= minLevel;
-    if (isLowStock) lowStockCount++;
+    const closingStock = openingStock + stockAdded + stockReturned - stockIssued + adjustmentsNet;
 
     totalSummaryOpening += openingStock;
     totalSummaryAdded += stockAdded;
@@ -395,310 +763,21 @@ export async function generateWeeklyStockReport({
       name: itemName,
       item_name: itemName,
       sku: item.sku || `MAT-${itemName.toUpperCase()}`,
-      category: item.category || 'Installation Material',
-      type: ['Camera', 'Live Display', 'Recording Display'].includes(itemName) ? 'DEVICE' : 'MATERIAL',
       unit: item.unit || 'Nos.',
       opening_stock: openingStock,
-      openingStock: openingStock,
+      openingStock,
       stock_added: stockAdded,
-      stockAdded: stockAdded,
+      stockAdded,
       issued: stockIssued,
       returned: stockReturned,
       adjustments: adjustmentsNet,
       closing_stock: closingStock,
-      closingStock: closingStock,
-      expected_closing_stock: expectedClosingStock,
-      expectedClosing: expectedClosingStock,
-      variance,
-      is_reconciled: isReconciled,
-      min_stock_level: minLevel,
-      minStock: minLevel,
-      is_low_stock: isLowStock,
-      is_out_of_stock: closingStock === 0,
-      has_historical_opening: hasHistoricalOpening,
+      closingStock,
     });
   }
 
-  // ============================================================
-  // SECTION 2: DETAILED STOCK MOVEMENT HISTORY
-  // ============================================================
-  const stockMovementHistory = weekMovements.map((mov, i) => {
-    const chk = mov.checklist_id ? checklistMap.get(mov.checklist_id) : null;
-    const checklistNo = chk?.checklist_number || (mov.checklist_id ? `CHK-${String(mov.checklist_id).slice(0, 8)}` : '—');
-    const recipient = chk?.service_engineer || mov.performer_name || '—';
-    const movType = mov.movement_type || mov.transaction_type || 'STOCK_ADJUSTMENT';
-
-    const isReversal = movType === 'STOCK_REVERSAL' ||
-      (mov.reason_or_remarks || '').toLowerCase().includes('reversal') ||
-      (mov.reason_or_remarks || '').toLowerCase().includes('void');
-
-    const dtFormatted = formatKolkataDateTime(mov.created_at);
-    const performer = mov.performer_name || mov.performer_email || 'Store Manager';
-    const remarks = mov.reason_or_remarks || '—';
-    const qty = Number(mov.quantity) || 0;
-    const unit = mov.unit || 'Nos.';
-    const balBefore = mov.balance_before !== null && mov.balance_before !== undefined ? Number(mov.balance_before) : '—';
-    const balAfter = mov.balance_after !== null && mov.balance_after !== undefined ? Number(mov.balance_after) : '—';
-
-    return {
-      index: i + 1,
-      id: mov.id,
-      created_at: mov.created_at,
-      date: mov.created_at,
-      date_time: dtFormatted,
-      dateTime: dtFormatted,
-      date_time_formatted: dtFormatted,
-      item_name: mov.item_name,
-      itemName: mov.item_name,
-      sku: mov.sku || '—',
-      category: mov.category,
-      movement_type: movType,
-      type: movType,
-      type_label: formatMovementTypeLabel(movType),
-      quantity: qty,
-      unit,
-      balance_before: balBefore,
-      balanceBefore: balBefore,
-      balance_after: balAfter,
-      balanceAfter: balAfter,
-      technician_recipient: recipient,
-      technician_name: recipient,
-      technicianName: recipient,
-      checklist_number: checklistNo,
-      checklistNumber: checklistNo,
-      checklist_id: mov.checklist_id || null,
-      performed_by_name: performer,
-      performed_by: performer,
-      performedBy: performer,
-      remarks,
-      is_reversal: isReversal,
-      is_void: isReversal,
-      isVoid: isReversal,
-    };
-  });
-
-  // ============================================================
-  // SECTION 3: TECHNICIAN-WISE MATERIAL ISSUANCE SUMMARY
-  // ============================================================
-  // Dynamically group all active service engineers, plus any engineers with movements, plus unassigned
-  const dynamicActiveEngineers = await getActiveServiceEngineerNames().catch(() => AUTHORIZED_SERVICE_ENGINEERS);
-  const allEngNamesSet = new Set(dynamicActiveEngineers.map((n) => n.trim()));
-  weekMovements.forEach((mov) => {
-    const chk = mov.checklist_id ? checklistMap.get(mov.checklist_id) : null;
-    const assignedEng = (chk?.service_engineer || '').trim();
-    if (assignedEng) allEngNamesSet.add(assignedEng);
-  });
-
-  const technicianGroupsMap = new Map();
-  Array.from(allEngNamesSet).sort().forEach((name) => {
-    technicianGroupsMap.set(name.toLowerCase(), {
-      engineer_name: name,
-      is_unassigned: false,
-      transactions: [],
-      item_totals_map: new Map(),
-    });
-  });
-  technicianGroupsMap.set('unassigned', {
-    engineer_name: 'Unassigned Recipient',
-    is_unassigned: true,
-    transactions: [],
-    item_totals_map: new Map(),
-  });
-
-  for (const mov of weekMovements) {
-    const type = (mov.movement_type || mov.transaction_type || '').toUpperCase();
-    if (type !== 'STOCK_ISSUED' && type !== 'COURIER_DISPATCH' && type !== 'COURIER_DISPATCHED') {
-      continue;
-    }
-
-    const chk = mov.checklist_id ? checklistMap.get(mov.checklist_id) : null;
-    const assignedEng = (chk?.service_engineer || '').trim();
-
-    let targetGroup = technicianGroupsMap.get('unassigned');
-    if (assignedEng && technicianGroupsMap.has(assignedEng.toLowerCase())) {
-      targetGroup = technicianGroupsMap.get(assignedEng.toLowerCase());
-    }
-
-    const qty = Number(mov.quantity) || 0;
-    const unit = mov.unit || 'Nos.';
-    const itemName = mov.item_name || 'Material';
-    const dtFormatted = formatKolkataDateTime(mov.created_at);
-    const issuedBy = mov.performer_name || 'Store Manager';
-    const chkNumber = chk?.checklist_number || '—';
-
-    targetGroup.transactions.push({
-      id: mov.id,
-      created_at: mov.created_at,
-      date_time_formatted: dtFormatted,
-      dateTime: dtFormatted,
-      checklist_number: chkNumber,
-      checklistNumber: chkNumber,
-      item_name: itemName,
-      itemName,
-      quantity: qty,
-      unit,
-      issued_by: issuedBy,
-      issuedBy,
-      remarks: mov.reason_or_remarks || '—',
-    });
-
-    // Group item totals (preserve incompatible units!)
-    const totalKey = `${itemName}__${unit}`;
-    const curTotal = targetGroup.item_totals_map.get(totalKey) || {
-      name: itemName,
-      item_name: itemName,
-      quantity: 0,
-      unit,
-    };
-    curTotal.quantity += qty;
-    targetGroup.item_totals_map.set(totalKey, curTotal);
-  }
-
-  const technicianIssuanceSummary = Array.from(technicianGroupsMap.values()).map((g) => {
-    const itemTotalsList = Array.from(g.item_totals_map.values());
-    const uniqueChecklists = new Set(
-      g.transactions.map((t) => t.checklist_number).filter((c) => c && c !== '—')
-    );
-
-    return {
-      engineer_name: g.engineer_name,
-      technician_name: g.engineer_name,
-      technicianName: g.engineer_name,
-      is_unassigned: g.is_unassigned,
-      total_transactions: g.transactions.length,
-      item_totals: itemTotalsList,
-      itemTotals: itemTotalsList,
-      transactions: g.transactions,
-      issuances: g.transactions,
-      unique_checklist_count: uniqueChecklists.size,
-      uniqueChecklistCount: uniqueChecklists.size,
-    };
-  });
-
-  // ============================================================
-  // SECTION 4: MATERIAL USAGE AND RETURN RECONCILIATION
-  // ============================================================
-  const materialReconciliation = [];
-  // For each material, reconcile: Issued, Used (from Completion), Declared Returned, Store Verified Usable, Awaiting, Damaged
-  const installationMaterialsOnly = physicalItems.filter(
-    (item) => !['Camera', 'Live Display', 'Recording Display'].includes(item.material_name)
-  );
-
-  for (const mat of installationMaterialsOnly) {
-    const matName = mat.material_name;
-    const isScrew = matName.toLowerCase().includes('screw');
-
-    // Issued quantity during this week
-    const summaryItem = physicalStockSummary.find((s) => s.item_name === matName);
-    const qtyIssued = summaryItem ? summaryItem.issued : 0;
-
-    // Returns for this material verified/declared in the reporting week
-    let declaredReturned = 0;
-    let verifiedAcceptedUsable = 0;
-    let awaitingVerification = 0;
-    let damagedOrMissing = 0;
-
-    for (const r of allMaterialReturns) {
-      if ((r.material_name || '').toLowerCase() === matName.toLowerCase()) {
-        const createdTime = new Date(r.declared_at || r.created_at || 0).getTime();
-        const inWeek = createdTime >= new Date(startUtcIso).getTime() && createdTime < new Date(endUtcIso).getTime();
-
-        if (inWeek) {
-          const dec = Number(r.declared_return_qty) || 0;
-          const usable = Number(r.accepted_usable_qty) || 0;
-          const dmg = (Number(r.damaged_qty) || 0) + (Number(r.missing_qty) || 0);
-
-          declaredReturned += dec;
-          if (r.status === 'PENDING_STORE_VERIFICATION') {
-            awaitingVerification += dec;
-          } else {
-            verifiedAcceptedUsable += usable;
-            damagedOrMissing += dmg;
-          }
-        }
-      }
-    }
-
-    // Material usage from completion reports in the week
-    let qtyUsed = 0;
-    let usageTracked = false;
-    for (const chk of allChecklists) {
-      const chkTime = new Date(chk.created_at || 0).getTime();
-      const inWeek = chkTime >= new Date(startUtcIso).getTime() && chkTime < new Date(endUtcIso).getTime();
-      if (inWeek) {
-        const compRep = inMemoryCompletionReports.get(chk.id);
-        const usedItems = compRep?.material_items || chk.actual_materials_used || [];
-        const matchedUsed = usedItems.find((u) => (u.material_name || '').toLowerCase() === matName.toLowerCase());
-        if (matchedUsed && matchedUsed.quantity_used !== undefined) {
-          qtyUsed += Number(matchedUsed.quantity_used) || 0;
-          usageTracked = true;
-        }
-      }
-    }
-
-    materialReconciliation.push({
-      name: matName,
-      item_name: matName,
-      unit: mat.unit || 'Nos.',
-      issued: qtyIssued,
-      quantity_issued: qtyIssued,
-      used: usageTracked ? qtyUsed : 'Not Tracked',
-      quantity_used: usageTracked ? qtyUsed : 'Not Tracked',
-      reportedReturned: isScrew ? 'Not Tracked' : declaredReturned,
-      quantity_declared_returned: isScrew ? 'Not Tracked' : declaredReturned,
-      verifiedUsable: isScrew ? 'Not Tracked' : verifiedAcceptedUsable,
-      quantity_verified_accepted: isScrew ? 'Not Tracked' : verifiedAcceptedUsable,
-      awaitingVerification: isScrew ? 0 : awaitingVerification,
-      quantity_awaiting_verification: isScrew ? 0 : awaitingVerification,
-      damagedMissing: isScrew ? 0 : damagedOrMissing,
-      damaged_or_missing: isScrew ? 0 : damagedOrMissing,
-      isScrew,
-      notes: isScrew ? 'Non-returnable consumable fitting' : (verifiedAcceptedUsable > 0 ? 'Verified & Credited' : 'Normal Usage'),
-    });
-  }
-
-  // ============================================================
-  // SECTION 5: LOW-STOCK AND ZERO-STOCK ALERTS
-  // ============================================================
-  const stockAlerts = physicalStockSummary
-    .filter((item) => item.min_stock_level > 0 && (item.is_low_stock || item.is_out_of_stock))
-    .map((item) => ({
-      name: item.item_name,
-      item_name: item.item_name,
-      category: item.category,
-      current_stock: item.closing_stock,
-      currentStock: item.closing_stock,
-      min_stock_level: item.min_stock_level,
-      minStock: item.min_stock_level,
-      unit: item.unit,
-      status: item.is_out_of_stock ? 'OUT_OF_STOCK' : 'LOW_STOCK',
-      severity: item.is_out_of_stock ? 'CRITICAL' : 'WARNING',
-      alert_label: item.is_out_of_stock ? 'Zero Stock Alert (Depleted)' : 'Low Stock Warning',
-    }));
-
-  // ============================================================
-  // SECTION 6: RECONCILIATION VARIANCES & AUDIT
-  // ============================================================
-  const reconciliationVariances = physicalStockSummary
-    .filter((item) => !item.is_reconciled)
-    .map((item) => ({
-      item_name: item.item_name,
-      productName: item.item_name,
-      opening_stock: item.opening_stock,
-      stock_added: item.stock_added,
-      issued: item.issued,
-      returned: item.returned,
-      adjustments: item.adjustments,
-      closing_stock: item.closing_stock,
-      expected_closing: item.expected_closing_stock,
-      calculatedClosing: item.expected_closing_stock,
-      actualLedgerBalance: item.closing_stock,
-      variance: item.variance,
-      unit: item.unit,
-      explanation: `Expected ${item.expected_closing_stock} ${item.unit}, recorded balance is ${item.closing_stock} ${item.unit}. Discrepancy: ${item.variance > 0 ? '+' : ''}${item.variance} ${item.unit}.`,
-    }));
-
-  // Compile final structured report with snake_case and camelCase aliases
+  // Compile final structured report with clean metadata and Technician-Wise Installation Report
+  // The 4 unwanted sections (movement history, material reconciliation, low-stock alerts, variance detection) are removed
   return {
     report_metadata: {
       title: 'WEEKLY STOCK MAINTENANCE REPORT',
@@ -719,7 +798,12 @@ export async function generateWeeklyStockReport({
         role: user?.role || 'STORE_MANAGER',
       },
     },
+    technician_installation_report: technicianInstallationReport,
+    technicianInstallationReport,
+
     summary_kpis: {
+      total_completed_installations: technicianInstallationReport.summary.total_completed_installations,
+      total_devices_installed: technicianInstallationReport.summary.total_devices_installed,
       total_physical_items: physicalItems.length,
       total_opening_stock: totalSummaryOpening,
       total_stock_added: totalSummaryAdded,
@@ -727,17 +811,11 @@ export async function generateWeeklyStockReport({
       total_stock_returned: totalSummaryReturned,
       total_adjustments_net: totalSummaryAdjustments,
       total_closing_stock: totalSummaryClosing,
-      reconciliation_status: varianceCount === 0 ? 'RECONCILED' : 'VARIANCE_DETECTED',
-      variance_count: varianceCount,
-      low_stock_count: lowStockCount,
-      total_movements_in_period: weekMovements.length,
     },
+
+    // Preserved for JSON consumers
     physical_stock_summary: physicalStockSummary,
-    stock_movement_history: stockMovementHistory,
-    technician_issuance_summary: technicianIssuanceSummary,
-    material_reconciliation: materialReconciliation,
-    stock_alerts: stockAlerts,
-    reconciliation_variances: reconciliationVariances,
+    stockSummary: physicalStockSummary,
 
     // camelCase aliases
     reportPeriod: {
@@ -753,38 +831,6 @@ export async function generateWeeklyStockReport({
       generatedOn: formatKolkataDateTime(new Date()),
       generatedBy: `${user?.full_name || user?.name || 'Store Manager'} (${user?.email || 'store@safdrive.com'})`,
     },
-    stockSummary: physicalStockSummary,
-    stockMovements: stockMovementHistory,
-    technicianIssuance: technicianIssuanceSummary,
-    materialReconciliation: materialReconciliation,
-    lowStockAlerts: stockAlerts,
-    stockReconciliation: {
-      isFullyReconciled: varianceCount === 0,
-      summary: {
-        varianceCount,
-        lowStockCount,
-      },
-      itemsWithVariance: reconciliationVariances,
-    },
   };
-
 }
 
-function formatMovementTypeLabel(type) {
-  if (!type) return 'Movement';
-  switch (type) {
-    case 'OPENING_STOCK': return 'Opening Stock';
-    case 'STOCK_RECEIVED': return 'Stock Received';
-    case 'STOCK_ISSUED': return 'Stock Issued';
-    case 'COURIER_DISPATCH':
-    case 'COURIER_DISPATCHED': return 'Courier Dispatched';
-    case 'STOCK_ADJUSTMENT': return 'Stock Adjustment';
-    case 'STOCK_REVERSAL': return 'Stock Reversal';
-    case 'USABLE_STOCK_RETURNED':
-    case 'RETURNED_USABLE': return 'Usable Return';
-    case 'DAMAGED_STOCK_RECEIVED':
-    case 'RETURNED_DAMAGED': return 'Damaged Return';
-    case 'DAMAGED_STOCK_DISPOSITION': return 'Damaged Disposition';
-    default: return type.replace(/_/g, ' ');
-  }
-}
