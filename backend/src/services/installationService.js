@@ -26,6 +26,37 @@ import config from '../config.js';
 export const inMemoryChecklistExtraConfigs = new Map();
 export const inMemoryChecklistBomSnapshots = new Map();
 export const inMemoryChecklistSchedules = new Map();
+export const inMemoryChecklistServiceItems = new Map();
+
+/**
+ * Normalizes service-specific required devices and materials for Service jobs
+ */
+export function normalizeServiceItems(items) {
+  if (!Array.isArray(items)) return [];
+  return items.map((it, idx) => {
+    const reqQty = Math.max(1, parseInt(it.quantity_required, 10) || 1);
+    const issuedQty = Math.max(0, parseInt(it.quantity_issued, 10) || 0);
+    const remainingQty = it.quantity_remaining !== undefined
+      ? Math.max(0, parseInt(it.quantity_remaining, 10))
+      : Math.max(0, reqQty - issuedQty);
+    const status = remainingQty === 0 && issuedQty > 0
+      ? 'ISSUED'
+      : (issuedQty > 0 ? 'PARTIALLY_ISSUED' : 'PENDING');
+    return {
+      id: it.id || `srv-item-${Date.now()}-${idx + 1}`,
+      item_id: it.item_id || null,
+      item_type: it.item_type === 'DEVICE' ? 'DEVICE' : 'MATERIAL',
+      item_name: (it.item_name || it.material_name || it.device_type || '').trim(),
+      sku: it.sku || null,
+      quantity_required: reqQty,
+      quantity_issued: issuedQty,
+      quantity_remaining: remainingQty,
+      unit: it.unit || 'Nos.',
+      service_note: it.service_note ? String(it.service_note).trim() : null,
+      status: it.status || status,
+    };
+  });
+}
 
 /**
  * Calculate today date string YYYY-MM-DD based on configured business timezone
@@ -297,6 +328,7 @@ export async function createChecklist(adminUserId, data, options = {}) {
     schedule_revision_number: 0,
     schedule_last_updated_at: new Date().toISOString(),
     installation_or_service: data.installation_or_service || 'Installation',
+    service_items: (!isInstallationJob || data.installation_or_service === 'Service') ? normalizeServiceItems(data.service_items) : [],
     salesperson_name: data.salesperson_name ? data.salesperson_name.trim() : null,
     service_engineer: engineerName,
     service_engineer_id: resolvedEng ? resolvedEng.id : null,
@@ -317,8 +349,9 @@ export async function createChecklist(adminUserId, data, options = {}) {
 
   // Atomic loose component stock validation & concurrent mutex lock for Installation jobs
   let reservationLock = null;
+  const isCourierChecklist = data.delivery_method === 'Product Couriered';
   const shouldEnforceStock = options?.skipStockValidation !== true && data?.skipStockValidation !== true;
-  if (isInstallationJob && deviceConfigs.length > 0 && shouldEnforceStock) {
+  if (isInstallationJob && !isCourierChecklist && deviceConfigs.length > 0 && shouldEnforceStock) {
     const { lockAndValidateDeviceComponents } = await import('./deviceSetService.js');
     reservationLock = await lockAndValidateDeviceComponents(deviceConfigs);
   }
@@ -341,7 +374,7 @@ export async function createChecklist(adminUserId, data, options = {}) {
       });
     }
   } catch (error) {
-    // If device_configurations / extra_device_configurations / service_engineer_id / booking_end_date / bom_snapshot / material_issuance_status / salesperson_name columns are not migrated yet in PostgreSQL, retry without optional columns
+    // If device_configurations / extra_device_configurations / service_engineer_id / booking_end_date / bom_snapshot / material_issuance_status / salesperson_name / service_items columns are not migrated yet in PostgreSQL, retry without optional columns
     if (
       error.code === 'PGRST204' ||
       error.message?.includes('Could not find') ||
@@ -351,7 +384,8 @@ export async function createChecklist(adminUserId, data, options = {}) {
       error.message?.includes('booking_end_date') ||
       error.message?.includes('bom_snapshot') ||
       error.message?.includes('material_issuance_status') ||
-      error.message?.includes('salesperson_name')
+      error.message?.includes('salesperson_name') ||
+      error.message?.includes('service_items')
     ) {
       let fallbackPayload = { ...payload };
       delete fallbackPayload.device_configurations;
@@ -361,6 +395,7 @@ export async function createChecklist(adminUserId, data, options = {}) {
       delete fallbackPayload.bom_snapshot;
       delete fallbackPayload.material_issuance_status;
       delete fallbackPayload.salesperson_name;
+      delete fallbackPayload.service_items;
       delete fallbackPayload.original_expected_arrival_date;
       delete fallbackPayload.original_expected_arrival_time;
       delete fallbackPayload.original_installation_duration;
@@ -452,6 +487,9 @@ export async function createChecklist(adminUserId, data, options = {}) {
 
   // Automatically create or update the associated Store Manager material-requirement record
   if (inserted?.id) {
+    if (payload.service_items) {
+      inMemoryChecklistServiceItems.set(inserted.id, payload.service_items);
+    }
     if (extraConfigs && extraConfigs.length > 0) {
       inMemoryChecklistExtraConfigs.set(inserted.id, extraConfigs);
     }
@@ -510,7 +548,10 @@ export function normalizeChecklistDeviceConfigs(checklist) {
   checklist.total_extra_devices = hasExtra ? extraConfigs.reduce((sum, c) => sum + (Number(c.extra_quantity) || 0), 0) : 0;
   checklist.total_devices_carried = checklist.total_devices_required + checklist.total_extra_devices;
 
-  if (!checklist.bom_snapshot && checklist.id) {
+  const isService = (checklist.installation_or_service || 'Installation') === 'Service';
+  if (isService) {
+    checklist.bom_snapshot = null;
+  } else if (!checklist.bom_snapshot && checklist.id) {
     checklist.bom_snapshot = inMemoryChecklistBomSnapshots.get(checklist.id) || null;
   }
   if (checklist.bom_snapshot) {
@@ -518,6 +559,12 @@ export function normalizeChecklistDeviceConfigs(checklist) {
     checklist.bom_snapshot.total_extra_devices = checklist.bom_snapshot.total_extra_devices ?? checklist.total_extra_devices;
     checklist.bom_snapshot.total_devices_carried = checklist.bom_snapshot.total_devices_carried ?? checklist.total_devices_carried;
   }
+
+  const inMemServiceItems = checklist.id ? inMemoryChecklistServiceItems.get(checklist.id) : null;
+  const rawServiceItems = (Array.isArray(checklist.service_items) && checklist.service_items.length > 0)
+    ? checklist.service_items
+    : (inMemServiceItems || []);
+  checklist.service_items = normalizeServiceItems(rawServiceItems);
 
   const inMemSchedule = checklist.id ? inMemoryChecklistSchedules.get(checklist.id) : null;
   if (inMemSchedule) {
@@ -902,6 +949,9 @@ export async function updateChecklist(id, data) {
     material_issuance_status: isInstallation
       ? (data.material_issuance_status || existing.material_issuance_status || 'PENDING')
       : 'NOT_APPLICABLE',
+    service_items: data.service_items !== undefined
+      ? (!isInstallation ? normalizeServiceItems(data.service_items) : [])
+      : (existing.service_items || inMemoryChecklistServiceItems.get(existing.id) || []),
     remarks: data.remarks !== undefined ? (data.remarks ? data.remarks.trim() : null) : existing.remarks,
     client_confirmation: data.client_confirmation || existing.client_confirmation,
     updated_at: new Date().toISOString(),
@@ -931,6 +981,9 @@ export async function updateChecklist(id, data) {
 
     if (error) throw error;
     updated = { ...existing, ...payload, ...res, id: existing.id };
+    if (payload.service_items) {
+      inMemoryChecklistServiceItems.set(existing.id, payload.service_items);
+    }
     if (extraConfigs && extraConfigs.length > 0) {
       inMemoryChecklistExtraConfigs.set(existing.id, extraConfigs);
     }
@@ -944,7 +997,8 @@ export async function updateChecklist(id, data) {
       error.message?.includes('booking_end_date') ||
       error.message?.includes('bom_snapshot') ||
       error.message?.includes('material_issuance_status') ||
-      error.message?.includes('salesperson_name')
+      error.message?.includes('salesperson_name') ||
+      error.message?.includes('service_items')
     ) {
       let fallbackPayload = { ...payload };
       delete fallbackPayload.device_configurations;
@@ -954,6 +1008,7 @@ export async function updateChecklist(id, data) {
       delete fallbackPayload.bom_snapshot;
       delete fallbackPayload.material_issuance_status;
       delete fallbackPayload.salesperson_name;
+      delete fallbackPayload.service_items;
       delete fallbackPayload.original_expected_arrival_date;
       delete fallbackPayload.original_expected_arrival_time;
       delete fallbackPayload.original_installation_duration;

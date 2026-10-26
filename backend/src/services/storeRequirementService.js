@@ -9,6 +9,7 @@ import {
 } from './bomService.js';
 import { enrichChecklistsWithWorkflowStatus, getAdditionalCustomerInstallations, getInstallationCompletionReport } from './workflowService.js';
 import { getBackupDeclaration, issueBackupItemsForChecklist } from './backupItemService.js';
+import { recordStockMovement } from './stockMovementService.js';
 
 // In-memory fallback cache
 export const inMemoryStoreRequirements = new Map();
@@ -30,6 +31,7 @@ export async function syncStoreRequirementForChecklist(checklistOrId) {
   }
 
   const isInstallation = (checklist.installation_or_service || 'Installation') === 'Installation';
+  const isCourier = checklist.delivery_method === 'Product Couriered';
   const checklistId = checklist.id;
   const checklistNumber = checklist.checklist_number || 'N/A';
 
@@ -109,7 +111,7 @@ export async function syncStoreRequirementForChecklist(checklistOrId) {
     const availableStock = prod ? Number(prod.usable_stock) || 0 : 0;
     const shortage = Math.max(0, reqQty - availableStock);
 
-    if (isInstallation && shortage > 0) {
+    if ((isInstallation || isCourier) && shortage > 0) {
       hasShortage = true;
       shortageCount++;
       shortageDetails.push({
@@ -133,12 +135,12 @@ export async function syncStoreRequirementForChecklist(checklistOrId) {
       extra_quantity: Number(cfg.extra_quantity) || 0,
       unit: 'Nos.',
       available_stock: availableStock,
-      shortage: isInstallation ? shortage : 0,
+      shortage: (isInstallation || isCourier) ? shortage : 0,
     };
   });
 
-  // 2. Authoritative Installation Materials stock availability check (ONLY for Installation jobs!)
-  if (isInstallation) {
+  // 2. Authoritative Installation Materials stock availability check (ONLY for technician Installation jobs!)
+  if (isInstallation && !isCourier) {
     bomSnapshot = checklist.bom_snapshot && Array.isArray(checklist.bom_snapshot?.items) && checklist.bom_snapshot.items.length > 0
       ? checklist.bom_snapshot
       : null;
@@ -199,15 +201,126 @@ export async function syncStoreRequirementForChecklist(checklistOrId) {
     }
   }
 
+  // Handle Service-specific requirements if job_type is Service
+  let serviceItems = [];
+  if (!isInstallation) {
+    const { inMemoryChecklistServiceItems, normalizeServiceItems } = await import('./installationService.js');
+    const rawService = (Array.isArray(checklist.service_items) && checklist.service_items.length > 0)
+      ? checklist.service_items
+      : (inMemoryChecklistServiceItems.get(checklistId) || []);
+    serviceItems = normalizeServiceItems(rawService);
+
+    let materialInventoryMap = new Map();
+    try {
+      const allMaterials = await getMaterialInventory();
+      materialInventoryMap = new Map(allMaterials.map((m) => [m.material_name.toLowerCase(), m]));
+    } catch (e) {
+      console.warn('Could not load material inventory:', e.message);
+    }
+
+    serviceItems = serviceItems.map((sItem) => {
+      let availableStock = 0;
+      let sku = sItem.sku || null;
+      let itemId = sItem.item_id || null;
+
+      if (sItem.item_type === 'DEVICE') {
+        const dev = deviceProductsMap.get(sItem.item_name) || (sItem.item_id ? Array.from(deviceProductsMap.values()).find(d => d.id === sItem.item_id) : null);
+        availableStock = dev ? Number(dev.usable_stock) || 0 : 0;
+        sku = dev?.sku || sku;
+        itemId = dev?.id || itemId;
+      } else {
+        const mat = materialInventoryMap.get(sItem.item_name.toLowerCase()) || (sItem.item_id ? Array.from(materialInventoryMap.values()).find(m => m.id === sItem.item_id) : null);
+        availableStock = mat ? Number(mat.current_stock) || 0 : 0;
+        sku = mat?.sku || sku;
+        itemId = mat?.id || itemId;
+      }
+
+      const reqQty = Number(sItem.quantity_required) || 1;
+      const issuedQty = Number(sItem.quantity_issued) || 0;
+      const remainingQty = Math.max(0, reqQty - issuedQty);
+      const shortage = Math.max(0, remainingQty - availableStock);
+
+      if (shortage > 0) {
+        hasShortage = true;
+        shortageCount++;
+        shortageDetails.push({
+          category: sItem.item_type === 'DEVICE' ? 'Service Device' : 'Service Material',
+          item_name: sItem.item_name,
+          sku: sku || 'N/A',
+          available_stock: availableStock,
+          required_quantity: remainingQty,
+          shortage,
+          unit: sItem.unit || 'Nos.',
+        });
+      }
+
+      const availabilityStatus = availableStock >= remainingQty
+        ? 'Available'
+        : (availableStock > 0 ? 'Partially Available' : 'Out of Stock');
+
+      return {
+        ...sItem,
+        item_id: itemId,
+        sku,
+        available_stock: availableStock,
+        quantity_remaining: remainingQty,
+        shortage,
+        availability_status: availabilityStatus,
+      };
+    });
+
+    deviceItems = [];
+    materialItems = [];
+    bomSnapshot = null;
+  }
+
   // Determine requirement statuses
   let reqStatus = 'PENDING_REVIEW';
   let materialIssuanceStatus = isInstallation ? (checklist.material_issuance_status || 'PENDING') : 'NOT_APPLICABLE';
   let devicesIssuanceStatus = isInstallation ? (checklist.devices_issuance_status || 'PENDING') : 'NOT_APPLICABLE';
 
-  if (!isInstallation) {
-    reqStatus = 'NOT_APPLICABLE';
-    materialIssuanceStatus = 'NOT_APPLICABLE';
-    devicesIssuanceStatus = 'NOT_APPLICABLE';
+  if (isCourier) {
+    devicesIssuanceStatus = checklist.devices_issuance_status || (checklist.is_courier_dispatched ? 'ISSUED' : 'PENDING');
+    materialIssuanceStatus = checklist.material_issuance_status || (checklist.is_courier_dispatched ? 'ISSUED' : 'NOT_APPLICABLE');
+    if (devicesIssuanceStatus === 'ISSUED' || checklist.is_courier_dispatched) {
+      reqStatus = 'ISSUED';
+      hasShortage = false;
+      shortageCount = 0;
+    } else if (hasShortage) {
+      reqStatus = 'SHORTAGE_FLAGGED';
+    } else {
+      reqStatus = 'READY_FOR_ISSUANCE';
+    }
+  } else if (!isInstallation) {
+    if (serviceItems.length === 0) {
+      reqStatus = 'NOT_APPLICABLE';
+      materialIssuanceStatus = 'NOT_APPLICABLE';
+      devicesIssuanceStatus = 'NOT_APPLICABLE';
+      hasShortage = false;
+      shortageCount = 0;
+    } else {
+      const allIssued = serviceItems.every((it) => it.quantity_remaining === 0);
+      const anyIssued = serviceItems.some((it) => (it.quantity_issued || 0) > 0);
+      if (allIssued) {
+        reqStatus = 'ISSUED';
+        materialIssuanceStatus = 'ISSUED';
+        devicesIssuanceStatus = 'ISSUED';
+        hasShortage = false;
+        shortageCount = 0;
+      } else if (hasShortage) {
+        reqStatus = 'SHORTAGE_FLAGGED';
+        materialIssuanceStatus = anyIssued ? 'PARTIALLY_ISSUED' : 'PENDING';
+        devicesIssuanceStatus = anyIssued ? 'PARTIALLY_ISSUED' : 'PENDING';
+      } else if (anyIssued) {
+        reqStatus = 'PARTIALLY_ISSUED';
+        materialIssuanceStatus = 'PARTIALLY_ISSUED';
+        devicesIssuanceStatus = 'PARTIALLY_ISSUED';
+      } else {
+        reqStatus = 'READY_FOR_ISSUANCE';
+        materialIssuanceStatus = 'PENDING';
+        devicesIssuanceStatus = 'PENDING';
+      }
+    }
   } else if (materialIssuanceStatus === 'ISSUED' && devicesIssuanceStatus === 'ISSUED') {
     reqStatus = 'ISSUED';
   } else if (hasShortage) {
@@ -229,10 +342,6 @@ export async function syncStoreRequirementForChecklist(checklistOrId) {
     'number_of_devices',
     'number_of_vehicles',
     'device_configurations',
-    'device_items',
-    'devices_issuance_status',
-    'devices_issued_at',
-    'devices_issued_by',
     'bom_snapshot',
     'material_items',
     'material_issuance_status',
@@ -273,9 +382,10 @@ export async function syncStoreRequirementForChecklist(checklistOrId) {
     number_of_vehicles: Number(checklist.number_of_vehicles) || Number(checklist.number_of_devices) || 1,
     device_configurations: deviceConfigs,
     device_items: deviceItems,
+    service_items: serviceItems,
     devices_issuance_status: devicesIssuanceStatus,
-    bom_snapshot: isInstallation ? bomSnapshot : null,
-    material_items: isInstallation ? materialItems : [],
+    bom_snapshot: (isInstallation && !isCourier) ? bomSnapshot : null,
+    material_items: (isInstallation && !isCourier) ? materialItems : [],
     material_issuance_status: materialIssuanceStatus,
     status: reqStatus,
     has_shortage: hasShortage,
@@ -330,11 +440,19 @@ export async function syncStoreRequirementForChecklist(checklistOrId) {
 
   const fullRecord = {
     ...(savedRecord || { id: `req-${checklistId}`, ...rawDbPayload }),
+    is_courier: isCourier,
+    delivery_method: checklist.delivery_method || (isCourier ? 'Product Couriered' : 'Technician Carries'),
+    courier_dispatch_status: checklist.courier_dispatch_status || (isCourier ? 'NOT_DISPATCHED' : 'NOT_APPLICABLE'),
+    is_courier_dispatched: Boolean(checklist.is_courier_dispatched),
     device_items: deviceItems,
+    service_items: isInstallation ? [] : serviceItems,
     devices_issuance_status: devicesIssuanceStatus,
+    material_issuance_status: materialIssuanceStatus,
+    bom_snapshot: (isInstallation && !isCourier) ? bomSnapshot : null,
+    material_items: (isInstallation && !isCourier) ? materialItems : [],
     required_device_items: requiredDeviceItems,
-    extra_device_items: extraDeviceItems,
-    extra_device_configurations: extraConfigs,
+    extra_device_items: isCourier ? [] : extraDeviceItems,
+    extra_device_configurations: isCourier ? [] : extraConfigs,
     total_devices_carried: totalCarried,
     total_devices_required: totalReq,
     total_extra_devices: totalExtra,
@@ -410,7 +528,15 @@ export async function getStoreMaterialRequirements(params = {}) {
       .order('submission_date', { ascending: false });
 
     if (job_type && job_type !== 'All') {
-      query = query.eq('job_type', job_type);
+      if (job_type === 'Courier') {
+        query = query.eq('delivery_method', 'Product Couriered');
+      } else if (job_type === 'Installation') {
+        query = query.eq('job_type', 'Installation').or('delivery_method.neq.Product Couriered,delivery_method.is.null');
+      } else if (job_type === 'Service') {
+        query = query.eq('job_type', 'Service').or('delivery_method.neq.Product Couriered,delivery_method.is.null');
+      } else {
+        query = query.eq('job_type', job_type);
+      }
     }
     if (issuance_status && issuance_status !== 'All') {
       query = query.eq('material_issuance_status', issuance_status);
@@ -457,8 +583,18 @@ export async function getStoreMaterialRequirements(params = {}) {
         totalCount = chkCount || chkList.length;
       }
     } catch (e) {
-      dbRecords = Array.from(inMemoryStoreRequirements.values()).slice(offset, offset + limitNum);
-      totalCount = inMemoryStoreRequirements.size;
+      let allMem = Array.from(inMemoryStoreRequirements.values());
+      if (job_type && job_type !== 'All') {
+        allMem = allMem.filter((r) => {
+          const isC = r.delivery_method === 'Product Couriered';
+          if (job_type === 'Courier') return isC;
+          if (job_type === 'Installation') return r.job_type === 'Installation' && !isC;
+          if (job_type === 'Service') return r.job_type === 'Service' && !isC;
+          return true;
+        });
+      }
+      dbRecords = allMem.slice(offset, offset + limitNum);
+      totalCount = allMem.length;
     }
   }
 
@@ -557,12 +693,15 @@ export async function getStoreMaterialRequirements(params = {}) {
       };
     });
 
+    const isCourier = rec.delivery_method === 'Product Couriered';
+    const isInstallation = rec.job_type === 'Installation' && !isCourier;
+
     const enrichedDevices = (parsedDevices.length > 0 ? parsedDevices : (Array.isArray(rec.device_items) && rec.device_items.length > 0 ? rec.device_items : [])).map((dItem) => {
       const dType = dItem.device_type || '';
       const dev = deviceMap.get(dType);
       const currentStock = dev ? Number(dev.usable_stock) || 0 : 0;
       const requiredQty = Number(dItem.required_quantity ?? dItem.number_of_devices) || 1;
-      const shortage = rec.job_type === 'Installation' ? Math.max(0, requiredQty - currentStock) : 0;
+      const shortage = (isInstallation || isCourier) ? Math.max(0, requiredQty - currentStock) : 0;
       const itemAvailability = currentStock >= requiredQty
         ? 'Available'
         : currentStock > 0
@@ -593,9 +732,9 @@ export async function getStoreMaterialRequirements(params = {}) {
       };
     });
 
-    // Self-heal and enrich material items (Only for Installation)
+    // Self-heal and enrich material items (Only for Installation jobs with technician carry!)
     let rawMats = Array.isArray(rec.material_items) ? rec.material_items : [];
-    if (rawMats.length === 0 && rec.job_type === 'Installation' && parsedDevices.length > 0) {
+    if (rawMats.length === 0 && isInstallation && parsedDevices.length > 0) {
       try {
         const autoCalc = await calculateBomRequirements(parsedDevices);
         if (autoCalc?.items && autoCalc.items.length > 0) {
@@ -617,12 +756,12 @@ export async function getStoreMaterialRequirements(params = {}) {
       }
     }
 
-    const enrichedMaterials = rawMats.map((item) => {
+    const enrichedMaterials = isCourier ? [] : rawMats.map((item) => {
       const matName = item.material_name || '';
       const inv = materialMap.get(matName.toLowerCase());
       const currentStock = inv ? Number(inv.current_stock) || 0 : 0;
       const requiredQty = Number(item.total_required_quantity !== undefined ? item.total_required_quantity : (item.total_quantity !== undefined ? item.total_quantity : item.required_quantity)) || 0;
-      const shortage = rec.job_type === 'Installation' ? Math.max(0, requiredQty - currentStock) : 0;
+      const shortage = isInstallation ? Math.max(0, requiredQty - currentStock) : 0;
       const itemAvailability = currentStock >= requiredQty
         ? 'Available'
         : currentStock > 0
@@ -653,10 +792,81 @@ export async function getStoreMaterialRequirements(params = {}) {
       };
     });
 
+    // Enrich service_items if job is Service
+    let enrichedServiceItems = [];
+    if (rec.job_type === 'Service') {
+      const { inMemoryChecklistServiceItems, normalizeServiceItems } = await import('./installationService.js');
+      const rawService = (Array.isArray(rec.service_items) && rec.service_items.length > 0)
+        ? rec.service_items
+        : (inMemoryChecklistServiceItems.get(rec.checklist_id || rec.id) || []);
+      const normalizedService = normalizeServiceItems(rawService);
+
+      enrichedServiceItems = normalizedService.map((sItem) => {
+        let currentStock = 0;
+        let sku = sItem.sku || null;
+
+        if (sItem.item_type === 'DEVICE') {
+          const dev = deviceMap.get(sItem.item_name) || (sItem.item_id ? Array.from(deviceMap.values()).find((d) => d.id === sItem.item_id) : null);
+          currentStock = dev ? Number(dev.usable_stock) || 0 : 0;
+          sku = dev?.sku || sku;
+        } else {
+          const mat = materialMap.get(sItem.item_name.toLowerCase()) || (sItem.item_id ? Array.from(materialMap.values()).find((m) => m.id === sItem.item_id) : null);
+          currentStock = mat ? Number(mat.current_stock) || 0 : 0;
+          sku = mat?.sku || sku;
+        }
+
+        const reqQty = Number(sItem.quantity_required) || 1;
+        const issuedQty = Number(sItem.quantity_issued) || 0;
+        const remainingQty = Math.max(0, reqQty - issuedQty);
+        const shortage = Math.max(0, remainingQty - currentStock);
+
+        if (shortage > 0) {
+          liveHasShortage = true;
+          liveShortageCount++;
+          liveShortageDetails.push({
+            category: sItem.item_type === 'DEVICE' ? 'Service Device' : 'Service Material',
+            item_name: sItem.item_name,
+            sku: sku || 'N/A',
+            available_stock: currentStock,
+            required_quantity: remainingQty,
+            shortage,
+            unit: sItem.unit || 'Nos.',
+          });
+        }
+
+        const itemAvailability = currentStock >= remainingQty
+          ? 'Available'
+          : (currentStock > 0 ? 'Partially Available' : 'Out of Stock');
+
+        return {
+          ...sItem,
+          sku,
+          available_stock: currentStock,
+          quantity_remaining: remainingQty,
+          shortage,
+          availability_status: itemAvailability,
+        };
+      });
+    }
+
     // Calculate BOM availability status
     let bomAvailabilityStatus = 'Available';
-    if (rec.job_type === 'Service') {
-      bomAvailabilityStatus = 'Not Applicable';
+    if (isCourier) {
+      if (enrichedDevices.length === 0) {
+        bomAvailabilityStatus = 'Available';
+      } else {
+        const allAvail = enrichedDevices.every((it) => it.availability_status === 'Available');
+        const allOut = enrichedDevices.every((it) => it.availability_status === 'Out of Stock');
+        bomAvailabilityStatus = allAvail ? 'Available' : (allOut ? 'Out of Stock' : 'Partially Available');
+      }
+    } else if (rec.job_type === 'Service') {
+      if (enrichedServiceItems.length === 0) {
+        bomAvailabilityStatus = 'Not Applicable';
+      } else {
+        const allAvail = enrichedServiceItems.every((it) => it.availability_status === 'Available');
+        const allOut = enrichedServiceItems.every((it) => it.availability_status === 'Out of Stock');
+        bomAvailabilityStatus = allAvail ? 'Available' : (allOut ? 'Out of Stock' : 'Partially Available');
+      }
     } else if (enrichedMaterials.length === 0) {
       bomAvailabilityStatus = 'Available';
     } else {
@@ -672,8 +882,37 @@ export async function getStoreMaterialRequirements(params = {}) {
     }
 
     let liveStatus = rec.status;
-    if (rec.job_type === 'Service') {
-      liveStatus = 'NOT_APPLICABLE';
+    if (isCourier) {
+      const isIssued = rec.devices_issuance_status === 'ISSUED' || rec.material_issuance_status === 'ISSUED' || Boolean(rec.is_courier_dispatched);
+      if (isIssued) {
+        liveStatus = 'ISSUED';
+        liveHasShortage = false;
+        liveShortageCount = 0;
+      } else if (liveHasShortage) {
+        liveStatus = 'SHORTAGE_FLAGGED';
+      } else {
+        liveStatus = 'READY_FOR_ISSUANCE';
+      }
+    } else if (rec.job_type === 'Service') {
+      if (enrichedServiceItems.length === 0) {
+        liveStatus = 'NOT_APPLICABLE';
+        liveHasShortage = false;
+        liveShortageCount = 0;
+      } else {
+        const allIssued = enrichedServiceItems.every((it) => it.quantity_remaining === 0);
+        const anyIssued = enrichedServiceItems.some((it) => (it.quantity_issued || 0) > 0);
+        if (allIssued) {
+          liveStatus = 'ISSUED';
+          liveHasShortage = false;
+          liveShortageCount = 0;
+        } else if (liveHasShortage) {
+          liveStatus = 'SHORTAGE_FLAGGED';
+        } else if (anyIssued) {
+          liveStatus = 'PARTIALLY_ISSUED';
+        } else {
+          liveStatus = 'READY_FOR_ISSUANCE';
+        }
+      }
     } else if (rec.material_issuance_status === 'ISSUED' && rec.devices_issuance_status === 'ISSUED') {
       liveStatus = 'ISSUED';
     } else if (rec.material_issuance_status === 'ISSUED') {
@@ -699,14 +938,19 @@ export async function getStoreMaterialRequirements(params = {}) {
 
     return {
       ...rec,
-      device_items: enrichedDevices,
-      required_device_items: rec.required_device_items || requiredDeviceItems,
-      extra_device_items: rec.extra_device_items || extraDeviceItems,
-      extra_device_configurations: rec.extra_device_configurations || extraConfigs,
-      material_items: enrichedMaterials,
-      backup_declaration: backupDecl,
-      extra_installations: finalExtraInst,
-      extra_installations_count: finalExtraInst.length,
+      is_courier: isCourier,
+      effective_job_type: isCourier ? 'Courier' : rec.job_type,
+      job_type: isCourier ? 'Courier' : rec.job_type,
+      delivery_method: rec.delivery_method || (isCourier ? 'Product Couriered' : 'Technician Carries'),
+      device_items: rec.job_type === 'Service' ? [] : enrichedDevices,
+      required_device_items: rec.job_type === 'Service' ? [] : (rec.required_device_items || requiredDeviceItems),
+      extra_device_items: (rec.job_type === 'Service' || isCourier) ? [] : (rec.extra_device_items || extraDeviceItems),
+      extra_device_configurations: (rec.job_type === 'Service' || isCourier) ? [] : (rec.extra_device_configurations || extraConfigs),
+      material_items: (rec.job_type === 'Service' || isCourier) ? [] : enrichedMaterials,
+      service_items: rec.job_type === 'Service' ? enrichedServiceItems : [],
+      backup_declaration: isCourier ? null : backupDecl,
+      extra_installations: isCourier ? [] : finalExtraInst,
+      extra_installations_count: isCourier ? 0 : finalExtraInst.length,
       completion_report: compReport || rec.completion_report || null,
       has_shortage: liveHasShortage,
       shortage_count: liveShortageCount,
@@ -719,6 +963,7 @@ export async function getStoreMaterialRequirements(params = {}) {
   // Store-wide summary counts across the entire requirements table
   let totalAll = 0;
   let installationCount = 0;
+  let courierCount = 0;
   let serviceCount = 0;
   let pendingCount = 0;
   let shortageCounter = 0;
@@ -727,7 +972,7 @@ export async function getStoreMaterialRequirements(params = {}) {
   try {
     let summaryQuery = supabase
       .from('store_material_requirements')
-      .select('job_type, material_issuance_status, has_shortage');
+      .select('job_type, delivery_method, status, material_issuance_status, has_shortage');
 
     if (search && search.trim()) {
       const s = search.trim();
@@ -740,14 +985,27 @@ export async function getStoreMaterialRequirements(params = {}) {
     if (!sumErr && Array.isArray(sumRows) && sumRows.length > 0) {
       totalAll = sumRows.length;
       sumRows.forEach((r) => {
-        if (r.job_type === 'Installation') installationCount++;
-        if (r.job_type === 'Service') serviceCount++;
-        if (r.material_issuance_status === 'ISSUED') {
+        const isC = r.delivery_method === 'Product Couriered';
+        if (isC) {
+          courierCount++;
+        } else if (r.job_type === 'Service') {
+          serviceCount++;
+        } else {
+          installationCount++;
+        }
+
+        const isIssued = isC
+          ? (r.status === 'ISSUED' || r.material_issuance_status === 'ISSUED')
+          : (r.job_type === 'Service'
+            ? (r.material_issuance_status === 'ISSUED' || r.status === 'ISSUED')
+            : (r.material_issuance_status === 'ISSUED' && r.status === 'ISSUED'));
+
+        if (isIssued) {
           issuedCount++;
-        } else if (r.job_type === 'Installation') {
+        } else {
           pendingCount++;
         }
-        if (r.has_shortage) shortageCounter++;
+        if (r.has_shortage && !isIssued) shortageCounter++;
       });
     }
   } catch (e) {
@@ -758,11 +1016,21 @@ export async function getStoreMaterialRequirements(params = {}) {
   if (totalAll === 0 && enrichedRecords.length > 0) {
     totalAll = totalCount || enrichedRecords.length;
     enrichedRecords.forEach((r) => {
-      if (r.job_type === 'Installation') installationCount++;
-      if (r.job_type === 'Service') serviceCount++;
-      if (r.material_issuance_status === 'ISSUED') issuedCount++;
-      else if (r.job_type === 'Installation') pendingCount++;
-      if (r.has_shortage) shortageCounter++;
+      const isC = r.delivery_method === 'Product Couriered';
+      if (isC) courierCount++;
+      else if (r.job_type === 'Service') serviceCount++;
+      else installationCount++;
+
+      const isIssued = isC
+        ? (r.devices_issuance_status === 'ISSUED' || r.material_issuance_status === 'ISSUED' || Boolean(r.is_courier_dispatched))
+        : (r.job_type === 'Service'
+          ? (r.material_issuance_status === 'ISSUED' || r.status === 'ISSUED')
+          : (r.material_issuance_status === 'ISSUED' && r.devices_issuance_status === 'ISSUED'));
+
+      if (isIssued) issuedCount++;
+      else pendingCount++;
+
+      if (r.has_shortage && !isIssued) shortageCounter++;
     });
   }
 
@@ -771,6 +1039,7 @@ export async function getStoreMaterialRequirements(params = {}) {
     summary: {
       total: totalAll || totalCount,
       installationCount,
+      courierCount,
       serviceCount,
       pendingCount,
       shortageCounter,
@@ -797,8 +1066,9 @@ export async function getStoreMaterialRequirementById(id) {
       .maybeSingle();
 
     if (!error && data) {
-      const enriched = await getStoreMaterialRequirements({ limit: 1, search: data.checklist_number });
-      baseRecord = enriched?.requirements?.[0] || data;
+      const enriched = await getStoreMaterialRequirements({ limit: 10, search: data.checklist_number });
+      const matched = (enriched?.requirements || []).find((r) => r.checklist_id === data.checklist_id || r.id === data.id);
+      baseRecord = matched || data;
     }
   } catch (err) {
     console.warn('Error fetching store requirement detail:', err.message);
@@ -837,9 +1107,12 @@ export async function getStoreMaterialRequirementById(id) {
 
   // Ensure extra_installations and completion_report are always enriched
   const chkId = baseRecord.checklist_id || baseRecord.id;
+  const isC = baseRecord.delivery_method === 'Product Couriered' || Boolean(baseRecord.is_courier);
+  const effectiveJobType = isC ? 'Courier' : (baseRecord.job_type || 'Installation');
+
   const [backupDecl, extraInstList, compReport] = await Promise.all([
-    getBackupDeclaration(chkId).catch(() => null),
-    getAdditionalCustomerInstallations({ checklist_id: chkId }).catch(() => []),
+    isC ? Promise.resolve(null) : getBackupDeclaration(chkId).catch(() => null),
+    isC ? Promise.resolve([]) : getAdditionalCustomerInstallations({ checklist_id: chkId }).catch(() => []),
     getInstallationCompletionReport(chkId).catch(() => null),
   ]);
 
@@ -849,9 +1122,13 @@ export async function getStoreMaterialRequirementById(id) {
 
   return {
     ...baseRecord,
-    backup_declaration: backupDecl || baseRecord.backup_declaration || null,
-    extra_installations: finalExtraInst,
-    extra_installations_count: finalExtraInst.length,
+    is_courier: isC,
+    effective_job_type: effectiveJobType,
+    job_type: isC ? 'Courier' : baseRecord.job_type,
+    delivery_method: baseRecord.delivery_method || (isC ? 'Product Couriered' : 'Technician Carries'),
+    backup_declaration: isC ? null : (backupDecl || baseRecord.backup_declaration || null),
+    extra_installations: isC ? [] : finalExtraInst,
+    extra_installations_count: isC ? 0 : finalExtraInst.length,
     completion_report: compReport || baseRecord.completion_report || null,
   };
 }
@@ -928,11 +1205,26 @@ export async function issueFullJobStock({
     }
 
     if (req.job_type === 'Service') {
-      throw new Error(`Job ${req.checklist_number} is a Service job. Installation BOM issuance does not apply.`);
+      inFlightJobIssuances.delete(checklist_id);
+      return await issueServiceJobStock({
+        checklist_id,
+        items: req.service_items || [],
+        remarks,
+        user,
+      });
     }
 
-    if (req.delivery_method === 'Product Couriered' && req.is_courier_dispatched) {
-      throw new Error(`Job ${req.checklist_number} has already been dispatched via Courier. Normal technician carry stock issuance is not applicable.`);
+    const isCourierJob = req.delivery_method === 'Product Couriered';
+
+    if (isCourierJob) {
+      const alreadyIssued = (
+        req.devices_issuance_status === 'ISSUED' ||
+        req.is_courier_dispatched ||
+        processedChecklistDeviceIssuances.has(checklist_id)
+      );
+      if (alreadyIssued) {
+        throw new Error(`Checklist ${req.checklist_number} courier stock has already been issued. Duplicate issuance is prevented.`);
+      }
     }
 
     // Check existing issuance statuses to prevent double deductions
@@ -1165,18 +1457,23 @@ export async function issueFullJobStock({
 
     // Persist to store_material_requirements in Supabase
     try {
+      const updateData = {
+        devices_issuance_status: devicesStatus,
+        material_issuance_status: isCourierJob ? 'ISSUED' : materialsStatus,
+        status: isCourierJob ? 'ISSUED' : overallStatus,
+        material_issued_at: new Date().toISOString(),
+        material_issued_by: user?.id || null,
+        devices_issued_at: new Date().toISOString(),
+        devices_issued_by: user?.id || null,
+        updated_at: new Date().toISOString(),
+      };
+      if (isCourierJob) {
+        updateData.is_courier_dispatched = true;
+        updateData.courier_dispatch_status = 'ISSUED';
+      }
       await supabase
         .from('store_material_requirements')
-        .update({
-          devices_issuance_status: devicesStatus,
-          material_issuance_status: materialsStatus,
-          status: overallStatus,
-          material_issued_at: new Date().toISOString(),
-          material_issued_by: user?.id || null,
-          devices_issued_at: new Date().toISOString(),
-          devices_issued_by: user?.id || null,
-          updated_at: new Date().toISOString(),
-        })
+        .update(updateData)
         .eq('checklist_id', checklist_id);
     } catch (e) {
       console.warn('Could not update store_material_requirements after issuance:', e.message);
@@ -1186,8 +1483,12 @@ export async function issueFullJobStock({
     const inMem = inMemoryStoreRequirements.get(checklist_id);
     if (inMem) {
       inMem.devices_issuance_status = devicesStatus;
-      inMem.material_issuance_status = materialsStatus;
-      inMem.status = overallStatus;
+      inMem.material_issuance_status = isCourierJob ? 'ISSUED' : materialsStatus;
+      inMem.status = isCourierJob ? 'ISSUED' : overallStatus;
+      if (isCourierJob) {
+        inMem.is_courier_dispatched = true;
+        inMem.courier_dispatch_status = 'ISSUED';
+      }
       inMem.material_issued_at = new Date().toISOString();
       inMem.material_issued_by = user?.id || null;
       inMem.devices_issued_at = new Date().toISOString();
@@ -1197,11 +1498,16 @@ export async function issueFullJobStock({
     // Update installation_checklists in Supabase
     try {
       const chkUpdate = {
-        material_issuance_status: materialsStatus,
+        material_issuance_status: isCourierJob ? 'ISSUED' : materialsStatus,
         material_issued_at: new Date().toISOString(),
         material_issued_by: user?.id || null,
         updated_at: new Date().toISOString(),
       };
+      if (isCourierJob) {
+        chkUpdate.is_courier_dispatched = true;
+        chkUpdate.courier_dispatch_status = 'ISSUED';
+        chkUpdate.installation_status = 'Customer Installed';
+      }
       try {
         await supabase
           .from('installation_checklists')
@@ -1229,6 +1535,272 @@ export async function issueFullJobStock({
       devices_issuance_status: devicesStatus,
       material_issuance_status: materialsStatus,
       status: overallStatus,
+      results,
+    };
+  } finally {
+    inFlightJobIssuances.delete(checklist_id);
+  }
+}
+
+/**
+ * Authorize and issue requested devices and materials for a Service job.
+ * Server-side atomic validation preventing negative balances and over-issuance,
+ * recording in stock ledger and updating checklist & requirement records.
+ */
+export async function issueServiceJobStock({ checklist_id, items, remarks = '', user }) {
+  if (!checklist_id) {
+    throw new Error('Checklist ID is required to issue Service job stock.');
+  }
+
+  if (inFlightJobIssuances.has(checklist_id)) {
+    throw new Error(`Stock issuance for checklist ${checklist_id} is already in progress. Duplicate request prevented.`);
+  }
+
+  inFlightJobIssuances.add(checklist_id);
+
+  try {
+    const { getChecklistById, inMemoryChecklistServiceItems, normalizeServiceItems } = await import('./installationService.js');
+    const checklist = await getChecklistById(checklist_id);
+    if (!checklist) {
+      throw new Error(`Job checklist "${checklist_id}" not found.`);
+    }
+
+    const inMemList = inMemoryChecklistServiceItems.get(checklist.id) || [];
+    const rawList = Array.isArray(checklist.service_items) && checklist.service_items.length > 0
+      ? checklist.service_items
+      : inMemList;
+    const currentServiceItems = normalizeServiceItems(rawList);
+
+    if (!currentServiceItems || currentServiceItems.length === 0) {
+      throw new Error(`Service checklist ${checklist.checklist_number} has no requested devices or materials to issue.`);
+    }
+
+    // Check if everything requested was already completed
+    const allRemainingZero = currentServiceItems.every((it) => it.quantity_remaining === 0);
+    if (allRemainingZero) {
+      throw new Error(`All requested items have already been issued for checklist ${checklist.checklist_number}. Duplicate issuance is prevented.`);
+    }
+
+    // Load live inventory maps
+    const [allMats, allDevs] = await Promise.all([
+      getMaterialInventory(),
+      getInventoryProducts(),
+    ]);
+    const matMap = new Map(allMats.map((m) => [m.id || m.material_name.toLowerCase(), m]));
+    const matByName = new Map(allMats.map((m) => [m.material_name.toLowerCase(), m]));
+    const devMap = new Map(allDevs.map((d) => [d.id || d.device_type, d]));
+    const devByName = new Map(allDevs.map((d) => [d.device_type, d]));
+
+    // Determine items to process
+    const itemsToProcess = Array.isArray(items) && items.length > 0
+      ? items
+      : currentServiceItems.map((it) => ({
+          id: it.id,
+          quantity_to_issue: it.quantity_remaining !== undefined ? it.quantity_remaining : Math.max(0, it.quantity_required - (it.quantity_issued || 0)),
+        }));
+
+    const issuancePlan = [];
+    let totalQtyToIssue = 0;
+
+    // ATOMIC PRE-VALIDATION: validate ALL items BEFORE executing deductions
+    for (const reqItem of currentServiceItems) {
+      const match = itemsToProcess.find((it) =>
+        (it.id && it.id === reqItem.id) ||
+        (it.item_id && reqItem.item_id && it.item_id === reqItem.item_id) ||
+        (it.item_name && it.item_name.toLowerCase() === reqItem.item_name.toLowerCase())
+      );
+      if (!match) continue;
+
+      const qtyToIssue = Math.max(
+        0,
+        parseInt(match.quantity_to_issue !== undefined ? match.quantity_to_issue : (match.quantity ?? reqItem.quantity_remaining), 10) || 0
+      );
+      if (qtyToIssue <= 0) continue;
+
+      const remaining = reqItem.quantity_remaining !== undefined
+        ? reqItem.quantity_remaining
+        : Math.max(0, reqItem.quantity_required - (reqItem.quantity_issued || 0));
+
+      if (qtyToIssue > remaining) {
+        throw new Error(`Cannot issue ${qtyToIssue} for "${reqItem.item_name}". Only ${remaining} remaining to issue.`);
+      }
+
+      const isDev = reqItem.item_type === 'DEVICE';
+      let prod = null;
+      let mat = null;
+      let available = 0;
+
+      if (isDev) {
+        prod = (reqItem.item_id && devMap.get(reqItem.item_id)) || devByName.get(reqItem.item_name);
+        available = prod ? Number(prod.usable_stock) || 0 : 0;
+        if (qtyToIssue > available) {
+          throw new Error(
+            `Insufficient usable stock for camera device "${reqItem.item_name}". Available: ${available} Nos., Requested: ${qtyToIssue} Nos. Negative stock is strictly prevented.`
+          );
+        }
+      } else {
+        mat = (reqItem.item_id && matMap.get(reqItem.item_id)) || matByName.get(reqItem.item_name.toLowerCase());
+        available = mat ? Number(mat.current_stock) || 0 : 0;
+        if (qtyToIssue > available) {
+          throw new Error(
+            `Insufficient stock for material "${reqItem.item_name}". Available: ${available} ${mat?.unit || 'Nos.'}, Requested: ${qtyToIssue} ${mat?.unit || 'Nos.'}. Negative stock is strictly prevented.`
+          );
+        }
+      }
+
+      issuancePlan.push({
+        serviceItem: reqItem,
+        qtyToIssue,
+        isDev,
+        prod,
+        mat,
+        available,
+      });
+      totalQtyToIssue += qtyToIssue;
+    }
+
+    if (totalQtyToIssue <= 0) {
+      throw new Error('Please enter a quantity greater than 0 to issue.');
+    }
+
+    // ============================================================
+    // EXECUTE DEDUCTIONS AND STOCK LEDGER ENTRIES
+    // ============================================================
+    const recipient = checklist.service_engineer || 'Technician';
+    const issuingUserId = user?.id || null;
+    const nowIso = new Date().toISOString();
+    const results = [];
+
+    for (const plan of issuancePlan) {
+      const { serviceItem, qtyToIssue, isDev, prod, mat, available } = plan;
+
+      if (isDev && prod) {
+        const { data: dbCurrentProd } = await supabase
+          .from('inventory_products')
+          .select('usable_stock')
+          .eq('id', prod.id)
+          .single();
+        const currentDbStock = Number(dbCurrentProd?.usable_stock ?? prod.usable_stock) || 0;
+        const newStock = Math.max(0, currentDbStock - qtyToIssue);
+        await supabase
+          .from('inventory_products')
+          .update({ usable_stock: newStock, updated_at: nowIso })
+          .eq('id', prod.id);
+
+        await recordStockMovement({
+          product_id: prod.id,
+          item_name: serviceItem.item_name,
+          sku: prod.sku || null,
+          category: 'Camera Device',
+          movement_type: 'SERVICE_DEVICE_ISSUED',
+          quantity: -qtyToIssue,
+          unit: serviceItem.unit || 'Nos.',
+          balance_before: currentDbStock,
+          balance_after: newStock,
+          checklist_id: checklist.id,
+          performed_by: issuingUserId && String(issuingUserId).length === 36 ? issuingUserId : null,
+          performer_name: user?.full_name || user?.name || 'Store Manager',
+          performer_email: user?.email || null,
+          reason_or_remarks: `Service Device Issued: ${qtyToIssue} Nos. to ${recipient} for checklist ${checklist.checklist_number}. ${remarks}`.trim(),
+          created_at: nowIso,
+        });
+
+        results.push({ item_name: serviceItem.item_name, quantity_issued: qtyToIssue, new_stock: newStock });
+      } else if (!isDev && mat) {
+        const { data: dbCurrentMat } = await supabase
+          .from('material_inventory')
+          .select('current_stock')
+          .eq('id', mat.id)
+          .single();
+        const currentDbStock = Number(dbCurrentMat?.current_stock ?? mat.current_stock) || 0;
+        const newStock = Math.max(0, currentDbStock - qtyToIssue);
+        await supabase
+          .from('material_inventory')
+          .update({ current_stock: newStock, updated_at: nowIso })
+          .eq('id', mat.id);
+
+        await recordStockMovement({
+          item_id: String(mat.id),
+          item_name: serviceItem.item_name,
+          sku: mat.sku || null,
+          category: 'Installation Material',
+          movement_type: 'SERVICE_MATERIAL_ISSUED',
+          quantity: -qtyToIssue,
+          unit: serviceItem.unit || mat.unit || 'Nos.',
+          balance_before: currentDbStock,
+          balance_after: newStock,
+          checklist_id: checklist.id,
+          performed_by: issuingUserId && String(issuingUserId).length === 36 ? issuingUserId : null,
+          performer_name: user?.full_name || user?.name || 'Store Manager',
+          performer_email: user?.email || null,
+          reason_or_remarks: `Service Material Issued: ${qtyToIssue} ${mat.unit || 'Nos.'} to ${recipient} for checklist ${checklist.checklist_number}. ${remarks}`.trim(),
+          created_at: nowIso,
+        });
+
+        results.push({ item_name: serviceItem.item_name, quantity_issued: qtyToIssue, new_stock: newStock });
+      }
+
+      // Update in-memory item state
+      serviceItem.quantity_issued = (serviceItem.quantity_issued || 0) + qtyToIssue;
+      serviceItem.quantity_remaining = Math.max(0, serviceItem.quantity_required - serviceItem.quantity_issued);
+      serviceItem.status = serviceItem.quantity_remaining === 0 ? 'ISSUED' : 'PARTIALLY_ISSUED';
+    }
+
+    const allIssued = currentServiceItems.every((it) => it.quantity_remaining === 0);
+    const overallStatus = allIssued ? 'ISSUED' : 'PARTIALLY_ISSUED';
+
+    // Persist to installation_checklists
+    try {
+      await supabase
+        .from('installation_checklists')
+        .update({
+          service_items: currentServiceItems,
+          material_issuance_status: overallStatus,
+          material_issued_at: nowIso,
+          material_issued_by: issuingUserId,
+          updated_at: nowIso,
+        })
+        .eq('id', checklist.id);
+    } catch (chkErr) {
+      console.warn('Could not update installation_checklists after service issuance:', chkErr.message);
+    }
+    inMemoryChecklistServiceItems.set(checklist.id, currentServiceItems);
+
+    // Persist to store_material_requirements
+    try {
+      await supabase
+        .from('store_material_requirements')
+        .update({
+          service_items: currentServiceItems,
+          material_issuance_status: overallStatus,
+          devices_issuance_status: overallStatus,
+          status: overallStatus,
+          material_issued_at: nowIso,
+          material_issued_by: issuingUserId,
+          updated_at: nowIso,
+        })
+        .eq('checklist_id', checklist.id);
+    } catch (storeErr) {
+      console.warn('Could not update store_material_requirements after service issuance:', storeErr.message);
+    }
+
+    const inMemStore = inMemoryStoreRequirements.get(checklist.id);
+    if (inMemStore) {
+      inMemStore.service_items = currentServiceItems;
+      inMemStore.material_issuance_status = overallStatus;
+      inMemStore.devices_issuance_status = overallStatus;
+      inMemStore.status = overallStatus;
+      inMemStore.material_issued_at = nowIso;
+      inMemStore.material_issued_by = issuingUserId;
+    }
+
+    return {
+      success: true,
+      checklist_id: checklist.id,
+      checklist_number: checklist.checklist_number,
+      service_items: currentServiceItems,
+      status: overallStatus,
+      issued_count: totalQtyToIssue,
       results,
     };
   } finally {

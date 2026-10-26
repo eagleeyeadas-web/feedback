@@ -385,8 +385,9 @@ export async function getTechnicianWiseInstallationReport({ startDate, endDate }
       }
     }
 
-    // Fallback: If no Post-Installation Form items were recorded but checklist was marked completed
-    if (deviceMap.size === 0 && chk.device_type && !report) {
+    // Fallback: If no Post-Installation Form items were recorded but checklist was marked completed (Installation jobs only)
+    const isServiceJob = (chk.installation_or_service || 'Installation') === 'Service';
+    if (deviceMap.size === 0 && chk.device_type && !report && !isServiceJob) {
       const devCount = Number(chk.device_count || chk.quantity || 1);
       deviceMap.set(chk.device_type, devCount);
     }
@@ -408,6 +409,8 @@ export async function getTechnicianWiseInstallationReport({ startDate, endDate }
       checklistId: chk.id,
       checklist_number: chk.checklist_number || `CHK-${String(chk.id).slice(0, 8)}`,
       checklistNumber: chk.checklist_number || `CHK-${String(chk.id).slice(0, 8)}`,
+      job_type: chk.installation_or_service || 'Installation',
+      jobType: chk.installation_or_service || 'Installation',
       client_name: clientName,
       clientName: clientName,
       installed_date: formatKolkataDateDisplay(completionDateKolkata),
@@ -738,7 +741,7 @@ export async function generateWeeklyStockReport({
       const type = (mov.movement_type || mov.transaction_type || '').toUpperCase();
       if (type === 'STOCK_RECEIVED' || type === 'OPENING_STOCK') {
         stockAdded += qty;
-      } else if (type === 'STOCK_ISSUED' || type === 'COURIER_DISPATCH' || type === 'COURIER_DISPATCHED') {
+      } else if (type === 'STOCK_ISSUED' || type === 'COURIER_DISPATCH' || type === 'COURIER_DISPATCHED' || type === 'SERVICE_DEVICE_ISSUED' || type === 'SERVICE_MATERIAL_ISSUED') {
         stockIssued += qty;
       } else if (type === 'USABLE_STOCK_RETURNED' || type === 'RETURNED_USABLE') {
         stockReturned += qty;

@@ -12,6 +12,7 @@ import {
   getStoreMaterialRequirementById,
   syncStoreRequirementForChecklist,
   issueFullJobStock,
+  issueServiceJobStock,
 } from '../services/storeRequirementService.js';
 import { generateStoreManagerRequirementPDF } from '../services/storeManagerPdfGenerator.js';
 import supabase from '../services/supabase.js';
@@ -129,6 +130,26 @@ router.post('/issue-full-job', requireRole('STORE_MANAGER', 'ADMIN'), async (req
   } catch (err) {
     console.error('Error issuing full job stock:', err);
     return res.status(400).json({ error: err.message || 'Failed to issue job stock' });
+  }
+});
+
+/**
+ * POST /api/admin/materials/issue-service-stock
+ * Issue requested devices and materials for a Service job.
+ */
+router.post('/issue-service-stock', requireRole('STORE_MANAGER', 'ADMIN'), async (req, res) => {
+  try {
+    const { checklist_id, items, remarks } = req.body;
+    const result = await issueServiceJobStock({
+      checklist_id,
+      items,
+      remarks,
+      user: req.profile,
+    });
+    return res.json(result);
+  } catch (err) {
+    console.error('Error issuing service job stock:', err);
+    return res.status(400).json({ error: err.message || 'Failed to issue service job stock' });
   }
 });
 

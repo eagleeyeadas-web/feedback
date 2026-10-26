@@ -41,6 +41,7 @@ export default function StoreInstallationRequirements({ token, onSelectChecklist
   const [summary, setSummary] = useState({
     total: 0,
     installationCount: 0,
+    courierCount: 0,
     serviceCount: 0,
     pendingCount: 0,
     shortageCounter: 0,
@@ -94,6 +95,7 @@ export default function StoreInstallationRequirements({ token, onSelectChecklist
       setSummary(data.summary || {
         total: 0,
         installationCount: 0,
+        courierCount: 0,
         serviceCount: 0,
         pendingCount: 0,
         shortageCounter: 0,
@@ -288,7 +290,7 @@ export default function StoreInstallationRequirements({ token, onSelectChecklist
       </div>
 
       {/* Summary KPI Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3">
         <div className="bg-white p-3.5 rounded-xl border border-gray-200 shadow-2xs">
           <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">Total Requirements</span>
           <span className="text-xl font-black text-gray-900 mt-1 block">{summary.total || 0}</span>
@@ -299,6 +301,12 @@ export default function StoreInstallationRequirements({ token, onSelectChecklist
           <span className="text-[10px] font-bold text-blue-700 uppercase tracking-wider block">Installation Jobs</span>
           <span className="text-xl font-black text-blue-900 mt-1 block">{summary.installationCount || 0}</span>
           <span className="text-[10px] text-blue-600/70 mt-0.5 block">BOM calculated</span>
+        </div>
+
+        <div className="bg-white p-3.5 rounded-xl border border-indigo-200 shadow-2xs bg-indigo-50/20">
+          <span className="text-[10px] font-bold text-indigo-700 uppercase tracking-wider block">Courier Jobs</span>
+          <span className="text-xl font-black text-indigo-900 mt-1 block">{summary.courierCount || 0}</span>
+          <span className="text-[10px] text-indigo-600/70 mt-0.5 block">Direct courier orders</span>
         </div>
 
         <div className="bg-white p-3.5 rounded-xl border border-purple-200 shadow-2xs bg-purple-50/20">
@@ -356,6 +364,7 @@ export default function StoreInstallationRequirements({ token, onSelectChecklist
             >
               <option value="All">All Jobs</option>
               <option value="Installation">Installation Only</option>
+              <option value="Courier">Courier Only</option>
               <option value="Service">Service Only</option>
             </select>
           </div>
@@ -463,8 +472,14 @@ export default function StoreInstallationRequirements({ token, onSelectChecklist
       ) : (
         <div className="space-y-4">
           {requirements.map((req) => {
-            const isService = req.job_type === 'Service';
-            const isIssued = req.material_issuance_status === 'ISSUED';
+            const isCourier = req.delivery_method === 'Product Couriered' || req.is_courier;
+            const isService = !isCourier && req.job_type === 'Service';
+            const isInstallation = !isCourier && !isService;
+            const isIssued = isCourier
+              ? (req.devices_issuance_status === 'ISSUED' || req.material_issuance_status === 'ISSUED' || Boolean(req.is_courier_dispatched))
+              : (isService
+                ? (Array.isArray(req.service_items) && req.service_items.length > 0 && req.service_items.every((it) => it.quantity_remaining === 0))
+                : (req.material_issuance_status === 'ISSUED' && req.devices_issuance_status === 'ISSUED'));
             const hasShortage = Boolean(req.has_shortage);
             const isExpanded = expandedCards.has(req.id || req.checklist_id);
             const materialItems = Array.isArray(req.material_items) ? req.material_items : [];
@@ -495,6 +510,8 @@ export default function StoreInstallationRequirements({ token, onSelectChecklist
                     ? 'border-rose-300 hover:border-rose-400'
                     : isIssued
                     ? 'border-emerald-200 hover:border-emerald-300'
+                    : isCourier
+                    ? 'border-indigo-200 hover:border-indigo-300'
                     : 'border-gray-200 hover:border-gray-300'
                 }`}
               >
@@ -508,75 +525,111 @@ export default function StoreInstallationRequirements({ token, onSelectChecklist
 
                       {/* Job Type Badge */}
                       <span
-                        className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
-                          isService
+                        className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full uppercase tracking-wider ${
+                          isCourier
+                            ? 'bg-indigo-100 text-indigo-900 border border-indigo-300'
+                            : isService
                             ? 'bg-purple-100 text-purple-800 border border-purple-300'
                             : 'bg-blue-100 text-blue-800 border border-blue-200'
                         }`}
                       >
-                        {req.job_type}
+                        {isCourier ? 'COURIER' : (isService ? 'SERVICE' : 'INSTALLATION')}
                       </span>
 
-                      {/* BOM Availability Status Badge */}
-                      {isService ? (
-                        <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
-                          BOM Not Applicable (Service Call)
-                        </span>
-                      ) : req.bom_availability_status === 'Available' ? (
-                        <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1">
-                          <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                          BOM Available
-                        </span>
-                      ) : req.bom_availability_status === 'Out of Stock' ? (
-                        <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-800 border border-rose-300 flex items-center gap-1">
-                          <AlertTriangle className="w-3 h-3 text-rose-600" />
-                          BOM Out of Stock ({req.shortage_count || 1} Short)
-                        </span>
+                      {/* Status Badges */}
+                      {isCourier ? (
+                        <>
+                          {isIssued ? (
+                            <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1">
+                              <Check className="w-3 h-3 text-emerald-600" />
+                              Stock Issued
+                            </span>
+                          ) : hasShortage ? (
+                            <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-800 border border-rose-300 flex items-center gap-1">
+                              <AlertTriangle className="w-3 h-3 text-rose-600" />
+                              Stock Shortage ({req.shortage_count || 1} Short)
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300 flex items-center gap-1">
+                              <Clock className="w-3 h-3 text-amber-600" />
+                              Pending Store Issuance
+                            </span>
+                          )}
+                        </>
+                      ) : isService ? (
+                        <>
+                          <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
+                            BOM Not Applicable (Service Call)
+                          </span>
+                          {isIssued ? (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1">
+                              <Check className="w-3 h-3 text-emerald-600" />
+                              Stock Issued from Store
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
+                              Issuance Pending
+                            </span>
+                          )}
+                        </>
                       ) : (
-                        <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300 flex items-center gap-1">
-                          <Clock className="w-3 h-3 text-amber-600" />
-                          BOM Partially Available ({req.shortage_count || 1} Short)
-                        </span>
-                      )}
+                        <>
+                          {req.bom_availability_status === 'Available' ? (
+                            <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1">
+                              <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                              BOM Available
+                            </span>
+                          ) : req.bom_availability_status === 'Out of Stock' ? (
+                            <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-800 border border-rose-300 flex items-center gap-1">
+                              <AlertTriangle className="w-3 h-3 text-rose-600" />
+                              BOM Out of Stock ({req.shortage_count || 1} Short)
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300 flex items-center gap-1">
+                              <Clock className="w-3 h-3 text-amber-600" />
+                              BOM Partially Available ({req.shortage_count || 1} Short)
+                            </span>
+                          )}
 
-                      {/* Store Stock Issuance Status */}
-                      {!isService && (
-                        isIssued ? (
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1">
-                            <Check className="w-3 h-3 text-emerald-600" />
-                            Stock Issued from Store
-                          </span>
-                        ) : (
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
-                            Issuance Pending
-                          </span>
-                        )
+                          {isIssued ? (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1">
+                              <Check className="w-3 h-3 text-emerald-600" />
+                              Stock Issued from Store
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
+                              Issuance Pending
+                            </span>
+                          )}
+                        </>
                       )}
                     </div>
 
                     <div className="text-xs text-gray-500 flex flex-wrap items-center gap-3 pt-0.5">
                       <span>Submitted: <strong>{new Date(req.submission_date || req.created_at).toLocaleString('en-IN')}</strong></span>
-                      {req.material_issued_at && (
-                        <span>Issued: <strong className="text-emerald-700">{new Date(req.material_issued_at).toLocaleString('en-IN')}</strong></span>
+                      {(req.material_issued_at || req.devices_issued_at) && (
+                        <span>Issued: <strong className="text-emerald-700">{new Date(req.material_issued_at || req.devices_issued_at).toLocaleString('en-IN')}</strong></span>
                       )}
                     </div>
                   </div>
 
                   {/* Actions */}
                   <div className="flex flex-wrap items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => toggleExpand(req.id || req.checklist_id)}
-                      className={`px-3 py-1.5 text-xs font-bold rounded-xl cursor-pointer transition-colors flex items-center gap-1.5 shadow-2xs ${
-                        isExpanded
-                          ? 'bg-amber-100 text-amber-900 border border-amber-300'
-                          : 'bg-white hover:bg-gray-50 text-gray-800 border border-gray-200'
-                      }`}
-                      title={isExpanded ? 'Collapse Material Requirements' : 'View Full Material Requirements & Live Stock'}
-                    >
-                      <span>{isExpanded ? 'Hide Requirements' : 'View Material Requirements'}</span>
-                      {isExpanded ? <ChevronUp className="w-3.5 h-3.5 text-amber-700" /> : <ChevronDown className="w-3.5 h-3.5 text-gray-500" />}
-                    </button>
+                    {!isCourier && (
+                      <button
+                        type="button"
+                        onClick={() => toggleExpand(req.id || req.checklist_id)}
+                        className={`px-3 py-1.5 text-xs font-bold rounded-xl cursor-pointer transition-colors flex items-center gap-1.5 shadow-2xs ${
+                          isExpanded
+                            ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                            : 'bg-white hover:bg-gray-50 text-gray-800 border border-gray-200'
+                        }`}
+                        title={isExpanded ? 'Collapse Material Requirements' : 'View Full Material Requirements & Live Stock'}
+                      >
+                        <span>{isExpanded ? 'Hide Requirements' : 'View Material Requirements'}</span>
+                        {isExpanded ? <ChevronUp className="w-3.5 h-3.5 text-amber-700" /> : <ChevronDown className="w-3.5 h-3.5 text-gray-500" />}
+                      </button>
+                    )}
 
                     <button
                       type="button"
@@ -588,13 +641,48 @@ export default function StoreInstallationRequirements({ token, onSelectChecklist
                       <span>Store Manager PDF</span>
                     </button>
 
-                    {!isService && !isIssued && (
+                    {/* Primary Action: Issue Stock for Courier */}
+                    {isCourier && !isIssued && (
+                      <button
+                        type="button"
+                        onClick={() => setIssueModalChecklist({
+                          id: req.checklist_id || req.id,
+                          checklist_id: req.checklist_id || req.id,
+                          checklist_number: req.checklist_number,
+                          client_name: req.client_name,
+                          client_mobile: req.client_mobile,
+                          client_location: req.client_location,
+                          destination: req.client_location,
+                          job_type: 'Courier',
+                          delivery_method: 'Product Couriered',
+                          isCourier: true,
+                          device_items: deviceItems,
+                          device_configurations: req.device_configurations,
+                          devices_issuance_status: req.devices_issuance_status,
+                          material_issuance_status: req.material_issuance_status,
+                        })}
+                        className="px-3.5 py-1.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <Package className="w-3.5 h-3.5" />
+                        <span>Issue Stock</span>
+                      </button>
+                    )}
+
+                    {isCourier && isIssued && (
+                      <span className="px-3 py-1.5 text-xs font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center gap-1.5">
+                        <Check className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>Stock Issued</span>
+                      </span>
+                    )}
+
+                    {!isCourier && !isService && !isIssued && (
                       <button
                         type="button"
                         onClick={() => setIssueModalChecklist({
                           id: req.checklist_id || req.id,
                           checklist_number: req.checklist_number,
                           client_name: req.client_name,
+                          job_type: 'Installation',
                           device_items: deviceItems,
                           device_configurations: req.device_configurations,
                           bom_snapshot: req.bom_snapshot,
@@ -604,6 +692,24 @@ export default function StoreInstallationRequirements({ token, onSelectChecklist
                       >
                         <Package className="w-3.5 h-3.5" />
                         <span>Issue Materials</span>
+                      </button>
+                    )}
+
+                    {!isCourier && isService && Array.isArray(req.service_items) && req.service_items.some((it) => (Number(it.quantity_remaining) > 0 || (Number(it.quantity_required) - (Number(it.quantity_issued) || 0)) > 0)) && (
+                      <button
+                        type="button"
+                        onClick={() => setIssueModalChecklist({
+                          id: req.checklist_id || req.id,
+                          checklist_number: req.checklist_number,
+                          client_name: req.client_name,
+                          service_engineer: req.service_engineer,
+                          job_type: 'Service',
+                          service_items: req.service_items,
+                        })}
+                        className="px-3.5 py-1.5 text-xs font-bold text-white bg-purple-600 hover:bg-purple-700 rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <Package className="w-3.5 h-3.5" />
+                        <span>Issue Service Items</span>
                       </button>
                     )}
 
@@ -619,8 +725,176 @@ export default function StoreInstallationRequirements({ token, onSelectChecklist
                   </div>
                 </div>
 
-                {/* Client, Job, Team & Device Summary */}
-                <div className="p-5 bg-slate-50/50 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 text-xs">
+                {/* Card Body: Courier Simplified Layout vs Technician Layout */}
+                {isCourier ? (
+                  /* ========================================================
+                     COURIER CARD LAYOUT (Simplified 5-Column Format)
+                     Customer & Checklist Details | Required Products | Available Stock | Status | Issue Stock
+                     ======================================================== */
+                  <div className="p-5 bg-indigo-50/20 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 text-xs border-t border-gray-100">
+                    {/* Col 1: Customer and Checklist Details */}
+                    <div>
+                      <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">Customer &amp; Checklist Details</span>
+                      <span className="font-bold text-gray-900 text-sm flex items-center gap-1.5 mt-0.5">
+                        <User className="w-3.5 h-3.5 text-gray-400" />
+                        {req.client_name}
+                      </span>
+                      {req.client_mobile && (
+                        <a
+                          href={`tel:${req.client_mobile}`}
+                          className="text-blue-600 hover:text-blue-800 font-mono flex items-center gap-1 mt-0.5 font-semibold"
+                        >
+                          <Phone className="w-3 h-3 text-gray-400" />
+                          {req.client_mobile}
+                        </a>
+                      )}
+                      <div className="text-gray-600 flex items-start gap-1 mt-1 text-[11px]">
+                        <MapPin className="w-3 h-3 text-rose-500 shrink-0 mt-0.5" />
+                        <span>Destination: <strong>{req.client_location || 'Not provided'}</strong></span>
+                      </div>
+                      {req.google_maps_location && (
+                        <a
+                          href={req.google_maps_location}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-amber-700 hover:underline flex items-center gap-1 font-semibold mt-1 text-[11px]"
+                        >
+                          <ExternalLink className="w-3 h-3" />
+                          <span>Google Maps</span>
+                        </a>
+                      )}
+                      <div className="mt-1 text-[11px] text-gray-500">
+                        Salesperson: <span className="font-semibold text-gray-700">{req.salesperson_name || '—'}</span>
+                      </div>
+                    </div>
+
+                    {/* Col 2: Required Products & Quantities */}
+                    <div>
+                      <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">Required Products</span>
+                      <div className="mt-1 space-y-1">
+                        {reqDeviceItems.map((d, idx) => (
+                          <div key={idx} className="flex items-center justify-between text-[11px] bg-white px-2 py-1 rounded-lg border border-indigo-100 shadow-2xs">
+                            <span className="font-semibold text-gray-900 truncate">{d.device_type}</span>
+                            <span className="font-mono text-indigo-900 bg-indigo-50 px-1.5 py-0.5 rounded font-bold shrink-0">
+                              {d.quantity ?? d.number_of_devices ?? 1} Nos.
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="pt-2 text-[11px] text-gray-600 font-medium">
+                        Total Devices: <strong className="font-mono text-indigo-900">{req.number_of_devices || 1} Sets</strong>
+                      </div>
+                    </div>
+
+                    {/* Col 3: Available Stock & Shortages */}
+                    <div>
+                      <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">Available Stock</span>
+                      <div className="mt-1 space-y-1">
+                        {deviceItems.map((d, idx) => (
+                          <div key={idx} className="text-[11px] bg-white p-1.5 rounded-lg border border-gray-200 shadow-2xs space-y-0.5">
+                            <div className="flex items-center justify-between">
+                              <span className="font-medium text-gray-700 truncate">{d.device_type}</span>
+                              <span className="font-mono text-gray-900 font-semibold">{d.available_stock} in store</span>
+                            </div>
+                            <div>
+                              {d.shortage > 0 ? (
+                                <span className="text-[10px] font-bold text-rose-700 bg-rose-50 px-1.5 py-0.2 rounded border border-rose-200 inline-block">
+                                  Shortage: {d.shortage} Nos.
+                                </span>
+                              ) : (
+                                <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200 inline-block">
+                                  In Stock ✓
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Col 4: Fulfillment Status */}
+                    <div>
+                      <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">Fulfillment Status</span>
+                      <div className="mt-1 space-y-1.5">
+                        <span className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-indigo-100 text-indigo-900 border border-indigo-200 inline-block">
+                          Product Couriered
+                        </span>
+                        <p className="text-[11px] text-gray-600 leading-tight">
+                          Direct Customer Courier. No technician scheduling or installation BOM required.
+                        </p>
+                        <div className="pt-1">
+                          {isIssued ? (
+                            <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 border border-emerald-300 px-2 py-0.5 rounded-full inline-flex items-center gap-1">
+                              <Check className="w-3 h-3 text-emerald-600" />
+                              Stock Issued
+                            </span>
+                          ) : hasShortage ? (
+                            <span className="text-[10px] font-bold text-rose-800 bg-rose-100 border border-rose-300 px-2 py-0.5 rounded-full inline-flex items-center gap-1">
+                              <AlertTriangle className="w-3 h-3 text-rose-600" />
+                              Stock Shortage
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-bold text-amber-800 bg-amber-100 border border-amber-300 px-2 py-0.5 rounded-full inline-flex items-center gap-1">
+                              <Clock className="w-3 h-3 text-amber-600" />
+                              Pending Store Issuance
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Col 5: Primary Action (Issue Stock) */}
+                    <div className="flex flex-col justify-center items-start lg:items-end">
+                      <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Primary Action</span>
+                      {isIssued ? (
+                        <div className="text-right space-y-1">
+                          <div className="px-3.5 py-2 text-xs font-bold text-emerald-800 bg-emerald-100 border border-emerald-300 rounded-xl inline-flex items-center gap-1.5">
+                            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                            <span>Stock Issued</span>
+                          </div>
+                          {(req.devices_issued_at || req.material_issued_at) && (
+                            <div className="text-[10px] text-gray-500">
+                              Issued: {new Date(req.devices_issued_at || req.material_issued_at).toLocaleDateString('en-IN')}
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="space-y-1.5 w-full lg:w-auto">
+                          <button
+                            type="button"
+                            onClick={() => setIssueModalChecklist({
+                              id: req.checklist_id || req.id,
+                              checklist_id: req.checklist_id || req.id,
+                              checklist_number: req.checklist_number,
+                              client_name: req.client_name,
+                              client_mobile: req.client_mobile,
+                              client_location: req.client_location,
+                              destination: req.client_location,
+                              job_type: 'Courier',
+                              delivery_method: 'Product Couriered',
+                              isCourier: true,
+                              device_items: deviceItems,
+                              device_configurations: req.device_configurations,
+                              devices_issuance_status: req.devices_issuance_status,
+                              material_issuance_status: req.material_issuance_status,
+                            })}
+                            className="w-full lg:w-auto px-4 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                          >
+                            <Package className="w-3.5 h-3.5" />
+                            <span>Issue Stock</span>
+                          </button>
+                          {hasShortage && (
+                            <span className="text-[10px] text-rose-600 font-semibold block text-center lg:text-right">
+                              Stock shortage detected
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  /* Standard Installation & Service Details Layout */
+                  <div className="p-5 bg-slate-50/50 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 text-xs">
                   {/* Col 1: Client Information */}
                   <div>
                     <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">Client Information</span>
@@ -789,19 +1063,134 @@ export default function StoreInstallationRequirements({ token, onSelectChecklist
                     )}
                   </div>
                 </div>
+              )}
 
-                {/* Service Job Notice Banner */}
-                {isService && (
-                  <div className="p-4 bg-slate-50 border-t border-gray-100 flex items-center gap-3 text-xs text-slate-700">
-                    <Info className="w-4 h-4 text-purple-600 shrink-0" />
-                    <span>
-                      <strong>Service Call:</strong> Client, location, device details, assigned engineer, salesperson, and checklist number are recorded. No automatic installation BOM is generated or deducted.
-                    </span>
+                {/* Service Job Notice Banner / Details */}
+                {isService && !isExpanded && (
+                  <div className="p-4 bg-slate-50 border-t border-gray-100 flex items-center justify-between text-xs text-slate-700">
+                    <div className="flex items-center gap-2.5">
+                      <Info className="w-4 h-4 text-purple-600 shrink-0" />
+                      <span>
+                        <strong>Service Call:</strong> {Array.isArray(req.service_items) && req.service_items.length > 0 ? `${req.service_items.length} requested service item(s)` : 'Direct technician inspection / service with no items requested.'}
+                      </span>
+                    </div>
+                    {Array.isArray(req.service_items) && req.service_items.length > 0 && (
+                      <span className="font-semibold text-purple-700">
+                        {req.service_items.filter(i => (Number(i.quantity_remaining) > 0 || (Number(i.quantity_required) - (Number(i.quantity_issued) || 0)) > 0)).length} item(s) pending issuance
+                      </span>
+                    )}
                   </div>
                 )}
 
-                {/* Expanded Detailed Breakdown (Separating Camera Devices & Materials) */}
-                {!isService && isExpanded && (
+                {/* Service Job Expanded Requirements Breakdown */}
+                {isService && isExpanded && (
+                  <div className="border-t border-purple-100 p-5 space-y-4 bg-white">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div>
+                        <h4 className="text-xs font-bold text-gray-900 flex items-center gap-2">
+                          <Package className="w-4 h-4 text-purple-600" />
+                          <span>Actual Requested Devices &amp; Replacement Materials</span>
+                        </h4>
+                        <p className="text-[11px] text-gray-500 mt-0.5">
+                          Items specifically requested for Service Job {req.checklist_number}. Standard installation BOM is disabled.
+                        </p>
+                      </div>
+                      {Array.isArray(req.service_items) && req.service_items.some(it => (Number(it.quantity_remaining) > 0 || (Number(it.quantity_required) - (Number(it.quantity_issued) || 0)) > 0)) && (
+                        <button
+                          type="button"
+                          onClick={() => setIssueModalChecklist({
+                            id: req.checklist_id || req.id,
+                            checklist_number: req.checklist_number,
+                            client_name: req.client_name,
+                            service_engineer: req.service_engineer,
+                            job_type: 'Service',
+                            service_items: req.service_items,
+                          })}
+                          className="px-3.5 py-1.5 text-xs font-bold text-white bg-purple-600 hover:bg-purple-700 rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer self-start sm:self-auto"
+                        >
+                          <Package className="w-3.5 h-3.5" />
+                          <span>Issue Requested Items</span>
+                        </button>
+                      )}
+                    </div>
+
+                    {Array.isArray(req.service_items) && req.service_items.length > 0 ? (
+                      <div className="border border-purple-200 rounded-xl overflow-x-auto shadow-2xs">
+                        <table className="w-full text-left border-collapse text-xs">
+                          <thead className="bg-purple-50/70 border-b border-purple-100 text-[10px] font-bold text-purple-950 uppercase">
+                            <tr>
+                              <th className="py-2.5 px-3 w-10 text-center">#</th>
+                              <th className="py-2.5 px-4">Item Name</th>
+                              <th className="py-2.5 px-3">SKU</th>
+                              <th className="py-2.5 px-3 text-center">Type</th>
+                              <th className="py-2.5 px-3 text-center">Required</th>
+                              <th className="py-2.5 px-3 text-center">Free in Store</th>
+                              <th className="py-2.5 px-3 text-center">Shortage</th>
+                              <th className="py-2.5 px-3 text-center">Issued</th>
+                              <th className="py-2.5 px-3 text-center">Remaining</th>
+                              <th className="py-2.5 px-3 text-center">Status</th>
+                              <th className="py-2.5 px-4">Service Note</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100">
+                            {req.service_items.map((it, idx) => {
+                              const reqQty = Number(it.quantity_required) || 1;
+                              const issQty = Number(it.quantity_issued) || 0;
+                              const remQty = Math.max(0, reqQty - issQty);
+                              const availStock = Number(it.available_stock) || 0;
+                              const shortage = Math.max(0, remQty - availStock);
+                              const isFullyIssued = remQty === 0;
+
+                              return (
+                                <tr key={idx} className="hover:bg-slate-50 transition-colors">
+                                  <td className="py-2 px-3 text-center font-mono text-gray-400 text-[11px]">{idx + 1}</td>
+                                  <td className="py-2 px-4 font-bold text-gray-900">{it.item_name}</td>
+                                  <td className="py-2 px-3 font-mono text-gray-500 text-[11px]">{it.sku || '—'}</td>
+                                  <td className="py-2 px-3 text-center">
+                                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded font-mono ${it.item_type === 'DEVICE' ? 'bg-blue-100 text-blue-800' : 'bg-emerald-100 text-emerald-800'}`}>
+                                      {it.item_type || 'ITEM'}
+                                    </span>
+                                  </td>
+                                  <td className="py-2 px-3 text-center font-mono font-bold text-gray-900">{reqQty} {it.unit || 'Nos.'}</td>
+                                  <td className="py-2 px-3 text-center font-mono font-bold text-gray-700">{availStock}</td>
+                                  <td className="py-2 px-3 text-center font-mono font-bold">
+                                    {shortage > 0 ? (
+                                      <span className="text-[10px] bg-rose-100 text-rose-700 px-1.5 py-0.5 rounded font-mono">
+                                        -{shortage} Short
+                                      </span>
+                                    ) : (
+                                      <span className="text-[10px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded font-mono">
+                                        OK
+                                      </span>
+                                    )}
+                                  </td>
+                                  <td className="py-2 px-3 text-center font-mono font-bold text-emerald-700">{issQty}</td>
+                                  <td className="py-2 px-3 text-center font-mono font-bold text-amber-700">{remQty}</td>
+                                  <td className="py-2 px-3 text-center">
+                                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${isFullyIssued ? 'bg-emerald-100 text-emerald-800' : shortage > 0 ? 'bg-rose-100 text-rose-800' : issQty > 0 ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-700'}`}>
+                                      {isFullyIssued ? 'ISSUED' : shortage > 0 ? 'SHORTAGE' : issQty > 0 ? 'PARTIAL' : 'PENDING'}
+                                    </span>
+                                  </td>
+                                  <td className="py-2 px-4 text-gray-600 italic text-[11px]">{it.service_note || '—'}</td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      <div className="p-4 bg-purple-50/50 border border-purple-200 rounded-xl text-xs text-purple-900 flex items-center gap-2">
+                        <Info className="w-4 h-4 text-purple-600 shrink-0" />
+                        <span>
+                          <strong>No requested items:</strong> This service job has no specific replacement components or installation materials requested. No Store Manager stock issuance is required.
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Expanded Detailed Breakdown (Separating Camera Devices & Materials) - ONLY for technician installation */}
+                {!isService && !isCourier && isExpanded && (
                   <div className="border-t border-gray-200 p-5 space-y-6 bg-white">
                     {/* SECTION 1: Camera Devices Allocation & Store Dispatch */}
                     <div className="space-y-4">

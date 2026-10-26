@@ -7,7 +7,10 @@ import {
   fetchInstallationChecklistDetail,
   fetchEngineersAvailability,
   fetchServiceEngineers,
+  fetchActiveServiceEngineersDropdown,
   checkComponentAvailabilityApi,
+  fetchInventoryProducts,
+  fetchMaterialInventory,
 } from '../../../lib/api';
 import BomRequirementSummary from '../../../components/bom/BomRequirementSummary';
 import {
@@ -125,6 +128,11 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
     { id: 'dev-1', device_type: DEVICE_OPTIONS[0], number_of_devices: 1, quantity_carried: 1 },
   ]);
 
+  // Service-Specific Requirements State (for Service Jobs)
+  const [serviceItems, setServiceItems] = useState([]);
+  const [catalogueItems, setCatalogueItems] = useState([]);
+  const [loadingCatalogue, setLoadingCatalogue] = useState(false);
+
   // Form State matching all 27 questions exactly
   const [formData, setFormData] = useState({
     salesperson_name: '',
@@ -202,6 +210,10 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
             ]);
           }
 
+          if (Array.isArray(data.service_items) && data.service_items.length > 0) {
+            setServiceItems(data.service_items);
+          }
+
           setFormData({
             salesperson_name: data.salesperson_name || '',
             client_name: data.client_name || '',
@@ -239,13 +251,55 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
     }
   }, [isEditMode, checklistId, token]);
 
+  // Load Catalogue Items (Devices & Materials) on mount
+  useEffect(() => {
+    if (token) {
+      setLoadingCatalogue(true);
+      Promise.all([
+        fetchInventoryProducts(token).catch(() => []),
+        fetchMaterialInventory(token).catch(() => []),
+      ])
+        .then(([devices, materials]) => {
+          const formattedDevs = (Array.isArray(devices) ? devices : []).map((d) => ({
+            id: d.id,
+            item_name: d.name || d.device_type,
+            item_type: 'DEVICE',
+            sku: d.sku || 'N/A',
+            unit: 'Nos.',
+            available_stock: Number(d.usable_stock) || 0,
+          }));
+          const formattedMats = (Array.isArray(materials) ? materials : []).map((m) => ({
+            id: m.id,
+            item_name: m.material_name,
+            item_type: 'MATERIAL',
+            sku: m.sku || 'N/A',
+            unit: m.unit || 'Nos.',
+            available_stock: Number(m.current_stock) || 0,
+          }));
+          setCatalogueItems([...formattedDevs, ...formattedMats]);
+        })
+        .catch((err) => console.warn('Could not load inventory catalogue:', err))
+        .finally(() => setLoadingCatalogue(false));
+    }
+  }, [token]);
+
   // Load Engineers List on mount
   useEffect(() => {
     if (token) {
-      fetchServiceEngineers(token)
+      const fetchCall = typeof fetchActiveServiceEngineersDropdown === 'function'
+        ? fetchActiveServiceEngineersDropdown(token).catch(() => fetchServiceEngineers(token))
+        : fetchServiceEngineers(token);
+
+      fetchCall
         .then((list) => {
           if (Array.isArray(list) && list.length > 0) {
-            setEngineersList(list);
+            const names = list
+              .filter((item) => (typeof item === 'object' && item !== null ? item.is_active !== false : true))
+              .map((item) => (typeof item === 'string' ? item : item?.name))
+              .filter((n) => typeof n === 'string' && n.trim().length > 0);
+            if (names.length > 0) {
+              setEngineersList(names);
+            }
           }
         })
         .catch((err) => console.warn('Could not load service engineers:', err));
@@ -404,6 +458,61 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
     );
   };
 
+  // Service Requirements Handlers (for Service Jobs)
+  const handleAddServiceItem = () => {
+    const firstItem = catalogueItems[0];
+    setServiceItems((prev) => [
+      ...prev,
+      {
+        id: `svc-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+        item_id: firstItem ? firstItem.id : '',
+        item_name: firstItem ? firstItem.item_name : '',
+        item_type: firstItem ? firstItem.item_type : 'MATERIAL',
+        sku: firstItem ? firstItem.sku : '',
+        quantity_required: 1,
+        unit: firstItem ? firstItem.unit : 'Nos.',
+        service_note: '',
+        quantity_issued: 0,
+        quantity_remaining: 1,
+        status: 'PENDING',
+      },
+    ]);
+  };
+
+  const handleUpdateServiceItem = (id, field, value) => {
+    setServiceItems((prev) =>
+      prev.map((item) => {
+        if (item.id !== id) return item;
+        if (field === 'item_id') {
+          const matched = catalogueItems.find((c) => String(c.id) === String(value));
+          if (matched) {
+            return {
+              ...item,
+              item_id: matched.id,
+              item_name: matched.item_name,
+              item_type: matched.item_type,
+              sku: matched.sku,
+              unit: matched.unit || 'Nos.',
+            };
+          }
+        }
+        if (field === 'quantity_required') {
+          const q = value === '' ? '' : Math.max(1, parseInt(value, 10) || 1);
+          return {
+            ...item,
+            quantity_required: q,
+            quantity_remaining: typeof q === 'number' ? Math.max(0, q - (Number(item.quantity_issued) || 0)) : item.quantity_remaining,
+          };
+        }
+        return { ...item, [field]: value };
+      })
+    );
+  };
+
+  const handleRemoveServiceItem = (id) => {
+    setServiceItems((prev) => prev.filter((item) => item.id !== id));
+  };
+
   const totalRequiredDevices = deviceConfigs.reduce(
     (sum, c) => sum + (parseInt(c.number_of_devices || c.quantity_carried, 10) || 0),
     0
@@ -424,24 +533,24 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
 
     if (!formData.client_location.trim()) return 'Client Location is required';
 
-    // Multi-Device Configurations Validation (Required Installation Devices)
-    if (!deviceConfigs || deviceConfigs.length === 0) {
-      return 'At least one device configuration is required.';
-    }
-
-    for (let i = 0; i < deviceConfigs.length; i++) {
-      const c = deviceConfigs[i];
-      if (!c.device_type || !DEVICE_OPTIONS.includes(c.device_type)) {
-        return `Device Configuration #${i + 1}: Please select a valid device type.`;
-      }
-      const numDev = Number(c.number_of_devices);
-      if (isNaN(numDev) || numDev <= 0 || !Number.isInteger(numDev)) {
-        return `Device Configuration #${i + 1} (${c.device_type}): Number of Devices must be a positive whole number greater than 0 (no zero, negative, or decimal quantities).`;
-      }
-    }
-
-    // Real-time Loose Component Stock Availability Check (Installation only)
+    // Multi-Device Configurations Validation (Installation Jobs Only)
     if (formData.installation_or_service === 'Installation') {
+      if (!deviceConfigs || deviceConfigs.length === 0) {
+        return 'At least one device configuration is required for an installation job.';
+      }
+
+      for (let i = 0; i < deviceConfigs.length; i++) {
+        const c = deviceConfigs[i];
+        if (!c.device_type || !DEVICE_OPTIONS.includes(c.device_type)) {
+          return `Device Configuration #${i + 1}: Please select a valid device type.`;
+        }
+        const numDev = Number(c.number_of_devices);
+        if (isNaN(numDev) || numDev <= 0 || !Number.isInteger(numDev)) {
+          return `Device Configuration #${i + 1} (${c.device_type}): Number of Devices must be a positive whole number greater than 0 (no zero, negative, or decimal quantities).`;
+        }
+      }
+
+      // Real-time Loose Component Stock Availability Check (Installation only)
       if (checkingCompAvailability) {
         return 'Verifying component stock availability in store... Please wait a moment.';
       }
@@ -453,6 +562,20 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
       }
       if (compAvailabilityError) {
         return `Component stock validation error: ${compAvailabilityError}. Please retry.`;
+      }
+    }
+
+    // Service-Specific Requirements Validation (Service Jobs Only)
+    if (formData.installation_or_service === 'Service' && serviceItems.length > 0) {
+      for (let i = 0; i < serviceItems.length; i++) {
+        const item = serviceItems[i];
+        if (!item.item_name || !item.item_name.trim()) {
+          return `Service Item #${i + 1}: Please select a valid item from inventory catalogue.`;
+        }
+        const qty = Number(item.quantity_required);
+        if (isNaN(qty) || qty <= 0) {
+          return `Service Item #${i + 1} (${item.item_name}): Quantity required must be a positive number.`;
+        }
       }
     }
 
@@ -497,7 +620,10 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
         if (!formData.service_engineer || !formData.service_engineer.trim()) {
           return 'Service Engineer is required. Please select an active service engineer.';
         }
-        const hasValidEng = effectiveEngineers.some(e => e.toLowerCase() === formData.service_engineer.trim().toLowerCase());
+        const hasValidEng = effectiveEngineers.some((e) => {
+          const engName = typeof e === 'string' ? e : e?.name || '';
+          return engName.trim().toLowerCase() === formData.service_engineer.trim().toLowerCase();
+        });
         if (!hasValidEng) {
           return 'Please select a valid active Service Engineer.';
         }
@@ -512,7 +638,7 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
         }
 
         const selectedEngStatus = engineersAvailability.find(
-          (e) => e.name.toLowerCase() === formData.service_engineer.trim().toLowerCase()
+          (e) => (e?.name || '').toLowerCase() === formData.service_engineer.trim().toLowerCase()
         );
         if (selectedEngStatus && !selectedEngStatus.available) {
           const c = selectedEngStatus.conflict;
@@ -525,7 +651,10 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
         // Product Couriered with technician assigned
         if (formData.service_engineer && formData.service_engineer.trim()) {
           const effectiveEngineers = engineersList.length > 0 ? engineersList : SERVICE_ENGINEER_OPTIONS;
-          const hasValidEng = effectiveEngineers.some(e => e.toLowerCase() === formData.service_engineer.trim().toLowerCase());
+          const hasValidEng = effectiveEngineers.some((e) => {
+            const engName = typeof e === 'string' ? e : e?.name || '';
+            return engName.trim().toLowerCase() === formData.service_engineer.trim().toLowerCase();
+          });
           if (!hasValidEng) {
             return 'Please select a valid active Service Engineer.';
           }
@@ -536,7 +665,7 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
             return 'Expected Arrival Time is required when assigning a technician to a couriered order';
           }
           const selectedEngStatus = engineersAvailability.find(
-            (e) => e.name.toLowerCase() === formData.service_engineer.trim().toLowerCase()
+            (e) => (e?.name || '').toLowerCase() === formData.service_engineer.trim().toLowerCase()
           );
           if (selectedEngStatus && !selectedEngStatus.available) {
             const c = selectedEngStatus.conflict;
@@ -650,6 +779,21 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
         expected_arrival_date: isAssignLater ? null : (formData.expected_arrival_date || null),
         expected_arrival_time: isAssignLater ? null : (formData.expected_arrival_time ? formData.expected_arrival_time.trim() : null),
         installation_or_service: formData.installation_or_service,
+        service_items: formData.installation_or_service === 'Service'
+          ? serviceItems.map((it) => ({
+              id: it.id || `svc-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+              item_id: it.item_id || it.id || null,
+              item_name: it.item_name,
+              item_type: it.item_type || 'MATERIAL',
+              sku: it.sku || 'N/A',
+              quantity_required: Number(it.quantity_required) || 1,
+              quantity_issued: Number(it.quantity_issued) || 0,
+              quantity_remaining: Math.max(0, (Number(it.quantity_required) || 1) - (Number(it.quantity_issued) || 0)),
+              unit: it.unit || 'Nos.',
+              service_note: it.service_note ? it.service_note.trim() : null,
+              status: it.status || 'PENDING',
+            }))
+          : [],
         service_engineer: isAssignLater ? null : (formData.service_engineer ? formData.service_engineer.trim() : null),
         service_assistant: null,
         installation_status: isAuthoritativeCompleted ? 'Completed' : resolvedStatus,
@@ -872,265 +1016,428 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
           </div>
         </div>
 
-        {/* SECTION 2 — 2. DEVICE DETAILS & CONFIGURATIONS */}
+        {/* SECTION 2 — 2. JOB TYPE & REQUIREMENTS */}
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-1 border-b border-gray-200 gap-2">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-gray-200 gap-3">
             <div>
               <h3 className="text-sm font-bold text-navy flex items-center gap-2">
                 <HardDrive className="text-blue-600" size={18} />
-                2. DEVICE DETAILS &amp; CONFIGURATIONS
+                2. JOB TYPE &amp; REQUIREMENTS
               </h3>
               <p className="text-[11px] text-gray-500 mt-0.5">
-                Devices required for customer installation. Standard installation BOM materials are calculated from these devices.
+                {formData.installation_or_service === 'Installation'
+                  ? 'Devices required for customer installation. Standard installation BOM materials are calculated from these devices.'
+                  : 'Service call mode: Standard installation BOM is disabled. Specify required replacement devices/parts from inventory catalogue as needed.'}
               </p>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="text-[11px] px-2.5 py-1 rounded-lg bg-blue-50 text-blue-800 font-bold border border-blue-200">
-                Required for Installation: <span className="font-mono text-xs">{totalRequiredDevices}</span>
-              </span>
+            <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-xl self-start sm:self-auto">
+              <button
+                type="button"
+                onClick={() => handleChange('installation_or_service', 'Installation')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  formData.installation_or_service === 'Installation'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                Installation
+              </button>
+              <button
+                type="button"
+                onClick={() => handleChange('installation_or_service', 'Service')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  formData.installation_or_service === 'Service'
+                    ? 'bg-purple-600 text-white shadow-xs'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                Service
+              </button>
             </div>
           </div>
 
-          {/* Repeatable Device Configuration Rows */}
-          <div className="space-y-3">
-            {deviceConfigs.map((config, idx) => {
-              const otherSelectedTypes = new Set(
-                deviceConfigs.filter((c) => c.id !== config.id).map((c) => c.device_type)
-              );
-
-              return (
-                <div
-                  key={config.id}
-                  className="p-4 bg-slate-50/70 border border-slate-200/80 rounded-2xl relative transition-all hover:border-slate-300"
-                >
-                  <div className="flex items-center justify-between pb-2.5 mb-3 border-b border-slate-200/70">
-                    <span className="text-xs font-bold text-gray-800 uppercase tracking-wider flex items-center gap-1.5">
-                      <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 font-mono text-[11px] flex items-center justify-center font-bold">
-                        {idx + 1}
-                      </span>
-                      Device Configuration #{idx + 1}
-                    </span>
-
-                    {/* Remove button (enforces at least 1 device row) */}
-                    {deviceConfigs.length > 1 ? (
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveDeviceConfig(config.id)}
-                        className="text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50 px-2.5 py-1 rounded-lg font-semibold flex items-center gap-1 transition-colors cursor-pointer border border-rose-200/60"
-                        title="Remove this device row"
-                      >
-                        <Trash2 size={13} />
-                        Remove
-                      </button>
-                    ) : (
-                      <span className="text-[10px] text-gray-400 font-medium italic">
-                        Minimum 1 device type required
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-xs font-semibold text-gray-700 mb-1">
-                        Type of Device <span className="text-rose-500">*</span>
-                      </label>
-                      <select
-                        value={config.device_type}
-                        onChange={(e) => handleUpdateDeviceConfig(config.id, 'device_type', e.target.value)}
-                        className="w-full text-xs p-2.5 border border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 font-medium bg-white"
-                      >
-                        {DEVICE_OPTIONS.map((opt) => {
-                          const isAlreadySelected = otherSelectedTypes.has(opt);
-                          return (
-                            <option key={opt} value={opt} disabled={isAlreadySelected}>
-                              {opt} {isAlreadySelected ? '(Already added)' : ''}
-                            </option>
-                          );
-                        })}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-semibold text-gray-700 mb-1">
-                        Number of Devices <span className="text-rose-500">*</span>
-                      </label>
-                      <input
-                        type="number"
-                        min="1"
-                        step="1"
-                        required
-                        value={config.number_of_devices !== undefined ? config.number_of_devices : 1}
-                        onChange={(e) => handleUpdateDeviceConfig(config.id, 'number_of_devices', e.target.value)}
-                        placeholder="1"
-                        className="w-full text-xs p-2.5 border border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 font-semibold bg-white"
-                      />
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Add Another Device Type Button */}
-          <div className="pt-1 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-            <button
-              type="button"
-              onClick={handleAddDeviceConfig}
-              disabled={deviceConfigs.length >= DEVICE_OPTIONS.length}
-              className={`text-xs px-3.5 py-2 rounded-xl font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
-                deviceConfigs.length >= DEVICE_OPTIONS.length
-                  ? 'bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed'
-                  : 'bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 hover:border-blue-300'
-              }`}
-            >
-              <Plus size={14} />
-              Add Another Device Type
-            </button>
-          </div>
-
-          {/* Automatic Bill of Materials (BOM) Calculation Display (Installation Only) */}
           {formData.installation_or_service === 'Installation' ? (
-            <div className="pt-2">
-              <BomRequirementSummary
-                deviceConfigurations={deviceConfigs}
-                extraDeviceConfigurations={EMPTY_EXTRA_DEVICES}
-                token={token}
-                jobType={formData.installation_or_service}
-                onCalculated={(snapshot) => {
-                  if (formData.installation_or_service === 'Installation') {
-                    setBomSnapshot((prev) => {
-                      if (JSON.stringify(prev) === JSON.stringify(snapshot)) return prev;
-                      return snapshot;
-                    });
-                  }
-                }}
-              />
-            </div>
-          ) : (
-            <div className="pt-2">
-              <div className="p-3.5 bg-blue-50/70 border border-blue-200/80 rounded-xl text-xs text-blue-900 flex items-center gap-2.5">
-                <Info size={16} className="text-blue-600 shrink-0" />
-                <span>
-                  <strong>Service Job Selected:</strong> Bill of Materials (BOM) calculation and automatic material issuance are applicable only for Installation jobs.
-                </span>
-              </div>
-            </div>
-          )}
+            <>
+              {/* Repeatable Device Configuration Rows */}
+              <div className="space-y-3">
+                {deviceConfigs.map((config, idx) => {
+                  const otherSelectedTypes = new Set(
+                    deviceConfigs.filter((c) => c.id !== config.id).map((c) => c.device_type)
+                  );
 
-          {/* Loose Physical Components Availability & Fulfillability Card (Installation Only) */}
-          {formData.installation_or_service === 'Installation' && (
-            <div className="pt-2">
-              {checkingCompAvailability ? (
-                <div className="p-4 bg-gray-50 border border-gray-200 rounded-2xl flex items-center justify-center gap-2 text-xs text-gray-500">
-                  <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-                  <span>Checking loose component stock in store...</span>
-                </div>
-              ) : compAvailabilityError ? (
-                <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 flex items-center gap-2">
-                  <AlertTriangle size={15} className="shrink-0 text-amber-600" />
-                  <span>Stock check notice: {compAvailabilityError}</span>
-                </div>
-              ) : compAvailability ? (
-                <div
-                  className={`p-4 rounded-2xl border transition-all ${
-                    compAvailability.fulfillable
-                      ? 'bg-emerald-50/60 border-emerald-200/80 text-emerald-950'
-                      : 'bg-rose-50/80 border-rose-200 text-rose-950'
-                  }`}
-                >
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-2.5 mb-3 border-b border-black/5 gap-2">
-                    <div className="flex items-center gap-2">
-                      {compAvailability.fulfillable ? (
-                        <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
-                      ) : (
-                        <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0" />
-                      )}
-                      <div>
-                        <h4 className="text-xs font-bold uppercase tracking-wider">
-                          {compAvailability.fulfillable
-                            ? 'Physical Components Available in Store'
-                            : 'Component Shortage — Cannot Fulfill Checklist'}
-                        </h4>
-                        <p className="text-[11px] opacity-80">
-                          {compAvailability.fulfillable
-                            ? 'All required physical loose products (Cameras & Displays) are currently free in store inventory.'
-                            : compAvailability.message || 'One or more required components are out of stock or reserved.'}
-                        </p>
+                  return (
+                    <div
+                      key={config.id}
+                      className="p-4 bg-slate-50/70 border border-slate-200/80 rounded-2xl relative transition-all hover:border-slate-300"
+                    >
+                      <div className="flex items-center justify-between pb-2.5 mb-3 border-b border-slate-200/70">
+                        <span className="text-xs font-bold text-gray-800 uppercase tracking-wider flex items-center gap-1.5">
+                          <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 font-mono text-[11px] flex items-center justify-center font-bold">
+                            {idx + 1}
+                          </span>
+                          Device Configuration #{idx + 1}
+                        </span>
+
+                        {/* Remove button (enforces at least 1 device row) */}
+                        {deviceConfigs.length > 1 ? (
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveDeviceConfig(config.id)}
+                            className="text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50 px-2.5 py-1 rounded-lg font-semibold flex items-center gap-1 transition-colors cursor-pointer border border-rose-200/60"
+                            title="Remove this device row"
+                          >
+                            <Trash2 size={13} />
+                            Remove
+                          </button>
+                        ) : (
+                          <span className="text-[10px] text-gray-400 font-medium italic">
+                            Minimum 1 device type required
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-xs font-semibold text-gray-700 mb-1">
+                            Type of Device <span className="text-rose-500">*</span>
+                          </label>
+                          <select
+                            value={config.device_type}
+                            onChange={(e) => handleUpdateDeviceConfig(config.id, 'device_type', e.target.value)}
+                            className="w-full text-xs p-2.5 border border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 font-medium bg-white"
+                          >
+                            {DEVICE_OPTIONS.map((opt) => {
+                              const isAlreadySelected = otherSelectedTypes.has(opt);
+                              return (
+                                <option key={opt} value={opt} disabled={isAlreadySelected}>
+                                  {opt} {isAlreadySelected ? '(Already added)' : ''}
+                                </option>
+                              );
+                            })}
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-semibold text-gray-700 mb-1">
+                            Number of Devices <span className="text-rose-500">*</span>
+                          </label>
+                          <input
+                            type="number"
+                            min="1"
+                            step="1"
+                            required
+                            value={config.number_of_devices !== undefined ? config.number_of_devices : 1}
+                            onChange={(e) => handleUpdateDeviceConfig(config.id, 'number_of_devices', e.target.value)}
+                            placeholder="1"
+                            className="w-full text-xs p-2.5 border border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 font-semibold bg-white"
+                          />
+                        </div>
                       </div>
                     </div>
-                    <span
-                      className={`text-[11px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider font-mono self-start sm:self-auto ${
-                        compAvailability.fulfillable
-                          ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                          : 'bg-rose-100 text-rose-800 border border-rose-300'
-                      }`}
-                    >
-                      {compAvailability.fulfillable ? 'Fulfillable' : 'Shortage'}
-                    </span>
-                  </div>
+                  );
+                })}
+              </div>
 
-                  {/* Component breakdown grid */}
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                    {(compAvailability.components || []).map((comp) => {
-                      const hasShortage = !comp.is_available;
+              {/* Add Another Device Type Button */}
+              <div className="pt-1 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <button
+                  type="button"
+                  onClick={handleAddDeviceConfig}
+                  disabled={deviceConfigs.length >= DEVICE_OPTIONS.length}
+                  className={`text-xs px-3.5 py-2 rounded-xl font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                    deviceConfigs.length >= DEVICE_OPTIONS.length
+                      ? 'bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed'
+                      : 'bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 hover:border-blue-300'
+                  }`}
+                >
+                  <Plus size={14} />
+                  Add Another Device Type
+                </button>
+              </div>
+
+              {/* Automatic Bill of Materials (BOM) Calculation Display (Installation Only) */}
+              <div className="pt-2">
+                <BomRequirementSummary
+                  deviceConfigurations={deviceConfigs}
+                  extraDeviceConfigurations={EMPTY_EXTRA_DEVICES}
+                  token={token}
+                  jobType={formData.installation_or_service}
+                  onCalculated={(snapshot) => {
+                    if (formData.installation_or_service === 'Installation') {
+                      setBomSnapshot((prev) => {
+                        if (JSON.stringify(prev) === JSON.stringify(snapshot)) return prev;
+                        return snapshot;
+                      });
+                    }
+                  }}
+                />
+              </div>
+
+              {/* Loose Physical Components Availability & Fulfillability Card (Installation Only) */}
+              <div className="pt-2">
+                {checkingCompAvailability ? (
+                  <div className="p-4 bg-gray-50 border border-gray-200 rounded-2xl flex items-center justify-center gap-2 text-xs text-gray-500">
+                    <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                    <span>Checking loose component stock in store...</span>
+                  </div>
+                ) : compAvailabilityError ? (
+                  <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 flex items-center gap-2">
+                    <AlertTriangle size={15} className="shrink-0 text-amber-600" />
+                    <span>Stock check notice: {compAvailabilityError}</span>
+                  </div>
+                ) : compAvailability ? (
+                  <div
+                    className={`p-4 rounded-2xl border transition-all ${
+                      compAvailability.fulfillable
+                        ? 'bg-emerald-50/60 border-emerald-200/80 text-emerald-950'
+                        : 'bg-rose-50/80 border-rose-200 text-rose-950'
+                    }`}
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-2.5 mb-3 border-b border-black/5 gap-2">
+                      <div className="flex items-center gap-2">
+                        {compAvailability.fulfillable ? (
+                          <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+                        ) : (
+                          <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0" />
+                        )}
+                        <div>
+                          <h4 className="text-xs font-bold uppercase tracking-wider">
+                            {compAvailability.fulfillable
+                              ? 'Physical Components Available in Store'
+                              : 'Component Shortage — Cannot Fulfill Checklist'}
+                          </h4>
+                          <p className="text-[11px] opacity-80">
+                            {compAvailability.fulfillable
+                              ? 'All required physical loose products (Cameras & Displays) are currently free in store inventory.'
+                              : compAvailability.message || 'One or more required components are out of stock or reserved.'}
+                          </p>
+                        </div>
+                      </div>
+                      <span
+                        className={`text-[11px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider font-mono self-start sm:self-auto ${
+                          compAvailability.fulfillable
+                            ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                            : 'bg-rose-100 text-rose-800 border border-rose-300'
+                        }`}
+                      >
+                        {compAvailability.fulfillable ? 'Fulfillable' : 'Shortage'}
+                      </span>
+                    </div>
+
+                    {/* Component breakdown grid */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                      {(compAvailability.components || []).map((comp) => {
+                        const hasShortage = !comp.is_available;
+                        return (
+                          <div
+                            key={comp.component_name}
+                            className={`p-3 rounded-xl border text-xs flex flex-col justify-between ${
+                              hasShortage
+                                ? 'bg-white border-rose-300 shadow-xs ring-1 ring-rose-200'
+                                : 'bg-white/80 border-emerald-200'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="font-bold text-gray-900">{comp.component_name}</span>
+                              {hasShortage ? (
+                                <span className="text-[10px] font-bold bg-rose-100 text-rose-700 px-1.5 py-0.5 rounded font-mono">
+                                  -{comp.shortage} Short
+                                </span>
+                              ) : (
+                                <span className="text-[10px] font-bold bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded font-mono">
+                                  OK
+                                </span>
+                              )}
+                            </div>
+                            <div className="mt-2 space-y-0.5 text-[11px] text-gray-600 font-mono">
+                              <div className="flex justify-between">
+                                <span>Required:</span>
+                                <span className="font-bold text-gray-900">{comp.required_qty} Nos.</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span>Free in Store:</span>
+                                <span className={`font-bold ${hasShortage ? 'text-rose-600' : 'text-emerald-700'}`}>
+                                  {comp.free_stock} Nos.
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {!compAvailability.fulfillable && (
+                      <div className="mt-3 p-2.5 bg-rose-100/70 border border-rose-200 rounded-xl text-[11px] text-rose-900 font-medium">
+                        <strong>Action Required:</strong> Loose-product stock must be replenished via Store Manager workspace before this checklist can be reserved or created.
+                      </div>
+                    )}
+                  </div>
+                ) : null}
+              </div>
+
+              {/* Required Device Allocation KPI */}
+              <div className="mt-3 p-3 bg-blue-50/50 rounded-xl border border-blue-100 flex items-center justify-between text-xs">
+                <span className="font-bold text-gray-700 flex items-center gap-1.5">
+                  <HardDrive size={14} className="text-blue-600" />
+                  Total Required Installation Devices:
+                </span>
+                <span className="text-sm font-black font-mono text-blue-900 bg-white px-3 py-1 rounded-lg border border-blue-200">
+                  {totalRequiredDevices} Units
+                </span>
+              </div>
+            </>
+          ) : (
+            <div className="space-y-4">
+              <div className="p-4 bg-purple-50/70 border border-purple-200/80 rounded-2xl text-xs text-purple-900 flex items-start gap-3">
+                <Info size={18} className="text-purple-600 shrink-0 mt-0.5" />
+                <div>
+                  <h4 className="font-bold text-sm text-purple-950">Service Job Mode</h4>
+                  <p className="mt-0.5 text-purple-800 leading-relaxed">
+                    Automatic standard installation BOM calculation is disabled for Service jobs. No materials or devices are deducted or reserved upon checklist creation. Use the section below to specify the actual items needed for this service job.
+                  </p>
+                </div>
+              </div>
+
+              {/* Service Requirements Table */}
+              <div className="space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-1 border-b border-gray-200 gap-2">
+                  <div>
+                    <h4 className="text-xs font-bold uppercase text-gray-800 tracking-wider flex items-center gap-1.5">
+                      <Package size={15} className="text-purple-600" />
+                      Requested Service Items &amp; Replacement Parts (Optional)
+                    </h4>
+                    <p className="text-[11px] text-gray-500">
+                      Select specific devices, cameras, or materials required for this service job from the existing inventory catalogue.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleAddServiceItem}
+                    className="text-xs px-3 py-1.5 rounded-xl font-bold bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200 hover:border-purple-300 flex items-center gap-1 transition-all cursor-pointer self-start sm:self-auto"
+                  >
+                    <Plus size={14} />
+                    Add Service Item
+                  </button>
+                </div>
+
+                {serviceItems.length === 0 ? (
+                  <div className="p-5 bg-gray-50 border border-dashed border-gray-200 rounded-2xl text-center text-xs text-gray-500 space-y-1">
+                    <p className="font-semibold text-gray-700">No replacement items or devices requested.</p>
+                    <p className="text-[11px]">Direct service inspections or routine fixes without parts do not trigger store inventory requirements or issuance.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {serviceItems.map((sItem, idx) => {
+                      const matchedInCat = catalogueItems.find((c) => String(c.id) === String(sItem.item_id));
+                      const availStock = matchedInCat ? matchedInCat.available_stock : 0;
+                      const isShortage = Number(sItem.quantity_required) > availStock;
                       return (
                         <div
-                          key={comp.component_name}
-                          className={`p-3 rounded-xl border text-xs flex flex-col justify-between ${
-                            hasShortage
-                              ? 'bg-white border-rose-300 shadow-xs ring-1 ring-rose-200'
-                              : 'bg-white/80 border-emerald-200'
-                          }`}
+                          key={sItem.id}
+                          className="p-4 bg-slate-50/80 border border-slate-200 rounded-2xl relative transition-all"
                         >
-                          <div className="flex items-center justify-between">
-                            <span className="font-bold text-gray-900">{comp.component_name}</span>
-                            {hasShortage ? (
-                              <span className="text-[10px] font-bold bg-rose-100 text-rose-700 px-1.5 py-0.5 rounded font-mono">
-                                -{comp.shortage} Short
+                          <div className="flex items-center justify-between pb-2 mb-2.5 border-b border-slate-200/70">
+                            <span className="text-xs font-bold text-gray-800 uppercase flex items-center gap-1.5">
+                              <span className="w-5 h-5 rounded-full bg-purple-100 text-purple-700 font-mono text-[11px] flex items-center justify-center font-bold">
+                                {idx + 1}
                               </span>
-                            ) : (
-                              <span className="text-[10px] font-bold bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded font-mono">
-                                OK
+                              Service Requirement #{idx + 1}
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md font-mono ${sItem.item_type === 'DEVICE' ? 'bg-blue-100 text-blue-800' : 'bg-emerald-100 text-emerald-800'}`}>
+                                {sItem.item_type || 'ITEM'}
                               </span>
-                            )}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveServiceItem(sItem.id)}
+                              className="text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50 px-2.5 py-1 rounded-lg font-semibold flex items-center gap-1 transition-colors cursor-pointer border border-rose-200/60"
+                            >
+                              <Trash2 size={13} />
+                              Remove
+                            </button>
                           </div>
-                          <div className="mt-2 space-y-0.5 text-[11px] text-gray-600 font-mono">
-                            <div className="flex justify-between">
-                              <span>Required:</span>
-                              <span className="font-bold text-gray-900">{comp.required_qty} Nos.</span>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 text-xs">
+                            <div className="sm:col-span-5">
+                              <label className="block text-[11px] font-semibold text-gray-700 mb-1">
+                                Item from Inventory Catalogue <span className="text-rose-500">*</span>
+                              </label>
+                              <select
+                                value={sItem.item_id}
+                                onChange={(e) => handleUpdateServiceItem(sItem.id, 'item_id', e.target.value)}
+                                className="w-full text-xs p-2.5 border border-gray-200 rounded-xl focus:outline-none focus:border-purple-500 bg-white font-medium"
+                              >
+                                {catalogueItems.map((cat) => (
+                                  <option key={cat.id} value={cat.id}>
+                                    [{cat.item_type}] {cat.item_name} ({cat.sku}) — Stock: {cat.available_stock} {cat.unit}
+                                  </option>
+                                ))}
+                              </select>
                             </div>
-                            <div className="flex justify-between">
-                              <span>Free in Store:</span>
-                              <span className={`font-bold ${hasShortage ? 'text-rose-600' : 'text-emerald-700'}`}>
-                                {comp.free_stock} Nos.
-                              </span>
+
+                            <div className="sm:col-span-2">
+                              <label className="block text-[11px] font-semibold text-gray-700 mb-1">
+                                Quantity Required <span className="text-rose-500">*</span>
+                              </label>
+                              <input
+                                type="number"
+                                min="1"
+                                step="1"
+                                required
+                                value={sItem.quantity_required}
+                                onChange={(e) => handleUpdateServiceItem(sItem.id, 'quantity_required', e.target.value)}
+                                className="w-full text-xs p-2.5 border border-gray-200 rounded-xl focus:outline-none focus:border-purple-500 bg-white font-bold font-mono"
+                              />
+                            </div>
+
+                            <div className="sm:col-span-2">
+                              <label className="block text-[11px] font-semibold text-gray-700 mb-1">
+                                Unit
+                              </label>
+                              <input
+                                type="text"
+                                value={sItem.unit || 'Nos.'}
+                                onChange={(e) => handleUpdateServiceItem(sItem.id, 'unit', e.target.value)}
+                                className="w-full text-xs p-2.5 border border-gray-200 rounded-xl focus:outline-none focus:border-purple-500 bg-white"
+                              />
+                            </div>
+
+                            <div className="sm:col-span-3">
+                              <label className="block text-[11px] font-semibold text-gray-700 mb-1">
+                                Available Usable Stock
+                              </label>
+                              <div className="flex items-center gap-2 pt-1 font-mono text-xs">
+                                <span className={`font-bold ${isShortage ? 'text-rose-600' : 'text-emerald-700'}`}>
+                                  {availStock} {sItem.unit || 'Nos.'}
+                                </span>
+                                {isShortage && (
+                                  <span className="text-[10px] font-bold bg-rose-100 text-rose-700 px-2 py-0.5 rounded-full">
+                                    Shortage
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="sm:col-span-12">
+                              <label className="block text-[11px] font-semibold text-gray-700 mb-1">
+                                Reason / Service Note (Optional)
+                              </label>
+                              <input
+                                type="text"
+                                value={sItem.service_note || ''}
+                                onChange={(e) => handleUpdateServiceItem(sItem.id, 'service_note', e.target.value)}
+                                placeholder="e.g. Camera lens scratched / replacement requested by client"
+                                className="w-full text-xs p-2.5 border border-gray-200 rounded-xl focus:outline-none focus:border-purple-500 bg-white"
+                              />
                             </div>
                           </div>
                         </div>
                       );
                     })}
                   </div>
-
-                  {!compAvailability.fulfillable && (
-                    <div className="mt-3 p-2.5 bg-rose-100/70 border border-rose-200 rounded-xl text-[11px] text-rose-900 font-medium">
-                      <strong>Action Required:</strong> Loose-product stock must be replenished via Store Manager workspace before this checklist can be reserved or created.
-                    </div>
-                  )}
-                </div>
-              ) : null}
+                )}
+              </div>
             </div>
           )}
-
-          {/* Required Device Allocation KPI */}
-          <div className="mt-3 p-3 bg-blue-50/50 rounded-xl border border-blue-100 flex items-center justify-between text-xs">
-            <span className="font-bold text-gray-700 flex items-center gap-1.5">
-              <HardDrive size={14} className="text-blue-600" />
-              Total Required Installation Devices:
-            </span>
-            <span className="text-sm font-black font-mono text-blue-900 bg-white px-3 py-1 rounded-lg border border-blue-200">
-              {totalRequiredDevices} Units
-            </span>
-          </div>
         </div>
 
         {/* SECTION 5 — 3. PRICING & PAYMENT */}
@@ -1743,9 +2050,11 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
                     ? '-- Leave Unassigned (Assign Later) --'
                     : '-- Select Service Engineer --'}
                 </option>
-                {(engineersList.length > 0 ? engineersList : SERVICE_ENGINEER_OPTIONS).map((name) => {
+                {(engineersList.length > 0 ? engineersList : SERVICE_ENGINEER_OPTIONS).map((item) => {
+                  const name = typeof item === 'string' ? item : item?.name || '';
+                  if (!name) return null;
                   const eng = engineersAvailability?.find(
-                    (e) => e.name.toLowerCase() === name.toLowerCase()
+                    (e) => (e?.name || '').toLowerCase() === name.toLowerCase()
                   );
                   const isAvailable = (!formData.expected_arrival_date || checkingAvailability) ? true : (eng ? eng.available : false);
 
@@ -1793,12 +2102,14 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
                   Service Engineers Availability Status:
                 </span>
                 <div className="flex flex-wrap gap-2">
-                  {(engineersList.length > 0 ? engineersList : SERVICE_ENGINEER_OPTIONS).map((name) => {
+                  {(engineersList.length > 0 ? engineersList : SERVICE_ENGINEER_OPTIONS).map((item) => {
+                    const name = typeof item === 'string' ? item : item?.name || '';
+                    if (!name) return null;
                     const eng = engineersAvailability?.find(
-                      (e) => e.name.toLowerCase() === name.toLowerCase()
+                      (e) => (e?.name || '').toLowerCase() === name.toLowerCase()
                     );
                     const isAvailable = (!formData.expected_arrival_date || checkingAvailability) ? true : (eng ? eng.available : false);
-                    const isSelected = formData.service_engineer.toLowerCase() === name.toLowerCase();
+                    const isSelected = (formData.service_engineer || '').toLowerCase() === name.toLowerCase();
 
                     let chipBadge = 'Avail';
                     if (!isAvailable) {
@@ -1873,7 +2184,7 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
               {/* Active Conflict Warning Banner if current selected engineer is Booked */}
               {(() => {
                 const selectedEng = engineersAvailability?.find(
-                  (e) => e.name.toLowerCase() === (formData.service_engineer || '').trim().toLowerCase()
+                  (e) => (e?.name || '').toLowerCase() === (formData.service_engineer || '').trim().toLowerCase()
                 );
                 if (selectedEng && !selectedEng.available) {
                   return (

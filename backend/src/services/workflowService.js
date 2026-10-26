@@ -12,7 +12,7 @@ import {
   calculateJobFinalBom,
 } from './bomService.js';
 import { creditMaterialStockForVerifiedReturn } from './materialStockService.js';
-import { normalizeChecklistDeviceConfigs, inMemoryChecklistBomSnapshots, inMemoryChecklistSchedules } from './installationService.js';
+import { normalizeChecklistDeviceConfigs, inMemoryChecklistBomSnapshots, inMemoryChecklistSchedules, inMemoryChecklistServiceItems, normalizeServiceItems } from './installationService.js';
 import { completeEngineerBookingByChecklistId } from './engineerBookingService.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -282,6 +282,33 @@ export async function getDeviceCarryRecord(checklist_id) {
       .maybeSingle();
 
     if (checklist) {
+      if ((checklist.installation_or_service || 'Installation') === 'Service') {
+        const rawList = (Array.isArray(checklist.service_items) && checklist.service_items.length > 0)
+          ? checklist.service_items
+          : (inMemoryChecklistServiceItems.get(checklist.id) || []);
+        const sItems = normalizeServiceItems(rawList);
+        const issuedItems = sItems.filter((it) => (it.quantity_issued || 0) > 0);
+        return {
+          id: `carry-service-${checklist.id}`,
+          checklist_id: checklist.id,
+          checklist_number: checklist.checklist_number,
+          source: 'SERVICE_CHECKLIST',
+          status: 'SUBMITTED',
+          total_devices_required: 0,
+          total_extra_devices: 0,
+          total_devices_carried: issuedItems.reduce((sum, it) => sum + (it.quantity_issued || 0), 0),
+          items: issuedItems.map((it) => ({
+            id: it.id,
+            item_id: it.item_id,
+            device_type: it.item_name,
+            item_name: it.item_name,
+            item_type: it.item_type,
+            quantity_carried: it.quantity_issued,
+            quantity_declared_to_carry: it.quantity_issued,
+          })),
+        };
+      }
+
       const normalized = normalizeChecklistDeviceConfigs(checklist);
       const reqConfigs = normalized.device_configurations || [];
       const extraConfigs = normalized.extra_device_configurations || [];
@@ -785,6 +812,24 @@ export async function submitInstallationCompletionReport(param1, param2) {
 
   const checklist_id = opts.checklist_id;
   const user = opts.user || { id: 'tech-user', email: 'tech@eagleeye.com', role: 'TECHNICAL' };
+
+  const { data: checklist, error: checkErr } = await supabase
+    .from('installation_checklists')
+    .select('*')
+    .eq('id', checklist_id)
+    .maybeSingle();
+
+  if (checkErr || !checklist) {
+    throw new Error('Installation checklist not found');
+  }
+
+  const isServiceJob = (checklist.installation_or_service || 'Installation') === 'Service';
+  const rawSList = (Array.isArray(checklist.service_items) && checklist.service_items.length > 0)
+    ? checklist.service_items
+    : (inMemoryChecklistServiceItems.get(checklist_id) || []);
+  const serviceItems = isServiceJob ? normalizeServiceItems(rawSList) : [];
+  const issuedServiceItems = serviceItems.filter((it) => (it.quantity_issued || 0) > 0);
+
   const items = (opts.items || opts.device_items || []).filter(
     (i) => !isScrewMaterial(i.device_type || i.item_name)
   );
@@ -794,18 +839,11 @@ export async function submitInstallationCompletionReport(param1, param2) {
   const completion_status = opts.completion_status || 'Site Work Completed';
   const remarks = opts.remarks || opts.completion_notes || '';
 
-  if (!items || !Array.isArray(items) || items.length === 0) {
+  if (!isServiceJob && (!items || !Array.isArray(items) || items.length === 0)) {
     throw new Error('Completion report items are required');
   }
-
-  const { data: checklist, error: checkErr } = await supabase
-    .from('installation_checklists')
-    .select('*')
-    .eq('id', checklist_id)
-    .single();
-
-  if (checkErr || !checklist) {
-    throw new Error('Installation checklist not found');
+  if (isServiceJob && issuedServiceItems.length > 0 && (!items || !Array.isArray(items) || items.length === 0)) {
+    throw new Error(`Reconciliation is required for the ${issuedServiceItems.length} items issued for this service job.`);
   }
 
   let totalCarried = 0;
@@ -1001,20 +1039,22 @@ export async function submitInstallationCompletionReport(param1, param2) {
     }));
 
   let finalBomSnapshot = null;
-  try {
-    finalBomSnapshot = await calculateJobFinalBom({
-      installedDeviceConfigs: installedConfigs,
-      preliminaryBomSnapshot: checklist.bom_snapshot || inMemoryChecklistBomSnapshots?.get(checklist_id),
-      actualMaterialsIssued: processedMaterialItems,
-      actualMaterialsUsed: processedMaterialItems.filter((m) => m.quantity_used > 0),
-      actualMaterialsReturned: processedMaterialItems.filter((m) => m.quantity_returned > 0),
-    });
-  } catch (bomErr) {
-    console.warn('Could not calculate final BOM snapshot:', bomErr.message);
-  }
+  if (!isServiceJob) {
+    try {
+      finalBomSnapshot = await calculateJobFinalBom({
+        installedDeviceConfigs: installedConfigs,
+        preliminaryBomSnapshot: checklist.bom_snapshot || inMemoryChecklistBomSnapshots?.get(checklist_id),
+        actualMaterialsIssued: processedMaterialItems,
+        actualMaterialsUsed: processedMaterialItems.filter((m) => m.quantity_used > 0),
+        actualMaterialsReturned: processedMaterialItems.filter((m) => m.quantity_returned > 0),
+      });
+    } catch (bomErr) {
+      console.warn('Could not calculate final BOM snapshot:', bomErr.message);
+    }
 
-  if (finalBomSnapshot && processedExtraInstallations.length > 0) {
-    finalBomSnapshot.extra_installations = processedExtraInstallations;
+    if (finalBomSnapshot && processedExtraInstallations.length > 0) {
+      finalBomSnapshot.extra_installations = processedExtraInstallations;
+    }
   }
 
   // Calculate extra devices metrics strictly from declared loose backup items

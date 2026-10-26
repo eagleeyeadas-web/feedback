@@ -323,6 +323,8 @@ export default function InstallationCompletionModal({
   const [standardMaterialItems, setStandardMaterialItems] = useState([]);
   const [materialsCollapsed, setMaterialsCollapsed] = useState(false);
 
+  const isServiceJob = (checklist.installation_or_service || 'Installation') === 'Service' || checklist.job_type === 'Service';
+
   const [deviceConfigs, setDeviceConfigs] = useState(DEFAULT_CONFIGS);
   const [extraInstallations, setExtraInstallations] = useState([]);
 
@@ -447,41 +449,61 @@ export default function InstallationCompletionModal({
         }
 
         // 3. New Post-Installation Entry
-        // 3A. Customer-Required Installation Devices (from checklist configurations)
-        const configs = Array.isArray(checklist.device_configurations) && checklist.device_configurations.length > 0
-          ? checklist.device_configurations
-          : (checklist.device_type ? [{ device_type: checklist.device_type, number_of_devices: checklist.number_of_devices || 1, unit: 'Nos.' }] : []);
-
-        const initialReqRows = configs.map((cfg, idx) => {
-          const devType = cfg.device_type || 'Standard Device';
-          const count = Number(cfg.number_of_devices ?? cfg.quantity_carried ?? 1);
-          const matchedProd = products.find((p) => (p.item_name || '').toLowerCase() === devType.toLowerCase());
-          return {
-            id: `req-dev-${idx}-${Date.now()}`,
-            product_id: matchedProd?.id || null,
-            device_type: devType,
-            product_name: devType,
-            sku: matchedProd?.sku || '',
-            unit: cfg.unit || matchedProd?.unit || 'Nos.',
-            required_quantity: count,
-            actual_installed_quantity: count, // default: all required installed
-            notes: '',
-          };
-        });
-
-        if (initialReqRows.length === 0) {
-          const defaultDev = products.find((p) => p.item_name === 'Camera') || products[0];
-          initialReqRows.push({
-            id: `req-dev-default`,
-            product_id: defaultDev?.id || null,
-            device_type: defaultDev ? defaultDev.item_name : 'Camera System',
-            product_name: defaultDev ? defaultDev.item_name : 'Camera System',
-            sku: defaultDev?.sku || '',
-            unit: defaultDev?.unit || 'Nos.',
-            required_quantity: 1,
-            actual_installed_quantity: 1,
-            notes: '',
+        // 3A. Customer-Required Installation Devices / Service Items
+        let initialReqRows = [];
+        if (isServiceJob) {
+          const rawService = Array.isArray(checklist.service_items) ? checklist.service_items : [];
+          const issuedServiceItems = rawService.filter((it) => (Number(it.quantity_issued) || 0) > 0);
+          initialReqRows = issuedServiceItems.map((it, idx) => {
+            const issuedQty = Number(it.quantity_issued) || 0;
+            return {
+              id: `req-service-${idx}-${Date.now()}`,
+              product_id: it.item_id || null,
+              device_type: it.item_name,
+              product_name: it.item_name,
+              sku: it.sku || '',
+              unit: it.unit || 'Nos.',
+              required_quantity: issuedQty,
+              actual_installed_quantity: issuedQty, // default: all issued items used
+              notes: it.service_note || '',
+            };
           });
+        } else {
+          const configs = Array.isArray(checklist.device_configurations) && checklist.device_configurations.length > 0
+            ? checklist.device_configurations
+            : (checklist.device_type ? [{ device_type: checklist.device_type, number_of_devices: checklist.number_of_devices || 1, unit: 'Nos.' }] : []);
+
+          initialReqRows = configs.map((cfg, idx) => {
+            const devType = cfg.device_type || 'Standard Device';
+            const count = Number(cfg.number_of_devices ?? cfg.quantity_carried ?? 1);
+            const matchedProd = products.find((p) => (p.item_name || '').toLowerCase() === devType.toLowerCase());
+            return {
+              id: `req-dev-${idx}-${Date.now()}`,
+              product_id: matchedProd?.id || null,
+              device_type: devType,
+              product_name: devType,
+              sku: matchedProd?.sku || '',
+              unit: cfg.unit || matchedProd?.unit || 'Nos.',
+              required_quantity: count,
+              actual_installed_quantity: count, // default: all required installed
+              notes: '',
+            };
+          });
+
+          if (initialReqRows.length === 0) {
+            const defaultDev = products.find((p) => p.item_name === 'Camera') || products[0];
+            initialReqRows.push({
+              id: `req-dev-default`,
+              product_id: defaultDev?.id || null,
+              device_type: defaultDev ? defaultDev.item_name : 'Camera System',
+              product_name: defaultDev ? defaultDev.item_name : 'Camera System',
+              sku: defaultDev?.sku || '',
+              unit: defaultDev?.unit || 'Nos.',
+              required_quantity: 1,
+              actual_installed_quantity: 1,
+              notes: '',
+            });
+          }
         }
         setRequiredDeviceItems(initialReqRows);
 
@@ -515,27 +537,30 @@ export default function InstallationCompletionModal({
         setBackupItems(initialBackupRows);
 
         // 3C. Standard Fitting Materials from preliminary BOM snapshot (screws excluded)
-        const prelimMaterials = checklist.bom_snapshot?.items || checklist.material_items || [];
-        const initialMatRows = prelimMaterials
-          .filter((m) => {
-            const name = (m.material_name || m.item_name || '').trim();
-            return name && !isScrewMaterial(name) && !isDeviceComponent(name);
-          })
-          .map((m, idx) => {
-            const name = (m.material_name || m.item_name || '').trim();
-            const qty = Number(m.total_quantity !== undefined ? m.total_quantity : m.quantity) || 0;
-            const matchedProd = products.find((p) => (p.item_name || '').toLowerCase() === name.toLowerCase());
-            return {
-              id: `mat-row-${idx}-${Date.now()}`,
-              material_id: m.material_id || m.id || matchedProd?.id || null,
-              material_name: name,
-              unit: m.unit || matchedProd?.unit || 'Nos.',
-              standard_quantity: qty,
-              quantity_used: qty,
-              quantity_returned: 0,
-              remarks: '',
-            };
-          });
+        let initialMatRows = [];
+        if (!isServiceJob) {
+          const prelimMaterials = checklist.bom_snapshot?.items || checklist.material_items || [];
+          initialMatRows = prelimMaterials
+            .filter((m) => {
+              const name = (m.material_name || m.item_name || '').trim();
+              return name && !isScrewMaterial(name) && !isDeviceComponent(name);
+            })
+            .map((m, idx) => {
+              const name = (m.material_name || m.item_name || '').trim();
+              const qty = Number(m.total_quantity !== undefined ? m.total_quantity : m.quantity) || 0;
+              const matchedProd = products.find((p) => (p.item_name || '').toLowerCase() === name.toLowerCase());
+              return {
+                id: `mat-row-${idx}-${Date.now()}`,
+                material_id: m.material_id || m.id || matchedProd?.id || null,
+                material_name: name,
+                unit: m.unit || matchedProd?.unit || 'Nos.',
+                standard_quantity: qty,
+                quantity_used: qty,
+                quantity_returned: 0,
+                remarks: '',
+              };
+            });
+        }
         setStandardMaterialItems(initialMatRows);
 
         // Pre-load existing extra installations if any were previously recorded
@@ -751,7 +776,7 @@ export default function InstallationCompletionModal({
   // Overall form validation
   const validateForm = () => {
     // 1. Required Devices validation
-    if (requiredDeviceItems.length === 0) {
+    if (!isServiceJob && requiredDeviceItems.length === 0) {
       return 'Please record at least one customer-required installation device.';
     }
     for (const dev of requiredDeviceItems) {
@@ -1014,19 +1039,30 @@ export default function InstallationCompletionModal({
           ) : (
             <form onSubmit={handleSubmit} className="space-y-6 text-xs">
               {/* ============================================================
-                  SECTION 1: CUSTOMER-REQUIRED INSTALLATION DEVICES
+                  SECTION 1: CUSTOMER-REQUIRED INSTALLATION DEVICES / SERVICE ITEMS
                   ============================================================ */}
               <div className="space-y-3">
                 <div className="border-b border-gray-100 pb-2">
                   <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wider flex items-center gap-1.5">
                     <Package className="w-4 h-4 text-blue-600" />
-                    Customer-Required Installation Devices
+                    {isServiceJob ? 'Service Items Used & Reconciled' : 'Customer-Required Installation Devices'}
                   </h4>
                   <p className="text-[11px] text-gray-500">
-                    Verify the actual quantity of customer devices installed on site. Required devices are kept strictly separate from extra backup returns.
+                    {isServiceJob
+                      ? 'Verify the actual quantity of issued service items used on site. Any unused items will be declared for return.'
+                      : 'Verify the actual quantity of customer devices installed on site. Required devices are kept strictly separate from extra backup returns.'}
                   </p>
                 </div>
 
+                {isServiceJob && requiredDeviceItems.length === 0 ? (
+                  <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl text-center text-gray-600 text-xs space-y-1">
+                    <CheckCircle2 className="w-5 h-5 mx-auto text-purple-600" />
+                    <span className="font-bold text-gray-800 block">Direct Service Call — No Stock Issued</span>
+                    <span className="text-[11px] text-gray-500 block">
+                      No items were issued from the store for this service job. Enter your service notes below to complete the report.
+                    </span>
+                  </div>
+                ) : (
                 <div className="space-y-2.5">
                   {requiredDeviceItems.map((row) => {
                     const req = Number(row.required_quantity) || 0;
@@ -1045,22 +1081,22 @@ export default function InstallationCompletionModal({
                             <span className="font-bold text-gray-900 text-xs">{row.product_name}</span>
                             {row.sku && <span className="text-[10px] text-gray-400 font-mono">({row.sku})</span>}
                             <span className="text-[10px] text-gray-500 font-mono font-normal">
-                              • Customer Requirement
+                              • {isServiceJob ? 'Service Carry Item' : 'Customer Requirement'}
                             </span>
                           </div>
 
                           <div className="flex items-center gap-2">
                             {isFull ? (
                               <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1">
-                                <CheckCircle2 size={12} className="text-emerald-600" /> Fully Installed ({inst}/{req})
+                                <CheckCircle2 size={12} className="text-emerald-600" /> {isServiceJob ? 'Fully Used' : 'Fully Installed'} ({inst}/{req})
                               </span>
                             ) : isPartial ? (
                               <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300 flex items-center gap-1">
-                                <AlertTriangle size={12} className="text-amber-600" /> Partial Installation ({inst}/{req})
+                                <AlertTriangle size={12} className="text-amber-600" /> {isServiceJob ? 'Partially Used' : 'Partial Installation'} ({inst}/{req})
                               </span>
                             ) : (
                               <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-300 flex items-center gap-1">
-                                <AlertTriangle size={12} className="text-rose-600" /> Not Installed (0/{req})
+                                <AlertTriangle size={12} className="text-rose-600" /> {isServiceJob ? 'Not Used (Returned)' : 'Not Installed'} (0/{req})
                               </span>
                             )}
                           </div>
@@ -1069,7 +1105,7 @@ export default function InstallationCompletionModal({
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
                           <div>
                             <label className="block text-[10px] font-semibold text-gray-600 mb-0.5 uppercase tracking-wide">
-                              Customer Required Quantity
+                              {isServiceJob ? 'Quantity Issued to Technician' : 'Customer Required Quantity'}
                             </label>
                             <div className="w-full text-xs p-1.5 border border-gray-200 rounded-lg text-center font-mono font-bold bg-gray-50 text-gray-800">
                               {req} {row.unit}
@@ -1078,7 +1114,7 @@ export default function InstallationCompletionModal({
 
                           <div>
                             <label className="block text-[10px] font-semibold text-gray-600 mb-0.5 uppercase tracking-wide">
-                              Actual Installed Quantity <span className="text-rose-500">*</span>
+                              {isServiceJob ? 'Quantity Used on Site' : 'Actual Installed Quantity'} <span className="text-rose-500">*</span>
                             </label>
                             <input
                               type="number"
@@ -1097,10 +1133,10 @@ export default function InstallationCompletionModal({
 
                           <div>
                             <label className="block text-[10px] font-semibold text-gray-600 mb-0.5 uppercase tracking-wide">
-                              Installation Reconciliation
+                              {isServiceJob ? 'Service Reconciliation' : 'Installation Reconciliation'}
                             </label>
                             <div className="w-full text-xs p-1.5 border border-gray-200 rounded-lg text-center font-semibold bg-gray-50 text-gray-700">
-                              {isFull ? '100% Installed' : `${inst} of ${req} Installed`}
+                              {isFull ? (isServiceJob ? '100% Used on Site' : '100% Installed') : (isServiceJob ? `${inst} Used, ${req - inst} Returned` : `${inst} of ${req} Installed`)}
                             </div>
                           </div>
                         </div>
@@ -1108,14 +1144,14 @@ export default function InstallationCompletionModal({
                         {inst < req && (
                           <div className="pt-1">
                             <label className="block text-[10px] font-semibold text-amber-800 mb-0.5 uppercase tracking-wide">
-                              Shortfall Reason / Uninstalled Note <span className="text-amber-600 font-normal">(Optional)</span>
+                              {isServiceJob ? 'Unused Return Note' : 'Shortfall Reason / Uninstalled Note'} <span className="text-amber-600 font-normal">(Optional)</span>
                             </label>
                             <input
                               type="text"
                               disabled={readOnly}
                               value={row.notes || ''}
                               onChange={(e) => handleRequiredDeviceChange(row.id, 'notes', e.target.value)}
-                              placeholder="e.g. 1 client vehicle was unavailable at site during installation..."
+                              placeholder={isServiceJob ? 'e.g. Existing camera was intact; returned 1 unused unit to store...' : 'e.g. 1 client vehicle was unavailable at site during installation...'}
                               className="w-full text-xs px-2.5 py-1.5 border border-amber-300 rounded-lg bg-amber-50/30 text-gray-800 outline-none focus:ring-2 focus:ring-amber-500 disabled:bg-gray-100"
                             />
                           </div>
@@ -1124,6 +1160,7 @@ export default function InstallationCompletionModal({
                     );
                   })}
                 </div>
+                )}
               </div>
 
               {/* ============================================================
@@ -1305,6 +1342,7 @@ export default function InstallationCompletionModal({
               {/* ============================================================
                   SECTION 3: STANDARD FITTING MATERIALS USAGE (COLLAPSIBLE)
                   ============================================================ */}
+              {!isServiceJob && (
               <div className="border border-gray-200 rounded-xl overflow-hidden bg-white shadow-2xs">
                 <div className="p-3 bg-slate-50 flex items-center justify-between border-b border-gray-200">
                   <button
@@ -1398,6 +1436,7 @@ export default function InstallationCompletionModal({
                   </div>
                 )}
               </div>
+              )}
 
               {/* ============================================================
                   SECTION 4: EXTRA DEVICE INSTALLATIONS (ADDITIONAL CUSTOMERS)

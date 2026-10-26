@@ -148,6 +148,20 @@ export const extraDeviceItemSchema = z.object({
   extra_quantity: z.coerce.number().int().gt(0, 'Extra quantity must be a positive whole number greater than 0'),
 });
 
+export const serviceItemSchema = z.object({
+  id: z.string().optional(),
+  item_id: z.string().nullable().optional(),
+  item_type: z.enum(['DEVICE', 'MATERIAL']).optional().default('MATERIAL'),
+  item_name: z.string().min(1, 'Item name is required'),
+  sku: z.string().nullable().optional(),
+  quantity_required: z.coerce.number().int().gt(0, 'Quantity required must be greater than 0'),
+  quantity_issued: z.coerce.number().int().gte(0).optional().default(0),
+  quantity_remaining: z.coerce.number().int().gte(0).optional(),
+  unit: z.string().optional().default('Nos.'),
+  service_note: z.string().nullable().optional(),
+  status: z.string().optional().default('PENDING'),
+});
+
 export const checklistValidationSchema = z.object({
   salesperson_name: z.enum(SALESPERSON_OPTIONS, {
     errorMap: () => ({ message: 'Salesperson Name is required. Please select one of the authorized salespeople: Ranjith, Abinaya, Kavitha, Kavitha Balu, or Padmapriya.' }),
@@ -162,6 +176,7 @@ export const checklistValidationSchema = z.object({
   device_type: z.string().optional(),
   number_of_devices: z.coerce.number().int().gt(0, 'Number of devices must be greater than 0').optional(),
   number_of_vehicles: z.coerce.number().int().gt(0, 'Number of vehicles must be greater than 0').optional().default(1),
+  service_items: z.array(serviceItemSchema).optional().default([]),
   carry_extra_backup_items: z.boolean().optional().default(false),
   extra_devices: z.boolean().default(false),
   extra_device_configurations: z.array(extraDeviceItemSchema).optional().nullable(),
@@ -252,8 +267,8 @@ export const checklistValidationSchema = z.object({
       }
     }
   }
-  // If device_configurations is not provided, enforce legacy device fields
-  if (!data.device_configurations || data.device_configurations.length === 0) {
+  // If device_configurations is not provided, enforce legacy device fields (Installation jobs only)
+  if (data.installation_or_service === 'Installation' && (!data.device_configurations || data.device_configurations.length === 0)) {
     if (!data.device_type) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -764,6 +779,29 @@ router.put('/:id', requireRole('SALES', 'ADMIN'), async (req, res) => {
       error: err.message || 'Failed to update installation checklist',
       conflict: err.conflict || null,
     });
+  }
+});
+
+/**
+ * POST /api/admin/installations/:id/service-requirements
+ * Add or update service-specific requirements for a Service job
+ */
+router.post('/:id/service-requirements', requireRole('SALES', 'ADMIN', 'TECHNICAL', 'STORE_MANAGER'), async (req, res) => {
+  try {
+    const rawItems = req.body.service_items || req.body.items || [];
+    const existing = await getChecklistById(req.params.id);
+    if (!existing) {
+      return res.status(404).json({ error: 'Checklist not found' });
+    }
+    const updated = await updateChecklist(req.params.id, {
+      ...existing,
+      installation_or_service: 'Service',
+      service_items: rawItems,
+    });
+    return res.json(updated);
+  } catch (err) {
+    console.error('Error in POST /installations/:id/service-requirements:', err);
+    return res.status(400).json({ error: err.message || 'Failed to update service requirements' });
   }
 });
 

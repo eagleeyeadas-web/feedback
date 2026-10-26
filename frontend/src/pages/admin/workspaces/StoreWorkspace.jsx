@@ -33,7 +33,6 @@ import {
 import StoreBomManager from '../../../components/bom/StoreBomManager';
 import StoreInstallationRequirements from '../../../components/bom/StoreInstallationRequirements';
 import IssueMaterialsModal from '../../../components/bom/IssueMaterialsModal';
-import StoreCourierDispatch from '../../../components/bom/StoreCourierDispatch';
 import WeeklyStockReportTab from './WeeklyStockReportTab';
 import {
   fetchInventoryProducts,
@@ -784,16 +783,6 @@ export default function StoreWorkspace({ onSelectChecklist }) {
         </button>
 
         <button
-          onClick={() => setActiveTab('courier')}
-          className={`flex-1 min-w-[130px] py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
-            activeTab === 'courier' ? 'bg-indigo-700 text-white shadow-xs' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-          }`}
-        >
-          <Package className="w-4 h-4 text-indigo-400" />
-          <span>Product Courier Dispatch</span>
-        </button>
-
-        <button
           onClick={() => setActiveTab('returns')}
           className={`flex-1 min-w-[130px] py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
             activeTab === 'returns' ? 'bg-amber-600 text-white shadow-xs' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
@@ -1284,13 +1273,6 @@ export default function StoreWorkspace({ onSelectChecklist }) {
             ))}
           </div>
         </div>
-      )}
-
-      {/* ============================================================
-          TAB: PRODUCT COURIER DISPATCH
-          ============================================================ */}
-      {activeTab === 'courier' && (
-        <StoreCourierDispatch token={token} onSelectChecklist={onSelectChecklist} />
       )}
 
       {/* ============================================================

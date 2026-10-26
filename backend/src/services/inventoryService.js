@@ -913,15 +913,15 @@ export async function issueDevicesForChecklist({
     throw new Error(`Devices have already been issued for checklist ${checklist_id}. Duplicate issuance is prevented.`);
   }
 
-  // Database check: verify devices have not already been issued in store_material_requirements
+  // Database check: verify devices have not already been issued in installation_checklists
   try {
-    const { data: storeReq } = await supabase
-      .from('store_material_requirements')
+    const { data: chk } = await supabase
+      .from('installation_checklists')
       .select('devices_issuance_status')
-      .eq('checklist_id', checklist_id)
+      .eq('id', checklist_id)
       .maybeSingle();
 
-    if (storeReq && storeReq.devices_issuance_status === 'ISSUED') {
+    if (chk && chk.devices_issuance_status === 'ISSUED') {
       processedChecklistDeviceIssuances.add(checklist_id);
       throw new Error(`Devices have already been issued for checklist ${checklist_id}. Duplicate issuance is prevented.`);
     }
@@ -1087,14 +1087,12 @@ export async function issueDevicesForChecklist({
   processedChecklistDeviceIssuances.add(checklist_id);
   saveInventoryStorage();
 
-  // Update devices_issuance_status in store_material_requirements and installation_checklists
+  // Update status in store_material_requirements
   try {
     await supabase
       .from('store_material_requirements')
       .update({
-        devices_issuance_status: 'ISSUED',
-        devices_issued_at: new Date().toISOString(),
-        devices_issued_by: user?.id || null,
+        status: 'ISSUED',
         updated_at: new Date().toISOString(),
       })
       .eq('checklist_id', checklist_id);

@@ -818,6 +818,97 @@ export default function InstallationChecklistDetails({ id: propId, onEdit, onBac
           </div>
         )}
 
+        {/* SECTION 2B: SERVICE REQUIREMENTS & STORE ISSUANCE (Service Only) */}
+        {checklist.installation_or_service === 'Service' && (
+          <div className="space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-1 border-b border-gray-200 gap-2">
+              <h3 className="text-xs font-black text-navy uppercase tracking-wider flex items-center gap-2">
+                <Package size={15} className="text-purple-600" />
+                Requested Service Items &amp; Store Issuance
+              </h3>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 border border-purple-200 self-start sm:self-auto uppercase">
+                Service Job
+              </span>
+            </div>
+
+            {Array.isArray(checklist.service_items) && checklist.service_items.length > 0 ? (
+              <div className="bg-gray-50/60 p-4 rounded-xl border border-gray-200/80 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                  <span className="text-[11px] text-gray-600 font-medium">
+                    {checklist.service_items.length} requested service item{checklist.service_items.length === 1 ? '' : 's'} tracked from inventory catalogue:
+                  </span>
+
+                  {(role === 'STORE_MANAGER' || role === 'ADMIN' || role === 'SUPER_ADMIN') &&
+                    checklist.service_items.some((it) => (it.quantity_remaining > 0 || (it.quantity_required - (it.quantity_issued || 0)) > 0)) && (
+                      <button
+                        type="button"
+                        onClick={() => setShowMaterialIssueModal(true)}
+                        className="px-3.5 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer shrink-0"
+                      >
+                        <Package size={14} />
+                        Issue Service Items
+                      </button>
+                    )}
+                </div>
+
+                <div className="overflow-x-auto rounded-xl border border-purple-200 bg-white shadow-xs">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className="bg-purple-50/70 border-b border-purple-100 text-[11px] font-bold text-purple-950 uppercase">
+                        <th className="py-2.5 px-3 w-12 text-center">#</th>
+                        <th className="py-2.5 px-4">Item Name</th>
+                        <th className="py-2.5 px-4">SKU</th>
+                        <th className="py-2.5 px-3 text-center">Category</th>
+                        <th className="py-2.5 px-3 text-center">Required</th>
+                        <th className="py-2.5 px-3 text-center">Issued</th>
+                        <th className="py-2.5 px-3 text-center">Remaining</th>
+                        <th className="py-2.5 px-3 text-center">Status</th>
+                        <th className="py-2.5 px-4">Service Note</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {checklist.service_items.map((it, idx) => {
+                        const req = Number(it.quantity_required) || 1;
+                        const iss = Number(it.quantity_issued) || 0;
+                        const rem = Math.max(0, req - iss);
+                        const isFullyIssued = rem === 0;
+                        return (
+                          <tr key={idx} className="hover:bg-slate-50 transition-colors">
+                            <td className="py-2 px-3 text-center text-gray-400 font-mono text-[11px]">{idx + 1}</td>
+                            <td className="py-2 px-4 font-bold text-gray-900">{it.item_name}</td>
+                            <td className="py-2 px-4 font-mono text-gray-500 text-[11px]">{it.sku || '—'}</td>
+                            <td className="py-2 px-3 text-center">
+                              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded font-mono ${it.item_type === 'DEVICE' ? 'bg-blue-100 text-blue-800' : 'bg-emerald-100 text-emerald-800'}`}>
+                                {it.item_type || 'ITEM'}
+                              </span>
+                            </td>
+                            <td className="py-2 px-3 text-center font-mono font-bold text-gray-900">{req} {it.unit || 'Nos.'}</td>
+                            <td className="py-2 px-3 text-center font-mono font-bold text-emerald-700">{iss}</td>
+                            <td className="py-2 px-3 text-center font-mono font-bold text-amber-700">{rem}</td>
+                            <td className="py-2 px-3 text-center">
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${isFullyIssued ? 'bg-emerald-100 text-emerald-800' : iss > 0 ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-700'}`}>
+                                {isFullyIssued ? 'ISSUED' : iss > 0 ? 'PARTIAL' : 'PENDING'}
+                              </span>
+                            </td>
+                            <td className="py-2 px-4 text-gray-600 italic text-[11px]">{it.service_note || '—'}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ) : (
+              <div className="p-4 bg-purple-50/50 border border-purple-200 rounded-xl text-xs text-purple-900 flex items-center gap-2">
+                <Info size={16} className="text-purple-600 shrink-0" />
+                <span>
+                  <strong>Direct Service Call:</strong> No additional replacement parts or items were requested for this service job.
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* SECTION 3: 3. PRICING & PAYMENT */}
         <div className="space-y-3">
           <h3 className="text-xs font-black text-navy uppercase tracking-wider pb-1 border-b border-gray-200 flex items-center gap-2">

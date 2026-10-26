@@ -923,6 +923,28 @@ export async function issueFullJobStockApi(token, data) {
   return json;
 }
 
+export async function issueServiceJobStockApi(token, data) {
+  const res = await fetch(`${API_BASE}/admin/materials/issue-service-stock`, {
+    method: 'POST',
+    headers: adminHeaders(token),
+    body: JSON.stringify(data),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to issue service items');
+  return json;
+}
+
+export async function updateChecklistServiceRequirementsApi(token, checklistId, data) {
+  const res = await fetch(`${API_BASE}/admin/installations/${checklistId}/service-requirements`, {
+    method: 'POST',
+    headers: adminHeaders(token),
+    body: JSON.stringify(data),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to update service requirements');
+  return json;
+}
+
 export async function issueDevicesForChecklistApi(token, data) {
   const res = await fetch(`${API_BASE}/admin/inventory/issue-devices`, {
     method: 'POST',

@@ -63030,6 +63030,922 @@
         }
       ],
       "reconciliation_status": "FULLY_RECONCILED"
+    },
+    "0ba2f230-9ca2-4cbd-b4a8-dbad2fcb83b2": {
+      "checklist_id": "0ba2f230-9ca2-4cbd-b4a8-dbad2fcb83b2",
+      "technician_id": "0ba2f230-9ca2-4cbd-b4a8-dbad2fcb83b2",
+      "devices_carried_qty": 2,
+      "devices_installed_qty": 1,
+      "devices_installed_required_qty": 0,
+      "devices_installed_extra_qty": 0,
+      "devices_unused_qty": 1,
+      "devices_damaged_qty": 0,
+      "devices_missing_qty": 0,
+      "extra_devices_carried_qty": 0,
+      "extra_devices_installed_qty": 0,
+      "extra_devices_unused_qty": 0,
+      "extra_devices_damaged_qty": 0,
+      "extra_devices_missing_qty": 0,
+      "material_items": [],
+      "backup_items": [],
+      "extra_installations": [],
+      "final_bom": null,
+      "completion_status": "Completed",
+      "remarks": "1 camera installed, 1 returned intact",
+      "submitted_at": "2026-10-24T12:26:42.687Z",
+      "id": "1e418b95-c000-48b3-b041-23d2b806484d",
+      "items": [
+        {
+          "checklist_id": "0ba2f230-9ca2-4cbd-b4a8-dbad2fcb83b2",
+          "device_type": "2 Channel Live",
+          "quantity_carried": 2,
+          "quantity_installed": 1,
+          "quantity_installed_required": 0,
+          "quantity_installed_extra": 0,
+          "quantity_to_return": 1,
+          "quantity_damaged": 0,
+          "quantity_missing": 0,
+          "discrepancy_reason": null
+        }
+      ],
+      "device_items": [
+        {
+          "checklist_id": "0ba2f230-9ca2-4cbd-b4a8-dbad2fcb83b2",
+          "device_type": "2 Channel Live",
+          "quantity_carried": 2,
+          "quantity_installed": 1,
+          "quantity_installed_required": 0,
+          "quantity_installed_extra": 0,
+          "quantity_to_return": 1,
+          "quantity_damaged": 0,
+          "quantity_missing": 0,
+          "discrepancy_reason": null
+        }
+      ],
+      "reconciliation_status": "PENDING_STORE_VERIFICATION"
+    },
+    "20866f02-ea06-4e37-b2b7-96e37f994e9c": {
+      "checklist_id": "20866f02-ea06-4e37-b2b7-96e37f994e9c",
+      "technician_id": "20866f02-ea06-4e37-b2b7-96e37f994e9c",
+      "devices_carried_qty": 2,
+      "devices_installed_qty": 1,
+      "devices_installed_required_qty": 0,
+      "devices_installed_extra_qty": 0,
+      "devices_unused_qty": 1,
+      "devices_damaged_qty": 0,
+      "devices_missing_qty": 0,
+      "extra_devices_carried_qty": 0,
+      "extra_devices_installed_qty": 0,
+      "extra_devices_unused_qty": 0,
+      "extra_devices_damaged_qty": 0,
+      "extra_devices_missing_qty": 0,
+      "material_items": [],
+      "backup_items": [],
+      "extra_installations": [],
+      "final_bom": null,
+      "completion_status": "Completed",
+      "remarks": "1 camera installed, 1 returned intact",
+      "submitted_at": "2026-10-24T12:38:35.800Z",
+      "id": "ac8b067e-c619-4213-b915-b1248defeb5e",
+      "items": [
+        {
+          "checklist_id": "20866f02-ea06-4e37-b2b7-96e37f994e9c",
+          "device_type": "2 Channel Live",
+          "quantity_carried": 2,
+          "quantity_installed": 1,
+          "quantity_installed_required": 0,
+          "quantity_installed_extra": 0,
+          "quantity_to_return": 1,
+          "quantity_damaged": 0,
+          "quantity_missing": 0,
+          "discrepancy_reason": null
+        }
+      ],
+      "device_items": [
+        {
+          "checklist_id": "20866f02-ea06-4e37-b2b7-96e37f994e9c",
+          "device_type": "2 Channel Live",
+          "quantity_carried": 2,
+          "quantity_installed": 1,
+          "quantity_installed_required": 0,
+          "quantity_installed_extra": 0,
+          "quantity_to_return": 1,
+          "quantity_damaged": 0,
+          "quantity_missing": 0,
+          "discrepancy_reason": null
+        }
+      ],
+      "reconciliation_status": "PENDING_STORE_VERIFICATION"
+    },
+    "b2dfc098-c14c-468f-a751-7afa3612069f": {
+      "checklist_id": "b2dfc098-c14c-468f-a751-7afa3612069f",
+      "technician_id": "b2dfc098-c14c-468f-a751-7afa3612069f",
+      "devices_carried_qty": 2,
+      "devices_installed_qty": 1,
+      "devices_installed_required_qty": 0,
+      "devices_installed_extra_qty": 0,
+      "devices_unused_qty": 1,
+      "devices_damaged_qty": 0,
+      "devices_missing_qty": 0,
+      "extra_devices_carried_qty": 0,
+      "extra_devices_installed_qty": 0,
+      "extra_devices_unused_qty": 0,
+      "extra_devices_damaged_qty": 0,
+      "extra_devices_missing_qty": 0,
+      "material_items": [],
+      "backup_items": [],
+      "extra_installations": [],
+      "final_bom": null,
+      "completion_status": "Completed",
+      "remarks": "1 camera installed, 1 returned intact",
+      "submitted_at": "2026-10-24T12:41:06.660Z",
+      "id": "f290835f-6883-418a-a857-be7b47c471f0",
+      "items": [
+        {
+          "checklist_id": "b2dfc098-c14c-468f-a751-7afa3612069f",
+          "device_type": "2 Channel Live",
+          "quantity_carried": 2,
+          "quantity_installed": 1,
+          "quantity_installed_required": 0,
+          "quantity_installed_extra": 0,
+          "quantity_to_return": 1,
+          "quantity_damaged": 0,
+          "quantity_missing": 0,
+          "discrepancy_reason": null
+        }
+      ],
+      "device_items": [
+        {
+          "checklist_id": "b2dfc098-c14c-468f-a751-7afa3612069f",
+          "device_type": "2 Channel Live",
+          "quantity_carried": 2,
+          "quantity_installed": 1,
+          "quantity_installed_required": 0,
+          "quantity_installed_extra": 0,
+          "quantity_to_return": 1,
+          "quantity_damaged": 0,
+          "quantity_missing": 0,
+          "discrepancy_reason": null
+        }
+      ],
+      "reconciliation_status": "PENDING_STORE_VERIFICATION"
+    },
+    "bf6e8f23-63bc-456e-80c7-397aa9dfc675": {
+      "checklist_id": "bf6e8f23-63bc-456e-80c7-397aa9dfc675",
+      "technician_id": "bf6e8f23-63bc-456e-80c7-397aa9dfc675",
+      "devices_carried_qty": 2,
+      "devices_installed_qty": 1,
+      "devices_installed_required_qty": 0,
+      "devices_installed_extra_qty": 0,
+      "devices_unused_qty": 1,
+      "devices_damaged_qty": 0,
+      "devices_missing_qty": 0,
+      "extra_devices_carried_qty": 0,
+      "extra_devices_installed_qty": 0,
+      "extra_devices_unused_qty": 0,
+      "extra_devices_damaged_qty": 0,
+      "extra_devices_missing_qty": 0,
+      "material_items": [],
+      "backup_items": [],
+      "extra_installations": [],
+      "final_bom": null,
+      "completion_status": "Completed",
+      "remarks": "1 camera installed, 1 returned intact",
+      "submitted_at": "2026-10-26T03:15:13.779Z",
+      "id": "07428909-81e2-418f-af27-46249dc7e337",
+      "items": [
+        {
+          "checklist_id": "bf6e8f23-63bc-456e-80c7-397aa9dfc675",
+          "device_type": "2 Channel Live",
+          "quantity_carried": 2,
+          "quantity_installed": 1,
+          "quantity_installed_required": 0,
+          "quantity_installed_extra": 0,
+          "quantity_to_return": 1,
+          "quantity_damaged": 0,
+          "quantity_missing": 0,
+          "discrepancy_reason": null
+        }
+      ],
+      "device_items": [
+        {
+          "checklist_id": "bf6e8f23-63bc-456e-80c7-397aa9dfc675",
+          "device_type": "2 Channel Live",
+          "quantity_carried": 2,
+          "quantity_installed": 1,
+          "quantity_installed_required": 0,
+          "quantity_installed_extra": 0,
+          "quantity_to_return": 1,
+          "quantity_damaged": 0,
+          "quantity_missing": 0,
+          "discrepancy_reason": null
+        }
+      ],
+      "reconciliation_status": "PENDING_STORE_VERIFICATION"
+    },
+    "24e3c31c-414d-427b-a2e8-ac4471f9e2e5": {
+      "checklist_id": "24e3c31c-414d-427b-a2e8-ac4471f9e2e5",
+      "technician_id": "24e3c31c-414d-427b-a2e8-ac4471f9e2e5",
+      "devices_carried_qty": 2,
+      "devices_installed_qty": 1,
+      "devices_installed_required_qty": 0,
+      "devices_installed_extra_qty": 0,
+      "devices_unused_qty": 1,
+      "devices_damaged_qty": 0,
+      "devices_missing_qty": 0,
+      "extra_devices_carried_qty": 0,
+      "extra_devices_installed_qty": 0,
+      "extra_devices_unused_qty": 0,
+      "extra_devices_damaged_qty": 0,
+      "extra_devices_missing_qty": 0,
+      "material_items": [],
+      "backup_items": [],
+      "extra_installations": [],
+      "final_bom": null,
+      "completion_status": "Completed",
+      "remarks": "1 camera installed, 1 returned intact",
+      "submitted_at": "2026-10-26T03:57:54.371Z",
+      "id": "745265be-a524-4535-8b96-571c9859f654",
+      "items": [
+        {
+          "checklist_id": "24e3c31c-414d-427b-a2e8-ac4471f9e2e5",
+          "device_type": "2 Channel Live",
+          "quantity_carried": 2,
+          "quantity_installed": 1,
+          "quantity_installed_required": 0,
+          "quantity_installed_extra": 0,
+          "quantity_to_return": 1,
+          "quantity_damaged": 0,
+          "quantity_missing": 0,
+          "discrepancy_reason": null
+        }
+      ],
+      "device_items": [
+        {
+          "checklist_id": "24e3c31c-414d-427b-a2e8-ac4471f9e2e5",
+          "device_type": "2 Channel Live",
+          "quantity_carried": 2,
+          "quantity_installed": 1,
+          "quantity_installed_required": 0,
+          "quantity_installed_extra": 0,
+          "quantity_to_return": 1,
+          "quantity_damaged": 0,
+          "quantity_missing": 0,
+          "discrepancy_reason": null
+        }
+      ],
+      "reconciliation_status": "PENDING_STORE_VERIFICATION"
+    },
+    "60e7de74-9a48-4be2-beab-6e662a95814a": {
+      "checklist_id": "60e7de74-9a48-4be2-beab-6e662a95814a",
+      "technician_id": "f3a5e467-a1bf-40ef-8878-ec64b29bbfd5",
+      "devices_carried_qty": 2,
+      "devices_installed_qty": 2,
+      "devices_installed_required_qty": 0,
+      "devices_installed_extra_qty": 0,
+      "devices_unused_qty": 0,
+      "devices_damaged_qty": 0,
+      "devices_missing_qty": 0,
+      "extra_devices_carried_qty": 0,
+      "extra_devices_installed_qty": 0,
+      "extra_devices_unused_qty": 0,
+      "extra_devices_damaged_qty": 0,
+      "extra_devices_missing_qty": 0,
+      "material_items": [],
+      "backup_items": [],
+      "extra_installations": [],
+      "final_bom": {
+        "configured": true,
+        "installed_device_configurations": [
+          {
+            "device_type": "2 Channel Live",
+            "quantity_carried": 2,
+            "number_of_devices": 2,
+            "number_of_vehicles": 2
+          }
+        ],
+        "total_devices_installed": 2,
+        "final_bom": {
+          "configured": true,
+          "device_type": "2 Channel Live",
+          "bom_version": 1,
+          "number_of_devices": 2,
+          "total_devices": 2,
+          "total_vehicles": 2,
+          "device_configurations": [
+            {
+              "bom_id": "7e102ef4-954a-4dd5-9fd8-3d8945a53c9c",
+              "device_type": "2 Channel Live",
+              "number_of_devices": 2,
+              "number_of_vehicles": 2,
+              "bom_version": 1,
+              "configured": true,
+              "items": [
+                {
+                  "id": "839d5f6a-467e-4974-9e78-bbef42fa5e22",
+                  "material_id": "c99c1b8d-fa0b-4e65-8d9e-96549a591865",
+                  "material_sku": "MAT-INSU-TAPE",
+                  "material_name": "Insulation Tape",
+                  "quantity_per_device": 2,
+                  "number_of_devices": 2,
+                  "total_quantity": 4,
+                  "unit": "Nos.",
+                  "inventory_unit": "Nos.",
+                  "sort_order": 1
+                },
+                {
+                  "id": "9da99f3f-3a7d-4e45-82ef-d7d1856b20e7",
+                  "material_id": "bd1ed5a4-94c0-4f38-aabc-f6a46b0b0159",
+                  "material_sku": "MAT-CT-200MM",
+                  "material_name": "Cable Tie – 200 mm",
+                  "quantity_per_device": 1,
+                  "number_of_devices": 2,
+                  "total_quantity": 2,
+                  "unit": "Packets",
+                  "inventory_unit": "Packets",
+                  "sort_order": 2
+                },
+                {
+                  "id": "8c0c527c-022f-4a21-8dbd-f68b7a689705",
+                  "material_id": "893d903a-4d30-4fc2-96c2-fc7a2b872ed2",
+                  "material_sku": "MAT-CT-300MM",
+                  "material_name": "Cable Tie – 300 mm",
+                  "quantity_per_device": 1,
+                  "number_of_devices": 2,
+                  "total_quantity": 2,
+                  "unit": "Packets",
+                  "inventory_unit": "Packets",
+                  "sort_order": 3
+                },
+                {
+                  "id": "4c828a8a-3015-4831-bdc2-b3b06d0528bf",
+                  "material_id": "943eb9be-f4bb-4300-90e9-6ce23cc90549",
+                  "material_sku": "MAT-SCREW-LONG",
+                  "material_name": "Long Screw",
+                  "quantity_per_device": 12,
+                  "number_of_devices": 2,
+                  "total_quantity": 24,
+                  "unit": "Nos.",
+                  "inventory_unit": "Nos.",
+                  "sort_order": 4
+                },
+                {
+                  "id": "7f8f05c0-18e7-4890-87b1-c0b2174d599a",
+                  "material_id": "bd02bad8-3b6f-45b9-bbc7-c5c79ecb86bd",
+                  "material_sku": "MAT-SCREW-SMALL",
+                  "material_name": "Small Screw",
+                  "quantity_per_device": 12,
+                  "number_of_devices": 2,
+                  "total_quantity": 24,
+                  "unit": "Nos.",
+                  "inventory_unit": "Nos.",
+                  "sort_order": 5
+                },
+                {
+                  "id": "ba85d141-4253-4e73-aca0-ec125e61959b",
+                  "material_id": "9f46d34e-91a4-4f31-a8c5-b5541cc8b32d",
+                  "material_sku": "MAT-MEM-CARD",
+                  "material_name": "Memory Card",
+                  "quantity_per_device": 1,
+                  "number_of_devices": 2,
+                  "total_quantity": 2,
+                  "unit": "Nos.",
+                  "inventory_unit": "Nos.",
+                  "sort_order": 6
+                },
+                {
+                  "id": "71ed55e0-8f29-4833-b250-6daad1205774",
+                  "material_id": "fcc5f452-6ae7-4097-bd5a-0ca9f29421e3",
+                  "material_sku": "MAT-WIRE-0.5MM",
+                  "material_name": "0.5 mm Wire",
+                  "quantity_per_device": 20,
+                  "number_of_devices": 2,
+                  "total_quantity": 40,
+                  "unit": "Metres",
+                  "inventory_unit": "Metres",
+                  "sort_order": 7
+                },
+                {
+                  "id": "f1ab76ea-a6e2-4c57-a52b-b2f600fad78e",
+                  "material_id": "d9583db5-eb4c-4059-b86c-f9548c99ac85",
+                  "material_sku": "MAT-CBL-5M",
+                  "material_name": "5-metre Cable",
+                  "quantity_per_device": 3,
+                  "number_of_devices": 2,
+                  "total_quantity": 6,
+                  "unit": "Nos.",
+                  "inventory_unit": "Nos.",
+                  "sort_order": 8
+                },
+                {
+                  "id": "7be65fbf-5c65-4e3d-a741-0e76de85dc9e",
+                  "material_id": "ffb14238-0b26-4bd5-ba71-d362cb6861dc",
+                  "material_sku": "MAT-CBL-15M",
+                  "material_name": "15-metre Cable",
+                  "quantity_per_device": 1,
+                  "number_of_devices": 2,
+                  "total_quantity": 2,
+                  "unit": "Nos.",
+                  "inventory_unit": "Nos.",
+                  "sort_order": 9
+                }
+              ]
+            }
+          ],
+          "total_materials_count": 9,
+          "calculated_at": "2026-10-26T04:16:17.509Z",
+          "items": [
+            {
+              "material_id": "c99c1b8d-fa0b-4e65-8d9e-96549a591865",
+              "material_sku": "MAT-INSU-TAPE",
+              "material_name": "Insulation Tape",
+              "unit": "Nos.",
+              "quantity_per_device": 2,
+              "total_quantity": 4,
+              "sort_order": 1,
+              "breakdown": [
+                {
+                  "device_type": "2 Channel Live",
+                  "quantity_per_device": 2,
+                  "number_of_devices": 2,
+                  "subtotal": 4
+                }
+              ],
+              "number_of_devices": 2
+            },
+            {
+              "material_id": "bd1ed5a4-94c0-4f38-aabc-f6a46b0b0159",
+              "material_sku": "MAT-CT-200MM",
+              "material_name": "Cable Tie – 200 mm",
+              "unit": "Packets",
+              "quantity_per_device": 1,
+              "total_quantity": 2,
+              "sort_order": 2,
+              "breakdown": [
+                {
+                  "device_type": "2 Channel Live",
+                  "quantity_per_device": 1,
+                  "number_of_devices": 2,
+                  "subtotal": 2
+                }
+              ],
+              "number_of_devices": 2
+            },
+            {
+              "material_id": "893d903a-4d30-4fc2-96c2-fc7a2b872ed2",
+              "material_sku": "MAT-CT-300MM",
+              "material_name": "Cable Tie – 300 mm",
+              "unit": "Packets",
+              "quantity_per_device": 1,
+              "total_quantity": 2,
+              "sort_order": 3,
+              "breakdown": [
+                {
+                  "device_type": "2 Channel Live",
+                  "quantity_per_device": 1,
+                  "number_of_devices": 2,
+                  "subtotal": 2
+                }
+              ],
+              "number_of_devices": 2
+            },
+            {
+              "material_id": "943eb9be-f4bb-4300-90e9-6ce23cc90549",
+              "material_sku": "MAT-SCREW-LONG",
+              "material_name": "Long Screw",
+              "unit": "Nos.",
+              "quantity_per_device": 12,
+              "total_quantity": 24,
+              "sort_order": 4,
+              "breakdown": [
+                {
+                  "device_type": "2 Channel Live",
+                  "quantity_per_device": 12,
+                  "number_of_devices": 2,
+                  "subtotal": 24
+                }
+              ],
+              "number_of_devices": 2
+            },
+            {
+              "material_id": "bd02bad8-3b6f-45b9-bbc7-c5c79ecb86bd",
+              "material_sku": "MAT-SCREW-SMALL",
+              "material_name": "Small Screw",
+              "unit": "Nos.",
+              "quantity_per_device": 12,
+              "total_quantity": 24,
+              "sort_order": 5,
+              "breakdown": [
+                {
+                  "device_type": "2 Channel Live",
+                  "quantity_per_device": 12,
+                  "number_of_devices": 2,
+                  "subtotal": 24
+                }
+              ],
+              "number_of_devices": 2
+            },
+            {
+              "material_id": "9f46d34e-91a4-4f31-a8c5-b5541cc8b32d",
+              "material_sku": "MAT-MEM-CARD",
+              "material_name": "Memory Card",
+              "unit": "Nos.",
+              "quantity_per_device": 1,
+              "total_quantity": 2,
+              "sort_order": 6,
+              "breakdown": [
+                {
+                  "device_type": "2 Channel Live",
+                  "quantity_per_device": 1,
+                  "number_of_devices": 2,
+                  "subtotal": 2
+                }
+              ],
+              "number_of_devices": 2
+            },
+            {
+              "material_id": "fcc5f452-6ae7-4097-bd5a-0ca9f29421e3",
+              "material_sku": "MAT-WIRE-0.5MM",
+              "material_name": "0.5 mm Wire",
+              "unit": "Metres",
+              "quantity_per_device": 20,
+              "total_quantity": 40,
+              "sort_order": 7,
+              "breakdown": [
+                {
+                  "device_type": "2 Channel Live",
+                  "quantity_per_device": 20,
+                  "number_of_devices": 2,
+                  "subtotal": 40
+                }
+              ],
+              "number_of_devices": 2
+            },
+            {
+              "material_id": "d9583db5-eb4c-4059-b86c-f9548c99ac85",
+              "material_sku": "MAT-CBL-5M",
+              "material_name": "5-metre Cable",
+              "unit": "Nos.",
+              "quantity_per_device": 3,
+              "total_quantity": 6,
+              "sort_order": 8,
+              "breakdown": [
+                {
+                  "device_type": "2 Channel Live",
+                  "quantity_per_device": 3,
+                  "number_of_devices": 2,
+                  "subtotal": 6
+                }
+              ],
+              "number_of_devices": 2
+            },
+            {
+              "material_id": "ffb14238-0b26-4bd5-ba71-d362cb6861dc",
+              "material_sku": "MAT-CBL-15M",
+              "material_name": "15-metre Cable",
+              "unit": "Nos.",
+              "quantity_per_device": 1,
+              "total_quantity": 2,
+              "sort_order": 9,
+              "breakdown": [
+                {
+                  "device_type": "2 Channel Live",
+                  "quantity_per_device": 1,
+                  "number_of_devices": 2,
+                  "subtotal": 2
+                }
+              ],
+              "number_of_devices": 2
+            }
+          ]
+        },
+        "items": [
+          {
+            "material_id": "c99c1b8d-fa0b-4e65-8d9e-96549a591865",
+            "material_sku": "MAT-INSU-TAPE",
+            "material_name": "Insulation Tape",
+            "unit": "Nos.",
+            "quantity_per_device": 2,
+            "total_quantity": 4,
+            "sort_order": 1,
+            "breakdown": [
+              {
+                "device_type": "2 Channel Live",
+                "quantity_per_device": 2,
+                "number_of_devices": 2,
+                "subtotal": 4
+              }
+            ],
+            "number_of_devices": 2
+          },
+          {
+            "material_id": "bd1ed5a4-94c0-4f38-aabc-f6a46b0b0159",
+            "material_sku": "MAT-CT-200MM",
+            "material_name": "Cable Tie – 200 mm",
+            "unit": "Packets",
+            "quantity_per_device": 1,
+            "total_quantity": 2,
+            "sort_order": 2,
+            "breakdown": [
+              {
+                "device_type": "2 Channel Live",
+                "quantity_per_device": 1,
+                "number_of_devices": 2,
+                "subtotal": 2
+              }
+            ],
+            "number_of_devices": 2
+          },
+          {
+            "material_id": "893d903a-4d30-4fc2-96c2-fc7a2b872ed2",
+            "material_sku": "MAT-CT-300MM",
+            "material_name": "Cable Tie – 300 mm",
+            "unit": "Packets",
+            "quantity_per_device": 1,
+            "total_quantity": 2,
+            "sort_order": 3,
+            "breakdown": [
+              {
+                "device_type": "2 Channel Live",
+                "quantity_per_device": 1,
+                "number_of_devices": 2,
+                "subtotal": 2
+              }
+            ],
+            "number_of_devices": 2
+          },
+          {
+            "material_id": "943eb9be-f4bb-4300-90e9-6ce23cc90549",
+            "material_sku": "MAT-SCREW-LONG",
+            "material_name": "Long Screw",
+            "unit": "Nos.",
+            "quantity_per_device": 12,
+            "total_quantity": 24,
+            "sort_order": 4,
+            "breakdown": [
+              {
+                "device_type": "2 Channel Live",
+                "quantity_per_device": 12,
+                "number_of_devices": 2,
+                "subtotal": 24
+              }
+            ],
+            "number_of_devices": 2
+          },
+          {
+            "material_id": "bd02bad8-3b6f-45b9-bbc7-c5c79ecb86bd",
+            "material_sku": "MAT-SCREW-SMALL",
+            "material_name": "Small Screw",
+            "unit": "Nos.",
+            "quantity_per_device": 12,
+            "total_quantity": 24,
+            "sort_order": 5,
+            "breakdown": [
+              {
+                "device_type": "2 Channel Live",
+                "quantity_per_device": 12,
+                "number_of_devices": 2,
+                "subtotal": 24
+              }
+            ],
+            "number_of_devices": 2
+          },
+          {
+            "material_id": "9f46d34e-91a4-4f31-a8c5-b5541cc8b32d",
+            "material_sku": "MAT-MEM-CARD",
+            "material_name": "Memory Card",
+            "unit": "Nos.",
+            "quantity_per_device": 1,
+            "total_quantity": 2,
+            "sort_order": 6,
+            "breakdown": [
+              {
+                "device_type": "2 Channel Live",
+                "quantity_per_device": 1,
+                "number_of_devices": 2,
+                "subtotal": 2
+              }
+            ],
+            "number_of_devices": 2
+          },
+          {
+            "material_id": "fcc5f452-6ae7-4097-bd5a-0ca9f29421e3",
+            "material_sku": "MAT-WIRE-0.5MM",
+            "material_name": "0.5 mm Wire",
+            "unit": "Metres",
+            "quantity_per_device": 20,
+            "total_quantity": 40,
+            "sort_order": 7,
+            "breakdown": [
+              {
+                "device_type": "2 Channel Live",
+                "quantity_per_device": 20,
+                "number_of_devices": 2,
+                "subtotal": 40
+              }
+            ],
+            "number_of_devices": 2
+          },
+          {
+            "material_id": "d9583db5-eb4c-4059-b86c-f9548c99ac85",
+            "material_sku": "MAT-CBL-5M",
+            "material_name": "5-metre Cable",
+            "unit": "Nos.",
+            "quantity_per_device": 3,
+            "total_quantity": 6,
+            "sort_order": 8,
+            "breakdown": [
+              {
+                "device_type": "2 Channel Live",
+                "quantity_per_device": 3,
+                "number_of_devices": 2,
+                "subtotal": 6
+              }
+            ],
+            "number_of_devices": 2
+          },
+          {
+            "material_id": "ffb14238-0b26-4bd5-ba71-d362cb6861dc",
+            "material_sku": "MAT-CBL-15M",
+            "material_name": "15-metre Cable",
+            "unit": "Nos.",
+            "quantity_per_device": 1,
+            "total_quantity": 2,
+            "sort_order": 9,
+            "breakdown": [
+              {
+                "device_type": "2 Channel Live",
+                "quantity_per_device": 1,
+                "number_of_devices": 2,
+                "subtotal": 2
+              }
+            ],
+            "number_of_devices": 2
+          }
+        ],
+        "comparison": [
+          {
+            "material_id": "c99c1b8d-fa0b-4e65-8d9e-96549a591865",
+            "material_sku": "MAT-INSU-TAPE",
+            "material_name": "Insulation Tape",
+            "unit": "Nos.",
+            "preliminary_quantity": 0,
+            "final_quantity": 4,
+            "difference": 4,
+            "actual_issued": 0,
+            "actual_used": 0,
+            "actual_returned": 0,
+            "status": "NEW_IN_FINAL",
+            "variance_label": "+4"
+          },
+          {
+            "material_id": "bd1ed5a4-94c0-4f38-aabc-f6a46b0b0159",
+            "material_sku": "MAT-CT-200MM",
+            "material_name": "Cable Tie – 200 mm",
+            "unit": "Packets",
+            "preliminary_quantity": 0,
+            "final_quantity": 2,
+            "difference": 2,
+            "actual_issued": 0,
+            "actual_used": 0,
+            "actual_returned": 0,
+            "status": "NEW_IN_FINAL",
+            "variance_label": "+2"
+          },
+          {
+            "material_id": "893d903a-4d30-4fc2-96c2-fc7a2b872ed2",
+            "material_sku": "MAT-CT-300MM",
+            "material_name": "Cable Tie – 300 mm",
+            "unit": "Packets",
+            "preliminary_quantity": 0,
+            "final_quantity": 2,
+            "difference": 2,
+            "actual_issued": 0,
+            "actual_used": 0,
+            "actual_returned": 0,
+            "status": "NEW_IN_FINAL",
+            "variance_label": "+2"
+          },
+          {
+            "material_id": "943eb9be-f4bb-4300-90e9-6ce23cc90549",
+            "material_sku": "MAT-SCREW-LONG",
+            "material_name": "Long Screw",
+            "unit": "Nos.",
+            "preliminary_quantity": 0,
+            "final_quantity": 24,
+            "difference": 24,
+            "actual_issued": 0,
+            "actual_used": 0,
+            "actual_returned": 0,
+            "status": "NEW_IN_FINAL",
+            "variance_label": "+24"
+          },
+          {
+            "material_id": "bd02bad8-3b6f-45b9-bbc7-c5c79ecb86bd",
+            "material_sku": "MAT-SCREW-SMALL",
+            "material_name": "Small Screw",
+            "unit": "Nos.",
+            "preliminary_quantity": 0,
+            "final_quantity": 24,
+            "difference": 24,
+            "actual_issued": 0,
+            "actual_used": 0,
+            "actual_returned": 0,
+            "status": "NEW_IN_FINAL",
+            "variance_label": "+24"
+          },
+          {
+            "material_id": "9f46d34e-91a4-4f31-a8c5-b5541cc8b32d",
+            "material_sku": "MAT-MEM-CARD",
+            "material_name": "Memory Card",
+            "unit": "Nos.",
+            "preliminary_quantity": 0,
+            "final_quantity": 2,
+            "difference": 2,
+            "actual_issued": 0,
+            "actual_used": 0,
+            "actual_returned": 0,
+            "status": "NEW_IN_FINAL",
+            "variance_label": "+2"
+          },
+          {
+            "material_id": "fcc5f452-6ae7-4097-bd5a-0ca9f29421e3",
+            "material_sku": "MAT-WIRE-0.5MM",
+            "material_name": "0.5 mm Wire",
+            "unit": "Metres",
+            "preliminary_quantity": 0,
+            "final_quantity": 40,
+            "difference": 40,
+            "actual_issued": 0,
+            "actual_used": 0,
+            "actual_returned": 0,
+            "status": "NEW_IN_FINAL",
+            "variance_label": "+40"
+          },
+          {
+            "material_id": "d9583db5-eb4c-4059-b86c-f9548c99ac85",
+            "material_sku": "MAT-CBL-5M",
+            "material_name": "5-metre Cable",
+            "unit": "Nos.",
+            "preliminary_quantity": 0,
+            "final_quantity": 6,
+            "difference": 6,
+            "actual_issued": 0,
+            "actual_used": 0,
+            "actual_returned": 0,
+            "status": "NEW_IN_FINAL",
+            "variance_label": "+6"
+          },
+          {
+            "material_id": "ffb14238-0b26-4bd5-ba71-d362cb6861dc",
+            "material_sku": "MAT-CBL-15M",
+            "material_name": "15-metre Cable",
+            "unit": "Nos.",
+            "preliminary_quantity": 0,
+            "final_quantity": 2,
+            "difference": 2,
+            "actual_issued": 0,
+            "actual_used": 0,
+            "actual_returned": 0,
+            "status": "NEW_IN_FINAL",
+            "variance_label": "+2"
+          }
+        ],
+        "calculated_at": "2026-10-26T04:16:17.509Z"
+      },
+      "completion_status": "Site Work Completed",
+      "remarks": "Installation completed cleanly at client location.",
+      "submitted_at": "2026-10-26T04:16:17.509Z",
+      "id": "f975eadf-af37-42fa-a578-17921543cd49",
+      "items": [
+        {
+          "checklist_id": "60e7de74-9a48-4be2-beab-6e662a95814a",
+          "device_type": "2 Channel Live",
+          "quantity_carried": 2,
+          "quantity_installed": 2,
+          "quantity_installed_required": 0,
+          "quantity_installed_extra": 0,
+          "quantity_to_return": 0,
+          "quantity_damaged": 0,
+          "quantity_missing": 0,
+          "discrepancy_reason": null
+        }
+      ],
+      "device_items": [
+        {
+          "checklist_id": "60e7de74-9a48-4be2-beab-6e662a95814a",
+          "device_type": "2 Channel Live",
+          "quantity_carried": 2,
+          "quantity_installed": 2,
+          "quantity_installed_required": 0,
+          "quantity_installed_extra": 0,
+          "quantity_to_return": 0,
+          "quantity_damaged": 0,
+          "quantity_missing": 0,
+          "discrepancy_reason": null
+        }
+      ],
+      "reconciliation_status": "FULLY_RECONCILED"
     }
   },
   "returns": {
@@ -63049,6 +63965,91 @@
       "verified_by": "store-001",
       "verified_at": "2026-10-22T05:14:27.070Z",
       "updated_at": "2026-10-22T05:14:27.070Z"
+    },
+    "675d70e2-8c22-40a7-b4cc-3e8ca6c04cef": {
+      "id": "675d70e2-8c22-40a7-b4cc-3e8ca6c04cef",
+      "checklist_id": "0ba2f230-9ca2-4cbd-b4a8-dbad2fcb83b2",
+      "device_type": "2 Channel Live",
+      "declared_return_qty": 1,
+      "declared_by": "0ba2f230-9ca2-4cbd-b4a8-dbad2fcb83b2",
+      "declared_at": "2026-10-24T12:26:43.657Z",
+      "status": "VERIFIED_AND_RECONCILED",
+      "verification_remarks": "Store verified return of 1 unused camera",
+      "actual_received_qty": 1,
+      "accepted_usable_qty": 1,
+      "damaged_qty": 0,
+      "missing_qty": 0,
+      "verified_by": "00000000-0000-0000-0000-000000000099",
+      "verified_at": "2026-10-24T12:26:50.216Z",
+      "updated_at": "2026-10-24T12:26:50.216Z"
+    },
+    "fd619ad2-851b-4a65-901c-b174a1ecdac7": {
+      "id": "fd619ad2-851b-4a65-901c-b174a1ecdac7",
+      "checklist_id": "20866f02-ea06-4e37-b2b7-96e37f994e9c",
+      "device_type": "2 Channel Live",
+      "declared_return_qty": 1,
+      "declared_by": "20866f02-ea06-4e37-b2b7-96e37f994e9c",
+      "declared_at": "2026-10-24T12:38:36.662Z",
+      "status": "VERIFIED_AND_RECONCILED",
+      "verification_remarks": "Store verified return of 1 unused camera",
+      "actual_received_qty": 1,
+      "accepted_usable_qty": 1,
+      "damaged_qty": 0,
+      "missing_qty": 0,
+      "verified_by": "00000000-0000-0000-0000-000000000099",
+      "verified_at": "2026-10-24T12:38:44.136Z",
+      "updated_at": "2026-10-24T12:38:44.136Z"
+    },
+    "ec2776b4-0e7a-4b8e-8ece-c080e797c8a2": {
+      "id": "ec2776b4-0e7a-4b8e-8ece-c080e797c8a2",
+      "checklist_id": "b2dfc098-c14c-468f-a751-7afa3612069f",
+      "device_type": "2 Channel Live",
+      "declared_return_qty": 1,
+      "declared_by": "b2dfc098-c14c-468f-a751-7afa3612069f",
+      "declared_at": "2026-10-24T12:41:07.615Z",
+      "status": "VERIFIED_AND_RECONCILED",
+      "verification_remarks": "Store verified return of 1 unused camera",
+      "actual_received_qty": 1,
+      "accepted_usable_qty": 1,
+      "damaged_qty": 0,
+      "missing_qty": 0,
+      "verified_by": "00000000-0000-0000-0000-000000000099",
+      "verified_at": "2026-10-24T12:41:14.253Z",
+      "updated_at": "2026-10-24T12:41:14.253Z"
+    },
+    "f3684f64-d5fa-4031-8134-e32f83641173": {
+      "id": "f3684f64-d5fa-4031-8134-e32f83641173",
+      "checklist_id": "bf6e8f23-63bc-456e-80c7-397aa9dfc675",
+      "device_type": "2 Channel Live",
+      "declared_return_qty": 1,
+      "declared_by": "bf6e8f23-63bc-456e-80c7-397aa9dfc675",
+      "declared_at": "2026-10-26T03:15:14.668Z",
+      "status": "VERIFIED_AND_RECONCILED",
+      "verification_remarks": "Store verified return of 1 unused camera",
+      "actual_received_qty": 1,
+      "accepted_usable_qty": 1,
+      "damaged_qty": 0,
+      "missing_qty": 0,
+      "verified_by": "00000000-0000-0000-0000-000000000099",
+      "verified_at": "2026-10-26T03:15:21.538Z",
+      "updated_at": "2026-10-26T03:15:21.538Z"
+    },
+    "d28c15ac-e24f-406d-aa1e-d76bc1fe371c": {
+      "id": "d28c15ac-e24f-406d-aa1e-d76bc1fe371c",
+      "checklist_id": "24e3c31c-414d-427b-a2e8-ac4471f9e2e5",
+      "device_type": "2 Channel Live",
+      "declared_return_qty": 1,
+      "declared_by": "24e3c31c-414d-427b-a2e8-ac4471f9e2e5",
+      "declared_at": "2026-10-26T03:57:55.326Z",
+      "status": "VERIFIED_AND_RECONCILED",
+      "verification_remarks": "Store verified return of 1 unused camera",
+      "actual_received_qty": 1,
+      "accepted_usable_qty": 1,
+      "damaged_qty": 0,
+      "missing_qty": 0,
+      "verified_by": "00000000-0000-0000-0000-000000000099",
+      "verified_at": "2026-10-26T03:58:02.346Z",
+      "updated_at": "2026-10-26T03:58:02.346Z"
     }
   },
   "materialReturns": {
@@ -116427,6 +117428,605 @@
         }
       ],
       "calculated_at": "2026-10-24T11:24:53.446Z"
+    },
+    "60e7de74-9a48-4be2-beab-6e662a95814a": {
+      "configured": true,
+      "installed_device_configurations": [
+        {
+          "device_type": "2 Channel Live",
+          "quantity_carried": 2,
+          "number_of_devices": 2,
+          "number_of_vehicles": 2
+        }
+      ],
+      "total_devices_installed": 2,
+      "final_bom": {
+        "configured": true,
+        "device_type": "2 Channel Live",
+        "bom_version": 1,
+        "number_of_devices": 2,
+        "total_devices": 2,
+        "total_vehicles": 2,
+        "device_configurations": [
+          {
+            "bom_id": "7e102ef4-954a-4dd5-9fd8-3d8945a53c9c",
+            "device_type": "2 Channel Live",
+            "number_of_devices": 2,
+            "number_of_vehicles": 2,
+            "bom_version": 1,
+            "configured": true,
+            "items": [
+              {
+                "id": "839d5f6a-467e-4974-9e78-bbef42fa5e22",
+                "material_id": "c99c1b8d-fa0b-4e65-8d9e-96549a591865",
+                "material_sku": "MAT-INSU-TAPE",
+                "material_name": "Insulation Tape",
+                "quantity_per_device": 2,
+                "number_of_devices": 2,
+                "total_quantity": 4,
+                "unit": "Nos.",
+                "inventory_unit": "Nos.",
+                "sort_order": 1
+              },
+              {
+                "id": "9da99f3f-3a7d-4e45-82ef-d7d1856b20e7",
+                "material_id": "bd1ed5a4-94c0-4f38-aabc-f6a46b0b0159",
+                "material_sku": "MAT-CT-200MM",
+                "material_name": "Cable Tie – 200 mm",
+                "quantity_per_device": 1,
+                "number_of_devices": 2,
+                "total_quantity": 2,
+                "unit": "Packets",
+                "inventory_unit": "Packets",
+                "sort_order": 2
+              },
+              {
+                "id": "8c0c527c-022f-4a21-8dbd-f68b7a689705",
+                "material_id": "893d903a-4d30-4fc2-96c2-fc7a2b872ed2",
+                "material_sku": "MAT-CT-300MM",
+                "material_name": "Cable Tie – 300 mm",
+                "quantity_per_device": 1,
+                "number_of_devices": 2,
+                "total_quantity": 2,
+                "unit": "Packets",
+                "inventory_unit": "Packets",
+                "sort_order": 3
+              },
+              {
+                "id": "4c828a8a-3015-4831-bdc2-b3b06d0528bf",
+                "material_id": "943eb9be-f4bb-4300-90e9-6ce23cc90549",
+                "material_sku": "MAT-SCREW-LONG",
+                "material_name": "Long Screw",
+                "quantity_per_device": 12,
+                "number_of_devices": 2,
+                "total_quantity": 24,
+                "unit": "Nos.",
+                "inventory_unit": "Nos.",
+                "sort_order": 4
+              },
+              {
+                "id": "7f8f05c0-18e7-4890-87b1-c0b2174d599a",
+                "material_id": "bd02bad8-3b6f-45b9-bbc7-c5c79ecb86bd",
+                "material_sku": "MAT-SCREW-SMALL",
+                "material_name": "Small Screw",
+                "quantity_per_device": 12,
+                "number_of_devices": 2,
+                "total_quantity": 24,
+                "unit": "Nos.",
+                "inventory_unit": "Nos.",
+                "sort_order": 5
+              },
+              {
+                "id": "ba85d141-4253-4e73-aca0-ec125e61959b",
+                "material_id": "9f46d34e-91a4-4f31-a8c5-b5541cc8b32d",
+                "material_sku": "MAT-MEM-CARD",
+                "material_name": "Memory Card",
+                "quantity_per_device": 1,
+                "number_of_devices": 2,
+                "total_quantity": 2,
+                "unit": "Nos.",
+                "inventory_unit": "Nos.",
+                "sort_order": 6
+              },
+              {
+                "id": "71ed55e0-8f29-4833-b250-6daad1205774",
+                "material_id": "fcc5f452-6ae7-4097-bd5a-0ca9f29421e3",
+                "material_sku": "MAT-WIRE-0.5MM",
+                "material_name": "0.5 mm Wire",
+                "quantity_per_device": 20,
+                "number_of_devices": 2,
+                "total_quantity": 40,
+                "unit": "Metres",
+                "inventory_unit": "Metres",
+                "sort_order": 7
+              },
+              {
+                "id": "f1ab76ea-a6e2-4c57-a52b-b2f600fad78e",
+                "material_id": "d9583db5-eb4c-4059-b86c-f9548c99ac85",
+                "material_sku": "MAT-CBL-5M",
+                "material_name": "5-metre Cable",
+                "quantity_per_device": 3,
+                "number_of_devices": 2,
+                "total_quantity": 6,
+                "unit": "Nos.",
+                "inventory_unit": "Nos.",
+                "sort_order": 8
+              },
+              {
+                "id": "7be65fbf-5c65-4e3d-a741-0e76de85dc9e",
+                "material_id": "ffb14238-0b26-4bd5-ba71-d362cb6861dc",
+                "material_sku": "MAT-CBL-15M",
+                "material_name": "15-metre Cable",
+                "quantity_per_device": 1,
+                "number_of_devices": 2,
+                "total_quantity": 2,
+                "unit": "Nos.",
+                "inventory_unit": "Nos.",
+                "sort_order": 9
+              }
+            ]
+          }
+        ],
+        "total_materials_count": 9,
+        "calculated_at": "2026-10-26T04:16:17.509Z",
+        "items": [
+          {
+            "material_id": "c99c1b8d-fa0b-4e65-8d9e-96549a591865",
+            "material_sku": "MAT-INSU-TAPE",
+            "material_name": "Insulation Tape",
+            "unit": "Nos.",
+            "quantity_per_device": 2,
+            "total_quantity": 4,
+            "sort_order": 1,
+            "breakdown": [
+              {
+                "device_type": "2 Channel Live",
+                "quantity_per_device": 2,
+                "number_of_devices": 2,
+                "subtotal": 4
+              }
+            ],
+            "number_of_devices": 2
+          },
+          {
+            "material_id": "bd1ed5a4-94c0-4f38-aabc-f6a46b0b0159",
+            "material_sku": "MAT-CT-200MM",
+            "material_name": "Cable Tie – 200 mm",
+            "unit": "Packets",
+            "quantity_per_device": 1,
+            "total_quantity": 2,
+            "sort_order": 2,
+            "breakdown": [
+              {
+                "device_type": "2 Channel Live",
+                "quantity_per_device": 1,
+                "number_of_devices": 2,
+                "subtotal": 2
+              }
+            ],
+            "number_of_devices": 2
+          },
+          {
+            "material_id": "893d903a-4d30-4fc2-96c2-fc7a2b872ed2",
+            "material_sku": "MAT-CT-300MM",
+            "material_name": "Cable Tie – 300 mm",
+            "unit": "Packets",
+            "quantity_per_device": 1,
+            "total_quantity": 2,
+            "sort_order": 3,
+            "breakdown": [
+              {
+                "device_type": "2 Channel Live",
+                "quantity_per_device": 1,
+                "number_of_devices": 2,
+                "subtotal": 2
+              }
+            ],
+            "number_of_devices": 2
+          },
+          {
+            "material_id": "943eb9be-f4bb-4300-90e9-6ce23cc90549",
+            "material_sku": "MAT-SCREW-LONG",
+            "material_name": "Long Screw",
+            "unit": "Nos.",
+            "quantity_per_device": 12,
+            "total_quantity": 24,
+            "sort_order": 4,
+            "breakdown": [
+              {
+                "device_type": "2 Channel Live",
+                "quantity_per_device": 12,
+                "number_of_devices": 2,
+                "subtotal": 24
+              }
+            ],
+            "number_of_devices": 2
+          },
+          {
+            "material_id": "bd02bad8-3b6f-45b9-bbc7-c5c79ecb86bd",
+            "material_sku": "MAT-SCREW-SMALL",
+            "material_name": "Small Screw",
+            "unit": "Nos.",
+            "quantity_per_device": 12,
+            "total_quantity": 24,
+            "sort_order": 5,
+            "breakdown": [
+              {
+                "device_type": "2 Channel Live",
+                "quantity_per_device": 12,
+                "number_of_devices": 2,
+                "subtotal": 24
+              }
+            ],
+            "number_of_devices": 2
+          },
+          {
+            "material_id": "9f46d34e-91a4-4f31-a8c5-b5541cc8b32d",
+            "material_sku": "MAT-MEM-CARD",
+            "material_name": "Memory Card",
+            "unit": "Nos.",
+            "quantity_per_device": 1,
+            "total_quantity": 2,
+            "sort_order": 6,
+            "breakdown": [
+              {
+                "device_type": "2 Channel Live",
+                "quantity_per_device": 1,
+                "number_of_devices": 2,
+                "subtotal": 2
+              }
+            ],
+            "number_of_devices": 2
+          },
+          {
+            "material_id": "fcc5f452-6ae7-4097-bd5a-0ca9f29421e3",
+            "material_sku": "MAT-WIRE-0.5MM",
+            "material_name": "0.5 mm Wire",
+            "unit": "Metres",
+            "quantity_per_device": 20,
+            "total_quantity": 40,
+            "sort_order": 7,
+            "breakdown": [
+              {
+                "device_type": "2 Channel Live",
+                "quantity_per_device": 20,
+                "number_of_devices": 2,
+                "subtotal": 40
+              }
+            ],
+            "number_of_devices": 2
+          },
+          {
+            "material_id": "d9583db5-eb4c-4059-b86c-f9548c99ac85",
+            "material_sku": "MAT-CBL-5M",
+            "material_name": "5-metre Cable",
+            "unit": "Nos.",
+            "quantity_per_device": 3,
+            "total_quantity": 6,
+            "sort_order": 8,
+            "breakdown": [
+              {
+                "device_type": "2 Channel Live",
+                "quantity_per_device": 3,
+                "number_of_devices": 2,
+                "subtotal": 6
+              }
+            ],
+            "number_of_devices": 2
+          },
+          {
+            "material_id": "ffb14238-0b26-4bd5-ba71-d362cb6861dc",
+            "material_sku": "MAT-CBL-15M",
+            "material_name": "15-metre Cable",
+            "unit": "Nos.",
+            "quantity_per_device": 1,
+            "total_quantity": 2,
+            "sort_order": 9,
+            "breakdown": [
+              {
+                "device_type": "2 Channel Live",
+                "quantity_per_device": 1,
+                "number_of_devices": 2,
+                "subtotal": 2
+              }
+            ],
+            "number_of_devices": 2
+          }
+        ]
+      },
+      "items": [
+        {
+          "material_id": "c99c1b8d-fa0b-4e65-8d9e-96549a591865",
+          "material_sku": "MAT-INSU-TAPE",
+          "material_name": "Insulation Tape",
+          "unit": "Nos.",
+          "quantity_per_device": 2,
+          "total_quantity": 4,
+          "sort_order": 1,
+          "breakdown": [
+            {
+              "device_type": "2 Channel Live",
+              "quantity_per_device": 2,
+              "number_of_devices": 2,
+              "subtotal": 4
+            }
+          ],
+          "number_of_devices": 2
+        },
+        {
+          "material_id": "bd1ed5a4-94c0-4f38-aabc-f6a46b0b0159",
+          "material_sku": "MAT-CT-200MM",
+          "material_name": "Cable Tie – 200 mm",
+          "unit": "Packets",
+          "quantity_per_device": 1,
+          "total_quantity": 2,
+          "sort_order": 2,
+          "breakdown": [
+            {
+              "device_type": "2 Channel Live",
+              "quantity_per_device": 1,
+              "number_of_devices": 2,
+              "subtotal": 2
+            }
+          ],
+          "number_of_devices": 2
+        },
+        {
+          "material_id": "893d903a-4d30-4fc2-96c2-fc7a2b872ed2",
+          "material_sku": "MAT-CT-300MM",
+          "material_name": "Cable Tie – 300 mm",
+          "unit": "Packets",
+          "quantity_per_device": 1,
+          "total_quantity": 2,
+          "sort_order": 3,
+          "breakdown": [
+            {
+              "device_type": "2 Channel Live",
+              "quantity_per_device": 1,
+              "number_of_devices": 2,
+              "subtotal": 2
+            }
+          ],
+          "number_of_devices": 2
+        },
+        {
+          "material_id": "943eb9be-f4bb-4300-90e9-6ce23cc90549",
+          "material_sku": "MAT-SCREW-LONG",
+          "material_name": "Long Screw",
+          "unit": "Nos.",
+          "quantity_per_device": 12,
+          "total_quantity": 24,
+          "sort_order": 4,
+          "breakdown": [
+            {
+              "device_type": "2 Channel Live",
+              "quantity_per_device": 12,
+              "number_of_devices": 2,
+              "subtotal": 24
+            }
+          ],
+          "number_of_devices": 2
+        },
+        {
+          "material_id": "bd02bad8-3b6f-45b9-bbc7-c5c79ecb86bd",
+          "material_sku": "MAT-SCREW-SMALL",
+          "material_name": "Small Screw",
+          "unit": "Nos.",
+          "quantity_per_device": 12,
+          "total_quantity": 24,
+          "sort_order": 5,
+          "breakdown": [
+            {
+              "device_type": "2 Channel Live",
+              "quantity_per_device": 12,
+              "number_of_devices": 2,
+              "subtotal": 24
+            }
+          ],
+          "number_of_devices": 2
+        },
+        {
+          "material_id": "9f46d34e-91a4-4f31-a8c5-b5541cc8b32d",
+          "material_sku": "MAT-MEM-CARD",
+          "material_name": "Memory Card",
+          "unit": "Nos.",
+          "quantity_per_device": 1,
+          "total_quantity": 2,
+          "sort_order": 6,
+          "breakdown": [
+            {
+              "device_type": "2 Channel Live",
+              "quantity_per_device": 1,
+              "number_of_devices": 2,
+              "subtotal": 2
+            }
+          ],
+          "number_of_devices": 2
+        },
+        {
+          "material_id": "fcc5f452-6ae7-4097-bd5a-0ca9f29421e3",
+          "material_sku": "MAT-WIRE-0.5MM",
+          "material_name": "0.5 mm Wire",
+          "unit": "Metres",
+          "quantity_per_device": 20,
+          "total_quantity": 40,
+          "sort_order": 7,
+          "breakdown": [
+            {
+              "device_type": "2 Channel Live",
+              "quantity_per_device": 20,
+              "number_of_devices": 2,
+              "subtotal": 40
+            }
+          ],
+          "number_of_devices": 2
+        },
+        {
+          "material_id": "d9583db5-eb4c-4059-b86c-f9548c99ac85",
+          "material_sku": "MAT-CBL-5M",
+          "material_name": "5-metre Cable",
+          "unit": "Nos.",
+          "quantity_per_device": 3,
+          "total_quantity": 6,
+          "sort_order": 8,
+          "breakdown": [
+            {
+              "device_type": "2 Channel Live",
+              "quantity_per_device": 3,
+              "number_of_devices": 2,
+              "subtotal": 6
+            }
+          ],
+          "number_of_devices": 2
+        },
+        {
+          "material_id": "ffb14238-0b26-4bd5-ba71-d362cb6861dc",
+          "material_sku": "MAT-CBL-15M",
+          "material_name": "15-metre Cable",
+          "unit": "Nos.",
+          "quantity_per_device": 1,
+          "total_quantity": 2,
+          "sort_order": 9,
+          "breakdown": [
+            {
+              "device_type": "2 Channel Live",
+              "quantity_per_device": 1,
+              "number_of_devices": 2,
+              "subtotal": 2
+            }
+          ],
+          "number_of_devices": 2
+        }
+      ],
+      "comparison": [
+        {
+          "material_id": "c99c1b8d-fa0b-4e65-8d9e-96549a591865",
+          "material_sku": "MAT-INSU-TAPE",
+          "material_name": "Insulation Tape",
+          "unit": "Nos.",
+          "preliminary_quantity": 0,
+          "final_quantity": 4,
+          "difference": 4,
+          "actual_issued": 0,
+          "actual_used": 0,
+          "actual_returned": 0,
+          "status": "NEW_IN_FINAL",
+          "variance_label": "+4"
+        },
+        {
+          "material_id": "bd1ed5a4-94c0-4f38-aabc-f6a46b0b0159",
+          "material_sku": "MAT-CT-200MM",
+          "material_name": "Cable Tie – 200 mm",
+          "unit": "Packets",
+          "preliminary_quantity": 0,
+          "final_quantity": 2,
+          "difference": 2,
+          "actual_issued": 0,
+          "actual_used": 0,
+          "actual_returned": 0,
+          "status": "NEW_IN_FINAL",
+          "variance_label": "+2"
+        },
+        {
+          "material_id": "893d903a-4d30-4fc2-96c2-fc7a2b872ed2",
+          "material_sku": "MAT-CT-300MM",
+          "material_name": "Cable Tie – 300 mm",
+          "unit": "Packets",
+          "preliminary_quantity": 0,
+          "final_quantity": 2,
+          "difference": 2,
+          "actual_issued": 0,
+          "actual_used": 0,
+          "actual_returned": 0,
+          "status": "NEW_IN_FINAL",
+          "variance_label": "+2"
+        },
+        {
+          "material_id": "943eb9be-f4bb-4300-90e9-6ce23cc90549",
+          "material_sku": "MAT-SCREW-LONG",
+          "material_name": "Long Screw",
+          "unit": "Nos.",
+          "preliminary_quantity": 0,
+          "final_quantity": 24,
+          "difference": 24,
+          "actual_issued": 0,
+          "actual_used": 0,
+          "actual_returned": 0,
+          "status": "NEW_IN_FINAL",
+          "variance_label": "+24"
+        },
+        {
+          "material_id": "bd02bad8-3b6f-45b9-bbc7-c5c79ecb86bd",
+          "material_sku": "MAT-SCREW-SMALL",
+          "material_name": "Small Screw",
+          "unit": "Nos.",
+          "preliminary_quantity": 0,
+          "final_quantity": 24,
+          "difference": 24,
+          "actual_issued": 0,
+          "actual_used": 0,
+          "actual_returned": 0,
+          "status": "NEW_IN_FINAL",
+          "variance_label": "+24"
+        },
+        {
+          "material_id": "9f46d34e-91a4-4f31-a8c5-b5541cc8b32d",
+          "material_sku": "MAT-MEM-CARD",
+          "material_name": "Memory Card",
+          "unit": "Nos.",
+          "preliminary_quantity": 0,
+          "final_quantity": 2,
+          "difference": 2,
+          "actual_issued": 0,
+          "actual_used": 0,
+          "actual_returned": 0,
+          "status": "NEW_IN_FINAL",
+          "variance_label": "+2"
+        },
+        {
+          "material_id": "fcc5f452-6ae7-4097-bd5a-0ca9f29421e3",
+          "material_sku": "MAT-WIRE-0.5MM",
+          "material_name": "0.5 mm Wire",
+          "unit": "Metres",
+          "preliminary_quantity": 0,
+          "final_quantity": 40,
+          "difference": 40,
+          "actual_issued": 0,
+          "actual_used": 0,
+          "actual_returned": 0,
+          "status": "NEW_IN_FINAL",
+          "variance_label": "+40"
+        },
+        {
+          "material_id": "d9583db5-eb4c-4059-b86c-f9548c99ac85",
+          "material_sku": "MAT-CBL-5M",
+          "material_name": "5-metre Cable",
+          "unit": "Nos.",
+          "preliminary_quantity": 0,
+          "final_quantity": 6,
+          "difference": 6,
+          "actual_issued": 0,
+          "actual_used": 0,
+          "actual_returned": 0,
+          "status": "NEW_IN_FINAL",
+          "variance_label": "+6"
+        },
+        {
+          "material_id": "ffb14238-0b26-4bd5-ba71-d362cb6861dc",
+          "material_sku": "MAT-CBL-15M",
+          "material_name": "15-metre Cable",
+          "unit": "Nos.",
+          "preliminary_quantity": 0,
+          "final_quantity": 2,
+          "difference": 2,
+          "actual_issued": 0,
+          "actual_used": 0,
+          "actual_returned": 0,
+          "status": "NEW_IN_FINAL",
+          "variance_label": "+2"
+        }
+      ],
+      "calculated_at": "2026-10-26T04:16:17.509Z"
     }
   },
   "additionalInstallations": {

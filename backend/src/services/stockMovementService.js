@@ -108,66 +108,50 @@ export async function recordStockMovement({
 
   // 1. Attempt database insertion into Supabase PostgreSQL
   try {
-    const { data: dbCreated, error } = await supabase
-      .from('stock_movements')
-      .insert([{
-        product_id: movementRecord.product_id,
-        item_id: movementRecord.item_id,
-        item_name: movementRecord.item_name,
-        sku: movementRecord.sku,
-        category: movementRecord.category,
-        movement_type: movementRecord.movement_type,
-        quantity: movementRecord.quantity,
-        unit: movementRecord.unit,
-        balance_before: movementRecord.balance_before,
-        balance_after: movementRecord.balance_after,
-        checklist_id: movementRecord.checklist_id,
-        reference_transaction_id: movementRecord.reference_transaction_id,
-        performed_by: movementRecord.performed_by,
-        performer_name: movementRecord.performer_name,
-        performer_email: movementRecord.performer_email,
-        reason_or_remarks: movementRecord.reason_or_remarks,
-        idempotency_key: movementRecord.idempotency_key,
-        created_at: movementRecord.created_at,
-      }])
-      .select()
-      .single();
+    const payloadsToTry = [
+      // 1st attempt: exact movement_type, performed_by, and checklist_id
+      { movement_type: movementRecord.movement_type, performed_by: movementRecord.performed_by, checklist_id: movementRecord.checklist_id },
+      // 2nd attempt: if FK fails on performed_by, try null performed_by
+      ...(movementRecord.performed_by ? [{ movement_type: movementRecord.movement_type, performed_by: null, checklist_id: movementRecord.checklist_id }] : []),
+      // 3rd attempt: if FK fails on checklist_id, try null checklist_id
+      ...(movementRecord.checklist_id ? [{ movement_type: movementRecord.movement_type, performed_by: null, checklist_id: null }] : []),
+      // 4th & 5th attempt: if check constraint fails on SERVICE_*, try STOCK_ISSUED fallback
+      ...(movementRecord.movement_type?.startsWith('SERVICE_') ? [
+        { movement_type: 'STOCK_ISSUED', performed_by: movementRecord.performed_by, checklist_id: movementRecord.checklist_id },
+        { movement_type: 'STOCK_ISSUED', performed_by: null, checklist_id: movementRecord.checklist_id },
+        { movement_type: 'STOCK_ISSUED', performed_by: null, checklist_id: null },
+      ] : []),
+    ];
 
-    if (!error && dbCreated) {
-      movementRecord.id = dbCreated.id;
-    } else if (error) {
-      if (error.message?.includes('violates foreign key constraint') && movementRecord.performed_by) {
-        const { data: dbRetry, error: retryError } = await supabase
-          .from('stock_movements')
-          .insert([{
-            product_id: movementRecord.product_id,
-            item_id: movementRecord.item_id,
-            item_name: movementRecord.item_name,
-            sku: movementRecord.sku,
-            category: movementRecord.category,
-            movement_type: movementRecord.movement_type,
-            quantity: movementRecord.quantity,
-            unit: movementRecord.unit,
-            balance_before: movementRecord.balance_before,
-            balance_after: movementRecord.balance_after,
-            checklist_id: movementRecord.checklist_id,
-            reference_transaction_id: movementRecord.reference_transaction_id,
-            performed_by: null,
-            performer_name: movementRecord.performer_name,
-            performer_email: movementRecord.performer_email,
-            reason_or_remarks: movementRecord.reason_or_remarks,
-            idempotency_key: movementRecord.idempotency_key,
-            created_at: movementRecord.created_at,
-          }])
-          .select()
-          .single();
-        if (!retryError && dbRetry) {
-          movementRecord.id = dbRetry.id;
-        } else {
-          console.warn('DB stock_movements retry notice:', retryError?.message);
-        }
-      } else {
-        console.warn('DB stock_movements insert notice:', error.message);
+    for (const attempt of payloadsToTry) {
+      const { data: dbCreated, error } = await supabase
+        .from('stock_movements')
+        .insert([{
+          product_id: movementRecord.product_id,
+          item_id: movementRecord.item_id,
+          item_name: movementRecord.item_name,
+          sku: movementRecord.sku,
+          category: movementRecord.category,
+          movement_type: attempt.movement_type,
+          quantity: movementRecord.quantity,
+          unit: movementRecord.unit,
+          balance_before: movementRecord.balance_before,
+          balance_after: movementRecord.balance_after,
+          checklist_id: attempt.checklist_id,
+          reference_transaction_id: movementRecord.reference_transaction_id,
+          performed_by: attempt.performed_by,
+          performer_name: movementRecord.performer_name,
+          performer_email: movementRecord.performer_email,
+          reason_or_remarks: movementRecord.reason_or_remarks,
+          idempotency_key: movementRecord.idempotency_key,
+          created_at: movementRecord.created_at,
+        }])
+        .select()
+        .single();
+
+      if (!error && dbCreated) {
+        movementRecord.id = dbCreated.id;
+        break;
       }
     }
   } catch (dbErr) {

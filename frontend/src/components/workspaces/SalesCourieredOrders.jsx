@@ -204,7 +204,9 @@ export default function SalesCourieredOrders({ token, onSelectChecklist }) {
     }
 
     // Availability conflict check
-    const eng = engineersAvailability.find((e) => e.name.toLowerCase() === service_engineer.toLowerCase());
+    const eng = engineersAvailability.find(
+      (e) => (e?.name || '').toLowerCase() === (service_engineer || '').toLowerCase()
+    );
     if (eng && !eng.available) {
       setScheduleModal((p) => ({
         ...p,
@@ -686,8 +688,8 @@ export default function SalesCourieredOrders({ token, onSelectChecklist }) {
                   className="w-full p-2.5 border border-gray-200 rounded-xl font-bold bg-white focus:outline-none focus:border-indigo-500"
                 >
                   <option value="">-- Select Authorized Service Engineer --</option>
-                  {(scheduleModal.engineersAvailability?.length ? scheduleModal.engineersAvailability.map((e) => e.name) : SERVICE_ENGINEER_OPTIONS).map((name) => {
-                    const eng = scheduleModal.engineersAvailability.find((e) => e.name.toLowerCase() === name.toLowerCase());
+                  {(scheduleModal.engineersAvailability?.length ? scheduleModal.engineersAvailability.map((e) => (typeof e === 'string' ? e : e?.name)).filter(Boolean) : SERVICE_ENGINEER_OPTIONS).map((name) => {
+                    const eng = scheduleModal.engineersAvailability.find((e) => (e?.name || '').toLowerCase() === (name || '').toLowerCase());
                     const isAvail = eng ? eng.available : true;
                     return (
                       <option
@@ -704,10 +706,10 @@ export default function SalesCourieredOrders({ token, onSelectChecklist }) {
 
                 {/* Quick Selection Buttons */}
                 <div className="flex flex-wrap gap-2 pt-2">
-                  {(scheduleModal.engineersAvailability?.length ? scheduleModal.engineersAvailability.map((e) => e.name) : SERVICE_ENGINEER_OPTIONS).map((name) => {
-                    const eng = scheduleModal.engineersAvailability.find((e) => e.name.toLowerCase() === name.toLowerCase());
+                  {(scheduleModal.engineersAvailability?.length ? scheduleModal.engineersAvailability.map((e) => (typeof e === 'string' ? e : e?.name)).filter(Boolean) : SERVICE_ENGINEER_OPTIONS).map((name) => {
+                    const eng = scheduleModal.engineersAvailability.find((e) => (e?.name || '').toLowerCase() === (name || '').toLowerCase());
                     const isAvail = eng ? eng.available : true;
-                    const isSelected = scheduleModal.service_engineer === name;
+                    const isSelected = (scheduleModal.service_engineer || '').toLowerCase() === (name || '').toLowerCase();
                     return (
                       <button
                         key={name}
