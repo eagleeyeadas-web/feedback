@@ -8,7 +8,7 @@ import {
   combineCarriedDevicesAllocation,
 } from './bomService.js';
 import { enrichChecklistsWithWorkflowStatus, getAdditionalCustomerInstallations, getInstallationCompletionReport } from './workflowService.js';
-import { getBackupDeclaration, issueBackupItemsForChecklist } from './backupItemService.js';
+import { getBackupDeclaration, issueBackupItemsForChecklist, isChecklistTechnicianDependent, isPreInstallationSubmitted } from './backupItemService.js';
 import { recordStockMovement } from './stockMovementService.js';
 
 // In-memory fallback cache
@@ -1046,6 +1046,18 @@ export async function getStoreMaterialRequirements(params = {}) {
       ? backupDecl.items.reduce((sum, it) => sum + (Number(it.quantity_damaged || 0) + Number(it.quantity_missing || 0)), 0)
       : ((compReport?.extra_devices_damaged ?? 0) + (compReport?.extra_devices_missing ?? 0));
 
+    const isTechDependent = isChecklistTechnicianDependent(rec);
+    const isOrigIssuedOrCompleted = isOrigIssued || rec.installation_status === 'Completed' || (isCourier && isCourierIssued);
+    const hasPreInstallSubmitted = Boolean(
+      isOrigIssuedOrCompleted ||
+      rec.carry_status === 'RECORDED' ||
+      ['DECLARED', 'CORRECTED', 'VERIFIED'].includes(backupDecl?.status) ||
+      inMemReq?.carry_status === 'RECORDED'
+    );
+    const preInstallStatus = hasPreInstallSubmitted ? 'Submitted' : 'Pending';
+    const preInstallTimestamp = backupDecl?.declaration_timestamp ||
+      (hasPreInstallSubmitted ? (rec.submission_date || rec.created_at) : null);
+
     const stockIssuanceStatus = isCourier
       ? (isCourierIssued ? 'Completed' : 'Pending')
       : (liveStatus === 'ISSUED' ? 'Completed' : 'Pending');
@@ -1095,6 +1107,10 @@ export async function getStoreMaterialRequirements(params = {}) {
       shortage_details: liveShortageDetails,
       bom_availability_status: bomAvailabilityStatus,
       status: isCourier ? (isCourierIssued ? 'ISSUED' : liveStatus) : liveStatus,
+      is_technician_dependent: isTechDependent,
+      has_pre_installation_submitted: hasPreInstallSubmitted,
+      pre_installation_status: preInstallStatus,
+      pre_installation_submitted_at: preInstallTimestamp,
     };
   }));
 
@@ -1110,7 +1126,7 @@ export async function getStoreMaterialRequirements(params = {}) {
   try {
     let summaryQuery = supabase
       .from('store_material_requirements')
-      .select('job_type, delivery_method, status, material_issuance_status, has_shortage');
+      .select('checklist_id, id, job_type, delivery_method, service_engineer, status, material_issuance_status, has_shortage, carry_status, installation_status');
 
     if (search && search.trim()) {
       const s = search.trim();
@@ -1138,12 +1154,16 @@ export async function getStoreMaterialRequirements(params = {}) {
             ? (r.material_issuance_status === 'ISSUED' || r.status === 'ISSUED')
             : (r.material_issuance_status === 'ISSUED' && r.status === 'ISSUED'));
 
+        const isTechDep = isChecklistTechnicianDependent(r);
+        const isPreSub = isIssued || r.installation_status === 'Completed' || r.carry_status === 'RECORDED';
+
         if (isIssued) {
           issuedCount++;
-        } else {
+        } else if (!isTechDep || isPreSub) {
+          // Actionable incoming material requirement
           pendingCount++;
+          if (r.has_shortage) shortageCounter++;
         }
-        if (r.has_shortage && !isIssued) shortageCounter++;
       });
     }
   } catch (e) {
@@ -1165,24 +1185,47 @@ export async function getStoreMaterialRequirements(params = {}) {
           ? (r.material_issuance_status === 'ISSUED' || r.status === 'ISSUED')
           : (r.material_issuance_status === 'ISSUED' && r.devices_issuance_status === 'ISSUED'));
 
-      if (isIssued) issuedCount++;
-      else pendingCount++;
-
-      if (r.has_shortage && !isIssued) shortageCounter++;
+      if (isIssued) {
+        issuedCount++;
+      } else if (!r.is_technician_dependent || r.has_pre_installation_submitted) {
+        pendingCount++;
+        if (r.has_shortage) shortageCounter++;
+      }
     });
   }
 
-  let filteredRequirements = enrichedRecords;
+  // Routing Gate: For technician-dependent checklists, they must NOT appear as actionable incoming
+  // material requirements in Store Manager's queue until the Pre-Installation Form is submitted.
+  // Exceptions:
+  // - Product Courier without technician: actionable immediately for original courier stock issuance.
+  // - Checklists whose original stock has already been issued or completed: preserved for history/audits.
+  let actionableRecords = enrichedRecords.filter((r) => {
+    // If historical / already issued / completed, keep in historical records
+    if (r.is_issued || r.stock_issuance_status === 'Completed' || r.installation_status === 'Completed') {
+      return true;
+    }
+    // If Product Courier without technician, actionable for Store Manager original stock issuance
+    if (r.is_courier && !r.is_technician_dependent) {
+      return true;
+    }
+    // If technician-dependent, actionable ONLY IF Pre-Installation Form has been submitted!
+    if (r.is_technician_dependent && !r.has_pre_installation_submitted) {
+      return false;
+    }
+    return true;
+  });
+
+  let filteredRequirements = actionableRecords;
   if (issuance_status && issuance_status !== 'All') {
     if (issuance_status === 'PENDING') {
-      filteredRequirements = enrichedRecords.filter((r) => {
+      filteredRequirements = actionableRecords.filter((r) => {
         if (r.is_courier) {
           return r.stock_issuance_status !== 'Completed' && !r.is_issued && r.status !== 'ISSUED';
         }
         return r.material_issuance_status === 'PENDING';
       });
     } else if (issuance_status === 'ISSUED') {
-      filteredRequirements = enrichedRecords.filter((r) => {
+      filteredRequirements = actionableRecords.filter((r) => {
         if (r.is_courier) {
           return r.stock_issuance_status === 'Completed' || r.is_issued || r.status === 'ISSUED';
         }

@@ -639,17 +639,73 @@ export async function saveBackupDeclaration({
 
   // Synchronize technician's backup declaration onto the parent installation checklist record
   try {
-    const totalExtra = validatedItems.reduce((sum, it) => sum + (Number(it.quantity) || 0), 0);
-
     await supabase
       .from('installation_checklists')
       .update({
         carry_extra_backup_items: isCarrying,
+        carry_status: 'RECORDED',
         updated_at: nowIso,
       })
       .eq('id', checklistId);
   } catch (err) {
-    console.warn('Could not update carry_extra_backup_items on installation_checklists:', err.message);
+    console.warn('Could not update carry_status on installation_checklists:', err.message);
+  }
+
+  // Synchronize Store Manager requirement record with technician backup declaration
+  try {
+    const { syncStoreRequirementForChecklist } = await import('./storeRequirementService.js');
+    await syncStoreRequirementForChecklist({
+      ...checklist,
+      carry_extra_backup_items: isCarrying,
+      carry_status: 'RECORDED',
+    });
+  } catch (syncErr) {
+    console.warn('Could not sync store requirement on backup declaration:', syncErr.message);
+  }
+
+  // Idempotently notify Store Manager and Coordinator of successful Pre-Installation submission
+  try {
+    const { createNotification } = await import('./appNotificationService.js');
+    const chkNum = checklist?.checklist_number || savedDeclaration.checklist_number || 'N/A';
+    const clientName = checklist?.client_name || savedDeclaration.customer_name || 'Client';
+    const techName = savedDeclaration.technician_name || checklist?.service_engineer || 'Technician';
+
+    // 1. Notify Store Manager: checklist is ready for material review
+    await createNotification({
+      targetRole: 'STORE',
+      title: `Pre-Installation Submitted: ${chkNum}`,
+      message: `Technician ${techName} submitted Pre-Installation Form for ${clientName}. Ready for material review.`,
+      type: 'PRE_INSTALLATION_SUBMITTED',
+      checklistId,
+      checklistNumber: chkNum,
+      metadata: {
+        idempotency_key: `pre-install-store-${checklistId}`,
+        checklist_id: checklistId,
+        checklist_number: chkNum,
+        technician_name: techName,
+        has_backup_items: isCarrying,
+        items_count: validatedItems.length,
+      },
+    }).catch(() => {});
+
+    // 2. Notify Coordinator: checklist is ready for operational coordination
+    await createNotification({
+      targetRole: 'COORDINATOR',
+      title: `Pre-Installation Submitted: ${chkNum}`,
+      message: `Technician ${techName} submitted Pre-Installation Form for ${clientName}. Ready for travel & room booking.`,
+      type: 'PRE_INSTALLATION_SUBMITTED',
+      checklistId,
+      checklistNumber: chkNum,
+      metadata: {
+        idempotency_key: `pre-install-coord-${checklistId}`,
+        checklist_id: checklistId,
+        checklist_number: chkNum,
+        technician_name: techName,
+        has_backup_items: isCarrying,
+      },
+    }).catch(() => {});
+  } catch (notifErr) {
+    console.warn('Could not dispatch pre-installation notifications:', notifErr.message);
   }
 
   // Audit log
@@ -1402,4 +1458,96 @@ export async function verifyStoreBackupItemReturn({
     message: 'Returned backup items physically verified and usable stock restored.',
     verification_results: verificationResults,
   };
+}
+
+/**
+ * Determines whether a checklist is technician-dependent:
+ * - Non-courier checklists (Technician Carries) are technician-dependent.
+ * - Product Courier is technician-dependent ONLY if a technician is assigned.
+ */
+export function isChecklistTechnicianDependent(checklist) {
+  if (!checklist) return false;
+  const deliveryMethod = checklist.delivery_method || 'Technician Carries';
+  const isCourier = deliveryMethod === 'Product Couriered';
+  if (!isCourier) {
+    return true;
+  }
+  const tech = (checklist.service_engineer || '').trim();
+  return Boolean(tech && tech.toLowerCase() !== 'unassigned');
+}
+
+/**
+ * Determines whether a technician has successfully submitted the Pre-Installation Form
+ * for a checklist across in-memory stores and DB records.
+ */
+export async function isPreInstallationSubmitted(checklistId, checklist = null) {
+  if (!checklistId) return false;
+
+  // 1. Checklist carry_status if provided
+  if (checklist?.carry_status === 'RECORDED') {
+    return true;
+  }
+
+  // 2. In-memory backup declarations
+  const memDecl = inMemoryDeclarations.get(checklistId);
+  if (memDecl && ['DECLARED', 'CORRECTED', 'VERIFIED'].includes(memDecl.status)) {
+    return true;
+  }
+
+  // 3. In-memory carry records
+  try {
+    const { inMemoryCarryRecords } = await import('./workflowService.js');
+    const memCarry = inMemoryCarryRecords?.get(checklistId);
+    if (memCarry && ['SUBMITTED', 'AUDITED'].includes(memCarry.status)) {
+      return true;
+    }
+  } catch (e) {}
+
+  const isUuid = typeof checklistId === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(checklistId);
+  if (!isUuid) {
+    return false;
+  }
+
+  // 4. Supabase pre_installation_backup_declarations table
+  try {
+    const { data: dbDecl, error: declErr } = await supabase
+      .from('pre_installation_backup_declarations')
+      .select('status')
+      .eq('checklist_id', checklistId)
+      .maybeSingle();
+
+    if (!declErr && dbDecl && ['DECLARED', 'CORRECTED', 'VERIFIED'].includes(dbDecl.status)) {
+      return true;
+    }
+  } catch (e) {}
+
+  // 5. Supabase job_device_carry_records table
+  try {
+    const { data: dbCarry, error: carryErr } = await supabase
+      .from('job_device_carry_records')
+      .select('status')
+      .eq('checklist_id', checklistId)
+      .maybeSingle();
+
+    if (!carryErr && dbCarry && ['SUBMITTED', 'AUDITED'].includes(dbCarry.status)) {
+      return true;
+    }
+  } catch (e) {}
+
+  // 6. DB installation_checklists carry_status check if checklist wasn't provided
+  if (!checklist) {
+    try {
+      const { data: dbChk } = await supabase
+        .from('installation_checklists')
+        .select('carry_status, installation_status')
+        .eq('id', checklistId)
+        .maybeSingle();
+
+      if (dbChk?.carry_status === 'RECORDED' || dbChk?.installation_status === 'Completed') {
+        return true;
+      }
+    } catch (e) {}
+  }
+
+  return false;
 }

@@ -498,9 +498,15 @@ export async function createChecklist(adminUserId, data, options = {}) {
     }
     try {
       const req = await syncStoreRequirementForChecklist(inserted);
-      notifyStoreManagerOnInstallationChecklist({ checklist: inserted, requirement: req }).catch((e) =>
-        console.warn('Could not dispatch Store Manager notification:', e.message)
-      );
+      // Routing Gate: Only dispatch Store Manager notification immediately if NOT technician-dependent (e.g. Product Courier without technician).
+      // For technician-dependent checklists, notification is deferred until the technician submits the Pre-Installation Form.
+      const { isChecklistTechnicianDependent } = await import('./backupItemService.js');
+      const isTechDep = isChecklistTechnicianDependent(inserted);
+      if (!isTechDep) {
+        notifyStoreManagerOnInstallationChecklist({ checklist: inserted, requirement: req }).catch((e) =>
+          console.warn('Could not dispatch Store Manager notification:', e.message)
+        );
+      }
     } catch (reqErr) {
       console.warn('Could not sync store requirement for checklist:', reqErr.message);
     }

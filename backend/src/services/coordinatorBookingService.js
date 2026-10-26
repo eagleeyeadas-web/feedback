@@ -5,6 +5,8 @@ import { v4 as uuidv4 } from 'uuid';
 import supabase from './supabase.js';
 import { getChecklistById, getChecklists } from './installationService.js';
 import { createNotification } from './appNotificationService.js';
+import { isChecklistTechnicianDependent, isPreInstallationSubmitted, inMemoryDeclarations } from './backupItemService.js';
+import { inMemoryCarryRecords } from './workflowService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -330,14 +332,15 @@ export function buildDefaultCoordinatorBooking(chk) {
   const start = chk.current_expected_arrival_date || chk.expected_arrival_date || null;
   const end = chk.current_booking_end_date || chk.booking_end_date || start;
   const isCompleted = chk.installation_status === 'Completed' || Boolean(chk.actual_completion_datetime);
+  const isCourieredNoTech = chk.delivery_method === 'Product Couriered' && (!chk.service_engineer || chk.service_engineer.trim() === '' || chk.service_engineer === 'Unassigned');
 
   return {
     id: uuidv4(),
     checklist_id: chk.id,
-    booking_status: 'PENDING',
+    booking_status: isCourieredNoTech ? 'NOT_REQUIRED' : 'PENDING',
 
     // Requirement 1 & 5: Outbound Ticket
-    outbound_status: 'Required',
+    outbound_status: isCourieredNoTech ? 'Cancelled' : 'Required',
     outbound_mode: 'Bus',
     outbound_method: 'Government bus',
     outbound_operator: '',
@@ -358,7 +361,7 @@ export function buildDefaultCoordinatorBooking(chk) {
     outbound_notes: '',
 
     // Legacy travel fields
-    travel_required: true,
+    travel_required: !isCourieredNoTech,
     travel_type: 'Bus',
     departure_city: '',
     destination: chk.client_location || '',
@@ -367,7 +370,7 @@ export function buildDefaultCoordinatorBooking(chk) {
     travel_notes: '',
 
     // Requirement 2 & 5: Accommodation
-    accommodation_status: 'Required',
+    accommodation_status: isCourieredNoTech ? 'Cancelled' : 'Required',
     accommodation_type: 'Online booking',
     hotel_name: '',
     hotel_platform: '',
@@ -390,7 +393,7 @@ export function buildDefaultCoordinatorBooking(chk) {
     accommodation_attachment_name: '',
     accommodation_notes: '',
     accommodation_history: [],
-    accommodation_required: true,
+    accommodation_required: !isCourieredNoTech,
 
     // Requirement 4 & 5: Return Ticket
     return_task_id: `RET-TASK-${chk.checklist_number || chk.id}`,
@@ -455,12 +458,17 @@ export function normalizeBookingData(booking, chk) {
   const start = chk.current_expected_arrival_date || chk.expected_arrival_date || null;
   const end = chk.current_booking_end_date || chk.booking_end_date || start;
   const isPostInstalled = chk.installation_status === 'Completed' && (chk.completion_type === 'TECHNICIAN_INSTALLED' || Boolean(chk.actual_completion_datetime));
+  const isCourieredNoTech = chk.delivery_method === 'Product Couriered' && (!chk.service_engineer || chk.service_engineer.trim() === '' || chk.service_engineer === 'Unassigned');
 
   const normalized = { ...booking };
 
+  if (isCourieredNoTech) {
+    normalized.booking_status = 'NOT_REQUIRED';
+  }
+
   // Outbound: Map to Pending, Booked, Confirmed, Cancelled
   let outSt = normalized.outbound_status;
-  if (normalized.travel_required === false || outSt === 'Cancelled' || outSt === 'NOT_REQUIRED') {
+  if (isCourieredNoTech || normalized.travel_required === false || outSt === 'Cancelled' || outSt === 'NOT_REQUIRED') {
     outSt = 'Cancelled';
   } else if (['Confirmed', 'COMPLETED', 'Completed'].includes(outSt)) {
     outSt = 'Confirmed';
@@ -492,7 +500,7 @@ export function normalizeBookingData(booking, chk) {
 
   // Accommodation: Map to Pending, Pending Review, Booked, Confirmed, Cancelled
   let accSt = normalized.accommodation_status;
-  if (normalized.accommodation_required === false || accSt === 'Cancelled' || accSt === 'NOT_REQUIRED') {
+  if (isCourieredNoTech || normalized.accommodation_required === false || accSt === 'Cancelled' || accSt === 'NOT_REQUIRED') {
     accSt = 'Cancelled';
   } else if (['Pending Review', 'Extension Required', 'Extension Pending'].includes(accSt) || normalized.accommodation_dates_affected) {
     accSt = 'Pending Review';
@@ -686,10 +694,25 @@ export async function getCoordinatorChecklists(arg1 = {}, arg2 = {}) {
     const rawBooking = inMemoryBookings.get(chk.id) || null;
     const normalizedBooking = normalizeBookingData(rawBooking, chk);
 
+    const isTechDep = isChecklistTechnicianDependent(chk);
+    const memDecl = inMemoryDeclarations.get(chk.id);
+    const memCarry = inMemoryCarryRecords.get(chk.id);
+    const isSubmitted = Boolean(
+      chk.carry_status === 'RECORDED' ||
+      ['DECLARED', 'CORRECTED', 'VERIFIED'].includes(memDecl?.status) ||
+      ['SUBMITTED', 'AUDITED'].includes(memCarry?.status) ||
+      chk.installation_status === 'Completed' ||
+      (chk.delivery_method === 'Product Couriered' && !isTechDep)
+    );
+
     return {
       ...chk,
       coordinator_booking: normalizedBooking,
       booking_status: normalizedBooking.booking_status || 'PENDING',
+      is_technician_dependent: isTechDep,
+      has_pre_installation_submitted: isSubmitted,
+      pre_installation_status: isSubmitted ? 'Submitted' : 'Pending',
+      pre_installation_submitted_at: memDecl?.declaration_timestamp || memCarry?.submitted_at || null,
     };
   });
 
@@ -731,23 +754,32 @@ export async function getCoordinatorChecklists(arg1 = {}, arg2 = {}) {
 
   enriched.forEach((item) => {
     const st = item.booking_status;
-    if (st === 'PENDING') stats.pending++;
-    else if (st === 'IN_PROGRESS') stats.in_progress++;
-    else if (st === 'COMPLETED') stats.completed++;
-    else if (st === 'NOT_REQUIRED') stats.not_required++;
+    const isActionable = !item.is_technician_dependent || item.has_pre_installation_submitted;
+
+    if (st === 'PENDING') {
+      if (isActionable) stats.pending++;
+    } else if (st === 'IN_PROGRESS') {
+      if (isActionable) stats.in_progress++;
+    } else if (st === 'COMPLETED') {
+      stats.completed++;
+    } else if (st === 'NOT_REQUIRED') {
+      stats.not_required++;
+    }
 
     const cb = item.coordinator_booking;
     if (!cb) return;
 
     // Outbound
-    if (cb.outbound_status === 'Pending') stats.outbound_pending++;
-    else if (cb.outbound_status === 'Booked') stats.outbound_booked++;
+    if (cb.outbound_status === 'Pending') {
+      if (isActionable) stats.outbound_pending++;
+    } else if (cb.outbound_status === 'Booked') stats.outbound_booked++;
     else if (cb.outbound_status === 'Confirmed') stats.outbound_confirmed++;
     else if (cb.outbound_status === 'Cancelled') stats.outbound_cancelled++;
 
     // Room Bookings
-    if (cb.accommodation_status === 'Pending') stats.room_pending++;
-    else if (cb.accommodation_status === 'Pending Review') {
+    if (cb.accommodation_status === 'Pending') {
+      if (isActionable) stats.room_pending++;
+    } else if (cb.accommodation_status === 'Pending Review') {
       stats.room_pending_review++;
       stats.extension_reviews++;
     } else if (cb.accommodation_status === 'Booked') stats.room_booked++;
@@ -774,6 +806,9 @@ export async function getCoordinatorChecklists(arg1 = {}, arg2 = {}) {
 
     // Tab filter:
     if (tab === 'pending') {
+      // Routing Gate: For technician-dependent checklists, they must NOT appear as actionable
+      // booking tasks in Coordinator's pending operational queue until the Pre-Installation Form is submitted.
+      if (item.is_technician_dependent && !item.has_pre_installation_submitted) return false;
       if (st !== 'PENDING' && st !== 'IN_PROGRESS') return false;
     } else if (tab === 'completed') {
       if (st !== 'COMPLETED' && st !== 'NOT_REQUIRED') return false;

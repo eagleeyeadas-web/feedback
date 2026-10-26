@@ -1516,15 +1516,22 @@ export default function CoordinatorWorkspace() {
                             >
                               {/* Header: Job ID + Status Badge */}
                               <div className="flex items-start justify-between gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() => openHistory(item.id, item.checklist_number)}
-                                  className="text-xs font-mono font-bold text-blue-700 hover:underline flex items-center gap-1 cursor-pointer"
-                                  title="View audit history"
-                                >
-                                  <span>{item.checklist_number || item.id.slice(0, 8)}</span>
-                                  <History size={12} className="text-slate-400" />
-                                </button>
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <button
+                                    type="button"
+                                    onClick={() => openHistory(item.id, item.checklist_number)}
+                                    className="text-xs font-mono font-bold text-blue-700 hover:underline flex items-center gap-1 cursor-pointer"
+                                    title="View audit history"
+                                  >
+                                    <span>{item.checklist_number || item.id.slice(0, 8)}</span>
+                                    <History size={12} className="text-slate-400" />
+                                  </button>
+                                  {item.is_technician_dependent && (
+                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded-full text-[9px] font-extrabold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                                      <CheckCircle2 size={10} className="text-emerald-600" /> Pre-Install Done
+                                    </span>
+                                  )}
+                                </div>
                                 <span
                                   className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border shrink-0 ${badgeStyle.bg} ${badgeStyle.text} ${badgeStyle.border}`}
                                 >

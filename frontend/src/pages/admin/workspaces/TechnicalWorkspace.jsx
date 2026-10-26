@@ -762,18 +762,40 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
                           <div className="flex flex-col gap-1.5">
                             {!item.has_completion_report ? (
                               <div className="flex flex-wrap gap-1">
-                                <button
-                                  type="button"
-                                  onClick={() => setBackupModalJob(item)}
-                                  className={`px-2.5 py-1.5 text-xs font-bold rounded-lg flex items-center gap-1 cursor-pointer w-fit shadow-2xs ${
-                                    item.carry_extra_backup_items
-                                      ? 'text-amber-900 bg-amber-50 hover:bg-amber-100 border border-amber-300'
-                                      : 'text-gray-700 bg-gray-50 hover:bg-gray-100 border border-gray-200'
-                                  }`}
-                                  title="Pre-Installation: Extra Backup Items Declaration"
-                                >
-                                  <Package className="w-3.5 h-3.5 text-amber-600" /> Pre-Installation Backup Items
-                                </button>
+                                {(() => {
+                                  const isPreInstallSubmitted = Boolean(
+                                    item.carry_status === 'RECORDED' ||
+                                    item.pre_installation_status === 'Submitted' ||
+                                    item.is_pre_installation_submitted
+                                  );
+
+                                  return (
+                                    <button
+                                      type="button"
+                                      onClick={() => setBackupModalJob(item)}
+                                      className={`px-2.5 py-1.5 text-xs font-bold rounded-lg flex items-center gap-1.5 cursor-pointer w-fit shadow-2xs ${
+                                        isPreInstallSubmitted
+                                          ? 'text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300'
+                                          : item.carry_extra_backup_items
+                                          ? 'text-amber-900 bg-amber-50 hover:bg-amber-100 border border-amber-300'
+                                          : 'text-purple-900 bg-purple-50 hover:bg-purple-100 border border-purple-300'
+                                      }`}
+                                      title="Pre-Installation Form & Device Carry Declaration"
+                                    >
+                                      {isPreInstallSubmitted ? (
+                                        <>
+                                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                          <span>Pre-Installation: Submitted</span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <Package className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                                          <span>Pre-Installation Form</span>
+                                        </>
+                                      )}
+                                    </button>
+                                  );
+                                })()}
                                 <button
                                   onClick={() => setCompletionModalJob(item)}
                                   className="px-3 py-1.5 text-xs font-bold text-white bg-purple-700 hover:bg-purple-800 rounded-lg shadow-2xs flex items-center gap-1.5 cursor-pointer w-fit"

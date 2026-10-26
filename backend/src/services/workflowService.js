@@ -151,14 +151,9 @@ export async function submitDeviceCarryRecord({ checklist_id, user, items, remar
     };
   });
 
-  // 3. Atomically validate available stock and deduct from usable stock
-  // If any requested quantity exceeds available stock, throws error and halts submission!
-  await deductStockForCarryRecord({
-    checklist_id,
-    technician_user_id: user.id,
-    technician_name: user.full_name || user.email,
-    items: processedItems,
-  });
+  // Technician Pre-Installation Carry Declaration:
+  // Capture declared device quantities without automatically deducting inventory.
+  // Physical inventory is deducted ONLY upon authorized Store Manager issuance.
 
   const carryRecord = {
     checklist_id,
@@ -230,6 +225,57 @@ export async function submitDeviceCarryRecord({ checklist_id, user, items, remar
     }
   } catch (err) {
     console.warn('DB update warning for carry_status:', err.message);
+  }
+
+  // Synchronize Store Manager requirement record with technician carry declaration
+  try {
+    const { syncStoreRequirementForChecklist } = await import('./storeRequirementService.js');
+    await syncStoreRequirementForChecklist({
+      ...checklist,
+      carry_status: 'RECORDED',
+    });
+  } catch (syncErr) {
+    console.warn('Could not sync store requirement on device carry submission:', syncErr.message);
+  }
+
+  // Idempotently notify Store Manager and Coordinator of successful Pre-Installation submission
+  try {
+    const { createNotification } = await import('./appNotificationService.js');
+    const chkNum = checklist.checklist_number || 'N/A';
+    const clientName = checklist.client_name || 'Client';
+    const techName = user.full_name || user.email || 'Technician';
+
+    await createNotification({
+      targetRole: 'STORE',
+      title: `Pre-Installation Submitted: ${chkNum}`,
+      message: `Technician ${techName} submitted Pre-Installation Form for ${clientName}. Ready for material review.`,
+      type: 'PRE_INSTALLATION_SUBMITTED',
+      checklistId: checklist_id,
+      checklistNumber: chkNum,
+      metadata: {
+        idempotency_key: `pre-install-store-${checklist_id}`,
+        checklist_id,
+        checklist_number: chkNum,
+        technician_name: techName,
+      },
+    }).catch(() => {});
+
+    await createNotification({
+      targetRole: 'COORDINATOR',
+      title: `Pre-Installation Submitted: ${chkNum}`,
+      message: `Technician ${techName} submitted Pre-Installation Form for ${clientName}. Ready for travel & room booking.`,
+      type: 'PRE_INSTALLATION_SUBMITTED',
+      checklistId: checklist_id,
+      checklistNumber: chkNum,
+      metadata: {
+        idempotency_key: `pre-install-coord-${checklist_id}`,
+        checklist_id,
+        checklist_number: chkNum,
+        technician_name: techName,
+      },
+    }).catch(() => {});
+  } catch (notifErr) {
+    console.warn('Could not dispatch pre-installation carry notifications:', notifErr.message);
   }
 
   await logAudit({

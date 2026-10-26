@@ -849,6 +849,63 @@ export default function TechnicianBackupDeclarationModal({
             </div>
           )}
 
+          {/* Job Details & Original Required Devices Summary Card */}
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-2.5 text-xs text-gray-700">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-2">
+              <span className="font-bold text-gray-900 uppercase tracking-wide text-[11px] flex items-center gap-1.5">
+                <Wrench className="w-3.5 h-3.5 text-purple-700" /> Original Job Configuration
+              </span>
+              <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 border border-blue-200">
+                {job.delivery_method || 'Technician Carries'}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <span className="text-[10px] text-gray-400 font-bold uppercase block">Customer &amp; Location</span>
+                <span className="font-bold text-gray-900">{job.client_name}</span>
+                <span className="text-[11px] text-gray-500 block truncate">{job.client_location || '—'}</span>
+              </div>
+              <div>
+                <span className="text-[10px] text-gray-400 font-bold uppercase block">Scheduled Arrival Date</span>
+                <span className="font-bold text-gray-900">{job.expected_arrival_date || 'TBD'}</span>
+                <span className="text-[11px] text-gray-500 block">{job.expected_arrival_time || '10:00 AM'}</span>
+              </div>
+              <div>
+                <span className="text-[10px] text-gray-400 font-bold uppercase block">Stock Issuance Status</span>
+                <span className={`font-bold inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] ${
+                  job.is_issued || job.stock_issuance_status === 'Completed'
+                    ? 'text-emerald-800 bg-emerald-50'
+                    : 'text-amber-800 bg-amber-50'
+                }`}>
+                  {job.is_issued || job.stock_issuance_status === 'Completed' ? 'Stock Issued' : 'Pending Issuance'}
+                </span>
+              </div>
+            </div>
+
+            {/* Original Required Devices */}
+            <div className="pt-2 border-t border-slate-200">
+              <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">
+                Required Customer Devices:
+              </span>
+              <div className="flex flex-wrap gap-2">
+                {Array.isArray(job.device_configurations) && job.device_configurations.length > 0 ? (
+                  job.device_configurations.map((dc, i) => (
+                    <span key={i} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-white border border-gray-200 text-gray-800 font-semibold text-[11px]">
+                      <span>{dc.device_type}:</span>
+                      <strong className="text-purple-700 font-mono">{dc.number_of_devices || dc.quantity_carried || 1} Nos.</strong>
+                    </span>
+                  ))
+                ) : (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-white border border-gray-200 text-gray-800 font-semibold text-[11px]">
+                    <span>{job.device_type || 'Device'}:</span>
+                    <strong className="text-purple-700 font-mono">{job.number_of_devices || 1} Nos.</strong>
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+
           {/* Business Rule Banner */}
           <div className="p-3 bg-purple-50/80 border border-purple-200/80 rounded-xl text-xs text-purple-950 flex items-start gap-2.5">
             <Info size={16} className="text-purple-700 shrink-0 mt-0.5" />
