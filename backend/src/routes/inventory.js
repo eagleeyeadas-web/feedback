@@ -95,9 +95,10 @@ router.get('/weekly-report/pdf', requireRole('STORE_MANAGER', 'ADMIN'), async (r
 
 /**
  * GET /api/admin/inventory
- * Accessible to STORE_MANAGER, ADMIN
+ * Accessible to all authenticated staff (STORE_MANAGER, ADMIN, SALES, TECHNICAL, COORDINATOR, HR)
+ * Needed for creating checklists, selecting device configurations, and viewing product catalogue
  */
-router.get('/', requireRole('STORE_MANAGER', 'ADMIN'), async (req, res) => {
+router.get('/', requireRole('STORE_MANAGER', 'ADMIN', 'SALES', 'TECHNICAL', 'COORDINATOR', 'HR'), async (req, res) => {
   try {
     const products = await getInventoryProducts();
     return res.json(products);
@@ -110,9 +111,9 @@ router.get('/', requireRole('STORE_MANAGER', 'ADMIN'), async (req, res) => {
 /**
  * GET /api/admin/inventory/calculated-sets
  * Real-time camera set availability derived dynamically from loose stock components
- * Accessible to STORE_MANAGER, ADMIN
+ * Accessible to STORE_MANAGER, ADMIN, SALES, TECHNICAL, COORDINATOR
  */
-router.get('/calculated-sets', requireRole('STORE_MANAGER', 'ADMIN'), async (req, res) => {
+router.get('/calculated-sets', requireRole('STORE_MANAGER', 'ADMIN', 'SALES', 'TECHNICAL', 'COORDINATOR'), async (req, res) => {
   try {
     const availability = await getCalculatedDeviceAvailability();
     return res.json(availability);
@@ -493,7 +494,7 @@ router.post('/verify-return', requireRole('STORE_MANAGER', 'ADMIN'), async (req,
 /**
  * GET /api/admin/inventory/discrepancies
  */
-router.get('/discrepancies', requireRole('STORE_MANAGER', 'ADMIN'), async (req, res) => {
+router.get('/discrepancies', requireRole('STORE_MANAGER', 'ADMIN', 'TECHNICAL', 'SALES', 'COORDINATOR'), async (req, res) => {
   try {
     const { data, error } = await supabase
       .from('inventory_discrepancies')

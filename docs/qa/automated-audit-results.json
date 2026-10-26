@@ -1,0 +1,233 @@
+[
+  {
+    "category": "Public Routes",
+    "testName": "Landing Page",
+    "status": "PASS",
+    "details": "Rendered successfully, found \"text=Eagle Eye\"",
+    "screenshotPath": null
+  },
+  {
+    "category": "Public Routes",
+    "testName": "Customer Form",
+    "status": "PASS",
+    "details": "Rendered successfully, found \"input, textarea, form\"",
+    "screenshotPath": null
+  },
+  {
+    "category": "Public Routes",
+    "testName": "Feedback Page",
+    "status": "PASS",
+    "details": "Rendered successfully, found \"input, textarea, form\"",
+    "screenshotPath": null
+  },
+  {
+    "category": "Public Routes",
+    "testName": "Staff Login Page",
+    "status": "PASS",
+    "details": "Rendered successfully, found \"input[type=\"email\"], input[type=\"password\"]\"",
+    "screenshotPath": null
+  },
+  {
+    "category": "Public Routes",
+    "testName": "Admin Login Redirect",
+    "status": "PASS",
+    "details": "Rendered successfully, found \"input[type=\"email\"], input[type=\"password\"]\"",
+    "screenshotPath": null
+  },
+  {
+    "category": "Public Routes",
+    "testName": "404 Fallback Page",
+    "status": "PASS",
+    "details": "Rendered successfully, found \"text=404\"",
+    "screenshotPath": null
+  },
+  {
+    "category": "Route Protection",
+    "testName": "Sales Workspace Unauthenticated",
+    "status": "PASS",
+    "details": "Correctly redirected to Login (http://127.0.0.1:5173/#/login?redirect=%2Fsales)",
+    "screenshotPath": null
+  },
+  {
+    "category": "Route Protection",
+    "testName": "Technical Workspace Unauthenticated",
+    "status": "PASS",
+    "details": "Correctly redirected to Login (http://127.0.0.1:5173/#/login?redirect=%2Ftechnical)",
+    "screenshotPath": null
+  },
+  {
+    "category": "Route Protection",
+    "testName": "Store Manager Workspace Unauthenticated",
+    "status": "PASS",
+    "details": "Correctly redirected to Login (http://127.0.0.1:5173/#/login?redirect=%2Fstore-manager)",
+    "screenshotPath": null
+  },
+  {
+    "category": "Route Protection",
+    "testName": "Coordinator Workspace Unauthenticated",
+    "status": "PASS",
+    "details": "Correctly redirected to Login (http://127.0.0.1:5173/#/login?redirect=%2Fcoordinator)",
+    "screenshotPath": null
+  },
+  {
+    "category": "Route Protection",
+    "testName": "HR Workspace Unauthenticated",
+    "status": "PASS",
+    "details": "Correctly redirected to Login (http://127.0.0.1:5173/#/login?redirect=%2Fhr)",
+    "screenshotPath": null
+  },
+  {
+    "category": "Route Protection",
+    "testName": "Admin Dashboard Unauthenticated",
+    "status": "PASS",
+    "details": "Correctly redirected to Login (http://127.0.0.1:5173/#/login?redirect=%2Fadmin)",
+    "screenshotPath": null
+  },
+  {
+    "category": "Route Protection",
+    "testName": "Direct Admin Dashboard Unauthenticated",
+    "status": "PASS",
+    "details": "Correctly redirected to Login (http://127.0.0.1:5173/#/login?redirect=%2Fadmin%2Fdashboard)",
+    "screenshotPath": null
+  },
+  {
+    "category": "Route Protection",
+    "testName": "Create Checklist Direct Legacy Route",
+    "status": "PASS",
+    "details": "Correctly redirected to Login (http://127.0.0.1:5173/#/login?redirect=%2Fadmin%2Finstallation-checklists%2Fcreate)",
+    "screenshotPath": null
+  },
+  {
+    "category": "Route Protection",
+    "testName": "Quotations Legacy Route",
+    "status": "PASS",
+    "details": "Correctly redirected to Login (http://127.0.0.1:5173/#/login?redirect=%2Fadmin%2Fquotations)",
+    "screenshotPath": null
+  },
+  {
+    "category": "Create Checklist Bug",
+    "testName": "Create Checklist Form Rendering",
+    "status": "PASS",
+    "details": "Form rendered successfully! Header \"New Installation Checklist\" found. Client Name Input: false, Contact Input: true, Engineer Assignment section: true. Zero crashes!",
+    "screenshotPath": "C:\\Users\\mwahi\\OneDrive\\Desktop\\feedback\\docs\\qa\\screenshots\\create_checklist_page.png"
+  },
+  {
+    "category": "Navigation",
+    "testName": "Back to Sales Workspace button",
+    "status": "PASS",
+    "details": "Successfully navigated back to workspace (http://127.0.0.1:5173/#/sales)",
+    "screenshotPath": null
+  },
+  {
+    "category": "Sales Workspace",
+    "testName": "Quotation Generator Tab",
+    "status": "PASS",
+    "details": "Rendered cleanly (has content: true)",
+    "screenshotPath": null
+  },
+  {
+    "category": "Sales Workspace",
+    "testName": "Quotation History Tab",
+    "status": "PASS",
+    "details": "Rendered cleanly (has content: true)",
+    "screenshotPath": null
+  },
+  {
+    "category": "Store Manager Workspace",
+    "testName": "Store Manager Dashboard",
+    "status": "PASS",
+    "details": "Workspace loaded cleanly with tabs and inventory elements.",
+    "screenshotPath": "C:\\Users\\mwahi\\OneDrive\\Desktop\\feedback\\docs\\qa\\screenshots\\store_manager_workspace.png"
+  },
+  {
+    "category": "Store Manager Workspace",
+    "testName": "#/store Redirect",
+    "status": "PASS",
+    "details": "Redirected to: http://127.0.0.1:5173/#/store",
+    "screenshotPath": null
+  },
+  {
+    "category": "Technical Workspace",
+    "testName": "Technical Dashboard",
+    "status": "PASS",
+    "details": "Workspace loaded cleanly with technician job cards and declarations.",
+    "screenshotPath": "C:\\Users\\mwahi\\OneDrive\\Desktop\\feedback\\docs\\qa\\screenshots\\technical_workspace.png"
+  },
+  {
+    "category": "Coordinator Workspace",
+    "testName": "Coordinator Dashboard",
+    "status": "PASS",
+    "details": "Workspace loaded cleanly with logistics, accommodation and return tickets.",
+    "screenshotPath": "C:\\Users\\mwahi\\OneDrive\\Desktop\\feedback\\docs\\qa\\screenshots\\coordinator_workspace.png"
+  },
+  {
+    "category": "HR Workspace",
+    "testName": "HR Dashboard",
+    "status": "PASS",
+    "details": "Workspace loaded cleanly with availability calendar and extension approval tasks.",
+    "screenshotPath": "C:\\Users\\mwahi\\OneDrive\\Desktop\\feedback\\docs\\qa\\screenshots\\hr_workspace.png"
+  },
+  {
+    "category": "Access Control",
+    "testName": "SALES accessing Technical Workspace",
+    "status": "PASS",
+    "details": "Correctly blocked with Access Denied screen or redirect",
+    "screenshotPath": null
+  },
+  {
+    "category": "Access Control",
+    "testName": "SALES accessing Store Manager Workspace",
+    "status": "PASS",
+    "details": "Correctly blocked with Access Denied screen or redirect",
+    "screenshotPath": null
+  },
+  {
+    "category": "Access Control",
+    "testName": "TECHNICAL accessing Sales Workspace",
+    "status": "PASS",
+    "details": "Correctly blocked with Access Denied screen or redirect",
+    "screenshotPath": null
+  },
+  {
+    "category": "Access Control",
+    "testName": "TECHNICAL accessing HR Workspace",
+    "status": "PASS",
+    "details": "Correctly blocked with Access Denied screen or redirect",
+    "screenshotPath": null
+  },
+  {
+    "category": "Access Control",
+    "testName": "STORE_MANAGER accessing Coordinator Workspace",
+    "status": "PASS",
+    "details": "Correctly blocked with Access Denied screen or redirect",
+    "screenshotPath": null
+  },
+  {
+    "category": "Access Control",
+    "testName": "COORDINATOR accessing HR Workspace",
+    "status": "PASS",
+    "details": "Correctly blocked with Access Denied screen or redirect",
+    "screenshotPath": null
+  },
+  {
+    "category": "Navigation",
+    "testName": "Browser Back button",
+    "status": "PASS",
+    "details": "Browser back preserved previous subview without blank screen",
+    "screenshotPath": null
+  },
+  {
+    "category": "Navigation",
+    "testName": "Browser Forward button",
+    "status": "PASS",
+    "details": "Browser forward preserved form state without blank screen",
+    "screenshotPath": null
+  },
+  {
+    "category": "Navigation",
+    "testName": "Page Reload on Create Checklist",
+    "status": "PASS",
+    "details": "Page reload did not produce blank screen or log out user",
+    "screenshotPath": null
+  }
+]

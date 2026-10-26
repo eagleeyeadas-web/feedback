@@ -288,6 +288,35 @@ export function validateBookingCompletion(bookingData) {
     errors.push(`Invalid return ticket status: ${bookingData.return_status}. Must be one of: Pending, Booked, Confirmed, Cancelled.`);
   }
 
+  // Validate that confirmed statuses have actual confirmation details (ticket reference or attachment)
+  if (bookingData.outbound_status === 'Confirmed') {
+    const hasTicketRef = Boolean(bookingData.outbound_ticket_reference && String(bookingData.outbound_ticket_reference).trim());
+    const hasTicketUrl = Boolean(bookingData.outbound_attachment_url && String(bookingData.outbound_attachment_url).trim());
+    if (!hasTicketRef && !hasTicketUrl) {
+      errors.push('Confirmed outbound booking requires a valid ticket reference or ticket attachment.');
+    }
+  }
+
+  if (bookingData.accommodation_status === 'Confirmed') {
+    const isOffline = bookingData.accommodation_type === 'Offline booking';
+    const hasHotelRef = Boolean(bookingData.hotel_booking_reference && String(bookingData.hotel_booking_reference).trim());
+    const hasHotelUrl = Boolean(bookingData.accommodation_attachment_url && String(bookingData.accommodation_attachment_url).trim());
+    const hasHotelName = Boolean(bookingData.hotel_name && String(bookingData.hotel_name).trim());
+    if (!isOffline && !hasHotelRef && !hasHotelUrl) {
+      errors.push('Confirmed online accommodation requires a booking reference or confirmation attachment.');
+    } else if (isOffline && !hasHotelName) {
+      errors.push('Confirmed offline accommodation requires a hotel/lodge name.');
+    }
+  }
+
+  if (['Booking Confirmed', 'Confirmed'].includes(bookingData.return_status)) {
+    const hasReturnRef = Boolean(bookingData.return_ticket_reference && String(bookingData.return_ticket_reference).trim());
+    const hasReturnUrl = Boolean(bookingData.return_attachment_url && String(bookingData.return_attachment_url).trim());
+    if (!hasReturnRef && !hasReturnUrl) {
+      errors.push('Confirmed return ticket booking requires a valid ticket reference or ticket attachment.');
+    }
+  }
+
   return {
     isValid: errors.length === 0,
     errors,
@@ -517,14 +546,22 @@ export function normalizeBookingData(booking, chk) {
   if (!returnTaskExists) {
     retSt = 'Not Required Yet';
   } else {
-    if (['Confirmed', 'Verified/Completed', 'Booking Confirmed', 'Completed'].includes(retSt)) {
+    if (['Verified/Completed', 'Booking Confirmed'].includes(retSt)) {
+      retSt = 'Verified/Completed';
+    } else if (retSt === 'Submitted for Verification') {
+      retSt = 'Submitted for Verification';
+    } else if (retSt === 'Needs Correction') {
+      retSt = 'Needs Correction';
+    } else if (['Awaiting Technician Booking', 'Booking Required', 'Pending'].includes(retSt)) {
+      retSt = 'Awaiting Technician Booking';
+    } else if (['Confirmed', 'Completed'].includes(retSt)) {
       retSt = 'Confirmed';
     } else if (['Booked'].includes(retSt)) {
       retSt = 'Booked';
     } else if (['Cancelled'].includes(retSt)) {
       retSt = 'Cancelled';
     } else {
-      retSt = 'Pending';
+      retSt = 'Awaiting Technician Booking';
     }
   }
   normalized.return_status = retSt;
@@ -563,7 +600,11 @@ export function normalizeBookingData(booking, chk) {
   normalized.report_submission_datetime = normalized.report_submission_datetime || normalized.actual_completion_datetime || null;
   normalized.booking_issue_reason = normalized.booking_issue_reason || '';
   normalized.return_notes = normalized.return_notes || '';
-  normalized.return_task_completed = Boolean(retSt === 'Confirmed');
+  normalized.return_task_completed = Boolean(
+    retSt === 'Confirmed' ||
+    retSt === 'Verified/Completed' ||
+    booking?.return_task_completed
+  );
 
   return normalized;
 }
@@ -716,9 +757,9 @@ export async function getCoordinatorChecklists(arg1 = {}, arg2 = {}) {
     // Return Tickets (only created return tickets)
     if (cb.return_task_created && cb.return_status && cb.return_status !== 'Not Required Yet') {
       stats.return_total++;
-      if (cb.return_status === 'Pending') stats.return_pending++;
+      if (['Pending', 'Awaiting Technician Booking', 'Submitted for Verification', 'Needs Correction', 'Booking Required'].includes(cb.return_status)) stats.return_pending++;
       else if (cb.return_status === 'Booked') stats.return_booked++;
-      else if (cb.return_status === 'Confirmed') stats.return_confirmed++;
+      else if (['Confirmed', 'Verified/Completed'].includes(cb.return_status)) stats.return_confirmed++;
       else if (cb.return_status === 'Cancelled') stats.return_cancelled++;
     }
   });
@@ -941,8 +982,8 @@ export async function saveCoordinatorBooking({ checklistId, bookingData = {}, us
   // Resolve Return fields
   let returnStatus = bookingData.return_status || (existing?.return_status || 'Not Required Yet');
   if (returnStatus === 'Not Yet Required') returnStatus = 'Not Required Yet';
-  if (['Verified/Completed', 'Booking Confirmed'].includes(returnStatus)) returnStatus = 'Confirmed';
-  if (['Awaiting Technician Booking', 'Submitted for Verification', 'Needs Correction', 'Booking Required', 'In Progress'].includes(returnStatus)) returnStatus = 'Pending';
+  if (returnStatus === 'Booking Confirmed') returnStatus = 'Verified/Completed';
+  if (returnStatus === 'Booking Required') returnStatus = 'Awaiting Technician Booking';
 
   const returnTaskId = bookingData.return_task_id || existing?.return_task_id || (bookingData.return_task_created ? `RET-TASK-${checklist.checklist_number || checklistId}` : null);
   const returnMethod = bookingData.return_method || existing?.return_method || 'Government bus';
@@ -1370,7 +1411,7 @@ export async function triggerReturnTicketBookingTask(arg1, arg2) {
   const updatedData = {
     ...existing,
     return_task_id: taskId,
-    return_status: 'Pending',
+    return_status: 'Awaiting Technician Booking',
     return_urgency: urgency,
     return_task_created: true,
     return_task_created_at: submissionTime,
@@ -1393,7 +1434,7 @@ export async function triggerReturnTicketBookingTask(arg1, arg2) {
     checklistId,
     action: 'RETURN_TICKET_TASK_CREATED',
     previousStatus: existing.return_status,
-    newStatus: 'Pending',
+    newStatus: 'Awaiting Technician Booking',
     user: user || { id: 'system', email: 'system@eagleeye.com', role: 'TECHNICAL' },
     notes: `Installation completed — return ticket booking task created. Actual completion: ${completionTime}, Submitted: ${submissionTime}, Urgency: ${urgency}`,
     snapshot: saved,

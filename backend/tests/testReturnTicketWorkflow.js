@@ -24,6 +24,7 @@ import {
   RETURN_STATUSES,
 } from '../src/services/coordinatorBookingService.js';
 import { getNotifications } from '../src/services/appNotificationService.js';
+import { submitInstallationCompletionReport } from '../src/services/workflowService.js';
 import coordinatorRoutes from '../src/routes/coordinator.js';
 
 async function runTestSuite() {
@@ -121,11 +122,22 @@ async function runTestSuite() {
     // Simulate Post-Installation completion at 1:00 AM on a Sunday
     const midnightCompletionTime = '2026-10-26T01:00:00.000Z';
     
-    // Update checklist to Completed
-    await updateChecklist(testChecklist.id, {
-      installation_status: 'Completed',
+    // Submit post-installation report to complete checklist properly
+    await submitInstallationCompletionReport({
+      checklist_id: testChecklist.id,
+      user: testUserTech,
       actual_completion_datetime: midnightCompletionTime,
-    }, testUserTech.id);
+      items: [
+        {
+          device_type: '4 Channel Live',
+          quantity_carried: 2,
+          quantity_installed: 2,
+          quantity_to_return: 0,
+          quantity_damaged: 0,
+          quantity_missing: 0,
+        },
+      ],
+    });
 
     // Trigger return ticket booking task
     const triggerRes = await triggerReturnTicketBookingTask({

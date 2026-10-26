@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from './hooks/useAuth';
 import RoleProtectedRoute from './components/RoleProtectedRoute';
 import AccessDenied from './components/AccessDenied';
 import ActiveSessionCleanupTracker from './components/ActiveSessionCleanupTracker';
+import ErrorBoundary from './components/ErrorBoundary';
 import { pingServerWakeup } from './lib/api';
 
 const LandingPage = lazy(() => import('./pages/LandingPage'));
@@ -300,7 +301,9 @@ export default function App() {
     <HashRouter>
       <AuthProvider>
         <ActiveSessionCleanupTracker />
-        <AppRoutes />
+        <ErrorBoundary>
+          <AppRoutes />
+        </ErrorBoundary>
       </AuthProvider>
     </HashRouter>
   );

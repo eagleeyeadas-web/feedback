@@ -585,8 +585,6 @@ export default function TechnicianBackupDeclarationModal({
     };
   }, [isOpen, job, token]);
 
-  if (!isOpen || !job) return null;
-
   // --- Extra Devices Handlers ---
   const handleAddDeviceRow = (initialDeviceType = '') => {
     setDeviceItems((prev) => [
@@ -796,6 +794,8 @@ export default function TechnicianBackupDeclarationModal({
       (it) => it.item_name && Number(it.quantity) > 0
     );
   }, [deviceItems, materialItems]);
+
+  if (!isOpen || !job) return null;
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">

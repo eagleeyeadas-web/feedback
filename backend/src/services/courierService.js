@@ -1053,6 +1053,12 @@ export async function markChecklistCustomerInstalled({
     throw new Error(`Technician "${checklist.service_engineer}" is assigned to checklist ${checklist.checklist_number}. Technician-assigned orders must be completed via the Post-Installation Form.`);
   }
 
+  // Must be delivered before customer installation can be confirmed
+  const dispatchStatus = (checklist.courier_dispatch_status || '').toUpperCase();
+  if (dispatchStatus !== 'DELIVERED') {
+    throw new Error(`Cannot confirm customer installation: Product has not been delivered yet (Current dispatch status: ${checklist.courier_dispatch_status || 'NOT_DISPATCHED'}).`);
+  }
+
   // Mandatory customer confirmation note
   const finalNotes = (notes || confirmation_note || '').trim();
   if (!finalNotes) {

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Briefcase, ChevronLeft, ClipboardList, FileText, History, Plus } from 'lucide-react';
 import StaffWorkspaceLayout from '../../components/layout/StaffWorkspaceLayout';
+import ErrorBoundary from '../../components/ErrorBoundary';
 import SalesWorkspace from '../admin/workspaces/SalesWorkspace';
 import InstallationChecklistForm from '../admin/installation/InstallationChecklistForm';
 import InstallationChecklistDetails from '../admin/installation/InstallationChecklistDetails';
@@ -183,10 +184,12 @@ export default function SalesWorkspacePage() {
                   </span>
                 </div>
 
-                <InstallationChecklistForm
-                  onSaved={(id) => handleOpenView(id)}
-                  onCancel={handleBackToWorkspace}
-                />
+                <ErrorBoundary title="Checklist Creation Form Error" onReset={handleBackToWorkspace}>
+                  <InstallationChecklistForm
+                    onSaved={(id) => handleOpenView(id)}
+                    onCancel={handleBackToWorkspace}
+                  />
+                </ErrorBoundary>
               </div>
             )}
 
@@ -207,11 +210,13 @@ export default function SalesWorkspacePage() {
                   </span>
                 </div>
 
-                <InstallationChecklistForm
-                  id={subView.id}
-                  onSaved={(id) => handleOpenView(id)}
-                  onCancel={handleBackToWorkspace}
-                />
+                <ErrorBoundary title="Checklist Edit Form Error" onReset={handleBackToWorkspace}>
+                  <InstallationChecklistForm
+                    id={subView.id}
+                    onSaved={(id) => handleOpenView(id)}
+                    onCancel={handleBackToWorkspace}
+                  />
+                </ErrorBoundary>
               </div>
             )}
 
@@ -232,11 +237,13 @@ export default function SalesWorkspacePage() {
                   </span>
                 </div>
 
-                <InstallationChecklistDetails
-                  id={subView.id}
-                  onEdit={(id) => handleOpenEdit(id)}
-                  onBack={handleBackToWorkspace}
-                />
+                <ErrorBoundary title="Checklist Details Error" onReset={handleBackToWorkspace}>
+                  <InstallationChecklistDetails
+                    id={subView.id}
+                    onEdit={(id) => handleOpenEdit(id)}
+                    onBack={handleBackToWorkspace}
+                  />
+                </ErrorBoundary>
               </div>
             )}
 
