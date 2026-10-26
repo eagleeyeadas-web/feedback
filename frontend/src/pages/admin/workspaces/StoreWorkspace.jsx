@@ -47,6 +47,7 @@ import {
   fetchAllStoreReturns,
   verifyStoreReturnApi,
   triggerInventoryCleanupApi,
+  fetchInventoryCleanupStatusApi,
   fetchStoreMaterialRequirements,
   createDeviceProductApi,
   deleteStockMovementApi,
@@ -97,6 +98,7 @@ export default function StoreWorkspace({ onSelectChecklist }) {
   const [movementTotalPages, setMovementTotalPages] = useState(1);
   const [movementTotalCount, setMovementTotalCount] = useState(0);
   const [cleanupRunning, setCleanupRunning] = useState(false);
+  const [cleanupStatus, setCleanupStatus] = useState(null);
 
   // Delete History States (Movements & Returns)
   const [showDeleteMovementsModal, setShowDeleteMovementsModal] = useState(false);
@@ -210,6 +212,11 @@ export default function StoreWorkspace({ onSelectChecklist }) {
         });
         setSummary({ totalUsable: u, totalIssued: i, totalDamaged: d, totalAwaitingReturn: 0, lowStockCount: 0 });
       }
+
+      // Fetch 60-day retention cleanup status for Store Manager observability
+      fetchInventoryCleanupStatusApi(token)
+        .then((st) => setCleanupStatus(st))
+        .catch(() => null);
     } catch (err) {
       console.error('Failed to load Store Workspace data:', err);
     } finally {
@@ -221,15 +228,16 @@ export default function StoreWorkspace({ onSelectChecklist }) {
     loadAllData();
   }, [loadAllData]);
 
-  // Handle Manual 20-Day Retention Cleanup Trigger
+  // Handle Manual 60-Day Retention Cleanup Trigger
   const handleTriggerCleanup = async () => {
     if (!token || cleanupRunning) return;
     setCleanupRunning(true);
     try {
       const res = await triggerInventoryCleanupApi(token);
       showToast(
-        `20-day cleanup completed! Deleted ${res.movements_deleted || 0} old movements, ${res.device_returns_deleted || 0} device returns, ${res.material_returns_deleted || 0} material returns.`
+        `60-day cleanup completed! Deleted ${res.movements_deleted || 0} old movements, ${res.device_returns_deleted || 0} device returns, ${res.material_returns_deleted || 0} material returns.`
       );
+      fetchInventoryCleanupStatusApi(token).then((st) => setCleanupStatus(st)).catch(() => null);
       loadAllData();
     } catch (err) {
       showToast(`Cleanup notice: ${err.message}`);
@@ -1639,15 +1647,45 @@ export default function StoreWorkspace({ onSelectChecklist }) {
             </div>
           </div>
 
-          {/* Automatic 20-Day Retention Notice & Manual Trigger */}
+          {/* Automatic 60-Day Retention Notice & Real-Time Status */}
           <div className="bg-amber-50/70 border border-amber-200/60 rounded-2xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
             <div className="flex items-start gap-2.5">
               <Clock className="w-5 h-5 text-amber-700 shrink-0 mt-0.5" />
               <div>
-                <h4 className="font-bold text-amber-950">Automatic 20-Day History Retention Active</h4>
+                <h4 className="font-bold text-amber-950 text-sm">
+                  Stock movement history is retained for 60 days. Older records are automatically removed.
+                </h4>
                 <p className="text-amber-800/80 mt-0.5 max-w-2xl leading-relaxed">
-                  Completed stock movements and verified returns strictly older than 20 days are automatically pruned daily by the server. Authoritative inventory stock balances, pending returns, and unresolved discrepancy records are permanently preserved and protected.
+                  Completed stock movements and verified returns older than 60 days are automatically pruned daily by the server. Authoritative inventory stock balances, pending returns, and unresolved discrepancy records are permanently preserved and protected.
                 </p>
+                {cleanupStatus && (
+                  <div className="mt-2.5 flex flex-wrap items-center gap-2 text-[11px] font-medium text-amber-900">
+                    <span
+                      className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full font-bold shadow-2xs ${
+                        cleanupStatus.health === 'HEALTHY'
+                          ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                          : 'bg-rose-100 text-rose-800 border border-rose-200'
+                      }`}
+                    >
+                      <span
+                        className={`w-1.5 h-1.5 rounded-full ${
+                          cleanupStatus.health === 'HEALTHY' ? 'bg-emerald-600 animate-pulse' : 'bg-rose-600'
+                        }`}
+                      />
+                      {cleanupStatus.health === 'HEALTHY' ? 'Automatic 60-Day Cleanup Active' : 'Cleanup Issue Detected'}
+                    </span>
+                    {cleanupStatus.last_successful_run && (
+                      <span className="text-amber-900 bg-amber-100/60 px-2 py-0.5 rounded-md border border-amber-200/50">
+                        Last cleaned: <strong>{new Date(cleanupStatus.last_successful_run).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}</strong> ({cleanupStatus.movements_deleted_last_run || 0} expired records removed)
+                      </span>
+                    )}
+                    {cleanupStatus.error_message && (
+                      <span className="text-rose-700 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200 font-semibold">
+                        Notice: {cleanupStatus.error_message}
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
             <button
@@ -1657,7 +1695,7 @@ export default function StoreWorkspace({ onSelectChecklist }) {
               className="px-3.5 py-2 bg-amber-700 hover:bg-amber-800 text-white font-bold rounded-xl shadow-xs shrink-0 flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${cleanupRunning ? 'animate-spin' : ''}`} />
-              <span>{cleanupRunning ? 'Running Cleanup...' : 'Run 20-Day Cleanup Now'}</span>
+              <span>{cleanupRunning ? 'Running Cleanup...' : 'Run 60-Day Cleanup Now'}</span>
             </button>
           </div>
         </div>

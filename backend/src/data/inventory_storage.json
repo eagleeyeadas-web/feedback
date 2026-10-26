@@ -171,7 +171,7 @@
       "sku": "MAT-INSU-TAPE",
       "material_name": "Insulation Tape",
       "unit": "Nos.",
-      "current_stock": 0,
+      "current_stock": 100,
       "opening_stock": 0,
       "opening_stock_set": true,
       "issued_stock": 0,
@@ -179,14 +179,14 @@
       "min_stock_level": 20,
       "is_active": true,
       "created_at": "2026-10-14T10:17:13.435702+00:00",
-      "updated_at": "2026-10-26T10:04:00.771Z"
+      "updated_at": "2026-10-26T10:19:38.095668+00:00"
     },
     "Cable Tie – 200 mm": {
       "id": "bd1ed5a4-94c0-4f38-aabc-f6a46b0b0159",
       "sku": "MAT-CT-200MM",
       "material_name": "Cable Tie – 200 mm",
       "unit": "Packets",
-      "current_stock": 0,
+      "current_stock": 35,
       "opening_stock": 0,
       "opening_stock_set": true,
       "issued_stock": 0,
@@ -194,14 +194,14 @@
       "min_stock_level": 10,
       "is_active": true,
       "created_at": "2026-10-14T10:17:13.435702+00:00",
-      "updated_at": "2026-10-26T10:04:00.771Z"
+      "updated_at": "2026-10-26T10:19:53.231957+00:00"
     },
     "Cable Tie – 300 mm": {
       "id": "893d903a-4d30-4fc2-96c2-fc7a2b872ed2",
       "sku": "MAT-CT-300MM",
       "material_name": "Cable Tie – 300 mm",
       "unit": "Packets",
-      "current_stock": 0,
+      "current_stock": 20,
       "opening_stock": 0,
       "opening_stock_set": true,
       "issued_stock": 0,
@@ -209,14 +209,14 @@
       "min_stock_level": 10,
       "is_active": true,
       "created_at": "2026-10-14T10:17:13.435702+00:00",
-      "updated_at": "2026-10-26T10:04:00.771Z"
+      "updated_at": "2026-10-26T10:20:16.227196+00:00"
     },
     "Long Screw": {
       "id": "943eb9be-f4bb-4300-90e9-6ce23cc90549",
       "sku": "MAT-SCREW-LONG",
       "material_name": "Long Screw",
       "unit": "Nos.",
-      "current_stock": 0,
+      "current_stock": 400,
       "opening_stock": 0,
       "opening_stock_set": true,
       "issued_stock": 0,
@@ -224,14 +224,14 @@
       "min_stock_level": 50,
       "is_active": true,
       "created_at": "2026-10-14T10:17:13.435702+00:00",
-      "updated_at": "2026-10-26T10:04:00.771Z"
+      "updated_at": "2026-10-26T10:38:50.364809+00:00"
     },
     "Small Screw": {
       "id": "bd02bad8-3b6f-45b9-bbc7-c5c79ecb86bd",
       "sku": "MAT-SCREW-SMALL",
       "material_name": "Small Screw",
       "unit": "Nos.",
-      "current_stock": 0,
+      "current_stock": 200,
       "opening_stock": 0,
       "opening_stock_set": true,
       "issued_stock": 0,
@@ -239,14 +239,14 @@
       "min_stock_level": 50,
       "is_active": true,
       "created_at": "2026-10-14T10:17:13.435702+00:00",
-      "updated_at": "2026-10-26T10:04:00.771Z"
+      "updated_at": "2026-10-26T10:39:37.126704+00:00"
     },
     "Memory Card": {
       "id": "9f46d34e-91a4-4f31-a8c5-b5541cc8b32d",
       "sku": "MAT-MEM-CARD",
       "material_name": "Memory Card",
       "unit": "Nos.",
-      "current_stock": 0,
+      "current_stock": 60,
       "opening_stock": 0,
       "opening_stock_set": true,
       "issued_stock": 0,
@@ -254,14 +254,14 @@
       "min_stock_level": 15,
       "is_active": true,
       "created_at": "2026-10-14T10:17:13.435702+00:00",
-      "updated_at": "2026-10-26T10:04:00.771Z"
+      "updated_at": "2026-10-26T10:17:26.755751+00:00"
     },
     "0.5 mm Wire": {
       "id": "fcc5f452-6ae7-4097-bd5a-0ca9f29421e3",
       "sku": "MAT-WIRE-0.5MM",
       "material_name": "0.5 mm Wire",
       "unit": "Metres",
-      "current_stock": 0,
+      "current_stock": 700,
       "opening_stock": 0,
       "opening_stock_set": true,
       "issued_stock": 0,
@@ -269,14 +269,14 @@
       "min_stock_level": 100,
       "is_active": true,
       "created_at": "2026-10-14T10:17:13.435702+00:00",
-      "updated_at": "2026-10-26T10:04:00.771Z"
+      "updated_at": "2026-10-26T10:18:13.581158+00:00"
     },
     "5-metre Cable": {
       "id": "d9583db5-eb4c-4059-b86c-f9548c99ac85",
       "sku": "MAT-CBL-5M",
       "material_name": "5-metre Cable",
       "unit": "Nos.",
-      "current_stock": 0,
+      "current_stock": 520,
       "opening_stock": 0,
       "opening_stock_set": true,
       "issued_stock": 0,
@@ -284,14 +284,14 @@
       "min_stock_level": 25,
       "is_active": true,
       "created_at": "2026-10-14T10:17:13.435702+00:00",
-      "updated_at": "2026-10-26T10:04:00.771Z"
+      "updated_at": "2026-10-26T10:18:56.275608+00:00"
     },
     "15-metre Cable": {
       "id": "ffb14238-0b26-4bd5-ba71-d362cb6861dc",
       "sku": "MAT-CBL-15M",
       "material_name": "15-metre Cable",
       "unit": "Nos.",
-      "current_stock": 0,
+      "current_stock": 70,
       "opening_stock": 0,
       "opening_stock_set": true,
       "issued_stock": 0,
@@ -299,14 +299,14 @@
       "min_stock_level": 10,
       "is_active": true,
       "created_at": "2026-10-14T10:17:13.435702+00:00",
-      "updated_at": "2026-10-26T10:04:00.771Z"
+      "updated_at": "2026-10-26T10:19:21.117072+00:00"
     },
     "Camera": {
       "id": "c7b53868-efff-486d-9b6f-560baf2b3cae",
       "sku": "MAT-CAM-LOOSE",
       "material_name": "Camera",
       "unit": "Nos.",
-      "current_stock": 0,
+      "current_stock": 450,
       "opening_stock": 0,
       "opening_stock_set": true,
       "issued_stock": 0,
@@ -314,7 +314,7 @@
       "min_stock_level": 10,
       "is_active": true,
       "created_at": "2026-10-14T10:17:13.435702+00:00",
-      "updated_at": "2026-10-26T10:04:00.771Z"
+      "updated_at": "2026-10-26T10:16:01.556028+00:00"
     },
     "Display": {
       "id": "b6d9a205-f951-4e02-ae32-75b2bbcf005b",
@@ -329,14 +329,14 @@
       "min_stock_level": 10,
       "is_active": false,
       "created_at": "2026-10-14T10:17:13.435702+00:00",
-      "updated_at": "2026-10-26T10:04:00.771Z"
+      "updated_at": "2026-10-26T10:04:11.689134+00:00"
     },
     "Live Display": {
       "id": "7eb8416b-3226-4017-9298-fc2438634176",
       "sku": "MAT-DISP-LIVE",
       "material_name": "Live Display",
       "unit": "Nos.",
-      "current_stock": 0,
+      "current_stock": 25,
       "opening_stock": 0,
       "opening_stock_set": true,
       "issued_stock": 0,
@@ -344,14 +344,14 @@
       "min_stock_level": 5,
       "is_active": true,
       "created_at": "2026-10-15T06:02:59.014663+00:00",
-      "updated_at": "2026-10-26T10:04:00.771Z"
+      "updated_at": "2026-10-26T10:16:45.878923+00:00"
     },
     "Recording Display": {
       "id": "db8e8411-cda3-4423-8d34-3443e8407d61",
       "sku": "MAT-DISP-REC",
       "material_name": "Recording Display",
       "unit": "Nos.",
-      "current_stock": 0,
+      "current_stock": 80,
       "opening_stock": 0,
       "opening_stock_set": true,
       "issued_stock": 0,
@@ -359,7 +359,7 @@
       "min_stock_level": 5,
       "is_active": true,
       "created_at": "2026-10-15T06:02:59.014663+00:00",
-      "updated_at": "2026-10-26T10:04:00.771Z"
+      "updated_at": "2026-10-26T10:16:58.368911+00:00"
     },
     "Airtel M2M 4G SIM Card": {
       "id": "23757817-8279-451c-8ae3-d57a8cb5c47b",
@@ -374,12 +374,12 @@
       "min_stock_level": 20,
       "is_active": false,
       "created_at": "2026-10-19T04:27:44.326034+00:00",
-      "updated_at": "2026-10-26T10:04:00.771Z"
+      "updated_at": "2026-10-26T10:04:11.505677+00:00"
     },
-    "Corrugated Flexible Conduit (25mm)": {
+    "25 m cable": {
       "id": "d08ce29d-efbe-4207-9791-9e48aa76a2a6",
-      "sku": null,
-      "material_name": "Corrugated Flexible Conduit (25mm)",
+      "sku": "MAT-CBL-25M",
+      "material_name": "25 m cable",
       "unit": "Nos.",
       "current_stock": 0,
       "opening_stock": 0,
@@ -389,7 +389,7 @@
       "min_stock_level": 20,
       "is_active": true,
       "created_at": "2026-10-23T03:31:45.297393+00:00",
-      "updated_at": "2026-10-26T10:04:00.771Z"
+      "updated_at": "2026-10-26T10:47:55.980103+00:00"
     }
   },
   "materialTransactions": [],
@@ -703,8 +703,8 @@
     {
       "item_id": "d08ce29d-efbe-4207-9791-9e48aa76a2a6",
       "product_id": null,
-      "item_name": "Corrugated Flexible Conduit (25mm)",
-      "sku": null,
+      "item_name": "25 m cable",
+      "sku": "MAT-CBL-25M",
       "category": "Installation Material",
       "movement_type": "OPENING_STOCK",
       "quantity": 0,

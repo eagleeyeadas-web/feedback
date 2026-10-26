@@ -667,12 +667,23 @@ export async function generateWeeklyStockReport({
     );
   });
 
-  // 4. Stock Movements for physical summary
+  // 4. Stock Movements for physical summary (Strictly within the 60-day retention window)
+  const RETENTION_DAYS = 60;
+  const sixtyDaysCutoffTime = Date.now() - RETENTION_DAYS * 24 * 60 * 60 * 1000;
+  const sixtyDaysCutoffIso = new Date(sixtyDaysCutoffTime).toISOString();
+  const isPeriodBeyondRetention = new Date(startUtcIso).getTime() < sixtyDaysCutoffTime;
+  const retentionNotice = isPeriodBeyondRetention
+    ? 'Notice: The selected report period extends beyond the 60-day stock movement retention window. Detailed movements prior to ' +
+      sixtyDaysCutoffIso.split('T')[0] +
+      ' have been automatically pruned per SafDrive retention policy. Current inventory quantities remain authoritative.'
+    : 'Stock movement history is retained for 60 days. Older records are automatically removed.';
+
   let allMovements = [];
   try {
     const { data: dbMovements, error } = await supabase
       .from('stock_movements')
       .select('*')
+      .gte('created_at', sixtyDaysCutoffIso)
       .order('created_at', { ascending: true });
 
     if (!error && Array.isArray(dbMovements)) {
@@ -683,8 +694,10 @@ export async function generateWeeklyStockReport({
   }
 
   for (const m of inMemoryStockMovements) {
-    if (!allMovements.some((existing) => existing.id === m.id)) {
-      allMovements.push(m);
+    if (m.created_at && new Date(m.created_at).getTime() >= sixtyDaysCutoffTime) {
+      if (!allMovements.some((existing) => existing.id === m.id)) {
+        allMovements.push(m);
+      }
     }
   }
   allMovements.sort((a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0));
@@ -776,11 +789,11 @@ export async function generateWeeklyStockReport({
       adjustments: adjustmentsNet,
       closing_stock: closingStock,
       closingStock,
+      is_historical_pruned: isPeriodBeyondRetention && itemMovementsBeforeWeek.length === 0,
     });
   }
 
   // Compile final structured report with clean metadata and Technician-Wise Installation Report
-  // The 4 unwanted sections (movement history, material reconciliation, low-stock alerts, variance detection) are removed
   return {
     report_metadata: {
       title: 'WEEKLY STOCK MAINTENANCE REPORT',
@@ -791,7 +804,10 @@ export async function generateWeeklyStockReport({
         formatted_range: formatWeekRangeDisplay(startDate, endDate),
         day_range_label: 'Monday – Sunday',
         timezone: 'Asia/Kolkata',
+        is_beyond_retention_window: isPeriodBeyondRetention,
+        retention_window_days: RETENTION_DAYS,
       },
+      retention_notice: retentionNotice,
       generated_at: new Date().toISOString(),
       generated_at_formatted: formatKolkataDateTime(new Date()),
       generated_by: {

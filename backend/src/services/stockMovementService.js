@@ -261,16 +261,20 @@ export function normalizeMovement(m) {
   };
 }
 
+export const STOCK_RETENTION_DAYS = 60;
+
 /**
- * Fetch all stock movements for a specific checklist ID
+ * Fetch all stock movements for a specific checklist ID within the 60-day retention window
  */
 export async function getStockMovementsByChecklistId(checklistId) {
   if (!checklistId) return [];
+  const cutoffIso = new Date(Date.now() - STOCK_RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString();
   try {
     const { data, error } = await supabase
       .from('stock_movements')
       .select('*')
       .eq('checklist_id', checklistId)
+      .gte('created_at', cutoffIso)
       .order('created_at', { ascending: false });
     if (!error && Array.isArray(data) && data.length > 0) {
       return data.map(normalizeMovement);
@@ -278,11 +282,15 @@ export async function getStockMovementsByChecklistId(checklistId) {
   } catch (e) {
     // Fall back to memory
   }
-  return inMemoryStockMovements.filter((m) => m.checklist_id === checklistId).map(normalizeMovement);
+  const cutoffTime = new Date(cutoffIso).getTime();
+  return inMemoryStockMovements
+    .filter((m) => m.checklist_id === checklistId && m.created_at && new Date(m.created_at).getTime() >= cutoffTime)
+    .map(normalizeMovement);
 }
 
 /**
  * Fetch unified stock movements from Supabase PostgreSQL with pagination, filtering, and search.
+ * Strictly enforces the 60-day retention window so expired history is never returned.
  */
 export async function getStockMovements(params = {}) {
   const {
@@ -297,11 +305,15 @@ export async function getStockMovements(params = {}) {
   const limitNum = Math.min(200, Math.max(1, parseInt(limit, 10)));
   const offset = (pageNum - 1) * limitNum;
 
+  // Authoritative 60-day retention cutoff: only return records created within the last 60 days
+  const sixtyDaysCutoffIso = new Date(Date.now() - STOCK_RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString();
+
   // 1. Try Supabase PostgreSQL first
   try {
     let query = supabase
       .from('stock_movements')
       .select('*', { count: 'exact' })
+      .gte('created_at', sixtyDaysCutoffIso)
       .order('created_at', { ascending: false })
       .range(offset, offset + limitNum - 1);
 
@@ -330,14 +342,22 @@ export async function getStockMovements(params = {}) {
         totalCount: count !== null ? count : normalizedData.length,
         page: pageNum,
         totalPages: Math.ceil((count !== null ? count : normalizedData.length) / limitNum) || 1,
+        retentionPolicy: '60-DAY-RETENTION',
+        retentionDays: STOCK_RETENTION_DAYS,
+        cutoffTimestamp: sixtyDaysCutoffIso,
       };
     }
   } catch (err) {
     console.warn('Supabase stock_movements query failed, falling back to local storage:', err.message);
   }
 
-  // 2. In-memory fallback filtering
-  let filtered = [...inMemoryStockMovements];
+  // 2. In-memory fallback filtering (strictly enforce 60-day window)
+  const sixtyDaysCutoffTime = new Date(sixtyDaysCutoffIso).getTime();
+  let filtered = inMemoryStockMovements.filter((m) => {
+    if (!m.created_at) return true; // Keep if timestamp missing to avoid unintended loss
+    const t = new Date(m.created_at).getTime();
+    return !isNaN(t) && t >= sixtyDaysCutoffTime;
+  });
 
   if (category === 'Devices' || category === 'Camera Device') {
     filtered = filtered.filter((m) => m.category === 'Camera Device');
@@ -369,11 +389,14 @@ export async function getStockMovements(params = {}) {
     totalCount: filtered.length,
     page: pageNum,
     totalPages: Math.ceil(filtered.length / limitNum) || 1,
+    retentionPolicy: '60-DAY-RETENTION',
+    retentionDays: STOCK_RETENTION_DAYS,
+    cutoffTimestamp: sixtyDaysCutoffIso,
   };
 }
 
 /**
- * Remove local in-memory fallback records strictly older than 20 days
+ * Remove local in-memory fallback records strictly older than 60 days
  * (Adhering strictly to retention rules and protections)
  */
 export function pruneLocalExpiredMovements(cutoffDate) {
@@ -381,10 +404,11 @@ export function pruneLocalExpiredMovements(cutoffDate) {
   const initialCount = inMemoryStockMovements.length;
 
   const surviving = inMemoryStockMovements.filter((m) => {
+    if (!m.created_at) return true; // Keep if timestamp missing to avoid unintended loss
     const createdTime = new Date(m.created_at).getTime();
+    if (isNaN(createdTime)) return true;
     if (createdTime >= cutoffTime) return true; // Keep newer or equal
-    // If older than cutoff, delete unless it has protected flags
-    return false;
+    return false; // Prune strictly older than cutoff
   });
 
   inMemoryStockMovements.length = 0;

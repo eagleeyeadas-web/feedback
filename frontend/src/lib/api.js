@@ -508,6 +508,15 @@ export async function triggerInventoryCleanupApi(token) {
   return json;
 }
 
+export async function fetchInventoryCleanupStatusApi(token) {
+  const res = await fetch(`${API_BASE}/admin/inventory/cleanup-status`, {
+    headers: adminHeaders(token),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to fetch cleanup status');
+  return json;
+}
+
 export async function fetchInventoryCleanupLogsApi(token, limit = 20) {
   const res = await fetch(`${API_BASE}/admin/inventory/cleanup-logs?limit=${limit}`, {
     headers: adminHeaders(token),

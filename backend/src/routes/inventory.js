@@ -34,6 +34,7 @@ import {
 import {
   executeInventoryCleanup,
   getCleanupLogs,
+  getCleanupStatus,
 } from '../services/inventoryCleanupService.js';
 import {
   generateWeeklyStockReport,
@@ -511,7 +512,7 @@ router.get('/discrepancies', requireRole('STORE_MANAGER', 'ADMIN', 'TECHNICAL', 
 
 /**
  * POST /api/admin/inventory/cleanup
- * Trigger server-side 20-day automatic history retention cleanup (STORE_MANAGER, ADMIN)
+ * Trigger server-side 60-day automatic history retention cleanup (STORE_MANAGER, ADMIN)
  */
 router.post('/cleanup', requireRole('STORE_MANAGER', 'ADMIN'), async (req, res) => {
   try {
@@ -527,9 +528,33 @@ router.post('/cleanup', requireRole('STORE_MANAGER', 'ADMIN'), async (req, res) 
 });
 
 /**
+ * GET /api/admin/inventory/cleanup-status
+ * Fetch real-time status of 60-day stock movement retention cleanup (STORE_MANAGER, ADMIN)
+ */
+router.get('/cleanup-status', requireRole('STORE_MANAGER', 'ADMIN'), async (req, res) => {
+  try {
+    const status = await getCleanupStatus();
+    return res.json(status);
+  } catch (err) {
+    console.error('Error fetching cleanup status:', err);
+    return res.status(500).json({ error: err.message || 'Failed to fetch cleanup status' });
+  }
+});
+
+/**
  * GET /api/admin/inventory/cleanup-logs
  * Fetch retention cleanup audit logs (STORE_MANAGER, ADMIN)
  */
+router.get('/cleanup-logs', requireRole('STORE_MANAGER', 'ADMIN'), async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit, 10) || 20;
+    const logs = await getCleanupLogs(limit);
+    return res.json(logs);
+  } catch (err) {
+    console.error('Error fetching cleanup logs:', err);
+    return res.status(500).json({ error: err.message || 'Failed to fetch cleanup logs' });
+  }
+});
 /**
  * DELETE /api/admin/inventory/movements/:id
  * Delete a specific stock movement by ID (STORE_MANAGER, ADMIN)
