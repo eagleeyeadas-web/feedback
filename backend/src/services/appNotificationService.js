@@ -8,7 +8,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const STORAGE_FILE = path.join(__dirname, '../data/app_notifications_storage.json');
 
-const inMemoryNotifications = new Map();
+export const inMemoryNotifications = new Map();
 
 function loadStorage() {
   try {

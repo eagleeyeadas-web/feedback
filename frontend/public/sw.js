@@ -120,6 +120,27 @@ function resolveNotificationUrl(rawUrl) {
 }
 
 /**
+ * Helper to ensure icon, badge, and image URLs are valid, absolute same-origin HTTPS URLs on APP_ORIGIN
+ */
+function resolveNotificationAssetUrl(rawUrl, defaultPath) {
+  const target = rawUrl || defaultPath;
+  if (!target || typeof target !== 'string') {
+    return defaultPath ? `${APP_ORIGIN}${defaultPath.startsWith('/') ? '' : '/'}${defaultPath}` : undefined;
+  }
+  try {
+    const parsed = new URL(target, APP_ORIGIN);
+    // If the URL is for an image asset on a safdrive domain, bind to current APP_ORIGIN for strict same-origin compliance
+    if (parsed.pathname.endsWith('.png') || parsed.pathname.endsWith('.svg') || parsed.pathname.endsWith('.jpg') || parsed.pathname.endsWith('.webp')) {
+      return `${APP_ORIGIN}${parsed.pathname}`;
+    }
+    return parsed.href;
+  } catch {
+    const clean = target.replace(/^\/+/, '');
+    return `${APP_ORIGIN}/${clean}`;
+  }
+}
+
+/**
  * Handle incoming push events from server
  */
 self.addEventListener('push', (event) => {
@@ -137,8 +158,18 @@ self.addEventListener('push', (event) => {
 
   const title = data.title || 'Eagle Eye SafDrive — New Installation Checklist';
   const body = data.body || 'A new installation checklist has been created.';
-  const icon = data.icon || '/icon-192.png';
-  const badge = data.badge || '/icon-192.png';
+
+  // Large icon (options.icon): displayed in full color on Android card right side
+  const icon = resolveNotificationAssetUrl(data.icon, '/icon-192.png');
+
+  // Small icon / status bar badge (options.badge): must be transparent monochrome alpha mask
+  // If an older payload specifies icon-192.png for badge, safely substitute with badge-96.png
+  let rawBadge = data.badge;
+  if (!rawBadge || rawBadge === '/icon-192.png' || rawBadge.endsWith('/icon-192.png')) {
+    rawBadge = '/badge-96.png';
+  }
+  const badge = resolveNotificationAssetUrl(rawBadge, '/badge-96.png');
+
   const tag = data.tag || `checklist-${Date.now()}`;
 
   // Resolve target URL to valid absolute hash-router URL on APP_ORIGIN
@@ -167,6 +198,11 @@ self.addEventListener('push', (event) => {
       },
     ],
   };
+
+  // Only attach image if explicitly provided (e.g. big picture style)
+  if (data.image) {
+    options.image = resolveNotificationAssetUrl(data.image, null);
+  }
 
   event.waitUntil(self.registration.showNotification(title, options));
 });

@@ -14,6 +14,10 @@ import {
   issueFullJobStock,
   issueServiceJobStock,
 } from '../services/storeRequirementService.js';
+import {
+  issueExtraBackupDevices,
+  rejectExtraBackupDevices,
+} from '../services/backupItemService.js';
 import { generateStoreManagerRequirementPDF } from '../services/storeManagerPdfGenerator.js';
 import supabase from '../services/supabase.js';
 
@@ -128,6 +132,15 @@ router.post('/issue-full-job', requireRole('STORE_MANAGER', 'ADMIN'), async (req
     });
     return res.json(result);
   } catch (err) {
+    if (err.already_issued || err.code === 'ALREADY_ISSUED' || err.status === 409 || err.message?.includes('already been issued')) {
+      return res.status(409).json({
+        error: err.message,
+        already_issued: true,
+        stock_issuance_status: 'Completed',
+        is_issued: true,
+        checklist_id: req.body?.checklist_id,
+      });
+    }
     console.error('Error issuing full job stock:', err);
     return res.status(400).json({ error: err.message || 'Failed to issue job stock' });
   }
@@ -150,6 +163,46 @@ router.post('/issue-service-stock', requireRole('STORE_MANAGER', 'ADMIN'), async
   } catch (err) {
     console.error('Error issuing service job stock:', err);
     return res.status(400).json({ error: err.message || 'Failed to issue service job stock' });
+  }
+});
+
+/**
+ * POST /api/admin/materials/issue-extra-devices
+ * Explicit Store Manager review and authorized issuance of technician extra backup devices.
+ * Supports partial issuance, verifies usable stock, records ledger movement, and updates status.
+ */
+router.post('/issue-extra-devices', requireRole('STORE_MANAGER', 'ADMIN'), async (req, res) => {
+  try {
+    const { checklist_id, items, remarks } = req.body;
+    const result = await issueExtraBackupDevices({
+      checklist_id,
+      items,
+      remarks,
+      user: req.profile || req.user,
+    });
+    return res.json(result);
+  } catch (err) {
+    console.error('Error issuing extra backup devices:', err);
+    return res.status(400).json({ error: err.message || 'Failed to issue extra backup devices' });
+  }
+});
+
+/**
+ * POST /api/admin/materials/reject-extra-devices
+ * Store Manager explicitly rejects technician's extra backup devices request.
+ */
+router.post('/reject-extra-devices', requireRole('STORE_MANAGER', 'ADMIN'), async (req, res) => {
+  try {
+    const { checklist_id, reason } = req.body;
+    const result = await rejectExtraBackupDevices({
+      checklist_id,
+      reason,
+      user: req.profile || req.user,
+    });
+    return res.json(result);
+  } catch (err) {
+    console.error('Error rejecting extra backup devices:', err);
+    return res.status(400).json({ error: err.message || 'Failed to reject extra backup devices' });
   }
 });
 

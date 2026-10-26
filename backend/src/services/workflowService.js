@@ -570,31 +570,7 @@ export async function recordAdditionalCustomerInstallations({
     console.warn('DB additional_customer_installations error, fallback to memory:', err.message);
   }
 
-  // 2. Also persist extra_installations inside installation_checklists.final_bom_snapshot (guaranteed DB storage)
-  if (isUuid(checklist_id)) {
-    try {
-      const { data: curChk } = await supabase
-        .from('installation_checklists')
-        .select('final_bom_snapshot')
-        .eq('id', checklist_id)
-        .maybeSingle();
-
-      const existingBom = curChk?.final_bom_snapshot || {};
-      const updatedBom = {
-        ...existingBom,
-        extra_installations: validatedRecords,
-      };
-
-      await supabase
-        .from('installation_checklists')
-        .update({ final_bom_snapshot: updatedBom })
-        .eq('id', checklist_id);
-    } catch (chkErr) {
-      console.warn('Could not update extra_installations in installation_checklists DB:', chkErr.message);
-    }
-  }
-
-  // 3. Update in-memory fallback
+  // 2. Compute accumulated records
   let finalRecords = [];
   if (replace) {
     finalRecords = validatedRecords;
@@ -606,6 +582,30 @@ export async function recordAdditionalCustomerInstallations({
   }
   inMemoryAdditionalInstallations.set(checklist_id, finalRecords);
   saveFallbackStorage();
+
+  // 3. Also persist accumulated extra_installations inside installation_checklists.final_bom_snapshot (guaranteed DB storage)
+  if (isUuid(checklist_id)) {
+    try {
+      const { data: curChk } = await supabase
+        .from('installation_checklists')
+        .select('final_bom_snapshot')
+        .eq('id', checklist_id)
+        .maybeSingle();
+
+      const existingBom = curChk?.final_bom_snapshot || {};
+      const updatedBom = {
+        ...existingBom,
+        extra_installations: finalRecords,
+      };
+
+      await supabase
+        .from('installation_checklists')
+        .update({ final_bom_snapshot: updatedBom })
+        .eq('id', checklist_id);
+    } catch (chkErr) {
+      console.warn('Could not update extra_installations in installation_checklists DB:', chkErr.message);
+    }
+  }
 
   // Audit
   try {

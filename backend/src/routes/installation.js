@@ -851,7 +851,7 @@ router.post('/:id/courier-request-technician', requireRole('SALES', 'ADMIN'), as
  * Outcome B - Step 2: Assign Technician & Schedule Installation on the SAME checklist.
  * Accessible to SALES and ADMIN.
  */
-router.post('/:id/courier-schedule-technician', requireRole('SALES', 'ADMIN'), async (req, res) => {
+router.post('/:id/courier-schedule-technician', requireRole('SALES', 'COORDINATOR', 'HR', 'STORE_MANAGER', 'TECHNICAL', 'ADMIN'), async (req, res) => {
   try {
     const {
       service_engineer,

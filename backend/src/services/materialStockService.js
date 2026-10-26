@@ -49,7 +49,7 @@ export const STANDARD_MATERIALS = [
 /**
  * Resilient in-memory store for material inventory with persistent file backing
  */
-const inMemoryMaterials = new Map(
+export const inMemoryMaterials = new Map(
   STANDARD_MATERIALS.map((item) => [
     item.material_name,
     {
@@ -68,7 +68,7 @@ const inMemoryMaterials = new Map(
   ])
 );
 
-const inMemoryMaterialTransactions = [];
+export const inMemoryMaterialTransactions = [];
 export const processedChecklistMaterialIssuances = new Set();
 export const processedMaterialReturnCredits = new Set();
 let dbSeeded = false;

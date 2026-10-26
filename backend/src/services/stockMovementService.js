@@ -121,6 +121,12 @@ export async function recordStockMovement({
         { movement_type: 'STOCK_ISSUED', performed_by: null, checklist_id: movementRecord.checklist_id },
         { movement_type: 'STOCK_ISSUED', performed_by: null, checklist_id: null },
       ] : []),
+      // 6th attempt: if check constraint fails on EXTRA_BACKUP_ISSUED, try STOCK_ISSUED fallback
+      ...(movementRecord.movement_type === 'EXTRA_BACKUP_ISSUED' ? [
+        { movement_type: 'STOCK_ISSUED', performed_by: movementRecord.performed_by, checklist_id: movementRecord.checklist_id },
+        { movement_type: 'STOCK_ISSUED', performed_by: null, checklist_id: movementRecord.checklist_id },
+        { movement_type: 'STOCK_ISSUED', performed_by: null, checklist_id: null },
+      ] : []),
     ];
 
     for (const attempt of payloadsToTry) {
@@ -234,11 +240,17 @@ export function isMovementProtected(movement) {
   return false;
 }
 
-function normalizeMovement(m) {
+export function normalizeMovement(m) {
+  if (!m) return null;
+  let movementType = m.movement_type || m.transaction_type;
+  const remarks = String(m.reason_or_remarks || m.remarks || m.reason || '');
+  if (movementType === 'STOCK_ISSUED' && (remarks.includes('Extra backup') || remarks.includes('[EXTRA_BACKUP_ISSUED]'))) {
+    movementType = 'EXTRA_BACKUP_ISSUED';
+  }
   return {
     ...m,
-    movement_type: m.movement_type || m.transaction_type,
-    transaction_type: m.movement_type || m.transaction_type,
+    movement_type: movementType,
+    transaction_type: movementType,
     balance_before: m.balance_before !== undefined && m.balance_before !== null ? m.balance_before : m.previous_balance,
     previous_balance: m.balance_before !== undefined && m.balance_before !== null ? m.balance_before : m.previous_balance,
     balance_after: m.balance_after !== undefined && m.balance_after !== null ? m.balance_after : m.new_balance,
@@ -247,6 +259,26 @@ function normalizeMovement(m) {
     reason: m.reason_or_remarks || m.remarks || m.reason || null,
     is_protected: isMovementProtected(m),
   };
+}
+
+/**
+ * Fetch all stock movements for a specific checklist ID
+ */
+export async function getStockMovementsByChecklistId(checklistId) {
+  if (!checklistId) return [];
+  try {
+    const { data, error } = await supabase
+      .from('stock_movements')
+      .select('*')
+      .eq('checklist_id', checklistId)
+      .order('created_at', { ascending: false });
+    if (!error && Array.isArray(data) && data.length > 0) {
+      return data.map(normalizeMovement);
+    }
+  } catch (e) {
+    // Fall back to memory
+  }
+  return inMemoryStockMovements.filter((m) => m.checklist_id === checklistId).map(normalizeMovement);
 }
 
 /**

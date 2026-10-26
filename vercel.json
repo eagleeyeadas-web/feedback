@@ -1,7 +1,31 @@
 {
+  "headers": [
+    {
+      "source": "/sw.js",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache, no-store, must-revalidate"
+        },
+        {
+          "key": "Service-Worker-Allowed",
+          "value": "/"
+        }
+      ]
+    },
+    {
+      "source": "/(badge.*|icon.*|logo.*)\\.png",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=86400, stale-while-revalidate=604800"
+        }
+      ]
+    }
+  ],
   "rewrites": [
     {
-      "source": "/((?!sw\\.js|manifest\\.json|icon.*\\.png|favicon.*|assets/|api/|_redirects).*)",
+      "source": "/((?!sw\\.js|manifest\\.json|icon.*\\.png|badge.*\\.png|logo.*\\.png|favicon.*|assets/|api/|_redirects).*)",
       "destination": "/index.html"
     }
   ]

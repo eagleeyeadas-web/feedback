@@ -61,7 +61,7 @@ export const STANDARD_DEVICE_PRODUCTS = [
  * In-memory fallback stores for local resilience with persistent JSON backing
  * Opening stock is NOT assumed (starts at 0 with opening_stock_set: false)
  */
-const inMemoryProducts = new Map(
+export const inMemoryProducts = new Map(
   STANDARD_DEVICE_PRODUCTS.map((p) => [
     p.device_type,
     {
@@ -71,8 +71,8 @@ const inMemoryProducts = new Map(
   ])
 );
 
-const inMemoryTransactions = [];
-const processedCarryDeductions = new Set();
+export const inMemoryTransactions = [];
+export const processedCarryDeductions = new Set();
 export const processedChecklistDeviceIssuances = new Set();
 let devicesDbSeeded = false;
 

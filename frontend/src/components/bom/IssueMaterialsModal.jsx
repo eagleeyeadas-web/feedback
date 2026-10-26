@@ -16,6 +16,7 @@ export default function IssueMaterialsModal({ checklist, token, onClose, onSucce
   const [submitting, setSubmitting] = useState(false);
   const [remarks, setRemarks] = useState('');
   const [error, setError] = useState('');
+  const [courierIssuedSuccess, setCourierIssuedSuccess] = useState(false);
 
   const isCourierJob = (checklist.delivery_method === 'Product Couriered' || checklist.isCourier || checklist.job_type === 'Courier');
   const isServiceJob = !isCourierJob && (checklist.job_type === 'Service' || checklist.installation_or_service === 'Service');
@@ -23,8 +24,19 @@ export default function IssueMaterialsModal({ checklist, token, onClose, onSucce
   // Service items issuance state: map of item.id -> qty to issue
   const [serviceIssueQtys, setServiceIssueQtys] = useState({});
 
-  const devicesAlreadyIssued = checklist.devices_issuance_status === 'ISSUED';
-  const materialsAlreadyIssued = checklist.material_issuance_status === 'ISSUED';
+  const isCourierStockIssued = isCourierJob && (
+    courierIssuedSuccess ||
+    checklist.stock_issuance_status === 'Completed' ||
+    checklist.is_issued === true ||
+    checklist.devices_issuance_status === 'ISSUED' ||
+    checklist.material_issuance_status === 'ISSUED' ||
+    checklist.status === 'ISSUED' ||
+    checklist.courier_dispatch_status === 'ISSUED' ||
+    Boolean(checklist.is_courier_dispatched)
+  );
+
+  const devicesAlreadyIssued = isCourierStockIssued || checklist.devices_issuance_status === 'ISSUED';
+  const materialsAlreadyIssued = isCourierStockIssued || checklist.material_issuance_status === 'ISSUED';
 
   const [issueDevices, setIssueDevices] = useState(!devicesAlreadyIssued);
   const [issueMaterials, setIssueMaterials] = useState(!isCourierJob && !materialsAlreadyIssued);
@@ -258,8 +270,9 @@ export default function IssueMaterialsModal({ checklist, token, onClose, onSucce
 
     // Courier Job Submission Flow
     if (isCourierJob) {
-      if (devicesAlreadyIssued) {
-        setError('Stock for this courier order has already been issued.');
+      if (isCourierStockIssued) {
+        setError(`Checklist ${checklist.checklist_number} courier stock has already been issued. Duplicate issuance is prevented.`);
+        setCourierIssuedSuccess(true);
         return;
       }
       if (hasDeviceDeficit) {
@@ -278,10 +291,17 @@ export default function IssueMaterialsModal({ checklist, token, onClose, onSucce
           issue_backup_items: false,
           remarks: remarks.trim() || `Authorized courier stock issuance for job ${checklist.checklist_number} to recipient ${checklist.client_name || 'Customer'}`,
         });
-        onSuccess();
+        setCourierIssuedSuccess(true);
+        if (onSuccess) onSuccess();
       } catch (err) {
-        console.error('Error issuing courier job stock:', err);
-        setError(err.message || 'Failed to issue courier job stock');
+        if (err.already_issued || err.status === 409 || err.message?.includes('already been issued')) {
+          setCourierIssuedSuccess(true);
+          setError(`Checklist ${checklist.checklist_number} courier stock has already been issued. Duplicate issuance is prevented.`);
+          if (onSuccess) onSuccess();
+        } else {
+          console.error('Error issuing courier job stock:', err);
+          setError(err.message || 'Failed to issue courier job stock');
+        }
       } finally {
         setSubmitting(false);
       }
@@ -333,13 +353,21 @@ export default function IssueMaterialsModal({ checklist, token, onClose, onSucce
               {isCourierJob ? <Package className="w-5 h-5" /> : isServiceJob ? <Wrench className="w-5 h-5" /> : <Package className="w-5 h-5" />}
             </div>
             <div>
-              <h3 className="text-base font-bold text-gray-900 flex items-center gap-2">
-                {isCourierJob
-                  ? 'Store Manager: Authorize & Issue Courier Stock'
-                  : isServiceJob
-                  ? 'Store Manager: Authorize & Issue Service Items'
-                  : 'Store Manager: Authorize & Issue Stock'}
-              </h3>
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="text-base font-bold text-gray-900">
+                  {isCourierJob
+                    ? (isCourierStockIssued ? 'Product Courier Stock Issuance Details' : 'Store Manager: Authorize & Issue Courier Stock')
+                    : isServiceJob
+                    ? 'Store Manager: Authorize & Issue Service Items'
+                    : 'Store Manager: Authorize & Issue Stock'}
+                </h3>
+                {isCourierJob && isCourierStockIssued && (
+                  <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1">
+                    <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                    Stock Issued — Completed
+                  </span>
+                )}
+              </div>
               <p className="text-xs text-gray-500">
                 Job: <strong className="font-mono text-gray-800">{checklist.checklist_number}</strong> ({checklist.client_name}) • <span className={`font-semibold ${isCourierJob ? 'text-indigo-700' : isServiceJob ? 'text-purple-700' : 'text-blue-700'}`}>
                   {isCourierJob ? 'Product Couriered' : (checklist.job_type || checklist.installation_or_service || 'Installation')}
@@ -372,91 +400,178 @@ export default function IssueMaterialsModal({ checklist, token, onClose, onSucce
             COURIER JOB SECTION
             ======================================================== */}
         {isCourierJob ? (
-          <div className="space-y-4">
-            {devicesAlreadyIssued && (
-              <div className="p-3.5 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-xs flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span>Camera devices for this courier job have already been issued from store.</span>
+          isCourierStockIssued ? (
+            /* ========================================================
+               COURIER JOB SECTION: COMPLETED READ-ONLY STATE
+               ======================================================== */
+            <div className="space-y-4">
+              <div className="p-4 bg-emerald-50 border border-emerald-300 text-emerald-900 rounded-2xl text-xs space-y-2 shadow-2xs">
+                <div className="flex items-center gap-2 font-bold text-sm text-emerald-800">
+                  <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+                  <span>Product Courier Stock Successfully Issued</span>
+                </div>
+                <p className="text-emerald-700 leading-relaxed">
+                  Authoritative stock issuance for checklist <strong className="font-mono">{checklist.checklist_number}</strong> was successfully committed and recorded in the stock ledger. No further deductions can be made.
+                </p>
               </div>
-            )}
 
-            {loadingInv ? (
-              <div className="py-8 text-center space-y-2">
-                <Loader2 className="w-6 h-6 animate-spin text-indigo-600 mx-auto" />
-                <p className="text-xs text-gray-500">Checking store stock for required courier devices...</p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                <div className="flex items-center justify-between text-xs font-bold text-gray-700">
-                  <span className="flex items-center gap-1.5 text-indigo-900">
-                    <Package className="w-4 h-4 text-indigo-600" />
-                    <span>Required Courier Devices ({deviceList.length})</span>
-                  </span>
-                  {devDeficits.length > 0 && (
-                    <span className="text-rose-600 text-[11px] font-bold">
-                      ⚠ {devDeficits.length} Device Shortage in Store
+              {/* Read-only Issuance Summary Details */}
+              <div className="bg-gray-50 border border-gray-200 rounded-2xl p-4 text-xs space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">Customer Details</span>
+                    <span className="font-bold text-gray-900 block mt-0.5">{checklist.client_name || 'Customer'}</span>
+                    {checklist.client_mobile && (
+                      <span className="text-gray-600 font-mono block text-[11px]">{checklist.client_mobile}</span>
+                    )}
+                    <span className="text-gray-600 text-[11px] block mt-0.5">
+                      Destination: <strong>{checklist.destination || checklist.client_location || 'Customer Address'}</strong>
                     </span>
-                  )}
+                  </div>
+
+                  <div>
+                    <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">Authoritative Issuance Status</span>
+                    <div className="mt-1 flex items-center gap-2">
+                      <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 inline-flex items-center gap-1">
+                        <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                        Stock Issuance: Completed
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-gray-500 mt-2">
+                      Installation Status: <span className="font-semibold text-gray-800">{checklist.installation_status || 'Pending Customer Installation / Technician Assignment'}</span>
+                    </div>
+                    {(checklist.material_issued_at || checklist.devices_issued_at) && (
+                      <div className="text-[11px] text-gray-500 mt-0.5">
+                        Issued On: <strong className="text-gray-700">{new Date(checklist.material_issued_at || checklist.devices_issued_at).toLocaleString('en-IN')}</strong>
+                      </div>
+                    )}
+                    {(checklist.material_issued_by || checklist.devices_issued_by) && (
+                      <div className="text-[11px] text-gray-500 mt-0.5">
+                        Authorized By: <strong className="text-gray-700">Store Manager</strong>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
-                <div className="border border-indigo-200 rounded-xl overflow-hidden text-xs bg-white shadow-2xs">
-                  <table className="w-full text-left">
-                    <thead className="bg-indigo-50 text-[10px] font-bold text-indigo-900 uppercase border-b border-indigo-200">
-                      <tr>
-                        <th className="py-2.5 px-3">Device Model</th>
-                        <th className="py-2.5 px-3">SKU</th>
-                        <th className="py-2.5 px-3 text-center">Required Qty</th>
-                        <th className="py-2.5 px-3 text-center">In Store Stock</th>
-                        <th className="py-2.5 px-3 text-center">Shortage</th>
-                        <th className="py-2.5 px-3 text-center">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                      {deviceList.map((d, i) => (
-                        <tr key={i} className={d.shortage > 0 ? 'bg-rose-50/40' : 'hover:bg-indigo-50/20'}>
-                          <td className="py-2.5 px-3 font-semibold text-gray-900">{d.device_type}</td>
-                          <td className="py-2.5 px-3 font-mono text-[11px] text-gray-500">{d.sku}</td>
-                          <td className="py-2.5 px-3 text-center font-bold text-gray-900">{d.required} Nos.</td>
-                          <td className="py-2.5 px-3 text-center font-mono font-bold text-gray-800">{d.available} Nos.</td>
-                          <td className="py-2.5 px-3 text-center font-mono font-bold">
-                            {d.shortage > 0 ? (
-                              <span className="text-rose-700 bg-rose-100 px-2 py-0.5 rounded text-[11px]">
-                                -{d.shortage} Short
-                              </span>
-                            ) : (
-                              <span className="text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded text-[11px]">
-                                0
-                              </span>
-                            )}
-                          </td>
-                          <td className="py-2.5 px-3 text-center">
-                            {devicesAlreadyIssued ? (
-                              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
-                                Already Issued
-                              </span>
-                            ) : d.shortage > 0 ? (
-                              <span className="text-[10px] font-bold text-rose-700 bg-rose-100 px-2 py-0.5 rounded-full">
-                                Out of Stock
-                              </span>
-                            ) : (
-                              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
-                                Available
-                              </span>
-                            )}
-                          </td>
+                {/* Issued Product Table */}
+                <div className="pt-2 border-t border-gray-200">
+                  <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1.5">Issued Products</span>
+                  <div className="border border-gray-200 rounded-xl overflow-hidden bg-white">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-gray-100 text-[10px] font-bold text-gray-600 uppercase border-b border-gray-200">
+                        <tr>
+                          <th className="py-2 px-3">Device Model</th>
+                          <th className="py-2 px-3">SKU</th>
+                          <th className="py-2 px-3 text-center">Issued Qty</th>
+                          <th className="py-2 px-3 text-center">Ledger Status</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                <div className="p-3 bg-slate-50 rounded-xl border border-gray-200 text-xs text-gray-600 flex items-center justify-between">
-                  <span>Destination / Recipient: <strong className="text-gray-900">{checklist.destination || checklist.client_location || checklist.client_name}</strong></span>
-                  <span className="text-[11px] text-gray-500">Single-action Store issuance • Deducts from usable stock</span>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {deviceList.map((d, i) => (
+                          <tr key={i} className="hover:bg-gray-50">
+                            <td className="py-2 px-3 font-semibold text-gray-900">{d.device_type}</td>
+                            <td className="py-2 px-3 font-mono text-[11px] text-gray-500">{d.sku}</td>
+                            <td className="py-2 px-3 text-center font-bold text-gray-900">{d.required} Nos.</td>
+                            <td className="py-2 px-3 text-center">
+                              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
+                                Deducted &amp; Committed
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
-            )}
-          </div>
+
+              {/* Read-only Action: Close Only */}
+              <div className="flex items-center justify-end pt-2 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="px-6 py-2.5 text-xs font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl transition-all cursor-pointer shadow-2xs"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {loadingInv ? (
+                <div className="py-8 text-center space-y-2">
+                  <Loader2 className="w-6 h-6 animate-spin text-indigo-600 mx-auto" />
+                  <p className="text-xs text-gray-500">Checking store stock for required courier devices...</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between text-xs font-bold text-gray-700">
+                    <span className="flex items-center gap-1.5 text-indigo-900">
+                      <Package className="w-4 h-4 text-indigo-600" />
+                      <span>Required Courier Devices ({deviceList.length})</span>
+                    </span>
+                    {devDeficits.length > 0 && (
+                      <span className="text-rose-600 text-[11px] font-bold">
+                        ⚠ {devDeficits.length} Device Shortage in Store
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="border border-indigo-200 rounded-xl overflow-hidden text-xs bg-white shadow-2xs">
+                    <table className="w-full text-left">
+                      <thead className="bg-indigo-50 text-[10px] font-bold text-indigo-900 uppercase border-b border-indigo-200">
+                        <tr>
+                          <th className="py-2.5 px-3">Device Model</th>
+                          <th className="py-2.5 px-3">SKU</th>
+                          <th className="py-2.5 px-3 text-center">Required Qty</th>
+                          <th className="py-2.5 px-3 text-center">In Store Stock</th>
+                          <th className="py-2.5 px-3 text-center">Shortage</th>
+                          <th className="py-2.5 px-3 text-center">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {deviceList.map((d, i) => (
+                          <tr key={i} className={d.shortage > 0 ? 'bg-rose-50/40' : 'hover:bg-indigo-50/20'}>
+                            <td className="py-2.5 px-3 font-semibold text-gray-900">{d.device_type}</td>
+                            <td className="py-2.5 px-3 font-mono text-[11px] text-gray-500">{d.sku}</td>
+                            <td className="py-2.5 px-3 text-center font-bold text-gray-900">{d.required} Nos.</td>
+                            <td className="py-2.5 px-3 text-center font-mono font-bold text-gray-800">{d.available} Nos.</td>
+                            <td className="py-2.5 px-3 text-center font-mono font-bold">
+                              {d.shortage > 0 ? (
+                                <span className="text-rose-700 bg-rose-100 px-2 py-0.5 rounded text-[11px]">
+                                  -{d.shortage} Short
+                                </span>
+                              ) : (
+                                <span className="text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded text-[11px]">
+                                  0
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-2.5 px-3 text-center">
+                              {d.shortage > 0 ? (
+                                <span className="text-[10px] font-bold text-rose-700 bg-rose-100 px-2 py-0.5 rounded-full">
+                                  Out of Stock
+                                </span>
+                              ) : (
+                                <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
+                                  Available
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div className="p-3 bg-slate-50 rounded-xl border border-gray-200 text-xs text-gray-600 flex items-center justify-between">
+                    <span>Destination / Recipient: <strong className="text-gray-900">{checklist.destination || checklist.client_location || checklist.client_name}</strong></span>
+                    <span className="text-[11px] text-gray-500">Single-action Store issuance • Deducts from usable stock</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          )
         ) : isServiceJob ? (
           <div className="space-y-4">
             {allServiceAlreadyIssued && (
@@ -811,7 +926,7 @@ export default function IssueMaterialsModal({ checklist, token, onClose, onSucce
         )}
 
         {/* Remarks Form & Submission */}
-        {(!isServiceJob || serviceList.length > 0) && (
+        {!isCourierStockIssued && (!isServiceJob || serviceList.length > 0) && (
           <form onSubmit={handleSubmit} className="space-y-4 pt-2 border-t border-gray-100">
             <div>
               <label className="text-xs font-bold text-gray-700 block mb-1">

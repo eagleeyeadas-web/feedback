@@ -919,7 +919,13 @@ export async function issueFullJobStockApi(token, data) {
     body: JSON.stringify(data),
   });
   const json = await res.json();
-  if (!res.ok) throw new Error(json.error || 'Failed to issue job stock');
+  if (!res.ok) {
+    const err = new Error(json.error || 'Failed to issue job stock');
+    err.status = res.status;
+    err.already_issued = json.already_issued;
+    err.stock_issuance_status = json.stock_issuance_status;
+    throw err;
+  }
   return json;
 }
 
@@ -1613,6 +1619,28 @@ export async function verifyStoreBackupReturns(token, checklistId, data) {
   });
   const json = await res.json();
   if (!res.ok) throw new Error(json.error || 'Failed to verify backup returns');
+  return json;
+}
+
+export async function issueExtraDevicesApi(token, data) {
+  const res = await fetch(`${API_BASE}/admin/materials/issue-extra-devices`, {
+    method: 'POST',
+    headers: adminHeaders(token),
+    body: JSON.stringify(data),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to issue extra backup devices');
+  return json;
+}
+
+export async function rejectExtraDevicesApi(token, data) {
+  const res = await fetch(`${API_BASE}/admin/materials/reject-extra-devices`, {
+    method: 'POST',
+    headers: adminHeaders(token),
+    body: JSON.stringify(data),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to reject extra backup devices');
   return json;
 }
 

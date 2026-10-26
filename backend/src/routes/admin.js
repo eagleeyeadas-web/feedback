@@ -2,6 +2,7 @@ import { Router } from 'express';
 import supabase from '../services/supabase.js';
 import { generateFeedbackPDF } from '../services/pdfGenerator.js';
 import { requireAdmin, requireRole, requireAuth } from '../middleware/auth.js';
+import { getResetPreview, executeCompleteOperationalReset } from '../services/operationalResetService.js';
 
 // UUID v4 format check — avoids Postgres cast errors when querying the UUID `id` column
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -602,6 +603,53 @@ router.get('/export', async (req, res) => {
   } catch (error) {
     console.error('Export error:', error);
     return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * GET /api/admin/operational-reset/preview
+ * Restricted to ADMIN: previews counts of operational records and confirms 100% quotation protection
+ */
+router.get('/operational-reset/preview', async (req, res) => {
+  try {
+    const preview = await getResetPreview();
+    return res.json({ success: true, preview });
+  } catch (err) {
+    console.error('Operational reset preview error:', err);
+    return res.status(500).json({ error: err.message || 'Failed to retrieve reset preview' });
+  }
+});
+
+/**
+ * POST /api/admin/operational-reset/execute
+ * Restricted to ADMIN: performs the complete operational reset while safeguarding all quotations
+ */
+router.post('/operational-reset/execute', async (req, res) => {
+  try {
+    const { confirmReset, confirmationPhrase, openingBalances } = req.body || {};
+
+    if (!confirmReset || confirmationPhrase !== 'RESET OPERATIONAL DATA PRESERVE QUOTATIONS') {
+      return res.status(400).json({
+        error:
+          'Reset rejected: You must set confirmReset: true and provide exact confirmationPhrase: "RESET OPERATIONAL DATA PRESERVE QUOTATIONS"',
+      });
+    }
+
+    const result = await executeCompleteOperationalReset({
+      openingBalances: openingBalances || {},
+      executedBy: `ADMIN_${req.profile?.email || req.user?.email || req.user?.id || 'AUTH_USER'}`,
+      user: { ...req.user, ...req.profile },
+      confirmReset: true,
+    });
+
+    return res.json({
+      success: true,
+      message: 'Complete operational reset executed successfully. All quotations 100% preserved.',
+      result,
+    });
+  } catch (err) {
+    console.error('Operational reset execution error:', err);
+    return res.status(500).json({ error: err.message || 'Operational reset execution failed' });
   }
 });
 

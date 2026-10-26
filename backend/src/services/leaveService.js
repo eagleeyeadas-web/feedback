@@ -16,7 +16,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const STORAGE_FILE = path.join(__dirname, '../data/leave_requests_storage.json');
 
-const inMemoryLeaves = new Map();
+export const inMemoryLeaves = new Map();
 
 function loadStorage() {
   try {

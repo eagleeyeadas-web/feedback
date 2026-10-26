@@ -16,7 +16,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const STORAGE_FILE = path.join(__dirname, '../data/rest_days_storage.json');
 
-const inMemoryRestDays = new Map();
+export const inMemoryRestDays = new Map();
 
 function loadStorage() {
   try {

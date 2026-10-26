@@ -181,8 +181,22 @@ export default function StoreWorkspace({ onSelectChecklist }) {
       setMovements(movData.transactions || []);
       setMovementTotalCount(movData.totalCount !== undefined ? movData.totalCount : (movData.transactions?.length || 0));
       setMovementTotalPages(movData.totalPages || 1);
-      setStoreReturns(returnsData || []);
-      setPendingRequirements(reqData.requirements || []);
+      const rawPending = reqData.requirements || [];
+      const cleanPending = rawPending.filter((job) => {
+        const isCourier = job.delivery_method === 'Product Couriered' || job.is_courier || job.job_type === 'Courier';
+        if (isCourier) {
+          const isIssued = job.stock_issuance_status === 'Completed' ||
+            job.is_issued === true ||
+            job.status === 'ISSUED' ||
+            job.material_issuance_status === 'ISSUED' ||
+            job.devices_issuance_status === 'ISSUED' ||
+            job.courier_dispatch_status === 'ISSUED' ||
+            Boolean(job.is_courier_dispatched);
+          return !isIssued;
+        }
+        return job.material_issuance_status !== 'ISSUED' || job.devices_issuance_status !== 'ISSUED';
+      });
+      setPendingRequirements(cleanPending);
       setAllocations(allocData || []);
 
       if (sumData) {

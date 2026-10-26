@@ -1361,6 +1361,17 @@ export async function scheduleTechnicianForCourieredChecklist({
     });
   }
 
+  // Synchronize Store Manager requirement record with updated technician assignment
+  try {
+    const { syncStoreRequirementForChecklist } = await import('./storeRequirementService.js');
+    await syncStoreRequirementForChecklist({
+      ...checklist,
+      ...updatePayload,
+    });
+  } catch (syncErr) {
+    console.warn('Could not sync store requirement after scheduling courier technician:', syncErr.message);
+  }
+
   await logAudit({
     actor_id: user?.id || '00000000-0000-0000-0000-000000000001',
     actor_email: user?.email || 'sales@eagleeyesafdrive.com',

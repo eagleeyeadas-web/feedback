@@ -6,6 +6,7 @@ import { logAudit } from './auditService.js';
 import { getMaterialInventory, adjustMaterialStock } from './materialStockService.js';
 import { getInventoryProducts, adjustStock } from './inventoryService.js';
 import { isScrewMaterial } from './workflowService.js';
+import { recordStockMovement } from './stockMovementService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -14,7 +15,7 @@ const STORAGE_FILE = path.join(__dirname, '../data/backup_items_storage.json');
 /**
  * Resilient in-memory store with file backing for loose backup item declarations
  */
-const inMemoryDeclarations = new Map(); // checklist_id -> declaration object
+export const inMemoryDeclarations = new Map(); // checklist_id -> declaration object
 const inMemoryVerifiedReturns = new Set(); // verification keys to prevent duplicate return credits
 
 export function loadBackupItemsStorage() {
@@ -207,6 +208,74 @@ export async function getAvailableBackupProducts() {
 }
 
 /**
+ * Enrich backup items with live usable stock balances and remaining quantities
+ */
+export async function enrichBackupItemsWithLiveStock(items = []) {
+  if (!Array.isArray(items) || items.length === 0) return [];
+  try {
+    const [allMats, allDevs] = await Promise.all([
+      getMaterialInventory().catch(() => []),
+      getInventoryProducts().catch(() => []),
+    ]);
+
+    const matMap = new Map((allMats || []).map((m) => [(m.material_name || '').toLowerCase(), m]));
+    const devMap = new Map((allDevs || []).map((d) => [(d.device_type || '').toLowerCase(), d]));
+
+    return items.map((it) => {
+      const name = (it.item_name || '').trim();
+      const lower = name.toLowerCase();
+      let currentStock = 0;
+      let unit = it.unit || 'Nos.';
+
+      let mat = matMap.get(lower);
+      if (!mat && lower.includes('display')) mat = matMap.get('display');
+      if (!mat) {
+        if (lower.includes('cable tie') && lower.includes('200')) {
+          mat = allMats.find((m) => m.material_name.toLowerCase().includes('cable tie') && m.material_name.includes('200'));
+        } else if (lower.includes('cable tie') && lower.includes('300')) {
+          mat = allMats.find((m) => m.material_name.toLowerCase().includes('cable tie') && m.material_name.includes('300'));
+        } else if (lower.includes('5m') || lower.includes('5-metre')) {
+          mat = allMats.find((m) => m.material_name.toLowerCase().includes('5-metre'));
+        } else if (lower.includes('15m') || lower.includes('15-metre')) {
+          mat = allMats.find((m) => m.material_name.toLowerCase().includes('15-metre'));
+        }
+      }
+      const dev = devMap.get(lower);
+
+      if (mat) {
+        currentStock = Number(mat.current_stock) || 0;
+        unit = mat.unit || unit;
+      } else if (dev) {
+        currentStock = Number(dev.usable_stock) || 0;
+        unit = dev.unit || unit;
+      }
+
+      const qty = Number(it.quantity) || 0;
+      const qtyIssued = Number(it.quantity_issued) || 0;
+      const qtyRemaining = Math.max(0, qty - qtyIssued);
+      const shortage = Math.max(0, qtyRemaining - currentStock);
+
+      return {
+        ...it,
+        unit,
+        quantity: qty,
+        quantity_issued: qtyIssued,
+        quantity_remaining: qtyRemaining,
+        available_stock: currentStock,
+        shortage,
+      };
+    });
+  } catch (err) {
+    return items.map((it) => ({
+      ...it,
+      quantity_remaining: Math.max(0, (Number(it.quantity) || 0) - (Number(it.quantity_issued) || 0)),
+      available_stock: 0,
+      shortage: 0,
+    }));
+  }
+}
+
+/**
  * Get pre-installation backup declaration for a checklist
  */
 export async function getBackupDeclaration(checklistId) {
@@ -217,7 +286,7 @@ export async function getBackupDeclaration(checklistId) {
   try {
     const { data, error } = await supabase
       .from('installation_checklists')
-      .select('id, checklist_number, carry_extra_backup_items, extra_devices, service_engineer, service_engineer_id, installation_status')
+      .select('id, checklist_number, carry_extra_backup_items, extra_devices, service_engineer, service_engineer_id, installation_status, client_name')
       .eq('id', checklistId)
       .maybeSingle();
     if (!error && data) {
@@ -230,61 +299,94 @@ export async function getBackupDeclaration(checklistId) {
   const salesExpected = Boolean(checklist?.carry_extra_backup_items ?? checklist?.extra_devices);
 
   // 2. Try Supabase
+  let decl = null;
+  let items = [];
   try {
-    const { data: decl, error: declErr } = await supabase
+    const { data: dbDecl, error: declErr } = await supabase
       .from('pre_installation_backup_declarations')
       .select('*')
       .eq('checklist_id', checklistId)
       .maybeSingle();
 
-    if (!declErr && decl) {
+    if (!declErr && dbDecl) {
+      decl = dbDecl;
       const { data: rows, error: rowsErr } = await supabase
         .from('pre_installation_backup_items')
         .select('*')
         .eq('declaration_id', decl.id)
         .order('created_at', { ascending: true });
 
-      const items = !rowsErr && Array.isArray(rows)
-        ? rows.map((r) => ({
-            ...r,
-            category: r.category || classifyBackupItemCategory(r.item_name),
-          }))
-        : [];
-      const result = {
-        ...decl,
-        sales_expected: salesExpected,
-        items,
-      };
-      // Keep memory synced
-      inMemoryDeclarations.set(checklistId, result);
-      return result;
+      if (!rowsErr && Array.isArray(rows)) {
+        items = rows.map((r) => ({
+          ...r,
+          category: r.category || classifyBackupItemCategory(r.item_name),
+        }));
+      }
     }
   } catch (e) {
     // Fall back to memory
   }
 
   // 3. Fallback to memory
-  const cached = inMemoryDeclarations.get(checklistId);
-  if (cached) {
-    return {
-      ...cached,
-      sales_expected: salesExpected,
-      items: (cached.items || []).map((it) => ({
+  if (!decl) {
+    const cached = inMemoryDeclarations.get(checklistId);
+    if (cached) {
+      decl = cached;
+      items = (cached.items || []).map((it) => ({
         ...it,
         category: it.category || classifyBackupItemCategory(it.item_name),
-      })),
+      }));
+    }
+  }
+
+  if (!decl) {
+    return {
+      checklist_id: checklistId,
+      checklist_number: checklist?.checklist_number || 'N/A',
+      customer_name: checklist?.client_name || 'N/A',
+      technician_name: checklist?.service_engineer || 'Unassigned',
+      sales_expected: salesExpected,
+      has_backup_items: false,
+      no_items_reason: null,
+      status: 'NOT_RECORDED',
+      issuance_status: 'NOT_RECORDED',
+      items: [],
+      issuance_history: [],
     };
   }
 
-  // Default empty declaration state
-  return {
-    checklist_id: checklistId,
+  // Compute live quantities and stock availability for items
+  const enrichedItems = await enrichBackupItemsWithLiveStock(items);
+
+  // Compute overall issuance status
+  let finalIssuanceStatus = decl.issuance_status;
+  if (!finalIssuanceStatus || finalIssuanceStatus === 'DECLARED' || finalIssuanceStatus === 'Pending') {
+    if (enrichedItems.length === 0 || !decl.has_backup_items) {
+      finalIssuanceStatus = 'NOT_APPLICABLE';
+    } else {
+      const allIssued = enrichedItems.every(
+        (it) => (Number(it.quantity_issued) || 0) >= (Number(it.quantity) || 0)
+      );
+      const anyIssued = enrichedItems.some(
+        (it) => (Number(it.quantity_issued) || 0) > 0
+      );
+      finalIssuanceStatus = allIssued ? 'Issued' : anyIssued ? 'Partially Issued' : 'Pending';
+    }
+  }
+
+  const result = {
+    ...decl,
+    checklist_number: checklist?.checklist_number || decl.checklist_number,
+    customer_name: checklist?.client_name || decl.customer_name,
+    technician_name: checklist?.service_engineer || decl.technician_name,
     sales_expected: salesExpected,
-    has_backup_items: false,
-    no_items_reason: null,
-    status: 'NOT_RECORDED',
-    items: [],
+    issuance_status: finalIssuanceStatus,
+    items: enrichedItems,
+    issuance_history: Array.isArray(decl.issuance_history) ? decl.issuance_history : [],
   };
+
+  inMemoryDeclarations.set(checklistId, result);
+  return result;
 }
 
 export function classifyBackupItemCategory(name = '', declaredCategory = '') {
@@ -331,6 +433,7 @@ export async function saveBackupDeclaration({
     // Non-blocking
   }
 
+  const existingDecl = await getBackupDeclaration(checklistId);
   const isCarrying = Boolean(hasBackupItems);
 
   if (!isCarrying) {
@@ -364,6 +467,9 @@ export async function saveBackupDeclaration({
       const category = classifyBackupItemCategory(name, it.category);
 
       // Combine duplicate rows if user selected same item
+      const prevItem = existingDecl?.items?.find((pi) => (pi.item_name || '').toLowerCase() === name.toLowerCase());
+      const prevIssued = Number(prevItem?.quantity_issued) || 0;
+
       if (itemMap.has(name.toLowerCase())) {
         const existing = itemMap.get(name.toLowerCase());
         existing.quantity += qty;
@@ -375,7 +481,7 @@ export async function saveBackupDeclaration({
           category,
           quantity: qty,
           unit: unit || 'Nos.',
-          quantity_issued: 0,
+          quantity_issued: prevIssued,
           quantity_used: 0,
           quantity_returned: 0,
           quantity_damaged: 0,
@@ -387,7 +493,6 @@ export async function saveBackupDeclaration({
     validatedItems = Array.from(itemMap.values());
   }
 
-  const existingDecl = await getBackupDeclaration(checklistId);
   const isCorrection = Boolean(existingDecl && existingDecl.status && existingDecl.status !== 'NOT_RECORDED');
 
   // Maintain history when correcting
@@ -407,6 +512,10 @@ export async function saveBackupDeclaration({
     typeof val === 'string' &&
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(val);
 
+  const calculatedIssuanceStatus = (existingDecl?.issuance_status && existingDecl.issuance_status !== 'NOT_RECORDED')
+    ? existingDecl.issuance_status
+    : (isCarrying ? 'Pending' : 'NOT_APPLICABLE');
+
   const declarationPayload = {
     checklist_id: checklistId,
     technician_id: isValidUuid(user?.id)
@@ -418,21 +527,35 @@ export async function saveBackupDeclaration({
     has_backup_items: isCarrying,
     no_items_reason: isCarrying ? null : (noItemsReason ? noItemsReason.trim() : null),
     status: isCorrection ? 'CORRECTED' : 'DECLARED',
+    issuance_status: calculatedIssuanceStatus,
     declaration_timestamp: nowIso,
     history,
+    issuance_history: existingDecl?.issuance_history || [],
     updated_at: nowIso,
   };
 
   let savedDeclaration = null;
 
-  // 1. Try Supabase upsert
+  // 1. Try Supabase upsert with base columns
   try {
+    const dbPayload = {
+      checklist_id: checklistId,
+      technician_id: declarationPayload.technician_id,
+      technician_name: declarationPayload.technician_name,
+      has_backup_items: declarationPayload.has_backup_items,
+      no_items_reason: declarationPayload.no_items_reason,
+      status: declarationPayload.status,
+      declaration_timestamp: declarationPayload.declaration_timestamp,
+      history: declarationPayload.history,
+      updated_at: declarationPayload.updated_at,
+    };
+
     const { data: upsertedDecl, error: declErr } = await supabase
       .from('pre_installation_backup_declarations')
       .upsert(
         {
           ...(isValidUuid(existingDecl?.id) ? { id: existingDecl.id } : {}),
-          ...declarationPayload,
+          ...dbPayload,
           created_at: existingDecl?.created_at || nowIso,
         },
         { onConflict: 'checklist_id' }
@@ -441,7 +564,11 @@ export async function saveBackupDeclaration({
       .single();
 
     if (!declErr && upsertedDecl) {
-      savedDeclaration = upsertedDecl;
+      savedDeclaration = {
+        ...upsertedDecl,
+        issuance_status: calculatedIssuanceStatus,
+        issuance_history: declarationPayload.issuance_history,
+      };
 
       // Delete old items and insert fresh rows
       await supabase
@@ -563,8 +690,10 @@ export async function reconcileBackupItems({ checklistId, user, items = [] }) {
   const reconciledRows = [];
 
   for (const decItem of declaredItems) {
-    const key = decItem.item_name.toLowerCase();
-    const qtyCarried = Number(decItem.quantity) || 0;
+    const isIssuedState = declaration.issuance_status === 'Issued' || declaration.issuance_status === 'Partially Issued';
+    const qtyCarried = (isIssuedState && decItem.quantity_issued !== undefined && decItem.quantity_issued !== null)
+      ? Number(decItem.quantity_issued)
+      : (Number(decItem.quantity) || 0);
 
     // Screws (Long Screw, Small Screw) are excluded from Post-Installation reconciliation & returns
     if (isScrewMaterial(decItem.item_name)) {
@@ -580,6 +709,7 @@ export async function reconcileBackupItems({ checklistId, user, items = [] }) {
       continue;
     }
 
+    const key = (decItem.item_name || '').toLowerCase();
     let rep = inputMap.get(key);
     if (!rep) {
       for (const [k, v] of inputMap.entries()) {
@@ -688,12 +818,381 @@ export async function reconcileBackupItems({ checklistId, user, items = [] }) {
   };
 }
 
-const processedChecklistBackupIssuances = new Set();
+const inFlightBackupIssuances = new Set();
 
 /**
- * Server-side atomic transaction to issue declared loose backup items for a checklist.
- * Deducts stock only when authorized Store Manager issues the actual quantities.
- * Prevents double-deductions and negative stock.
+ * Server-side atomic transaction for Store Manager to review and issue extra backup devices.
+ * Supports full or partial issuance, checks live usable stock before deduction,
+ * records distinct stock_movements with EXTRA_BACKUP_ISSUED, updates quantity_issued,
+ * updates declaration issuance_status (Pending, Partially Issued, Issued), and maintains issuance history.
+ * Prevents concurrent duplicate clicks and prevents negative inventory.
+ */
+export async function issueExtraBackupDevices({
+  checklist_id,
+  items = [],
+  remarks = '',
+  user,
+}) {
+  if (!checklist_id) throw new Error('Checklist ID is required.');
+
+  if (user && user.role) {
+    const role = (user.role || '').toUpperCase();
+    if (role !== 'STORE_MANAGER' && role !== 'ADMIN' && role !== 'SUPER_ADMIN') {
+      throw new Error(`Unauthorized: Role "${user.role}" is not permitted to approve or issue extra backup stock.`);
+    }
+  }
+
+  if (inFlightBackupIssuances.has(checklist_id)) {
+    throw new Error('Stock issuance for extra backup devices is already in progress for this checklist. Please wait.');
+  }
+
+  inFlightBackupIssuances.add(checklist_id);
+
+  try {
+    const declaration = await getBackupDeclaration(checklist_id);
+    if (!declaration || !declaration.has_backup_items) {
+      throw new Error(`No loose backup items declared for checklist ${checklist_id}.`);
+    }
+
+    const declItems = declaration.items || [];
+    if (declItems.length === 0) {
+      throw new Error('No declared backup items found to issue.');
+    }
+
+    // Fetch parent checklist details for logging and recipient tracking
+    let checklist = null;
+    try {
+      const { data } = await supabase
+        .from('installation_checklists')
+        .select('id, checklist_number, service_engineer, service_engineer_id, client_name')
+        .eq('id', checklist_id)
+        .maybeSingle();
+      if (data) checklist = data;
+    } catch (e) {}
+
+    const techName = checklist?.service_engineer || declaration.technician_name || 'Assigned Technician';
+    const chkNum = checklist?.checklist_number || declaration.checklist_number || checklist_id;
+
+    // Determine items to issue
+    const itemsToProcess = [];
+
+    if (Array.isArray(items) && items.length > 0) {
+      for (const reqItem of items) {
+        const name = (reqItem.item_name || '').trim();
+        const qtyToIssue = Number(reqItem.quantity_to_issue !== undefined ? reqItem.quantity_to_issue : reqItem.quantity) || 0;
+        if (qtyToIssue <= 0) continue;
+
+        const targetDeclItem = declItems.find(
+          (d) => (d.item_name || '').trim().toLowerCase() === name.toLowerCase() ||
+                 (d.id && reqItem.item_id && d.id === reqItem.item_id)
+        );
+        if (!targetDeclItem) {
+          throw new Error(`Item "${name}" is not part of the declared backup items for this checklist.`);
+        }
+
+        const remaining = Math.max(0, (Number(targetDeclItem.quantity) || 0) - (Number(targetDeclItem.quantity_issued) || 0));
+        if (qtyToIssue > remaining) {
+          throw new Error(
+            `Cannot issue ${qtyToIssue} for "${name}". Maximum remaining unissued quantity is ${remaining}.`
+          );
+        }
+
+        itemsToProcess.push({
+          declItem: targetDeclItem,
+          name: targetDeclItem.item_name,
+          quantity_to_issue: qtyToIssue,
+          unit: targetDeclItem.unit || 'Nos.',
+        });
+      }
+    } else {
+      for (const d of declItems) {
+        const remaining = Math.max(0, (Number(d.quantity) || 0) - (Number(d.quantity_issued) || 0));
+        if (remaining > 0) {
+          itemsToProcess.push({
+            declItem: d,
+            name: d.item_name,
+            quantity_to_issue: remaining,
+            unit: d.unit || 'Nos.',
+          });
+        }
+      }
+    }
+
+    if (itemsToProcess.length === 0) {
+      const allIssued = declItems.every(
+        (it) => (Number(it.quantity_issued) || 0) >= (Number(it.quantity) || 0)
+      );
+      if (allIssued) {
+        return {
+          success: true,
+          message: 'All declared extra backup items have already been fully issued.',
+          issuance_status: 'Issued',
+          issued_items: [],
+        };
+      }
+      throw new Error('Please enter a positive quantity greater than 0 to issue.');
+    }
+
+    // Step 1: Check inventory availability for ALL items BEFORE deducting any stock
+    const [allMats, allDevs] = await Promise.all([
+      getMaterialInventory().catch(() => []),
+      getInventoryProducts().catch(() => []),
+    ]);
+
+    const matMap = new Map((allMats || []).map((m) => [(m.material_name || '').toLowerCase(), m]));
+    const devMap = new Map((allDevs || []).map((d) => [(d.device_type || '').toLowerCase(), d]));
+
+    const plannedDeductions = [];
+
+    for (const item of itemsToProcess) {
+      const name = (item.name || item.declItem?.item_name || item.declItem?.name || '').trim();
+      const lower = name.toLowerCase();
+      const qty = item.quantity_to_issue;
+
+      let mat = matMap.get(lower);
+      if (!mat && lower.includes('display')) mat = matMap.get('display');
+      if (!mat) {
+        if (lower.includes('cable tie') && lower.includes('200')) {
+          mat = allMats.find((m) => m.material_name.toLowerCase().includes('cable tie') && m.material_name.includes('200'));
+        } else if (lower.includes('cable tie') && lower.includes('300')) {
+          mat = allMats.find((m) => m.material_name.toLowerCase().includes('cable tie') && m.material_name.includes('300'));
+        } else if (lower.includes('5m') || lower.includes('5-metre')) {
+          mat = allMats.find((m) => m.material_name.toLowerCase().includes('5-metre'));
+        } else if (lower.includes('15m') || lower.includes('15-metre')) {
+          mat = allMats.find((m) => m.material_name.toLowerCase().includes('15-metre'));
+        }
+      }
+      const dev = devMap.get(lower);
+
+      if (mat) {
+        const available = Number(mat.current_stock) || 0;
+        if (qty > available) {
+          throw new Error(
+            `Insufficient stock for backup material "${name}". In store: ${available} ${mat.unit || 'Nos.'}, required to issue: ${qty} ${mat.unit || 'Nos.'}.`
+          );
+        }
+        plannedDeductions.push({
+          type: 'MATERIAL',
+          target: mat,
+          declItem: item.declItem,
+          name,
+          quantity: qty,
+          unit: mat.unit || item.unit,
+        });
+      } else if (dev) {
+        const available = Number(dev.usable_stock) || 0;
+        if (qty > available) {
+          throw new Error(
+            `Insufficient stock for backup device "${name}". In store: ${available} Nos., required to issue: ${qty} Nos.`
+          );
+        }
+        plannedDeductions.push({
+          type: 'DEVICE',
+          target: dev,
+          declItem: item.declItem,
+          name,
+          quantity: qty,
+          unit: dev.unit || item.unit,
+        });
+      } else {
+        plannedDeductions.push({
+          type: 'OTHER',
+          target: null,
+          declItem: item.declItem,
+          name,
+          quantity: qty,
+          unit: item.unit,
+        });
+      }
+    }
+
+    // Step 2: Atomic Deduction & Ledger Movement Recording
+    const nowIso = new Date().toISOString();
+    const issuedResults = [];
+
+    for (const plan of plannedDeductions) {
+      const { type, target, declItem, name, quantity, unit } = plan;
+
+      if (type === 'MATERIAL') {
+        const stockBefore = Number(target.current_stock) || 0;
+        await adjustMaterialStock({
+          material_name: target.material_name,
+          action: 'REMOVE',
+          quantity,
+          reason: `Extra backup material issued to technician ${techName} for checklist ${chkNum}. ${remarks || ''}`.trim(),
+          user,
+        });
+        const stockAfter = Math.max(0, stockBefore - quantity);
+
+        await recordStockMovement({
+          item_id: String(target.id),
+          item_name: target.material_name,
+          sku: target.sku || null,
+          category: 'Installation Material',
+          movement_type: 'EXTRA_BACKUP_ISSUED',
+          quantity: -quantity,
+          unit,
+          balance_before: stockBefore,
+          balance_after: stockAfter,
+          checklist_id,
+          performed_by: user?.id && String(user.id).length === 36 ? user.id : null,
+          performer_name: user?.name || user?.full_name || user?.email || 'Store Manager',
+          performer_email: user?.email || null,
+          reason_or_remarks: `Extra backup material issued: ${quantity} ${unit} to technician ${techName} for checklist ${chkNum}. ${remarks || ''}`.trim(),
+          created_at: nowIso,
+        }).catch((err) => console.warn('Movement recording notice:', err.message));
+      } else if (type === 'DEVICE') {
+        const stockBefore = Number(target.usable_stock) || 0;
+        await adjustStock({
+          device_type: target.device_type,
+          action: 'REMOVE',
+          quantity,
+          reason: `Extra backup device issued to technician ${techName} for checklist ${chkNum}. ${remarks || ''}`.trim(),
+          user,
+        });
+        const stockAfter = Math.max(0, stockBefore - quantity);
+
+        await recordStockMovement({
+          product_id: target.id && String(target.id).length === 36 ? target.id : null,
+          item_name: target.device_type,
+          sku: target.sku || null,
+          category: 'Camera Device',
+          movement_type: 'EXTRA_BACKUP_ISSUED',
+          quantity: -quantity,
+          unit,
+          balance_before: stockBefore,
+          balance_after: stockAfter,
+          checklist_id,
+          performed_by: user?.id && String(user.id).length === 36 ? user.id : null,
+          performer_name: user?.name || user?.full_name || user?.email || 'Store Manager',
+          performer_email: user?.email || null,
+          reason_or_remarks: `Extra backup device issued: ${quantity} ${unit} to technician ${techName} for checklist ${chkNum}. ${remarks || ''}`.trim(),
+          created_at: nowIso,
+        }).catch((err) => console.warn('Movement recording notice:', err.message));
+      }
+
+      // Update quantity_issued and remaining on declaration item
+      declItem.quantity_issued = (Number(declItem.quantity_issued) || 0) + quantity;
+      declItem.quantity_remaining = Math.max(0, (Number(declItem.quantity) || 0) - declItem.quantity_issued);
+      declItem.updated_at = nowIso;
+
+      if (declItem.id) {
+        try {
+          await supabase
+            .from('pre_installation_backup_items')
+            .update({
+              quantity_issued: declItem.quantity_issued,
+              updated_at: nowIso,
+            })
+            .eq('id', declItem.id);
+        } catch (itemUpdateErr) {
+          console.warn('Could not update backup item in DB:', itemUpdateErr.message);
+        }
+      }
+
+      issuedResults.push({
+        item_name: name,
+        quantity_issued: quantity,
+        total_issued: declItem.quantity_issued,
+        quantity_remaining: Math.max(0, (Number(declItem.quantity) || 0) - declItem.quantity_issued),
+        unit,
+      });
+    }
+
+    // Step 3: Compute overall issuance status
+    const allIssued = declItems.every(
+      (it) => (Number(it.quantity_issued) || 0) >= (Number(it.quantity) || 0)
+    );
+    const anyIssued = declItems.some(
+      (it) => (Number(it.quantity_issued) || 0) > 0
+    );
+    const finalIssuanceStatus = allIssued ? 'Issued' : (anyIssued ? 'Partially Issued' : 'Pending');
+
+    // Maintain issuance history
+    const historyEntry = {
+      issued_at: nowIso,
+      issued_by: user?.id || null,
+      issued_by_name: user?.name || user?.full_name || user?.email || 'Store Manager',
+      technician_recipient: techName,
+      issued_items: issuedResults,
+      remarks: remarks || null,
+      issuance_status: finalIssuanceStatus,
+    };
+
+    const issuanceHistory = Array.isArray(declaration.issuance_history) ? [...declaration.issuance_history] : [];
+    issuanceHistory.push(historyEntry);
+
+    // Update declaration in Supabase and memory
+    const updateDeclPayload = {
+      issuance_status: finalIssuanceStatus,
+      issued_by: user?.id && String(user.id).length === 36 ? user.id : null,
+      issued_at: nowIso,
+      issuance_history: issuanceHistory,
+      updated_at: nowIso,
+    };
+
+    try {
+      await supabase
+        .from('pre_installation_backup_declarations')
+        .update({
+          status: finalIssuanceStatus === 'Issued' ? 'ISSUED' : (finalIssuanceStatus === 'Partially Issued' ? 'PARTIALLY_ISSUED' : 'DECLARED'),
+          updated_at: nowIso,
+        })
+        .eq('id', declaration.id);
+    } catch (dbDeclErr) {
+      console.warn('Could not update pre_installation_backup_declarations DB:', dbDeclErr.message);
+    }
+
+    // Sync to store_material_requirements
+    try {
+      await supabase
+        .from('store_material_requirements')
+        .update({
+          updated_at: nowIso,
+        })
+        .eq('checklist_id', checklist_id);
+    } catch (storeReqErr) {
+      console.warn('Could not update store_material_requirements timestamp:', storeReqErr.message);
+    }
+
+    // Update in-memory declaration
+    Object.assign(declaration, updateDeclPayload);
+    inMemoryDeclarations.set(checklist_id, declaration);
+    saveBackupItemsStorage();
+
+    // Audit log
+    await logAudit({
+      actor_id: user?.id,
+      actor_email: user?.email,
+      actor_role: user?.role || 'STORE_MANAGER',
+      action: 'ISSUE_EXTRA_BACKUP_DEVICES',
+      target_table: 'pre_installation_backup_declarations',
+      target_id: declaration.id,
+      details: {
+        checklist_id,
+        checklist_number: chkNum,
+        technician_name: techName,
+        issued_items: issuedResults,
+        issuance_status: finalIssuanceStatus,
+        remarks,
+      },
+    });
+
+    const enrichedFinalItems = await enrichBackupItemsWithLiveStock(declItems);
+    return {
+      success: true,
+      message: `Extra backup devices successfully issued (${finalIssuanceStatus}).`,
+      issuance_status: finalIssuanceStatus,
+      issued_items: issuedResults,
+      items: enrichedFinalItems,
+    };
+  } finally {
+    inFlightBackupIssuances.delete(checklist_id);
+  }
+}
+
+/**
+ * Backward-compatible wrapper for issueBackupItemsForChecklist
  */
 export async function issueBackupItemsForChecklist({
   checklist_id,
@@ -701,135 +1200,66 @@ export async function issueBackupItemsForChecklist({
   remarks = '',
   user,
 }) {
+  return await issueExtraBackupDevices({
+    checklist_id,
+    items,
+    remarks,
+    user,
+  });
+}
+
+/**
+ * Reject extra backup devices request
+ */
+export async function rejectExtraBackupDevices({ checklist_id, reason = '', user }) {
   if (!checklist_id) throw new Error('Checklist ID is required.');
-  if (processedChecklistBackupIssuances.has(checklist_id)) {
-    return { success: true, message: 'Backup items already issued' };
+
+  if (user && user.role) {
+    const role = (user.role || '').toUpperCase();
+    if (role !== 'STORE_MANAGER' && role !== 'ADMIN' && role !== 'SUPER_ADMIN') {
+      throw new Error(`Unauthorized: Role "${user.role}" is not permitted to reject extra backup stock requests.`);
+    }
   }
 
   const declaration = await getBackupDeclaration(checklist_id);
   if (!declaration || !declaration.has_backup_items) {
-    return { success: true, items: [] };
+    throw new Error('No declared backup items found to reject.');
   }
 
-  const itemsToIssue = Array.isArray(items) && items.length > 0 ? items : (declaration.items || []);
-  if (itemsToIssue.length === 0) return { success: true, items: [] };
+  const nowIso = new Date().toISOString();
+  const historyEntry = {
+    rejected_at: nowIso,
+    rejected_by: user?.id || null,
+    rejected_by_name: user?.name || user?.full_name || user?.email || 'Store Manager',
+    reason: reason || 'Store Manager rejected extra backup devices request',
+    issuance_status: 'Rejected',
+  };
 
-  const [allMats, allDevs] = await Promise.all([
-    getMaterialInventory().catch(() => []),
-    getInventoryProducts().catch(() => []),
-  ]);
+  const issuanceHistory = Array.isArray(declaration.issuance_history) ? [...declaration.issuance_history] : [];
+  issuanceHistory.push(historyEntry);
 
-  const matMap = new Map(allMats.map((m) => [m.material_name.toLowerCase(), m]));
-  const devMap = new Map(allDevs.map((d) => [d.device_type.toLowerCase(), d]));
+  const payload = {
+    issuance_status: 'Rejected',
+    issuance_history: issuanceHistory,
+    updated_at: nowIso,
+  };
 
-  const issuedResults = [];
+  try {
+    await supabase
+      .from('pre_installation_backup_declarations')
+      .update(payload)
+      .eq('id', declaration.id);
+  } catch (e) {}
 
-  for (const it of itemsToIssue) {
-    const name = (it.item_name || '').trim();
-    const qty = Number(it.quantity) || 0;
-    if (qty <= 0) continue;
-
-    // Skip if already issued
-    if (Number(it.quantity_issued) >= qty) {
-      continue;
-    }
-
-    let mat = matMap.get(name.toLowerCase());
-    if (!mat && name.toLowerCase().includes('display')) {
-      mat = matMap.get('display');
-    }
-    if (!mat) {
-      const lower = name.toLowerCase();
-      if (lower.includes('cable tie') && lower.includes('200')) {
-        mat = allMats.find((m) => m.material_name.toLowerCase().includes('cable tie') && m.material_name.includes('200'));
-      } else if (lower.includes('cable tie') && lower.includes('300')) {
-        mat = allMats.find((m) => m.material_name.toLowerCase().includes('cable tie') && m.material_name.includes('300'));
-      } else if (lower.includes('5m') || lower.includes('5-metre')) {
-        mat = allMats.find((m) => m.material_name.toLowerCase().includes('5-metre'));
-      } else if (lower.includes('15m') || lower.includes('15-metre')) {
-        mat = allMats.find((m) => m.material_name.toLowerCase().includes('15-metre'));
-      }
-    }
-    const dev = devMap.get(name.toLowerCase());
-
-    if (mat) {
-      const currentStock = Number(mat.current_stock) || 0;
-      if (qty > currentStock) {
-        throw new Error(
-          `Insufficient stock for backup material "${name}". In store: ${currentStock} ${mat.unit || 'Nos.'}, required: ${qty} ${mat.unit || 'Nos.'}.`
-        );
-      }
-      await adjustMaterialStock({
-        material_name: mat.material_name,
-        action: 'REMOVE',
-        quantity: qty,
-        reason: `Backup material issued for checklist ${checklist_id}: ${qty} ${mat.unit}. ${remarks || ''}`.trim(),
-        user,
-      });
-    } else if (dev) {
-      const currentStock = Number(dev.usable_stock) || 0;
-      if (qty > currentStock) {
-        throw new Error(
-          `Insufficient stock for backup device "${name}". In store: ${currentStock} Nos., required: ${qty} Nos.`
-        );
-      }
-      await adjustStock({
-        device_type: dev.device_type,
-        action: 'REMOVE',
-        quantity: qty,
-        reason: `Backup device issued for checklist ${checklist_id}: ${qty} Nos. ${remarks || ''}`.trim(),
-        user,
-      });
-    } else {
-      console.warn(`Backup item "${name}" not found in materials or device products. Stock not deducted.`);
-    }
-
-    it.quantity_issued = qty;
-    issuedResults.push({
-      item_name: name,
-      quantity_issued: qty,
-      unit: it.unit || mat?.unit || dev?.unit || 'Nos.',
-    });
-
-    // Update in Supabase
-    if (it.id) {
-      try {
-        await supabase
-          .from('pre_installation_backup_items')
-          .update({
-            quantity_issued: qty,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', it.id);
-      } catch (e) {
-        // Non-blocking
-      }
-    }
-  }
-
-  // Update in-memory declaration
-  declaration.items = itemsToIssue;
+  Object.assign(declaration, payload);
   inMemoryDeclarations.set(checklist_id, declaration);
   saveBackupItemsStorage();
-  processedChecklistBackupIssuances.add(checklist_id);
 
-  if (issuedResults.length > 0) {
-    await logAudit({
-      actor_id: user?.id,
-      actor_email: user?.email,
-      actor_role: user?.role || 'STORE_MANAGER',
-      action: 'ISSUE_BACKUP_ITEMS',
-      target_table: 'pre_installation_backup_declarations',
-      target_id: declaration.id,
-      details: {
-        checklist_id,
-        issued_items: issuedResults,
-        remarks,
-      },
-    });
-  }
-
-  return { success: true, issued_items: issuedResults };
+  return {
+    success: true,
+    message: 'Extra backup devices request rejected.',
+    issuance_status: 'Rejected',
+  };
 }
 
 /**

@@ -24,10 +24,9 @@ try {
   console.error('[PUSH_SERVICE] Failed to configure Web Push VAPID:', err.message);
 }
 
-// In-memory caches for subscriptions and notification history
-const inMemorySubscriptions = new Map(); // endpoint -> subscription record
-const inMemoryHistory = [];
-const processedEventIds = new Set();
+export const inMemorySubscriptions = new Map(); // endpoint -> subscription record
+export const inMemoryHistory = [];
+export const processedEventIds = new Set();
 
 /**
  * Load fallback JSON storage
@@ -387,15 +386,16 @@ export async function notifyChecklistCreated(checklist, options = {}) {
 
   const body = `A new installation checklist has been created.\nJob #${checklistNumber} • ${detailsParts.join(' • ')}`;
 
-  // Valid canonical hash-based absolute URL for push notifications matching HashRouter structure
+  // Canonical hash-based absolute URL for push notifications matching HashRouter structure
   const relativePath = `/admin/installation-checklists/${checklistId}`;
   const absoluteUrl = buildNotificationUrl(relativePath);
+  const baseUrl = getNotificationBaseUrl();
 
   const pushPayload = {
     title,
     body,
-    icon: '/icon-192.png',
-    badge: '/icon-192.png',
+    icon: `${baseUrl}/icon-192.png`,
+    badge: `${baseUrl}/badge-96.png`,
     tag: `checklist-${checklistId || checklistNumber}`,
     renotify: true,
     data: {
@@ -473,6 +473,7 @@ export async function notifyChecklistCreated(checklist, options = {}) {
     succeeded,
     failed,
     historyId: historyRecord.id,
+    payload: pushPayload,
   };
 }
 
@@ -496,12 +497,13 @@ export async function sendTestNotificationToUser({ userId, userEmail = null }) {
 
   const relativePath = '/admin/installation-checklists';
   const absoluteUrl = buildNotificationUrl(relativePath);
+  const baseUrl = getNotificationBaseUrl();
 
   const payload = {
     title,
     body,
-    icon: '/icon-192.png',
-    badge: '/icon-192.png',
+    icon: `${baseUrl}/icon-192.png`,
+    badge: `${baseUrl}/badge-96.png`,
     tag: `test-push-${Date.now()}`,
     data: {
       url: absoluteUrl,
@@ -522,6 +524,7 @@ export async function sendTestNotificationToUser({ userId, userEmail = null }) {
     attempted: userSubs.length,
     sent,
     message: `Test notification sent to ${sent} active device(s).`,
+    payload,
   };
 }
 
@@ -603,12 +606,13 @@ export async function notifyCoordinatorReportSubmitted({
   // Canonical absolute URL with both view and checklist parameters for deep linking
   const relativePath = `/coordinator?view=${checklistId}&checklist=${checklistId}&tab=return&openReport=true`;
   const absoluteUrl = buildNotificationUrl(relativePath);
+  const baseUrl = getNotificationBaseUrl();
 
   const pushPayload = {
     title,
     body,
-    icon: '/icon-192.png',
-    badge: '/icon-192.png',
+    icon: `${baseUrl}/icon-192.png`,
+    badge: `${baseUrl}/badge-96.png`,
     tag: `post-install-${checklistId || checklistNumber}`,
     renotify: true,
     data: {
@@ -685,5 +689,6 @@ export async function notifyCoordinatorReportSubmitted({
     succeeded,
     failed,
     historyId: historyRecord.id,
+    payload: pushPayload,
   };
 }

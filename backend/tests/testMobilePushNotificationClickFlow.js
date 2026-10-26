@@ -20,6 +20,7 @@ import {
 
 // Load Service Worker code into string to test resolution logic directly
 import fs from 'fs';
+import sharp from 'sharp';
 const swPath = path.resolve(__dirname, '../../frontend/public/sw.js');
 const swCode = fs.readFileSync(swPath, 'utf-8');
 
@@ -36,7 +37,7 @@ function createSwSandbox(simulatedOrigin = 'https://eagleeyesafdrive.vercel.app'
   const fn = new Function('self', 'console', `
     const APP_ORIGIN = self.location.origin;
     ${swCode.slice(swCode.indexOf('function isKnownSafDrivePath'), swCode.indexOf('self.addEventListener(\'push\''))}
-    return { isKnownSafDrivePath, buildHashUrl, resolveNotificationUrl, APP_ORIGIN };
+    return { isKnownSafDrivePath, buildHashUrl, resolveNotificationUrl, resolveNotificationAssetUrl, APP_ORIGIN };
   `);
 
   return fn(context.self, context.console);
@@ -140,11 +141,13 @@ async function runMobilePushVerificationSuite() {
 
     const res = await notifyChecklistCreated(mockChecklist, { force: true });
     assert(res.success === true, 'notifyChecklistCreated must succeed');
+    assert.strictEqual(res.payload.icon, `${getNotificationBaseUrl()}/icon-192.png`, 'Push payload icon must be absolute URL to icon-192.png');
+    assert.strictEqual(res.payload.badge, `${getNotificationBaseUrl()}/badge-96.png`, 'Push payload badge must be absolute URL to transparent monochrome badge-96.png');
 
     const expectedAbsolute = `${getNotificationBaseUrl()}/#/admin/installation-checklists/${mockChecklist.id}`;
     const resolvedInSw = sw.resolveNotificationUrl(expectedAbsolute);
     assert.strictEqual(resolvedInSw, `${testOrigin}/#/admin/installation-checklists/${mockChecklist.id}`);
-    pass('Checklist created notification payload contains verified absolute link matching HashRouter');
+    pass('Checklist created notification payload contains verified absolute link matching HashRouter, icon-192, and badge-96');
   } catch (err) {
     fail('Checklist created notification payload verification failed', err);
   }
@@ -179,6 +182,8 @@ async function runMobilePushVerificationSuite() {
       force: true,
     });
     assert(coordRes.attempted >= 1, 'Coordinator push must find active subscription');
+    assert.strictEqual(coordRes.payload.icon, `${getNotificationBaseUrl()}/icon-192.png`, 'Coordinator push payload icon must be absolute URL');
+    assert.strictEqual(coordRes.payload.badge, `${getNotificationBaseUrl()}/badge-96.png`, 'Coordinator push payload badge must be absolute URL');
 
     const expectedCoordRel = `/coordinator?view=${coordChecklistId}&checklist=${coordChecklistId}&tab=return&openReport=true`;
     const resolvedCoord = sw.resolveNotificationUrl(expectedCoordRel);
@@ -186,7 +191,7 @@ async function runMobilePushVerificationSuite() {
       resolvedCoord,
       `${testOrigin}/#/coordinator?view=${coordChecklistId}&checklist=${coordChecklistId}&tab=return&openReport=true`
     );
-    pass('Coordinator deep link includes checklist ID, tab, and openReport parameters');
+    pass('Coordinator deep link includes checklist ID, tab, and openReport parameters with absolute icon and badge');
   } catch (err) {
     fail('Coordinator deep link verification failed', err);
   }
@@ -312,12 +317,97 @@ async function runMobilePushVerificationSuite() {
     assert(!rewriteRegex.test('/sw.js'), 'Rewrite must NOT match /sw.js');
     assert(!rewriteRegex.test('/manifest.json'), 'Rewrite must NOT match /manifest.json');
     assert(!rewriteRegex.test('/icon-192.png'), 'Rewrite must NOT match /icon-192.png');
+    assert(!rewriteRegex.test('/badge-96.png'), 'Rewrite must NOT match /badge-96.png');
+    assert(!rewriteRegex.test('/badge.png'), 'Rewrite must NOT match /badge.png');
+    assert(!rewriteRegex.test('/logo.png'), 'Rewrite must NOT match /logo.png');
     assert(!rewriteRegex.test('/assets/index.js'), 'Rewrite must NOT match /assets/*');
     assert(!rewriteRegex.test('/api/health'), 'Rewrite must NOT match /api/*');
 
-    pass('Vercel SPA rewrite rules protect static assets and sw.js while rewriting all SPA routes to /index.html');
+    pass('Vercel SPA rewrite rules protect static assets, icons, badges, and sw.js while rewriting SPA routes');
   } catch (err) {
     fail('Vercel rewrites configuration failed', err);
+  }
+
+  // ------------------------------------------------------------------
+  // 8. PUSH NOTIFICATION ASSETS & ANDROID MONOCHROME BADGE INTEGRITY
+  // ------------------------------------------------------------------
+  try {
+    console.log('-> 8. Verifying Push Notification Assets & Android Badge Mask Integrity...');
+    const publicDir = path.resolve(__dirname, '../../frontend/public');
+    const distDir = path.resolve(__dirname, '../../frontend/dist');
+
+    const requiredAssets = [
+      'badge-96.png',
+      'badge-72.png',
+      'badge-48.png',
+      'badge.png',
+      'icon-192.png',
+      'icon-512.png',
+      'icon-maskable-192.png',
+      'icon-maskable-512.png',
+      'logo.png',
+      'manifest.json',
+      'sw.js',
+    ];
+
+    for (const asset of requiredAssets) {
+      assert(fs.existsSync(path.join(publicDir, asset)), `frontend/public/${asset} must exist`);
+      assert(fs.existsSync(path.join(distDir, asset)), `frontend/dist/${asset} must exist in build distribution`);
+    }
+
+    // Inspect badge-96.png with Sharp
+    const badge96Path = path.join(publicDir, 'badge-96.png');
+    const badgeMeta = await sharp(badge96Path).metadata();
+    assert.strictEqual(badgeMeta.width, 96, 'badge-96 width must be 96');
+    assert.strictEqual(badgeMeta.height, 96, 'badge-96 height must be 96');
+    assert.strictEqual(badgeMeta.channels, 4, 'badge-96 must have 4 channels (RGBA with alpha mask)');
+    assert(badgeMeta.hasAlpha, 'badge-96 must have an alpha channel for transparency');
+
+    // Inspect badge pixels to ensure monochrome silhouette on transparent background
+    const badgeRaw = await sharp(badge96Path).raw().toBuffer();
+    let transparentPixels = 0;
+    let solidWhitePixels = 0;
+    for (let i = 0; i < badgeRaw.length; i += 4) {
+      const r = badgeRaw[i];
+      const g = badgeRaw[i + 1];
+      const b = badgeRaw[i + 2];
+      const a = badgeRaw[i + 3];
+      if (a === 0) {
+        transparentPixels++;
+      } else if (a > 0) {
+        // Pixel should be pure white tint for Android stencil mask
+        assert.strictEqual(r, 255, 'Badge visible pixels must be pure white (R=255)');
+        assert.strictEqual(g, 255, 'Badge visible pixels must be pure white (G=255)');
+        assert.strictEqual(b, 255, 'Badge visible pixels must be pure white (B=255)');
+        solidWhitePixels++;
+      }
+    }
+    assert(transparentPixels > 0, 'Badge must have transparent pixels around the logo emblem');
+    assert(solidWhitePixels > 0, 'Badge must have solid white pixels for the logo emblem');
+
+    // Inspect icon-192.png with Sharp (large icon in full color)
+    const icon192Path = path.join(publicDir, 'icon-192.png');
+    const iconMeta = await sharp(icon192Path).metadata();
+    assert.strictEqual(iconMeta.width, 192, 'icon-192 width must be 192');
+    assert.strictEqual(iconMeta.height, 192, 'icon-192 height must be 192');
+    assert(iconMeta.hasAlpha, 'icon-192 must support transparency');
+
+    // Test Service Worker resolveNotificationAssetUrl behavior
+    const asset1 = sw.resolveNotificationAssetUrl('/icon-192.png', '/icon-192.png');
+    assert.strictEqual(asset1, `${testOrigin}/icon-192.png`);
+
+    const asset2 = sw.resolveNotificationAssetUrl('/badge-96.png', '/badge-96.png');
+    assert.strictEqual(asset2, `${testOrigin}/badge-96.png`);
+
+    const asset3 = sw.resolveNotificationAssetUrl(null, '/badge-96.png');
+    assert.strictEqual(asset3, `${testOrigin}/badge-96.png`);
+
+    const asset4 = sw.resolveNotificationAssetUrl('https://eagleeyesafdrive.vercel.app/icon-192.png', '/icon-192.png');
+    assert.strictEqual(asset4, 'https://eagleeyesafdrive.vercel.app/icon-192.png');
+
+    pass('Push notification assets, monochrome alpha mask badge, and SW asset URL resolution verified successfully');
+  } catch (err) {
+    fail('Push notification assets integrity check failed', err);
   }
 
   console.log('\n========================================================================');

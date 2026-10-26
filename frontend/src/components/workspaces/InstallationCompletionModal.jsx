@@ -513,7 +513,10 @@ export default function InstallationCompletionModal({
           initialBackupRows = backupDecl.items
             .filter((b) => !isScrewMaterial(b.item_name) && (Number(b.quantity) || 0) > 0)
             .map((b, idx) => {
-              const extraCarried = Number(b.quantity) || 0;
+              const isIssuedState = backupDecl.issuance_status === 'Issued' || backupDecl.issuance_status === 'Partially Issued';
+              const extraCarried = (isIssuedState && b.quantity_issued !== undefined && b.quantity_issued !== null)
+                ? Number(b.quantity_issued)
+                : (Number(b.quantity) || 0);
               const matchedProd = products.find(
                 (p) => (p.item_name || '').toLowerCase() === (b.item_name || '').toLowerCase()
               );
