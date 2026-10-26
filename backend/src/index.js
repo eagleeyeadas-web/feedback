@@ -153,7 +153,7 @@ app.listen(config.port, '0.0.0.0', () => {
     executeActivityTriggeredCleanup({ userId: null, force: false }).catch(err => console.error('Scheduled daily cleanup check error:', err));
   }, CLEANUP_INTERVAL_MS);
 
-  // Automatic 20-day inventory and returns history retention cleanup
+  // Automatic 60-day inventory and returns history retention cleanup
   startDailyCleanupSchedule();
 
   // Automatic 24/7 overdue detection and idempotent HR alerting scheduler

@@ -381,7 +381,7 @@
       "sku": "MAT-CBL-25M",
       "material_name": "25 m cable",
       "unit": "Nos.",
-      "current_stock": 0,
+      "current_stock": 100,
       "opening_stock": 0,
       "opening_stock_set": true,
       "issued_stock": 0,
@@ -389,7 +389,7 @@
       "min_stock_level": 20,
       "is_active": true,
       "created_at": "2026-10-23T03:31:45.297393+00:00",
-      "updated_at": "2026-10-26T10:47:55.980103+00:00"
+      "updated_at": "2026-10-26T10:50:48.470831+00:00"
     }
   },
   "materialTransactions": [],

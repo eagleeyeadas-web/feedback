@@ -256,7 +256,7 @@ router.get('/transactions', requireRole('STORE_MANAGER', 'ADMIN'), async (req, r
 /**
  * GET /api/admin/inventory/all-movements
  * Returns unified auditable movements across BOTH camera devices and installation materials
- * Saved permanently in PostgreSQL stock_movements with 20-day retention
+ * Saved permanently in PostgreSQL stock_movements with 60-day retention
  */
 router.get('/all-movements', requireRole('STORE_MANAGER', 'ADMIN'), async (req, res) => {
   try {

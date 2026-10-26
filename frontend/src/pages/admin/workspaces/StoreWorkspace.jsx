@@ -1653,10 +1653,10 @@ export default function StoreWorkspace({ onSelectChecklist }) {
               <Clock className="w-5 h-5 text-amber-700 shrink-0 mt-0.5" />
               <div>
                 <h4 className="font-bold text-amber-950 text-sm">
-                  Stock movement history is retained for 60 days. Older records are automatically removed.
+                  Automatic 60-Day History Retention
                 </h4>
                 <p className="text-amber-800/80 mt-0.5 max-w-2xl leading-relaxed">
-                  Completed stock movements and verified returns older than 60 days are automatically pruned daily by the server. Authoritative inventory stock balances, pending returns, and unresolved discrepancy records are permanently preserved and protected.
+                  Eligible stock movement history older than 60 days is automatically deleted on a daily schedule. Authoritative inventory stock balances, pending returns, unresolved discrepancy records, checklists, and quotations are permanently preserved and protected.
                 </p>
                 {cleanupStatus && (
                   <div className="mt-2.5 flex flex-wrap items-center gap-2 text-[11px] font-medium text-amber-900">
