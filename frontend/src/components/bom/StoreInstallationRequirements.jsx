@@ -38,7 +38,7 @@ import {
 import { isScrewMaterial } from '../../lib/productHelpers';
 import IssueMaterialsModal from './IssueMaterialsModal';
 
-export default function StoreInstallationRequirements({ token, onSelectChecklist }) {
+export default function StoreInstallationRequirements({ token, onSelectChecklist, onInventoryUpdated }) {
   const [requirements, setRequirements] = useState([]);
   const [summary, setSummary] = useState({
     total: 0,
@@ -262,10 +262,17 @@ export default function StoreInstallationRequirements({ token, onSelectChecklist
     setSubmittingExtraIssuance(true);
 
     try {
-      const itemsPayload = Object.entries(extraIssuanceQuantities).map(([item_name, qty]) => ({
-        item_name,
-        quantity_to_issue: Number(qty) || 0,
-      })).filter((it) => it.quantity_to_issue > 0);
+      const itemsPayload = Object.entries(extraIssuanceQuantities).map(([item_name, qty]) => {
+        const found = (extraDeviceModal.declaration?.items || []).find(
+          (d) => (d.item_name || '').trim().toLowerCase() === item_name.trim().toLowerCase()
+        );
+        return {
+          item_id: found?.item_id || found?.id,
+          item_sku: found?.item_sku || found?.sku,
+          item_name,
+          quantity_to_issue: Number(qty) || 0,
+        };
+      }).filter((it) => it.quantity_to_issue > 0);
 
       if (itemsPayload.length === 0) {
         throw new Error('Please enter a quantity greater than 0 for at least one item.');
@@ -280,6 +287,14 @@ export default function StoreInstallationRequirements({ token, onSelectChecklist
       showToast(`Extra backup devices successfully issued! Status: ${res.issuance_status}`);
       setExtraDeviceModal(null);
       await loadRequirements();
+      if (typeof onInventoryUpdated === 'function') {
+        try { onInventoryUpdated(); } catch (e) {}
+      }
+      try {
+        window.dispatchEvent(new CustomEvent('inventory-updated', {
+          detail: { checklist_id: extraDeviceModal.checklist?.checklist_id || extraDeviceModal.checklist?.id }
+        }));
+      } catch (e) {}
     } catch (err) {
       setExtraIssuanceError(err.message || 'Failed to issue extra backup devices');
     } finally {

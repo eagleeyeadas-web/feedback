@@ -230,6 +230,14 @@ export default function StoreWorkspace({ onSelectChecklist }) {
     loadAllData();
   }, [loadAllData]);
 
+  useEffect(() => {
+    const handleInventoryChange = () => {
+      loadAllData();
+    };
+    window.addEventListener('inventory-updated', handleInventoryChange);
+    return () => window.removeEventListener('inventory-updated', handleInventoryChange);
+  }, [loadAllData]);
+
   // Handle Manual 60-Day Retention Cleanup Trigger
   const handleTriggerCleanup = async () => {
     if (!token || cleanupRunning) return;
@@ -1228,7 +1236,11 @@ export default function StoreWorkspace({ onSelectChecklist }) {
           TAB 5: INCOMING INSTALLATION JOBS & MATERIAL REQUIREMENTS
           ============================================================ */}
       {activeTab === 'requirements' && (
-        <StoreInstallationRequirements token={token} onSelectChecklist={onSelectChecklist} />
+        <StoreInstallationRequirements
+          token={token}
+          onSelectChecklist={onSelectChecklist}
+          onInventoryUpdated={loadAllData}
+        />
       )}
 
       {/* ============================================================

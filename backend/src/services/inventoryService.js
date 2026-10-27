@@ -572,6 +572,8 @@ export async function adjustStock({
   reason,
   move_to_damaged = false,
   user,
+  is_issuance = false,
+  recordMovement = true,
 }) {
   if (!device_type || (!STANDARD_DEVICE_TYPES.includes(device_type) && !inMemoryProducts.has(device_type))) {
     throw new Error(`Invalid device type selected: "${device_type}".`);
@@ -621,6 +623,9 @@ export async function adjustStock({
   if (product) {
     product.usable_stock = newUsable;
     product.damaged_stock = newDamaged;
+    if (is_issuance && normalizedAction === 'REMOVE') {
+      product.issued_stock = (Number(product.issued_stock) || 0) + qty;
+    }
     product.updated_at = new Date().toISOString();
   }
 
@@ -635,11 +640,13 @@ export async function adjustStock({
       .maybeSingle();
 
     if (dbProd) {
+      const dbIssued = (Number(dbProd.issued_stock) || 0) + (is_issuance && normalizedAction === 'REMOVE' ? qty : 0);
       await supabase
         .from('inventory_products')
         .update({
           usable_stock: newUsable,
           damaged_stock: newDamaged,
+          ...(is_issuance && normalizedAction === 'REMOVE' ? { issued_stock: dbIssued } : {}),
           updated_at: new Date().toISOString(),
         })
         .eq('id', dbProd.id);
@@ -683,23 +690,25 @@ export async function adjustStock({
   }
 
   // Record into persistent stock_movements ledger in Supabase
-  await recordStockMovement({
-    item_id: productId,
-    product_id: productId,
-    item_name: product?.device_name || `${device_type} System`,
-    sku: product?.sku,
-    category: 'Camera Device',
-    movement_type: txType,
-    quantity: Math.abs(qtyDelta),
-    unit: product?.unit || 'Nos.',
-    balance_before: currentUsable,
-    balance_after: newUsable,
-    performed_by: user?.id,
-    performer_name: user?.full_name || user?.email || 'Store Manager',
-    performer_email: user?.email,
-    reason_or_remarks: remarkFormatted,
-    idempotency_key: transactionRecord.idempotency_key,
-  }).catch((e) => console.warn('recordStockMovement error:', e.message));
+  if (recordMovement) {
+    await recordStockMovement({
+      item_id: productId,
+      product_id: productId,
+      item_name: product?.device_name || `${device_type} System`,
+      sku: product?.sku,
+      category: 'Camera Device',
+      movement_type: txType,
+      quantity: Math.abs(qtyDelta),
+      unit: product?.unit || 'Nos.',
+      balance_before: currentUsable,
+      balance_after: newUsable,
+      performed_by: user?.id,
+      performer_name: user?.full_name || user?.email || 'Store Manager',
+      performer_email: user?.email,
+      reason_or_remarks: remarkFormatted,
+      idempotency_key: transactionRecord.idempotency_key,
+    }).catch((e) => console.warn('recordStockMovement error:', e.message));
+  }
 
   inMemoryTransactions.unshift(transactionRecord);
   saveInventoryStorage();

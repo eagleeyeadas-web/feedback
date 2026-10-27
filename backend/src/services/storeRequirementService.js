@@ -1109,10 +1109,13 @@ export async function getStoreMaterialRequirements(params = {}) {
     // 3. Extra devices requested for issuance
     const extraReqQty = extraDeclQty;
 
-    // 4. Extra devices actually issued
-    const extraIssuedQty = backupDecl?.has_backup_items && Array.isArray(backupDecl.items)
+    // 4. Extra devices actually issued (source of truth is persisted issuance transactions and declaration records)
+    const extraMovs = movList.filter((m) => m.movement_type === 'EXTRA_BACKUP_ISSUED');
+    const extraMovsQty = extraMovs.reduce((sum, m) => sum + Math.abs(Number(m.quantity) || 0), 0);
+    const declIssuedQty = backupDecl?.has_backup_items && Array.isArray(backupDecl.items)
       ? backupDecl.items.reduce((sum, it) => sum + (Number(it.quantity_issued) || 0), 0)
       : 0;
+    const extraIssuedQty = Math.max(declIssuedQty, extraMovsQty);
 
     // 5. Extra devices installed for the primary customer
     const sameCustInst = finalExtraInst.filter((inst) => {

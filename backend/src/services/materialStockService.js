@@ -412,6 +412,8 @@ export async function adjustMaterialStock({
   quantity,
   reason,
   user,
+  is_issuance = false,
+  recordMovement = true,
 }) {
   if (!material_name || !material_name.trim()) {
     throw new Error('Material name is required.');
@@ -490,6 +492,11 @@ export async function adjustMaterialStock({
 
   // Update in-memory
   material.current_stock = newCurrent;
+  let newIssuedStock = Number(material.issued_stock) || 0;
+  if (is_issuance && normalizedAction === 'REMOVE') {
+    newIssuedStock += qty;
+    material.issued_stock = newIssuedStock;
+  }
   material.updated_at = new Date().toISOString();
 
   // Try DB update
@@ -503,10 +510,15 @@ export async function adjustMaterialStock({
 
     if (dbMat) {
       materialId = dbMat.id;
+      if (is_issuance && normalizedAction === 'REMOVE') {
+        newIssuedStock = (Number(dbMat.issued_stock) || 0) + qty;
+        material.issued_stock = newIssuedStock;
+      }
       await supabase
         .from('material_inventory')
         .update({
           current_stock: newCurrent,
+          ...(is_issuance && normalizedAction === 'REMOVE' ? { issued_stock: newIssuedStock } : {}),
           updated_at: new Date().toISOString(),
         })
         .eq('id', dbMat.id);
@@ -519,6 +531,7 @@ export async function adjustMaterialStock({
           current_stock: newCurrent,
           opening_stock: normalizedAction === 'SET' ? newCurrent : 0,
           opening_stock_set: normalizedAction === 'SET',
+          issued_stock: (is_issuance && normalizedAction === 'REMOVE') ? qty : 0,
           min_stock_level: material.min_stock_level || 20,
         })
         .select()
@@ -560,22 +573,24 @@ export async function adjustMaterialStock({
   });
 
   // Record into persistent stock_movements ledger in Supabase
-  await recordStockMovement({
-    item_id: materialId,
-    item_name: name,
-    sku: material?.sku || null,
-    category: 'Installation Material',
-    movement_type: txType,
-    quantity: Math.abs(qtyDelta),
-    unit: material.unit,
-    balance_before: previousBalance,
-    balance_after: newCurrent,
-    performed_by: user?.id,
-    performer_name: user?.full_name || user?.email || 'Store Manager',
-    performer_email: user?.email,
-    reason_or_remarks: txRecord.reason_or_remarks,
-    idempotency_key: txRecord.idempotency_key,
-  }).catch((e) => console.warn('recordStockMovement error:', e.message));
+  if (recordMovement) {
+    await recordStockMovement({
+      item_id: materialId,
+      item_name: name,
+      sku: material?.sku || null,
+      category: 'Installation Material',
+      movement_type: txType,
+      quantity: Math.abs(qtyDelta),
+      unit: material.unit,
+      balance_before: previousBalance,
+      balance_after: newCurrent,
+      performed_by: user?.id,
+      performer_name: user?.full_name || user?.email || 'Store Manager',
+      performer_email: user?.email,
+      reason_or_remarks: txRecord.reason_or_remarks,
+      idempotency_key: txRecord.idempotency_key,
+    }).catch((e) => console.warn('recordStockMovement error:', e.message));
+  }
 
   inMemoryMaterialTransactions.unshift(txRecord);
   saveMaterialFallbackStorage();

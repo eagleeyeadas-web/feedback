@@ -208,6 +208,110 @@ export async function getAvailableBackupProducts() {
 }
 
 /**
+ * Resolves an item identifier (id, sku, or name) to a live inventory record.
+ * Prioritizes:
+ * 1. Exact UUID / ID match in materials and products
+ * 2. Exact SKU match in materials and products
+ * 3. Exact case-insensitive name match in materials and products
+ * 4. Tokenized heuristic match (longest prefix / specific length checked first: e.g. 15m strictly before 5m)
+ */
+export function resolveInventoryTarget(item = {}, { allMats = [], allDevs = [] } = {}) {
+  const itemId = item.item_id || item.id || item.material_id || item.product_id;
+  const sku = item.item_sku || item.sku;
+  const name = (item.item_name || item.material_name || item.device_type || item.name || '').trim();
+  const lower = name.toLowerCase();
+
+  // 1. Match by exact UUID / ID
+  if (itemId) {
+    const sId = String(itemId).trim().toLowerCase();
+    const matById = allMats.find((m) => String(m.id || '').trim().toLowerCase() === sId);
+    if (matById) return { type: 'MATERIAL', target: matById };
+    const devById = allDevs.find((d) => String(d.id || '').trim().toLowerCase() === sId);
+    if (devById) return { type: 'DEVICE', target: devById };
+  }
+
+  // 2. Match by exact SKU
+  if (sku) {
+    const sSku = String(sku).trim().toLowerCase();
+    const matBySku = allMats.find((m) => (m.sku || '').trim().toLowerCase() === sSku);
+    if (matBySku) return { type: 'MATERIAL', target: matBySku };
+    const devBySku = allDevs.find((d) => (d.sku || '').trim().toLowerCase() === sSku);
+    if (devBySku) return { type: 'DEVICE', target: devBySku };
+  }
+
+  // 3. Match by exact material name
+  const matExact = allMats.find((m) => (m.material_name || '').trim().toLowerCase() === lower);
+  if (matExact) return { type: 'MATERIAL', target: matExact };
+
+  // 4. Match by exact device name / device type
+  const devExact = allDevs.find((d) =>
+    (d.device_type || '').trim().toLowerCase() === lower ||
+    (d.device_name || '').trim().toLowerCase() === lower
+  );
+  if (devExact) return { type: 'DEVICE', target: devExact };
+
+  // 5. Intelligent heuristics (Order is critical: check 15m strictly BEFORE 5m)
+  // Cable lengths: test 15m before 5m with word boundaries to prevent substring collision
+  if (/(?:^|\D)15\s*(?:m|metre|meter)s?(?:$|\D)/i.test(lower)) {
+    const mat = allMats.find((m) => /(?:^|\D)15\s*(?:-| )?metre/i.test(m.material_name || '') || (m.material_name || '').toLowerCase().includes('15-metre'));
+    if (mat) return { type: 'MATERIAL', target: mat };
+  } else if (/(?:^|\D)5\s*(?:m|metre|meter)s?(?:$|\D)/i.test(lower)) {
+    const mat = allMats.find((m) => /(?:^|\D)5\s*(?:-| )?metre/i.test(m.material_name || '') && !(m.material_name || '').includes('15'));
+    if (mat) return { type: 'MATERIAL', target: mat };
+  }
+
+  // Cable ties: 300 mm vs 200 mm
+  if (lower.includes('cable tie') && (lower.includes('300') || lower.includes('300mm'))) {
+    const mat = allMats.find((m) => m.material_name.toLowerCase().includes('cable tie') && m.material_name.includes('300'));
+    if (mat) return { type: 'MATERIAL', target: mat };
+  } else if (lower.includes('cable tie') && (lower.includes('200') || lower.includes('200mm'))) {
+    const mat = allMats.find((m) => m.material_name.toLowerCase().includes('cable tie') && m.material_name.includes('200'));
+    if (mat) return { type: 'MATERIAL', target: mat };
+  }
+
+  // Display / Live Display
+  if (lower.includes('display')) {
+    const mat = allMats.find((m) => (m.material_name || '').toLowerCase().includes('display'));
+    if (mat) return { type: 'MATERIAL', target: mat };
+  }
+
+  // Camera loose component
+  if (lower === 'camera' || lower.includes('camera')) {
+    const mat = allMats.find((m) => (m.material_name || '').toLowerCase() === 'camera');
+    if (mat) return { type: 'MATERIAL', target: mat };
+  }
+
+  // Memory card
+  if (lower.includes('memory card')) {
+    const mat = allMats.find((m) => (m.material_name || '').toLowerCase().includes('memory card'));
+    if (mat) return { type: 'MATERIAL', target: mat };
+  }
+
+  // 0.5 mm Wire
+  if (lower.includes('wire') && (lower.includes('0.5') || lower.includes('0.5mm'))) {
+    const mat = allMats.find((m) => (m.material_name || '').toLowerCase().includes('0.5'));
+    if (mat) return { type: 'MATERIAL', target: mat };
+  }
+
+  // Screws
+  if (lower.includes('long screw')) {
+    const mat = allMats.find((m) => (m.material_name || '').toLowerCase().includes('long screw'));
+    if (mat) return { type: 'MATERIAL', target: mat };
+  } else if (lower.includes('small screw')) {
+    const mat = allMats.find((m) => (m.material_name || '').toLowerCase().includes('small screw'));
+    if (mat) return { type: 'MATERIAL', target: mat };
+  }
+
+  // Tape
+  if (lower.includes('insulation tape') || lower.includes('tape')) {
+    const mat = allMats.find((m) => (m.material_name || '').toLowerCase().includes('insulation tape'));
+    if (mat) return { type: 'MATERIAL', target: mat };
+  }
+
+  return { type: 'UNKNOWN', target: null };
+}
+
+/**
  * Enrich backup items with live usable stock balances and remaining quantities
  */
 export async function enrichBackupItemsWithLiveStock(items = []) {
@@ -218,36 +322,26 @@ export async function enrichBackupItemsWithLiveStock(items = []) {
       getInventoryProducts().catch(() => []),
     ]);
 
-    const matMap = new Map((allMats || []).map((m) => [(m.material_name || '').toLowerCase(), m]));
-    const devMap = new Map((allDevs || []).map((d) => [(d.device_type || '').toLowerCase(), d]));
-
     return items.map((it) => {
       const name = (it.item_name || '').trim();
-      const lower = name.toLowerCase();
+      const resolved = resolveInventoryTarget({
+        item_id: it.item_id,
+        item_sku: it.item_sku,
+        item_name: name,
+      }, { allMats, allDevs });
+
       let currentStock = 0;
       let unit = it.unit || 'Nos.';
+      let sku = it.item_sku || it.sku || null;
 
-      let mat = matMap.get(lower);
-      if (!mat && lower.includes('display')) mat = matMap.get('display');
-      if (!mat) {
-        if (lower.includes('cable tie') && lower.includes('200')) {
-          mat = allMats.find((m) => m.material_name.toLowerCase().includes('cable tie') && m.material_name.includes('200'));
-        } else if (lower.includes('cable tie') && lower.includes('300')) {
-          mat = allMats.find((m) => m.material_name.toLowerCase().includes('cable tie') && m.material_name.includes('300'));
-        } else if (lower.includes('5m') || lower.includes('5-metre')) {
-          mat = allMats.find((m) => m.material_name.toLowerCase().includes('5-metre'));
-        } else if (lower.includes('15m') || lower.includes('15-metre')) {
-          mat = allMats.find((m) => m.material_name.toLowerCase().includes('15-metre'));
-        }
-      }
-      const dev = devMap.get(lower);
-
-      if (mat) {
-        currentStock = Number(mat.current_stock) || 0;
-        unit = mat.unit || unit;
-      } else if (dev) {
-        currentStock = Number(dev.usable_stock) || 0;
-        unit = dev.unit || unit;
+      if (resolved.type === 'MATERIAL' && resolved.target) {
+        currentStock = Number(resolved.target.current_stock) || 0;
+        unit = resolved.target.unit || unit;
+        sku = resolved.target.sku || sku;
+      } else if (resolved.type === 'DEVICE' && resolved.target) {
+        currentStock = Number(resolved.target.usable_stock) || 0;
+        unit = resolved.target.unit || unit;
+        sku = resolved.target.sku || sku;
       }
 
       const qty = Number(it.quantity) || 0;
@@ -258,6 +352,7 @@ export async function enrichBackupItemsWithLiveStock(items = []) {
       return {
         ...it,
         unit,
+        item_sku: sku,
         quantity: qty,
         quantity_issued: qtyIssued,
         quantity_remaining: qtyRemaining,
@@ -939,14 +1034,19 @@ export async function issueExtraBackupDevices({
         if (qtyToIssue <= 0) continue;
 
         const targetDeclItem = declItems.find(
-          (d) => (d.item_name || '').trim().toLowerCase() === name.toLowerCase() ||
-                 (d.id && reqItem.item_id && d.id === reqItem.item_id)
+          (d) => (d.id && reqItem.item_id && d.id === reqItem.item_id) ||
+                 (d.item_id && reqItem.item_id && d.item_id === reqItem.item_id) ||
+                 (d.item_sku && reqItem.item_sku && d.item_sku.toLowerCase() === reqItem.item_sku.toLowerCase()) ||
+                 (d.item_name || '').trim().toLowerCase() === name.toLowerCase()
         );
         if (!targetDeclItem) {
           throw new Error(`Item "${name}" is not part of the declared backup items for this checklist.`);
         }
 
         const remaining = Math.max(0, (Number(targetDeclItem.quantity) || 0) - (Number(targetDeclItem.quantity_issued) || 0));
+        if (remaining <= 0) {
+          throw new Error(`All declared quantities for "${targetDeclItem.item_name}" have already been issued.`);
+        }
         if (qtyToIssue > remaining) {
           throw new Error(
             `Cannot issue ${qtyToIssue} for "${name}". Maximum remaining unissued quantity is ${remaining}.`
@@ -995,32 +1095,26 @@ export async function issueExtraBackupDevices({
       getInventoryProducts().catch(() => []),
     ]);
 
-    const matMap = new Map((allMats || []).map((m) => [(m.material_name || '').toLowerCase(), m]));
-    const devMap = new Map((allDevs || []).map((d) => [(d.device_type || '').toLowerCase(), d]));
-
     const plannedDeductions = [];
 
     for (const item of itemsToProcess) {
       const name = (item.name || item.declItem?.item_name || item.declItem?.name || '').trim();
-      const lower = name.toLowerCase();
       const qty = item.quantity_to_issue;
 
-      let mat = matMap.get(lower);
-      if (!mat && lower.includes('display')) mat = matMap.get('display');
-      if (!mat) {
-        if (lower.includes('cable tie') && lower.includes('200')) {
-          mat = allMats.find((m) => m.material_name.toLowerCase().includes('cable tie') && m.material_name.includes('200'));
-        } else if (lower.includes('cable tie') && lower.includes('300')) {
-          mat = allMats.find((m) => m.material_name.toLowerCase().includes('cable tie') && m.material_name.includes('300'));
-        } else if (lower.includes('5m') || lower.includes('5-metre')) {
-          mat = allMats.find((m) => m.material_name.toLowerCase().includes('5-metre'));
-        } else if (lower.includes('15m') || lower.includes('15-metre')) {
-          mat = allMats.find((m) => m.material_name.toLowerCase().includes('15-metre'));
-        }
-      }
-      const dev = devMap.get(lower);
+      const resolved = resolveInventoryTarget({
+        item_id: item.declItem?.item_id || item.item_id,
+        item_sku: item.declItem?.item_sku || item.item_sku,
+        item_name: name,
+      }, { allMats, allDevs });
 
-      if (mat) {
+      if (resolved.type === 'UNKNOWN' || !resolved.target) {
+        throw new Error(
+          `Cannot issue backup item "${name}". No matching warehouse inventory product or installation material was found. Physical inventory deduction is required before marking as issued.`
+        );
+      }
+
+      if (resolved.type === 'MATERIAL') {
+        const mat = resolved.target;
         const available = Number(mat.current_stock) || 0;
         if (qty > available) {
           throw new Error(
@@ -1033,9 +1127,10 @@ export async function issueExtraBackupDevices({
           declItem: item.declItem,
           name,
           quantity: qty,
-          unit: mat.unit || item.unit,
+          unit: mat.unit || item.unit || 'Nos.',
         });
-      } else if (dev) {
+      } else if (resolved.type === 'DEVICE') {
+        const dev = resolved.target;
         const available = Number(dev.usable_stock) || 0;
         if (qty > available) {
           throw new Error(
@@ -1048,16 +1143,7 @@ export async function issueExtraBackupDevices({
           declItem: item.declItem,
           name,
           quantity: qty,
-          unit: dev.unit || item.unit,
-        });
-      } else {
-        plannedDeductions.push({
-          type: 'OTHER',
-          target: null,
-          declItem: item.declItem,
-          name,
-          quantity: qty,
-          unit: item.unit,
+          unit: dev.unit || item.unit || 'Nos.',
         });
       }
     }
@@ -1077,6 +1163,8 @@ export async function issueExtraBackupDevices({
           quantity,
           reason: `Extra backup material issued to technician ${techName} for checklist ${chkNum}. ${remarks || ''}`.trim(),
           user,
+          is_issuance: true,
+          recordMovement: false, // Authoritative EXTRA_BACKUP_ISSUED movement logged below
         });
         const stockAfter = Math.max(0, stockBefore - quantity);
 
@@ -1105,6 +1193,8 @@ export async function issueExtraBackupDevices({
           quantity,
           reason: `Extra backup device issued to technician ${techName} for checklist ${chkNum}. ${remarks || ''}`.trim(),
           user,
+          is_issuance: true,
+          recordMovement: false, // Authoritative EXTRA_BACKUP_ISSUED movement logged below
         });
         const stockAfter = Math.max(0, stockBefore - quantity);
 
@@ -1138,6 +1228,7 @@ export async function issueExtraBackupDevices({
             .from('pre_installation_backup_items')
             .update({
               quantity_issued: declItem.quantity_issued,
+              quantity_remaining: declItem.quantity_remaining,
               updated_at: nowIso,
             })
             .eq('id', declItem.id);
@@ -1150,7 +1241,7 @@ export async function issueExtraBackupDevices({
         item_name: name,
         quantity_issued: quantity,
         total_issued: declItem.quantity_issued,
-        quantity_remaining: Math.max(0, (Number(declItem.quantity) || 0) - declItem.quantity_issued),
+        quantity_remaining: declItem.quantity_remaining,
         unit,
       });
     }
