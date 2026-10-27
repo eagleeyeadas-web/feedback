@@ -698,11 +698,8 @@ export async function getCoordinatorChecklists(arg1 = {}, arg2 = {}) {
     const memDecl = inMemoryDeclarations.get(chk.id);
     const memCarry = inMemoryCarryRecords.get(chk.id);
     const isSubmitted = Boolean(
-      chk.carry_status === 'RECORDED' ||
       ['DECLARED', 'CORRECTED', 'VERIFIED'].includes(memDecl?.status) ||
-      ['SUBMITTED', 'AUDITED'].includes(memCarry?.status) ||
-      chk.installation_status === 'Completed' ||
-      (chk.delivery_method === 'Product Couriered' && !isTechDep)
+      ['SUBMITTED', 'AUDITED'].includes(memCarry?.status)
     );
 
     return {

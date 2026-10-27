@@ -1526,7 +1526,7 @@ export default function CoordinatorWorkspace() {
                                     <span>{item.checklist_number || item.id.slice(0, 8)}</span>
                                     <History size={12} className="text-slate-400" />
                                   </button>
-                                  {item.is_technician_dependent && (
+                                  {item.is_technician_dependent && (item.has_pre_installation_submitted || item.pre_installation_status === 'Submitted') && (
                                     <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded-full text-[9px] font-extrabold bg-emerald-50 text-emerald-800 border border-emerald-200">
                                       <CheckCircle2 size={10} className="text-emerald-600" /> Pre-Install Done
                                     </span>

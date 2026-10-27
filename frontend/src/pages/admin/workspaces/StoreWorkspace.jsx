@@ -789,24 +789,9 @@ export default function StoreWorkspace({ onSelectChecklist }) {
         </button>
 
         <button
-          onClick={() => setActiveTab('requirements')}
-          className={`flex-1 min-w-[130px] py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
-            activeTab === 'requirements' ? 'bg-amber-600 text-white shadow-xs' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-          }`}
-        >
-          <ClipboardList className="w-4 h-4" />
-          <span>Incoming Jobs & Material Requirements</span>
-          {shortageJobs.length > 0 && (
-            <span className="text-[10px] bg-rose-500 text-white px-1.5 py-0.2 rounded-full font-bold">
-              {shortageJobs.length} short
-            </span>
-          )}
-        </button>
-
-        <button
           onClick={() => setActiveTab('issue')}
           className={`flex-1 min-w-[130px] py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
-            activeTab === 'issue' ? 'bg-amber-600 text-white shadow-xs' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+            activeTab === 'issue' || activeTab === 'requirements' ? 'bg-amber-600 text-white shadow-xs' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
           }`}
         >
           <Truck className="w-4 h-4" />
@@ -1233,82 +1218,14 @@ export default function StoreWorkspace({ onSelectChecklist }) {
       )}
 
       {/* ============================================================
-          TAB 5: INCOMING INSTALLATION JOBS & MATERIAL REQUIREMENTS
+          TAB 5: ISSUE MATERIALS (CONSOLIDATED WORKSPACE)
           ============================================================ */}
-      {activeTab === 'requirements' && (
+      {(activeTab === 'issue' || activeTab === 'requirements') && (
         <StoreInstallationRequirements
           token={token}
           onSelectChecklist={onSelectChecklist}
           onInventoryUpdated={loadAllData}
         />
-      )}
-
-      {/* ============================================================
-          TAB 6: ISSUE MATERIALS (DEDICATED ISSUANCE STATION)
-          ============================================================ */}
-      {activeTab === 'issue' && (
-        <div className="space-y-4">
-          <div className="bg-white p-4 rounded-2xl border border-gray-200 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-            <div>
-              <h2 className="text-sm font-bold text-gray-900 flex items-center gap-2">
-                <Truck className="w-4 h-4 text-amber-600" />
-                <span>Store Issuance Station</span>
-              </h2>
-              <p className="text-gray-500 mt-0.5">
-                Authorized Store Manager can issue camera devices and installation materials. Negative stock is strictly prevented.
-              </p>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {pendingRequirements.map((job) => (
-              <div
-                key={job.id || job.checklist_id}
-                className="bg-white p-5 rounded-2xl border border-gray-200 shadow-xs space-y-3 hover:border-amber-300 transition-all"
-              >
-                <div className="flex items-start justify-between">
-                  <div>
-                    <span className="font-mono text-xs font-black text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
-                      {job.checklist_number}
-                    </span>
-                    <h3 className="text-sm font-bold text-gray-900 mt-1">{job.client_name || job.customer_name || 'Not provided'}</h3>
-                    <p className="text-xs text-gray-500">{job.client_location || job.client_address || job.location || job.destination || 'Location not specified'}</p>
-                  </div>
-                  {job.has_shortage ? (
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 flex items-center gap-1">
-                      <AlertTriangle className="w-3 h-3" /> Shortage Flagged
-                    </span>
-                  ) : (
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 flex items-center gap-1">
-                      <Check className="w-3 h-3" /> Stock In Store
-                    </span>
-                  )}
-                </div>
-
-                <div className="bg-gray-50 p-3 rounded-xl text-xs space-y-1">
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">Camera Devices:</span>
-                    <span className="font-semibold text-gray-900">{job.device_type} ({job.number_of_devices} Nos.)</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">Materials:</span>
-                    <span className="font-semibold text-gray-900">{job.material_items?.length || 0} BOM items</span>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-end gap-2 pt-1">
-                  <button
-                    onClick={() => setIssueModalJob(job)}
-                    className="px-4 py-2 text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <Package className="w-3.5 h-3.5" />
-                    <span>Inspect & Issue Stock</span>
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
       )}
 
       {/* ============================================================

@@ -2457,13 +2457,12 @@ export async function enrichChecklistsWithWorkflowStatus(checklists) {
     const memDecl = inMemoryDeclarations?.get(item.id);
     const hasGenuineInMemDecl = Boolean(memDecl && ['DECLARED', 'CORRECTED', 'VERIFIED'].includes(memDecl.status));
 
-    const hasDbCarryStatus = (item.carry_status && item.carry_status.toUpperCase() === 'RECORDED');
-
-    const hasCarryRecord =
+    const hasGenuineSubmissionRecord =
       dbCarrySet.has(item.id) ||
       hasGenuineInMemCarry ||
-      hasGenuineInMemDecl ||
-      hasDbCarryStatus;
+      hasGenuineInMemDecl;
+
+    const hasCarryRecord = Boolean(hasGenuineSubmissionRecord);
 
     copy.carry_status = hasCarryRecord ? 'RECORDED' : 'NOT_RECORDED';
     copy.is_pre_installation_submitted = hasCarryRecord;

@@ -1160,9 +1160,9 @@ export async function getStoreMaterialRequirements(params = {}) {
 
     const isTechDependent = isChecklistTechnicianDependent(rec);
     const hasPreInstallSubmitted = Boolean(
-      rec.carry_status === 'RECORDED' ||
       ['DECLARED', 'CORRECTED', 'VERIFIED'].includes(backupDecl?.status) ||
-      inMemReq?.carry_status === 'RECORDED'
+      ['SUBMITTED', 'AUDITED'].includes(rec.carry_record?.status) ||
+      Boolean(rec.carry_record?.submitted_at || rec.carry_record?.submission_date)
     );
     const preInstallStatus = hasPreInstallSubmitted ? 'Submitted' : 'Pending';
     const preInstallTimestamp = backupDecl?.declaration_timestamp ||
@@ -1175,8 +1175,82 @@ export async function getStoreMaterialRequirements(params = {}) {
 
     const stockIssuanceStatus = isFullyIssued ? 'Completed' : 'Pending';
 
+    // Build post_installation_details array for Panel 3 of Issue Materials
+    let postInstallationDetails = [];
+    if (Array.isArray(rec.post_installation_details) && rec.post_installation_details.length > 0) {
+      postInstallationDetails = rec.post_installation_details;
+    } else {
+      // 1. Installed extra devices (Same Customer or Another Person)
+      finalExtraInst.forEach((inst) => {
+        const isSame = (inst.recipient_customer_type || '').toUpperCase() === 'SAME_CUSTOMER' ||
+                       (inst.recipient_customer_type || '').toUpperCase() === 'ORIGINAL_CUSTOMER';
+        const targetPerson = isSame ? 'Same Customer' : 'Another Person';
+        const targetNameMobile = isSame
+          ? (rec.client_name || 'Same Customer')
+          : (inst.customer_name ? `${inst.customer_name}${inst.customer_phone ? ` (${inst.customer_phone})` : ''}` : 'Another Person');
+        const targetLoc = inst.location || (isSame ? (rec.client_location || '—') : '—');
+        const targetDate = inst.installation_date || inst.created_at || compReport?.installation_date || rec.installation_date || rec.expected_arrival_date || '—';
+
+        const compList = inst.installed_components || inst.components || inst.components_used || inst.items || [];
+        if (Array.isArray(compList) && compList.length > 0) {
+          compList.forEach((c) => {
+            const devName = c.device_type || c.item_name || c.device || 'Device';
+            const qty = Number(c.quantity_installed ?? c.quantity) || 1;
+            for (let i = 0; i < qty; i++) {
+              postInstallationDetails.push({
+                device: devName,
+                action: 'Fixed',
+                installed_for: targetPerson,
+                name_mobile: targetNameMobile,
+                location: targetLoc,
+                date: targetDate,
+              });
+            }
+          });
+        } else {
+          const devName = inst.device_type || inst.item_name || 'Device';
+          const qty = Number(inst.number_of_devices || inst.quantity) || 1;
+          for (let i = 0; i < qty; i++) {
+            postInstallationDetails.push({
+              device: devName,
+              action: 'Fixed',
+              installed_for: targetPerson,
+              name_mobile: targetNameMobile,
+              location: targetLoc,
+              date: targetDate,
+            });
+          }
+        }
+      });
+
+      // 2. Extra devices returned unused
+      if (backupDecl?.has_backup_items && Array.isArray(backupDecl.items)) {
+        backupDecl.items.forEach((it) => {
+          const retQty = Number(it.quantity_returned) || 0;
+          if (retQty > 0) {
+            const retDate = it.returned_at || backupDecl.updated_at || compReport?.installation_date || '—';
+            for (let i = 0; i < retQty; i++) {
+              postInstallationDetails.push({
+                device: it.device_type || it.item_name || it.sku || 'Device',
+                action: 'Returned',
+                installed_for: '—',
+                name_mobile: '—',
+                location: '—',
+                date: retDate,
+              });
+            }
+          }
+        });
+      }
+    }
+
     return {
       ...rec,
+      client_name: rec.client_name || rec.customer_name || 'Primary Customer',
+      client_mobile: rec.client_mobile || rec.customer_mobile || rec.client_phone || '—',
+      client_location: rec.client_location || rec.customer_location || rec.location || '—',
+      salesperson_name: rec.salesperson_name || '—',
+      service_engineer: rec.service_engineer || 'Unassigned',
       is_courier: isCourier,
       effective_job_type: isCourier ? 'Courier' : rec.job_type,
       job_type: isCourier ? 'Courier' : rec.job_type,
@@ -1204,6 +1278,7 @@ export async function getStoreMaterialRequirements(params = {}) {
       backup_declaration: backupDecl || null,
       extra_installations: finalExtraInst,
       extra_installations_count: finalExtraInst.length,
+      post_installation_details: postInstallationDetails,
       distinguished_quantities: {
         original_products_issued: origIssuedQty,
         extra_devices_declared: extraDeclQty,
@@ -1347,15 +1422,47 @@ export async function getStoreMaterialRequirements(params = {}) {
     }
   }
 
+  // 4 KPI Summary Cards for Issue Materials Reference UI:
+  // 1. Total Jobs (all actionable / active jobs)
+  // 2. Pending Original Issuance
+  // 3. Pending Extra Issuance
+  // 4. Stock Shortages
+  let pendingOriginalCount = 0;
+  let pendingExtraCount = 0;
+  let shortagesCount = 0;
+
+  actionableRecords.forEach((r) => {
+    const isOrigIssued = r.is_issued || r.stock_issuance_status === 'Completed' || r.status === 'ISSUED';
+    if (!isOrigIssued) {
+      pendingOriginalCount++;
+    }
+    const hasExtraRequest = Boolean(
+      (r.backup_declaration?.has_backup_items && Array.isArray(r.backup_declaration.items) && r.backup_declaration.items.length > 0) ||
+      (r.extra_device_items && r.extra_device_items.length > 0) ||
+      (r.distinguished_quantities?.extra_devices_requested > 0)
+    );
+    const extraIssuancePending = r.backup_declaration?.issuance_status === 'Pending' ||
+      (hasExtraRequest && (r.distinguished_quantities?.extra_devices_issued || 0) < (r.distinguished_quantities?.extra_devices_requested || 0));
+    if (extraIssuancePending) {
+      pendingExtraCount++;
+    }
+    if (r.has_shortage || (r.shortage_count && r.shortage_count > 0)) {
+      shortagesCount++;
+    }
+  });
+
   return {
     requirements: filteredRequirements,
     summary: {
-      total: totalAll || totalCount,
+      total: actionableRecords.length,
+      pending_original: pendingOriginalCount,
+      pending_extra: pendingExtraCount,
+      shortages: shortagesCount,
       installationCount,
       courierCount,
       serviceCount,
-      pendingCount,
-      shortageCounter,
+      pendingCount: pendingOriginalCount,
+      shortageCounter: shortagesCount,
       issuedCount,
     },
     page: pageNum,

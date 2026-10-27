@@ -1282,7 +1282,10 @@ export async function issueExtraBackupDevices({
       await supabase
         .from('pre_installation_backup_declarations')
         .update({
-          status: finalIssuanceStatus === 'Issued' ? 'ISSUED' : (finalIssuanceStatus === 'Partially Issued' ? 'PARTIALLY_ISSUED' : 'DECLARED'),
+          issuance_status: finalIssuanceStatus,
+          issued_by: user?.id && String(user.id).length === 36 ? user.id : null,
+          issued_at: nowIso,
+          issuance_history: issuanceHistory,
           updated_at: nowIso,
         })
         .eq('id', declaration.id);
@@ -1295,6 +1298,7 @@ export async function issueExtraBackupDevices({
       await supabase
         .from('store_material_requirements')
         .update({
+          extra_devices_issuance_status: finalIssuanceStatus,
           updated_at: nowIso,
         })
         .eq('checklist_id', checklist_id);
@@ -1574,18 +1578,13 @@ export function isChecklistTechnicianDependent(checklist) {
 export async function isPreInstallationSubmitted(checklistId, checklist = null) {
   if (!checklistId) return false;
 
-  // 1. Checklist carry_status if provided
-  if (checklist?.carry_status === 'RECORDED') {
-    return true;
-  }
-
-  // 2. In-memory backup declarations
+  // 1. In-memory backup declarations
   const memDecl = inMemoryDeclarations.get(checklistId);
   if (memDecl && ['DECLARED', 'CORRECTED', 'VERIFIED'].includes(memDecl.status)) {
     return true;
   }
 
-  // 3. In-memory carry records
+  // 2. In-memory carry records
   try {
     const { inMemoryCarryRecords } = await import('./workflowService.js');
     const memCarry = inMemoryCarryRecords?.get(checklistId);
@@ -1599,7 +1598,7 @@ export async function isPreInstallationSubmitted(checklistId, checklist = null) 
     return false;
   }
 
-  // 4. Supabase pre_installation_backup_declarations table
+  // 3. Supabase pre_installation_backup_declarations table
   try {
     const { data: dbDecl, error: declErr } = await supabase
       .from('pre_installation_backup_declarations')
@@ -1612,7 +1611,7 @@ export async function isPreInstallationSubmitted(checklistId, checklist = null) 
     }
   } catch (e) {}
 
-  // 5. Supabase job_device_carry_records table
+  // 4. Supabase job_device_carry_records table
   try {
     const { data: dbCarry, error: carryErr } = await supabase
       .from('job_device_carry_records')
@@ -1624,21 +1623,6 @@ export async function isPreInstallationSubmitted(checklistId, checklist = null) 
       return true;
     }
   } catch (e) {}
-
-  // 6. DB installation_checklists carry_status check if checklist wasn't provided
-  if (!checklist) {
-    try {
-      const { data: dbChk } = await supabase
-        .from('installation_checklists')
-        .select('carry_status, installation_status')
-        .eq('id', checklistId)
-        .maybeSingle();
-
-      if (dbChk?.carry_status === 'RECORDED') {
-        return true;
-      }
-    } catch (e) {}
-  }
 
   return false;
 }
