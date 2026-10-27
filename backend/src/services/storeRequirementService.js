@@ -1344,10 +1344,15 @@ export async function getStoreMaterialRequirements(params = {}) {
 
         const isTechDep = isChecklistTechnicianDependent(r);
         const isPreSub = r.carry_status === 'RECORDED';
+        const isCompletedChecklist = r.installation_status === 'Completed' ||
+          r.status === 'Completed' ||
+          r.completion_type === 'CUSTOMER_INSTALLED' ||
+          r.completion_reason === 'Customer Self-Installation' ||
+          r.completion_reason === 'Completed - No Stock Required';
 
         if (isIssued) {
           issuedCount++;
-        } else if (!isTechDep || isPreSub) {
+        } else if (!isCompletedChecklist && (!isTechDep || isPreSub)) {
           // Actionable incoming material requirement
           pendingCount++;
           if (r.has_shortage) shortageCounter++;
@@ -1373,9 +1378,15 @@ export async function getStoreMaterialRequirements(params = {}) {
           ? (r.material_issuance_status === 'ISSUED' || r.status === 'ISSUED')
           : (r.material_issuance_status === 'ISSUED' && r.devices_issuance_status === 'ISSUED'));
 
+      const isCompletedChecklist = r.installation_status === 'Completed' ||
+        r.status === 'Completed' ||
+        r.completion_type === 'CUSTOMER_INSTALLED' ||
+        r.completion_reason === 'Customer Self-Installation' ||
+        r.completion_reason === 'Completed - No Stock Required';
+
       if (isIssued) {
         issuedCount++;
-      } else if (!r.is_technician_dependent || r.has_pre_installation_submitted) {
+      } else if (!isCompletedChecklist && (!r.is_technician_dependent || r.has_pre_installation_submitted)) {
         pendingCount++;
         if (r.has_shortage) shortageCounter++;
       }
@@ -1387,7 +1398,19 @@ export async function getStoreMaterialRequirements(params = {}) {
   // Exceptions:
   // - Product Courier without technician: actionable immediately for original courier stock issuance.
   // - Checklists whose original stock has already been issued or completed: preserved for history/audits.
+  // - Checklists marked as Completed by Sales (e.g. Customer Self-Installation): separated to Completed Checklists page.
   let actionableRecords = enrichedRecords.filter((r) => {
+    // If completed customer self-installation or non-stock completed, exclude from actionable queue (belongs in Completed Checklists)
+    const isSelfInstalledOrNonStockCompleted = r.installation_status === 'Completed' && (
+      r.completion_type === 'CUSTOMER_INSTALLED' ||
+      r.completion_reason === 'Customer Self-Installation' ||
+      r.completion_reason === 'Completed - No Stock Required' ||
+      r.delivery_method === 'Product Couriered'
+    );
+    if (isSelfInstalledOrNonStockCompleted) {
+      return false;
+    }
+
     // If historical / already issued / completed, keep in historical records
     if (r.is_issued || r.stock_issuance_status === 'Completed' || r.installation_status === 'Completed') {
       return true;

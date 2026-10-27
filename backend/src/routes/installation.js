@@ -14,6 +14,7 @@ import {
   cancelChecklist,
   getInstallationStats,
   getServiceEngineers,
+  getCompletedChecklists,
   getBusinessToday,
   getBusinessTomorrow,
 } from '../services/installationService.js';
@@ -208,6 +209,10 @@ export const checklistValidationSchema = z.object({
   installation_status: z.enum(['Assigned', 'Assign Later', 'Completed'], {
     errorMap: () => ({ message: 'Installation Status must be one of: Assigned, Assign Later, or Completed' }),
   }).optional().default('Assigned'),
+  completion_reason: z.string().nullable().optional(),
+  completed_by: z.string().nullable().optional(),
+  completed_at: z.string().nullable().optional(),
+  completion_notes: z.string().nullable().optional(),
   payment_status: z.enum(['Paid', 'Partially Paid', 'Pending']).default('Pending'),
   remarks: z.string().nullable().optional(),
   client_confirmation: z.enum(['Confirmed', 'Not Confirmed']).default('Confirmed'),
@@ -216,8 +221,9 @@ export const checklistValidationSchema = z.object({
 }).superRefine((data, ctx) => {
   const isCouriered = data.delivery_method === 'Product Couriered';
   const isAssignLater = data.installation_status === 'Assign Later';
+  const isCompleted = data.installation_status === 'Completed';
 
-  if (!isCouriered && !isAssignLater) {
+  if (!isCouriered && !isAssignLater && !isCompleted) {
     if (!data.installation_duration || !data.installation_duration.trim()) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -580,11 +586,27 @@ router.get('/', requireRole('ADMIN', 'SALES', 'TECHNICAL', 'STORE_MANAGER', 'COO
 });
 
 /**
+ * GET /api/admin/installations/completed-checklists
+ * Retrieve completed checklists with dynamic KPI counts, search, filtering, and pagination.
+ * Accessible to STORE_MANAGER, ADMIN, SALES
+ */
+router.get('/completed-checklists', requireRole('STORE_MANAGER', 'ADMIN', 'SALES'), async (req, res) => {
+  try {
+    const result = await getCompletedChecklists(req.query);
+    return res.json(result);
+  } catch (err) {
+    console.error('Error in GET /installations/completed-checklists:', err);
+    return res.status(500).json({ error: err.message || 'Failed to fetch completed checklists' });
+  }
+});
+
+/**
  * GET /api/admin/installations/:id
  * Get single installation checklist by ID (Accessible to all authorized roles)
  */
 router.get('/:id', requireRole('ADMIN', 'SALES', 'TECHNICAL', 'STORE_MANAGER', 'COORDINATOR'), async (req, res, next) => {
   const STATIC_ROUTE_KEYS = [
+    'completed-checklists',
     'backup-products',
     'device-configurations',
     'rest-days',
@@ -700,6 +722,8 @@ router.post('/', requireRole('SALES', 'ADMIN'), async (req, res) => {
     // Sales can create and submit a new installation or service checklist starting today (urgent same-day) or any future date.
     // Past dates are strictly rejected.
     const isCouriered = parsed.data.delivery_method === 'Product Couriered';
+    const isCompleted = parsed.data.installation_status === 'Completed';
+    const isAssignLater = parsed.data.installation_status === 'Assign Later';
     const businessToday = getBusinessToday(config.timezone);
 
     if (parsed.data.expected_arrival_date) {
@@ -710,15 +734,24 @@ router.post('/', requireRole('SALES', 'ADMIN'), async (req, res) => {
           provided_date: parsed.data.expected_arrival_date,
         });
       }
-    } else if (!isCouriered) {
+    } else if (!isCouriered && !isCompleted && !isAssignLater) {
       return res.status(400).json({
         error: 'Expected Date of Arrival is required for Technician Carries.',
         business_today: businessToday,
       });
     }
 
-    // A newly created checklist always starts as Assigned
-    parsed.data.installation_status = 'Assigned';
+    // Preserve chosen status (Assigned, Assign Later, or Completed)
+    if (!parsed.data.installation_status) {
+      parsed.data.installation_status = 'Assigned';
+    }
+
+    if (parsed.data.installation_status === 'Completed') {
+      parsed.data.completion_reason = parsed.data.completion_reason || (isCouriered ? 'Customer Self-Installation' : 'Completed - No Stock Required');
+      parsed.data.completed_by = parsed.data.completed_by || parsed.data.salesperson_name || req.profile.name || 'Sales';
+      parsed.data.completed_at = parsed.data.completed_at || new Date().toISOString();
+      parsed.data.completion_notes = parsed.data.completion_notes || parsed.data.remarks || '';
+    }
 
     const created = await createChecklist(req.profile.id, parsed.data, {
       enforceDateValidation: Boolean(parsed.data.expected_arrival_date),
@@ -767,6 +800,11 @@ router.put('/:id', requireRole('SALES', 'ADMIN'), async (req, res) => {
           });
         }
       }
+
+      parsed.data.completion_reason = parsed.data.completion_reason || existing.completion_reason || ((parsed.data.delivery_method || existing.delivery_method) === 'Product Couriered' ? 'Customer Self-Installation' : 'Completed - No Stock Required');
+      parsed.data.completed_by = parsed.data.completed_by || parsed.data.salesperson_name || existing.completed_by || req.profile.name || 'Sales';
+      parsed.data.completed_at = parsed.data.completed_at || existing.completed_at || new Date().toISOString();
+      parsed.data.completion_notes = parsed.data.completion_notes || parsed.data.remarks || existing.completion_notes || '';
     }
 
     const updated = await updateChecklist(req.params.id, parsed.data);

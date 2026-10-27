@@ -162,6 +162,17 @@ function AppRoutes() {
             </RoleProtectedRoute>
           }
         />
+        <Route
+          path="/store-manager/completed"
+          element={
+            <RoleProtectedRoute
+              allowedRoles={['STORE_MANAGER', 'ADMIN']}
+              targetResource="Completed Checklists"
+            >
+              <StoreWorkspacePage initialTab="completed" />
+            </RoleProtectedRoute>
+          }
+        />
         <Route path="/store" element={<Navigate to="/store-manager" replace />} />
 
         {/* Coordinator Workspace: Accessible ONLY to COORDINATOR */}

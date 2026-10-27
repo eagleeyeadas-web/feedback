@@ -867,6 +867,16 @@ export async function fetchMaterialTransactions(token, params = {}) {
 /**
  * Store Manager Material Requirements API helpers
  */
+export async function fetchCompletedChecklistsApi(token, params = {}) {
+  const query = new URLSearchParams(params).toString();
+  const res = await fetch(`${API_BASE}/admin/installations/completed-checklists?${query}`, {
+    headers: adminHeaders(token),
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(json.error || 'Failed to fetch completed checklists');
+  return json;
+}
+
 export async function fetchStoreMaterialRequirements(token, params = {}) {
   const query = new URLSearchParams(params).toString();
   const res = await fetch(`${API_BASE}/admin/materials/requirements?${query}`, {

@@ -5,9 +5,10 @@ import StaffWorkspaceLayout from '../../components/layout/StaffWorkspaceLayout';
 import StoreWorkspace from '../admin/workspaces/StoreWorkspace';
 import InstallationChecklistDetails from '../admin/installation/InstallationChecklistDetails';
 
-export default function StoreWorkspacePage() {
+export default function StoreWorkspacePage({ initialTab }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const urlViewId = searchParams.get('view');
+  const urlTab = searchParams.get('tab') || initialTab;
   const [viewChecklistId, setViewChecklistId] = useState(urlViewId || null);
 
   useEffect(() => {
@@ -66,7 +67,7 @@ export default function StoreWorkspacePage() {
           />
         </div>
       ) : (
-        <StoreWorkspace onSelectChecklist={handleSelectChecklist} />
+        <StoreWorkspace initialTab={urlTab} onSelectChecklist={handleSelectChecklist} />
       )}
     </StaffWorkspaceLayout>
   );

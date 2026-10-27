@@ -27,6 +27,7 @@ import {
   ShieldCheck,
   Layers,
   Truck,
+  Info,
 } from 'lucide-react';
 
 export default function InstallationChecklistDetails({ id: propId, onEdit, onBack }) {

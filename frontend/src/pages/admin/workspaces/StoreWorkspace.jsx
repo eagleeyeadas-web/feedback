@@ -34,6 +34,7 @@ import StoreBomManager from '../../../components/bom/StoreBomManager';
 import StoreInstallationRequirements from '../../../components/bom/StoreInstallationRequirements';
 import IssueMaterialsModal from '../../../components/bom/IssueMaterialsModal';
 import WeeklyStockReportTab from './WeeklyStockReportTab';
+import CompletedChecklists from '../../../components/bom/CompletedChecklists';
 import {
   fetchInventoryProducts,
   fetchInventorySummary,
@@ -68,11 +69,17 @@ const STANDARD_DEVICE_TYPES = [
   '8 Channel Live',
 ];
 
-export default function StoreWorkspace({ onSelectChecklist }) {
+export default function StoreWorkspace({ onSelectChecklist, initialTab = 'overview' }) {
   const { token, user, profile } = useAuth();
 
-  // 10 Workspace Tabs
-  const [activeTab, setActiveTab] = useState('overview');
+  // 9 Workspace Tabs
+  const [activeTab, setActiveTab] = useState(initialTab || 'overview');
+
+  useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab);
+    }
+  }, [initialTab]);
 
   // State
   const [products, setProducts] = useState([]);
@@ -833,6 +840,16 @@ export default function StoreWorkspace({ onSelectChecklist }) {
         >
           <FileSpreadsheet className="w-4 h-4" />
           <span>Weekly Stock Report</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('completed')}
+          className={`flex-1 min-w-[130px] py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+            activeTab === 'completed' ? 'bg-[#0f2444] text-white shadow-xs' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+          }`}
+        >
+          <CheckCircle2 className="w-4 h-4" />
+          <span>Completed Checklists</span>
         </button>
       </div>
 
@@ -1637,6 +1654,16 @@ export default function StoreWorkspace({ onSelectChecklist }) {
           ============================================================ */}
       {activeTab === 'weekly-report' && (
         <WeeklyStockReportTab token={token} user={profile || user} />
+      )}
+
+      {/* ============================================================
+          TAB 9: COMPLETED CHECKLISTS
+          ============================================================ */}
+      {activeTab === 'completed' && (
+        <CompletedChecklists
+          token={token}
+          onSelectChecklist={onSelectChecklist}
+        />
       )}
 
       {/* ============================================================

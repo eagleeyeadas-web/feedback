@@ -158,6 +158,8 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
     installation_or_service: 'Installation',
     service_engineer: '',
     installation_status: 'Assigned',
+    completion_reason: 'Customer Self-Installation',
+    completion_notes: '',
     payment_status: 'Pending',
     remarks: '',
     client_confirmation: 'Confirmed',
@@ -176,6 +178,7 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
           const isCompleted = data.installation_status === 'Completed' || data.installation_status === 'Site Work Completed';
           setIsAuthoritativeCompleted(isCompleted);
           const safeStatus = isCompleted ? 'Completed' : (data.installation_status || 'Assigned');
+          const defaultReason = (data.delivery_method === 'Product Couriered' ? 'Customer Self-Installation' : (data.installation_or_service === 'Service' ? 'Completed - No Stock Required' : 'Completed — Standard'));
           const jobType = data.installation_or_service || 'Installation';
           if (jobType === 'Installation' && data.bom_snapshot) {
             setBomSnapshot(data.bom_snapshot);
@@ -238,6 +241,8 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
             installation_or_service: data.installation_or_service || 'Installation',
             service_engineer: data.service_engineer || '',
             installation_status: safeStatus,
+            completion_reason: data.completion_reason || defaultReason,
+            completion_notes: data.completion_notes || data.remarks || '',
             payment_status: data.payment_status || 'Pending',
             remarks: data.remarks || '',
             client_confirmation: data.client_confirmation || 'Confirmed',
@@ -686,14 +691,15 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
 
     // Completion authorization checks
     if (formData.installation_status === 'Completed' && !isAuthoritativeCompleted) {
-      if (!isCouriered) {
+      if (!isCouriered && formData.installation_or_service !== 'Service') {
         return 'Technician Carries installations can only be completed via the technician Post-Installation Form.';
       }
       if (isCouriered && formData.service_engineer && formData.service_engineer.trim()) {
         return 'Technician-assigned couriered installations can only be completed via the technician Post-Installation Form.';
       }
-      if (isCouriered && !formData.remarks?.trim()) {
-        return 'Customer confirmation note in Notes is required before marking an independently installed couriered order Completed.';
+      const note = (formData.completion_notes || formData.remarks || '').trim();
+      if (!note) {
+        return 'Customer confirmation note is required before marking an order Completed.';
       }
     }
 
@@ -797,6 +803,18 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
         service_engineer: isAssignLater ? null : (formData.service_engineer ? formData.service_engineer.trim() : null),
         service_assistant: null,
         installation_status: isAuthoritativeCompleted ? 'Completed' : resolvedStatus,
+        completion_reason: (isAuthoritativeCompleted || resolvedStatus === 'Completed')
+          ? (formData.completion_reason || (formData.delivery_method === 'Product Couriered' ? 'Customer Self-Installation' : (formData.installation_or_service === 'Service' ? 'Completed - No Stock Required' : 'Completed — Standard')))
+          : null,
+        completed_by: (isAuthoritativeCompleted || resolvedStatus === 'Completed')
+          ? (formData.salesperson_name || 'Sales')
+          : null,
+        completed_at: (isAuthoritativeCompleted || resolvedStatus === 'Completed')
+          ? new Date().toISOString()
+          : null,
+        completion_notes: (isAuthoritativeCompleted || resolvedStatus === 'Completed')
+          ? (formData.completion_notes?.trim() || formData.remarks?.trim() || null)
+          : null,
         payment_status: formData.payment_status,
         bom_snapshot: formData.installation_or_service === 'Installation' ? (bomSnapshot || null) : null,
         material_issuance_status: formData.installation_or_service === 'Installation' ? (formData.material_issuance_status || 'PENDING') : 'NOT_APPLICABLE',
@@ -2281,7 +2299,7 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
                       <option
                         value="Completed"
                         disabled={
-                          (!isAuthoritativeCompleted && formData.delivery_method === 'Technician Carries') ||
+                          (!isAuthoritativeCompleted && formData.delivery_method === 'Technician Carries' && formData.installation_or_service !== 'Service') ||
                           (!isAuthoritativeCompleted && formData.delivery_method === 'Product Couriered' && Boolean(formData.service_engineer && formData.service_engineer.trim()))
                         }
                       >
@@ -2306,8 +2324,68 @@ export default function InstallationChecklistForm({ id: propId, onSaved, onCance
                       </p>
                     ) : (
                       <p className="text-[10px] text-emerald-700 font-medium mt-1">
-                        Customer self-installation confirmed (requires confirmation note in Notes).
+                        Customer self-installation or non-stock completion declared.
                       </p>
+                    )}
+
+                    {/* Dedicated Completed Details Panel when Completed is selected */}
+                    {formData.installation_status === 'Completed' && (
+                      <div className="mt-3 p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl space-y-3">
+                        <div className="flex items-center gap-2">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                          <span className="text-xs font-bold text-emerald-900">
+                            Completion Declaration Details
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-[11px] font-semibold text-gray-700 mb-1">
+                              Completion Reason <span className="text-rose-500">*</span>
+                            </label>
+                            <select
+                              value={formData.completion_reason || 'Customer Self-Installation'}
+                              onChange={(e) => handleChange('completion_reason', e.target.value)}
+                              className="w-full text-xs p-2 border border-gray-200 rounded-lg bg-white focus:outline-none focus:border-emerald-500 font-semibold"
+                            >
+                              <option value="Customer Self-Installation">Customer Self-Installation</option>
+                              <option value="Completed - No Stock Required">Completed — No Stock Required</option>
+                              <option value="Other Completed">Other Completed</option>
+                            </select>
+                          </div>
+
+                          <div>
+                            <label className="block text-[11px] font-semibold text-gray-700 mb-1">
+                              Completed By (Salesperson)
+                            </label>
+                            <input
+                              type="text"
+                              readOnly
+                              value={`${formData.salesperson_name || 'Sales'} (Sales)`}
+                              className="w-full text-xs p-2 border border-gray-200 rounded-lg bg-gray-50 text-gray-600 font-semibold cursor-not-allowed"
+                            />
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="block text-[11px] font-semibold text-gray-700 mb-1">
+                            Customer Confirmation Note <span className="text-rose-500">*</span>
+                          </label>
+                          <input
+                            type="text"
+                            value={formData.completion_notes || ''}
+                            onChange={(e) => {
+                              handleChange('completion_notes', e.target.value);
+                              if (!formData.remarks) handleChange('remarks', e.target.value);
+                            }}
+                            placeholder="e.g. Customer will install by themselves / Customer confirmed self-installation"
+                            className="w-full text-xs p-2 border border-gray-200 rounded-lg bg-white focus:outline-none focus:border-emerald-500 font-medium"
+                          />
+                        </div>
+
+                        <p className="text-[11px] text-emerald-800 leading-relaxed">
+                          ✓ This checklist will be saved as <strong>Completed</strong> and will appear on the <strong>Completed Checklists</strong> page. It will be excluded from Store Manager pending material issuance and technician scheduling queues.
+                        </p>
+                      </div>
                     )}
                   </div>
                 );

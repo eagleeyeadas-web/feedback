@@ -183,27 +183,29 @@ export async function createChecklist(adminUserId, data, options = {}) {
 
   // Calculate inclusive booking end date and validate engineer availability atomically
   const isCouriered = data.delivery_method === 'Product Couriered';
+  const isServiceJob = (data.installation_or_service || 'Installation') === 'Service';
   let initialStatus = data.installation_status;
   if (!initialStatus) {
     initialStatus = (data.service_engineer && data.expected_arrival_date) ? 'Assigned' : (isCouriered ? 'Assign Later' : 'Assigned');
   }
 
-  // Technician Carries cannot be created directly as Completed
-  if (!isCouriered && initialStatus === 'Completed') {
+  // Technician Carries installation jobs cannot be created directly as Completed (must complete via Post-Installation Form)
+  if (!isCouriered && !isServiceJob && initialStatus === 'Completed') {
     const err = new Error('Technician Carries installations cannot be created as Completed directly. They must be completed through the Post-Installation Form.');
     err.statusCode = 400;
     throw err;
   }
 
   const isAssignLater = initialStatus === 'Assign Later';
+  const isDirectCompleted = initialStatus === 'Completed';
   const engineerName = data.service_engineer ? data.service_engineer.trim() : null;
   const startDate = data.expected_arrival_date || null;
-  const duration = data.installation_duration ? data.installation_duration.trim() : (isCouriered || isAssignLater ? null : '1 Day');
+  const duration = data.installation_duration ? data.installation_duration.trim() : (isCouriered || isAssignLater || isDirectCompleted ? null : '1 Day');
   let bookingEndDate = null;
   let resolvedEng = null;
 
-  // For Technician Carries jobs: strictly require arrival date, duration and service engineer UNLESS Assign Later
-  if (!isCouriered && !isAssignLater) {
+  // For Technician Carries jobs: strictly require arrival date, duration and service engineer UNLESS Assign Later or Completed
+  if (!isCouriered && !isAssignLater && !isDirectCompleted) {
     if (!startDate) {
       const err = new Error('Expected Date of Arrival is required for Technician Carries');
       err.statusCode = 400;
@@ -216,7 +218,7 @@ export async function createChecklist(adminUserId, data, options = {}) {
     }
   }
 
-  // If Product Couriered and no engineer/startDate provided, ensure status is Assign Later
+  // If Product Couriered and no engineer/startDate provided, ensure status is Assign Later (unless Completed)
   if (isCouriered && (!engineerName || !startDate) && initialStatus !== 'Completed') {
     initialStatus = 'Assign Later';
   }
@@ -338,6 +340,21 @@ export async function createChecklist(adminUserId, data, options = {}) {
     courier_dispatch_status: data.delivery_method === 'Product Couriered' ? 'NOT_DISPATCHED' : 'NOT_APPLICABLE',
     is_courier_dispatched: false,
     installation_status: initialStatus,
+    completion_reason: isDirectCompleted
+      ? (data.completion_reason || (isCouriered ? 'Customer Self-Installation' : (isServiceJob ? 'Completed - No Stock Required' : 'Completed — Standard')))
+      : null,
+    completed_by: isDirectCompleted
+      ? (data.completed_by || data.salesperson_name || 'Sales')
+      : null,
+    completed_at: isDirectCompleted
+      ? (data.completed_at || new Date().toISOString())
+      : null,
+    actual_completion_datetime: isDirectCompleted
+      ? (data.completed_at || new Date().toISOString())
+      : null,
+    completion_notes: isDirectCompleted
+      ? (data.completion_notes || data.remarks || '')
+      : null,
     payment_status: paymentStatus,
     bom_snapshot: bomSnapshot,
     material_issuance_status: isInstallationJob ? (data.material_issuance_status || 'PENDING') : 'NOT_APPLICABLE',
@@ -375,7 +392,7 @@ export async function createChecklist(adminUserId, data, options = {}) {
       });
     }
   } catch (error) {
-    // If device_configurations / extra_device_configurations / service_engineer_id / booking_end_date / bom_snapshot / material_issuance_status / salesperson_name / service_items columns are not migrated yet in PostgreSQL, retry without optional columns
+    // If device_configurations / extra_device_configurations / service_engineer_id / booking_end_date / bom_snapshot / material_issuance_status / salesperson_name / service_items / completion columns are not migrated yet in PostgreSQL, retry without optional columns
     if (
       error.code === 'PGRST204' ||
       error.message?.includes('Could not find') ||
@@ -386,7 +403,11 @@ export async function createChecklist(adminUserId, data, options = {}) {
       error.message?.includes('bom_snapshot') ||
       error.message?.includes('material_issuance_status') ||
       error.message?.includes('salesperson_name') ||
-      error.message?.includes('service_items')
+      error.message?.includes('service_items') ||
+      error.message?.includes('completion_reason') ||
+      error.message?.includes('completed_by') ||
+      error.message?.includes('completed_at') ||
+      error.message?.includes('completion_notes')
     ) {
       let fallbackPayload = { ...payload };
       delete fallbackPayload.device_configurations;
@@ -397,6 +418,11 @@ export async function createChecklist(adminUserId, data, options = {}) {
       delete fallbackPayload.material_issuance_status;
       delete fallbackPayload.salesperson_name;
       delete fallbackPayload.service_items;
+      delete fallbackPayload.completion_reason;
+      delete fallbackPayload.completed_by;
+      delete fallbackPayload.completed_at;
+      delete fallbackPayload.actual_completion_datetime;
+      delete fallbackPayload.completion_notes;
       delete fallbackPayload.original_expected_arrival_date;
       delete fallbackPayload.original_expected_arrival_time;
       delete fallbackPayload.original_installation_duration;
@@ -497,6 +523,39 @@ export async function createChecklist(adminUserId, data, options = {}) {
     if (bomSnapshot) {
       inMemoryChecklistBomSnapshots.set(inserted.id, bomSnapshot);
     }
+
+    if (isDirectCompleted) {
+      try {
+        const { inMemoryCourierCompletions } = await import('./courierService.js');
+        if (inMemoryCourierCompletions) {
+          inMemoryCourierCompletions.set(inserted.id, {
+            checklist_id: inserted.id,
+            checklist_number: checklistNumber,
+            completion_type: isCouriered ? 'CUSTOMER_INSTALLED' : 'COMPLETED_NO_STOCK',
+            completion_reason: payload.completion_reason,
+            completed_by_name: payload.completed_by,
+            confirmed_by_user: payload.completed_by,
+            completed_at: payload.completed_at,
+            actual_completion_datetime: payload.actual_completion_datetime,
+            completion_notes: payload.completion_notes,
+            notes: payload.completion_notes,
+          });
+        }
+      } catch (compErr) {
+        console.warn('Could not register in-memory completion:', compErr.message);
+      }
+
+      inMemoryChecklistSchedules.set(inserted.id, {
+        ...(inMemoryChecklistSchedules.get(inserted.id) || {}),
+        installation_status: 'Completed',
+        completion_reason: payload.completion_reason,
+        completed_by: payload.completed_by,
+        completed_at: payload.completed_at,
+        actual_completion_datetime: payload.actual_completion_datetime,
+        completion_notes: payload.completion_notes,
+      });
+    }
+
     try {
       const req = await syncStoreRequirementForChecklist(inserted);
       // Routing Gate: Only dispatch Store Manager notification immediately if NOT technician-dependent (e.g. Product Courier without technician).
@@ -598,6 +657,18 @@ export function normalizeChecklistDeviceConfigs(checklist) {
   const pendingExt = getPendingExtensionForChecklist(checklist.id);
   checklist.pending_extension = pendingExt || null;
   checklist.has_pending_extension = Boolean(pendingExt);
+
+  // Attach completion details if completed
+  if (checklist.id && (checklist.installation_status === 'Completed' || checklist.installation_status === 'Site Work Completed')) {
+    const isCourier = checklist.delivery_method === 'Product Couriered';
+    const isService = checklist.installation_or_service === 'Service';
+    const defaultReason = isService ? 'Completed - No Stock Required' : (isCourier ? 'Customer Self-Installation' : 'Completed — Standard');
+
+    checklist.completion_reason = checklist.completion_reason || defaultReason;
+    checklist.completed_by = checklist.completed_by || checklist.salesperson_name || 'Sales';
+    checklist.completed_at = checklist.completed_at || checklist.actual_completion_datetime || checklist.actual_completion_at || checklist.updated_at || checklist.created_at;
+    checklist.completion_notes = checklist.completion_notes || checklist.remarks || '';
+  }
 
   return checklist;
 }
@@ -1745,5 +1816,265 @@ export async function getInstallationStats() {
     assignLater: assignLater || 0,
     completed: completed || 0,
     pending: assignLater || 0, // backward compatibility
+  };
+}
+
+/**
+ * Fetch Completed Checklists for Store Manager and Admin
+ * Retrieves checklists marked as Completed (e.g. customer self-installation or service without stock issuance)
+ * Derives dynamic summary counts from actual persisted records (Section 4 & Section 5 compliance)
+ */
+export async function getCompletedChecklists(params = {}) {
+  const {
+    page = 1,
+    limit = 25,
+    search = '',
+    jobType = 'All',
+    completionReason = 'All',
+    dateRange = 'All Time',
+    sortBy = 'completed_at',
+    sortOrder = 'desc',
+  } = params;
+
+  const pageNum = Math.max(1, parseInt(page, 10));
+  const limitNum = Math.min(200, Math.max(1, parseInt(limit, 10)));
+  const offset = (pageNum - 1) * limitNum;
+
+  // 1. Fetch completed checklists from Supabase database
+  let dbChecklists = [];
+  try {
+    const { data, error } = await supabase
+      .from('installation_checklists')
+      .select('*')
+      .in('installation_status', ['Completed', 'Site Work Completed'])
+      .order('created_at', { ascending: false });
+
+    if (!error && Array.isArray(data)) {
+      dbChecklists = data;
+    }
+  } catch (err) {
+    console.warn('Error fetching completed checklists from database:', err.message);
+  }
+
+  // 2. Merge with in-memory completions & schedules (fallback / isolated test support)
+  const allCompletedMap = new Map();
+
+  // First add DB records
+  dbChecklists.forEach((chk) => {
+    allCompletedMap.set(chk.id, chk);
+    if (chk.checklist_number) {
+      allCompletedMap.set(chk.checklist_number, chk);
+    }
+  });
+
+  // Check inMemoryCourierCompletions
+  try {
+    const { inMemoryCourierCompletions } = await import('./courierService.js');
+    if (inMemoryCourierCompletions) {
+      for (const [chkId, compData] of inMemoryCourierCompletions.entries()) {
+        let existing = allCompletedMap.get(chkId);
+        if (!existing) {
+          try {
+            existing = await getChecklistById(chkId);
+          } catch (e) {}
+        }
+        if (existing) {
+          const merged = {
+            ...existing,
+            installation_status: 'Completed',
+            completion_type: compData.completion_type || existing.completion_type || 'CUSTOMER_INSTALLED',
+            completion_reason: compData.completion_reason || (compData.completion_type === 'CUSTOMER_INSTALLED' ? 'Customer Self-Installation' : 'Completed - No Stock Required'),
+            completed_by: compData.completed_by_name || compData.confirmed_by_user || existing.completed_by || existing.salesperson_name || 'Sales',
+            completed_at: compData.completed_at || compData.actual_completion_datetime || existing.completed_at || existing.actual_completion_datetime || existing.updated_at,
+            completion_notes: compData.completion_notes || compData.notes || existing.completion_notes || existing.remarks || '',
+          };
+          allCompletedMap.set(chkId, merged);
+        }
+      }
+    }
+  } catch (compErr) {
+    console.warn('Could not inspect courier completions:', compErr.message);
+  }
+
+  // Check inMemoryChecklistSchedules
+  if (inMemoryChecklistSchedules) {
+    for (const [chkId, sched] of inMemoryChecklistSchedules.entries()) {
+      if (sched.installation_status === 'Completed') {
+        let existing = allCompletedMap.get(chkId);
+        if (!existing) {
+          try {
+            existing = await getChecklistById(chkId);
+          } catch (e) {}
+        }
+        if (existing) {
+          allCompletedMap.set(chkId, {
+            ...existing,
+            ...sched,
+            installation_status: 'Completed',
+          });
+        }
+      }
+    }
+  }
+
+  // Convert map to unique list by ID
+  const uniqueCompleted = [];
+  const seenIds = new Set();
+  for (const item of allCompletedMap.values()) {
+    const key = item.id || item.checklist_number;
+    if (!key || seenIds.has(key)) continue;
+    seenIds.add(key);
+
+    const norm = normalizeChecklistDeviceConfigs(item);
+
+    const isCourier = norm.delivery_method === 'Product Couriered';
+    const isService = norm.installation_or_service === 'Service';
+    let defaultReason = 'Customer Self-Installation';
+    if (isService) {
+      defaultReason = 'Completed - No Stock Required';
+    } else if (!isCourier) {
+      defaultReason = 'Completed — Standard';
+    }
+
+    const reason = norm.completion_reason || (norm.completion_type === 'CUSTOMER_INSTALLED' ? 'Customer Self-Installation' : defaultReason);
+    const completedBy = norm.completed_by || norm.completed_by_name || norm.confirmed_by_user || norm.salesperson_name || 'Sales';
+    const completedAt = norm.completed_at || norm.actual_completion_datetime || norm.actual_completion_at || norm.updated_at || norm.created_at;
+    const completionNotes = norm.completion_notes || norm.notes || norm.remarks || '';
+    const effectiveJobType = isCourier ? 'Product Courier' : (norm.installation_or_service || 'Installation');
+
+    uniqueCompleted.push({
+      ...norm,
+      job_type: effectiveJobType,
+      completion_reason: reason,
+      completed_by: completedBy,
+      completed_at: completedAt,
+      completion_notes: completionNotes,
+    });
+  }
+
+  // Calculate dynamic dashboard summary counts derived from ALL actual completed records
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth(); // 0-indexed
+
+  let totalCompleted = uniqueCompleted.length;
+  let customerSelfCount = 0;
+  let otherCompletedCount = 0;
+  let thisMonthCount = 0;
+
+  uniqueCompleted.forEach((chk) => {
+    const rLower = (chk.completion_reason || '').toLowerCase();
+    if (rLower.includes('self') || rLower.includes('courier')) {
+      customerSelfCount++;
+    } else {
+      otherCompletedCount++;
+    }
+
+    if (chk.completed_at) {
+      try {
+        const d = new Date(chk.completed_at);
+        if (!isNaN(d.getTime()) && d.getFullYear() === currentYear && d.getMonth() === currentMonth) {
+          thisMonthCount++;
+        }
+      } catch (e) {}
+    }
+  });
+
+  // Apply Search & Filters
+  let filtered = uniqueCompleted;
+
+  // Search filter (Checklist #, Customer Name, Mobile, Location)
+  if (search && search.trim()) {
+    const s = search.trim().toLowerCase();
+    filtered = filtered.filter((c) => {
+      const num = (c.checklist_number || '').toLowerCase();
+      const name = (c.client_name || '').toLowerCase();
+      const mobile = (c.client_mobile || '').toLowerCase();
+      const loc = (c.client_location || '').toLowerCase();
+      return num.includes(s) || name.includes(s) || mobile.includes(s) || loc.includes(s);
+    });
+  }
+
+  // Job Type filter
+  if (jobType && jobType !== 'All') {
+    filtered = filtered.filter((c) => {
+      if (jobType === 'Product Courier') {
+        return c.job_type === 'Product Courier' || c.delivery_method === 'Product Couriered';
+      }
+      return c.job_type === jobType || c.installation_or_service === jobType;
+    });
+  }
+
+  // Completion Reason filter
+  if (completionReason && completionReason !== 'All') {
+    filtered = filtered.filter((c) => {
+      if (completionReason === 'Customer Self-Installation') {
+        return (c.completion_reason || '').toLowerCase().includes('self');
+      }
+      if (completionReason === 'Completed - No Stock Required') {
+        return (c.completion_reason || '').toLowerCase().includes('no stock');
+      }
+      if (completionReason === 'Other Completed') {
+        const rLower = (c.completion_reason || '').toLowerCase();
+        return !rLower.includes('self') && !rLower.includes('no stock');
+      }
+      return c.completion_reason === completionReason;
+    });
+  }
+
+  // Date Range filter
+  if (dateRange && dateRange !== 'All Time') {
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+
+    filtered = filtered.filter((c) => {
+      if (!c.completed_at) return true;
+      const d = new Date(c.completed_at);
+      if (isNaN(d.getTime())) return true;
+
+      if (dateRange === 'Today') {
+        return d >= todayStart;
+      }
+      if (dateRange === 'This Week') {
+        return d >= weekAgo;
+      }
+      if (dateRange === 'This Month') {
+        return d >= monthStart;
+      }
+      if (dateRange === 'Last Month') {
+        return d >= lastMonthStart && d <= lastMonthEnd;
+      }
+      return true;
+    });
+  }
+
+  // Sort
+  filtered.sort((a, b) => {
+    const dateA = new Date(a.completed_at || a.created_at || 0).getTime();
+    const dateB = new Date(b.completed_at || b.created_at || 0).getTime();
+    return sortOrder === 'asc' ? dateA - dateB : dateB - dateA;
+  });
+
+  const totalFilteredCount = filtered.length;
+  const totalPages = Math.ceil(totalFilteredCount / limitNum) || 1;
+  const paginated = filtered.slice(offset, offset + limitNum);
+
+  return {
+    checklists: paginated,
+    pagination: {
+      totalCount: totalFilteredCount,
+      page: pageNum,
+      limit: limitNum,
+      totalPages,
+    },
+    summary: {
+      total: totalCompleted,
+      customer_self_installed: customerSelfCount,
+      other_completed: otherCompletedCount,
+      this_month: thisMonthCount,
+    },
   };
 }
