@@ -27,6 +27,7 @@ import {
   Archive,
   Ticket,
   MapPin,
+  Lock,
 } from 'lucide-react';
 import InstallationCompletionModal from '../../../components/workspaces/InstallationCompletionModal';
 import TechnicianExpenseModal from '../../../components/workspaces/TechnicianExpenseModal';
@@ -790,18 +791,34 @@ export default function TechnicalWorkspace({ onSelectChecklist }) {
                                       ) : (
                                         <>
                                           <Package className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                                          <span>Pre-Installation Form</span>
+                                          <span>Pre-Installation: Not Submitted</span>
                                         </>
                                       )}
                                     </button>
                                   );
                                 })()}
-                                <button
-                                  onClick={() => setCompletionModalJob(item)}
-                                  className="px-3 py-1.5 text-xs font-bold text-white bg-purple-700 hover:bg-purple-800 rounded-lg shadow-2xs flex items-center gap-1.5 cursor-pointer w-fit"
-                                >
-                                  <FileCheck className="w-3.5 h-3.5" /> Post-Installation Device Report
-                                </button>
+                                {Boolean(
+                                  item.carry_status === 'RECORDED' ||
+                                  item.pre_installation_status === 'Submitted' ||
+                                  item.is_pre_installation_submitted
+                                ) ? (
+                                  <button
+                                    onClick={() => setCompletionModalJob(item)}
+                                    className="px-3 py-1.5 text-xs font-bold text-white bg-purple-700 hover:bg-purple-800 rounded-lg shadow-2xs flex items-center gap-1.5 cursor-pointer w-fit"
+                                    title="Submit Post-Installation Device Report"
+                                  >
+                                    <FileCheck className="w-3.5 h-3.5" /> Post-Installation Device Report
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    disabled
+                                    className="px-3 py-1.5 text-xs font-semibold text-gray-400 bg-gray-100 border border-gray-200 rounded-lg shadow-2xs flex items-center gap-1.5 cursor-not-allowed w-fit opacity-75"
+                                    title="Pre-Installation Form must be submitted first before Post-Installation Device Report becomes available"
+                                  >
+                                    <Lock className="w-3.5 h-3.5 text-gray-400" /> Post-Installation Device Report (Locked)
+                                  </button>
+                                )}
                                 <button
                                   type="button"
                                   onClick={() => setExtensionModalJob(item)}

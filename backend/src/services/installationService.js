@@ -341,6 +341,7 @@ export async function createChecklist(adminUserId, data, options = {}) {
     payment_status: paymentStatus,
     bom_snapshot: bomSnapshot,
     material_issuance_status: isInstallationJob ? (data.material_issuance_status || 'PENDING') : 'NOT_APPLICABLE',
+    carry_status: 'NOT_RECORDED',
     remarks: data.remarks ? data.remarks.trim() : null,
     client_confirmation: data.client_confirmation || 'Confirmed',
     created_at: new Date().toISOString(),

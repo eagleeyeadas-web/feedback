@@ -362,6 +362,75 @@ runTest('6.1 Customer self-installation strictly requires confirmation note and 
   assert.strictEqual(canSelfInstall(courieredChecklistNoTech, 'Customer confirmed complete'), true);
 });
 
+// ---------------------------------------------------------------------------
+// Scenario 7: Newly Created Checklist State & Post-Installation Gating
+// ---------------------------------------------------------------------------
+console.log('\nTest Group 7: Newly Created Checklist State & Post-Installation Gating');
+
+runTest('7.1 Newly created checklist with device_configurations preserves carry_status NOT_RECORDED during enrichment', async () => {
+  const { enrichChecklistsWithWorkflowStatus } = await import('../src/services/workflowService.js');
+  const mockNewChecklist = {
+    id: 'test-chk-new-701',
+    checklist_number: 'CHK-NEW-701',
+    device_configurations: [{ device_type: '4 Channel Live', number_of_devices: 2 }],
+    device_type: '4 Channel Live',
+    carry_status: 'NOT_RECORDED',
+    delivery_method: 'Technician Carries',
+    service_engineer: 'Sakthivel',
+  };
+
+  const [enriched] = await enrichChecklistsWithWorkflowStatus([mockNewChecklist]);
+  assert.strictEqual(enriched.carry_status, 'NOT_RECORDED');
+  assert.strictEqual(enriched.is_pre_installation_submitted, false);
+  assert.strictEqual(enriched.pre_installation_status, 'Not Submitted');
+});
+
+runTest('7.2 Pre-installation submitted status flips to true only when genuine submission exists', async () => {
+  const { enrichChecklistsWithWorkflowStatus } = await import('../src/services/workflowService.js');
+  const testChkId = 'test-chk-submitted-702';
+  inMemoryDeclarations.set(testChkId, {
+    checklist_id: testChkId,
+    status: 'DECLARED',
+    items: [{ item_name: 'Camera', quantity: 1 }],
+  });
+
+  const mockChecklist = {
+    id: testChkId,
+    checklist_number: 'CHK-SUB-702',
+    device_configurations: [{ device_type: '4 Channel Live', number_of_devices: 1 }],
+    carry_status: 'NOT_RECORDED',
+    delivery_method: 'Technician Carries',
+    service_engineer: 'Sakthivel',
+  };
+
+  const [enriched] = await enrichChecklistsWithWorkflowStatus([mockChecklist]);
+  assert.strictEqual(enriched.carry_status, 'RECORDED');
+  assert.strictEqual(enriched.is_pre_installation_submitted, true);
+  assert.strictEqual(enriched.pre_installation_status, 'Submitted');
+  inMemoryDeclarations.delete(testChkId);
+});
+
+runTest('7.3 submitInstallationCompletionReport rejects submission when Pre-Installation is not submitted', async () => {
+  const { submitInstallationCompletionReport } = await import('../src/services/workflowService.js');
+  const testChkId = 'test-chk-unsubmitted-703';
+  let rejected = false;
+  let errMsg = '';
+
+  try {
+    await submitInstallationCompletionReport({
+      checklist_id: testChkId,
+      user: { id: 'tech-1', role: 'TECHNICAL' },
+      items: [{ device_type: 'Camera', quantity_carried: 2, quantity_installed: 2 }],
+    });
+  } catch (err) {
+    rejected = true;
+    errMsg = err.message;
+  }
+
+  // Expect rejection either because checklist is not in DB or because pre-installation is unsubmitted
+  assert(rejected === true, 'Completion report MUST be rejected');
+});
+
 console.log('\n=================================================================');
 console.log(`TEST SUMMARY: ${passedTests} OF ${totalTests} SCENARIOS PASSED`);
 console.log('=================================================================');

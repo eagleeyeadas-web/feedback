@@ -869,6 +869,18 @@ export async function submitInstallationCompletionReport(param1, param2) {
     throw new Error('Installation checklist not found');
   }
 
+  // Backend Enforcement: Gating Post-Installation Device Report
+  // Technician-dependent checklists require a genuine Pre-Installation Form submission first!
+  const { isChecklistTechnicianDependent, isPreInstallationSubmitted } = await import('./backupItemService.js');
+  if (isChecklistTechnicianDependent(checklist)) {
+    const isPreSubmitted = await isPreInstallationSubmitted(checklist_id, checklist);
+    if (!isPreSubmitted) {
+      const gateErr = new Error('Pre-Installation Form must be successfully submitted before the Post-Installation Device Report can be submitted.');
+      gateErr.statusCode = 400;
+      throw gateErr;
+    }
+  }
+
   const isServiceJob = (checklist.installation_or_service || 'Installation') === 'Service';
   const rawSList = (Array.isArray(checklist.service_items) && checklist.service_items.length > 0)
     ? checklist.service_items
@@ -2380,16 +2392,17 @@ export async function enrichChecklistsWithWorkflowStatus(checklists) {
   if (!Array.isArray(checklists) || checklists.length === 0) return checklists;
 
   const ids = checklists.map((item) => item.id).filter(Boolean);
+  const uuidIds = ids.filter((id) => typeof id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id));
 
   const dbCarrySet = new Set();
   const dbReportMap = new Map();
 
-  if (ids.length > 0) {
+  if (uuidIds.length > 0) {
     try {
       const { data: carryRows, error: carryErr } = await supabase
         .from('job_device_carry_records')
         .select('checklist_id')
-        .in('checklist_id', ids);
+        .in('checklist_id', uuidIds);
 
       if (!carryErr && Array.isArray(carryRows)) {
         carryRows.forEach((r) => dbCarrySet.add(r.checklist_id));
@@ -2399,10 +2412,27 @@ export async function enrichChecklistsWithWorkflowStatus(checklists) {
     }
 
     try {
+      const { data: declRows, error: declErr } = await supabase
+        .from('pre_installation_backup_declarations')
+        .select('checklist_id, status')
+        .in('checklist_id', uuidIds);
+
+      if (!declErr && Array.isArray(declRows)) {
+        declRows.forEach((r) => {
+          if (['DECLARED', 'CORRECTED', 'VERIFIED'].includes(r.status)) {
+            dbCarrySet.add(r.checklist_id);
+          }
+        });
+      }
+    } catch (err) {
+      // Non-blocking fallback
+    }
+
+    try {
       const { data: reportRows, error: repErr } = await supabase
         .from('technical_installation_reports')
         .select('id, checklist_id, completion_status')
-        .in('checklist_id', ids);
+        .in('checklist_id', uuidIds);
 
       if (!repErr && Array.isArray(reportRows)) {
         reportRows.forEach((r) => dbReportMap.set(r.checklist_id, r));
@@ -2412,19 +2442,32 @@ export async function enrichChecklistsWithWorkflowStatus(checklists) {
     }
   }
 
+  let inMemoryDeclarations = null;
+  try {
+    const backupMod = await import('./backupItemService.js');
+    inMemoryDeclarations = backupMod.inMemoryDeclarations;
+  } catch (e) {}
+
   return checklists.map((item) => {
     let copy = { ...item };
 
-    // 1. Check carry record in DB or in-memory fallback store, or automatically true from Sales allocation
+    // 1. Check genuine carry record in DB or in-memory fallback store
     const inMemCarry = inMemoryCarryRecords.get(item.id);
+    const hasGenuineInMemCarry = Boolean(inMemCarry && ['SUBMITTED', 'AUDITED'].includes(inMemCarry.status));
+    const memDecl = inMemoryDeclarations?.get(item.id);
+    const hasGenuineInMemDecl = Boolean(memDecl && ['DECLARED', 'CORRECTED', 'VERIFIED'].includes(memDecl.status));
+
+    const hasDbCarryStatus = (item.carry_status && item.carry_status.toUpperCase() === 'RECORDED');
+
     const hasCarryRecord =
       dbCarrySet.has(item.id) ||
-      Boolean(inMemCarry) ||
-      (Array.isArray(item.device_configurations) && item.device_configurations.length > 0) ||
-      Boolean(item.device_type) ||
-      (item.carry_status && item.carry_status.toUpperCase() === 'RECORDED');
+      hasGenuineInMemCarry ||
+      hasGenuineInMemDecl ||
+      hasDbCarryStatus;
 
     copy.carry_status = hasCarryRecord ? 'RECORDED' : 'NOT_RECORDED';
+    copy.is_pre_installation_submitted = hasCarryRecord;
+    copy.pre_installation_status = hasCarryRecord ? 'Submitted' : 'Not Submitted';
     if (!copy.reconciliation_status || copy.reconciliation_status === 'SALES_CREATED') {
       copy.reconciliation_status = hasCarryRecord ? 'SALES_ALLOCATED' : 'SALES_CREATED';
     }

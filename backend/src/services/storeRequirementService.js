@@ -1056,7 +1056,8 @@ export async function getStoreMaterialRequirements(params = {}) {
     );
     const preInstallStatus = hasPreInstallSubmitted ? 'Submitted' : 'Pending';
     const preInstallTimestamp = backupDecl?.declaration_timestamp ||
-      (hasPreInstallSubmitted ? (rec.submission_date || rec.created_at) : null);
+      rec.carry_record?.submission_date ||
+      (hasPreInstallSubmitted ? (rec.submission_date || null) : null);
 
     const stockIssuanceStatus = isCourier
       ? (isCourierIssued ? 'Completed' : 'Pending')
