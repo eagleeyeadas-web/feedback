@@ -208,6 +208,7 @@ export default function StoreInstallationRequirements({ token, onSelectChecklist
   const handleExtraIssuanceSubmit = async (e) => {
     e.preventDefault();
     if (!token || !extraDeviceModal) return;
+    if (submittingExtraIssuance) return;
     setExtraIssuanceError('');
     setSubmittingExtraIssuance(true);
 
@@ -228,10 +229,14 @@ export default function StoreInstallationRequirements({ token, onSelectChecklist
         throw new Error('Please enter a quantity greater than 0 for at least one item.');
       }
 
+      const chkId = extraDeviceModal.checklist.checklist_id || extraDeviceModal.checklist.id;
+      const idempotencyKey = `EXT-${chkId}-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+
       const res = await issueExtraDevicesApi(token, {
-        checklist_id: extraDeviceModal.checklist.checklist_id || extraDeviceModal.checklist.id,
+        checklist_id: chkId,
         items: itemsPayload,
         remarks: extraIssuanceRemarks.trim(),
+        idempotency_key: idempotencyKey,
       });
 
       showToast(`Extra backup devices successfully issued! Status: ${res.issuance_status || 'Issued'}`);

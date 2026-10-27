@@ -40,7 +40,7 @@ export default function IssueMaterialsModal({ checklist, token, onClose, onSucce
 
   const [issueDevices, setIssueDevices] = useState(!devicesAlreadyIssued);
   const [issueMaterials, setIssueMaterials] = useState(!isCourierJob && !materialsAlreadyIssued);
-  const [issueBackupItems, setIssueBackupItems] = useState(!isCourierJob);
+  const [issueBackupItems, setIssueBackupItems] = useState(false);
 
   useEffect(() => {
     if (!token) return;

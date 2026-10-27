@@ -126,7 +126,7 @@ router.post('/issue-full-job', requireRole('STORE_MANAGER', 'ADMIN'), async (req
       checklist_id,
       issue_devices: issue_devices !== undefined ? Boolean(issue_devices) : true,
       issue_materials: issue_materials !== undefined ? Boolean(issue_materials) : true,
-      issue_backup_items: issue_backup_items !== undefined ? Boolean(issue_backup_items) : true,
+      issue_backup_items: issue_backup_items !== undefined ? Boolean(issue_backup_items) : false,
       remarks,
       user: req.profile,
     });
@@ -173,11 +173,12 @@ router.post('/issue-service-stock', requireRole('STORE_MANAGER', 'ADMIN'), async
  */
 router.post('/issue-extra-devices', requireRole('STORE_MANAGER', 'ADMIN'), async (req, res) => {
   try {
-    const { checklist_id, items, remarks } = req.body;
+    const { checklist_id, items, remarks, idempotency_key } = req.body;
     const result = await issueExtraBackupDevices({
       checklist_id,
       items,
       remarks,
+      idempotency_key: idempotency_key || req.headers['x-idempotency-key'],
       user: req.profile || req.user,
     });
     return res.json(result);

@@ -453,6 +453,51 @@ export async function getBackupDeclaration(checklistId) {
   // Compute live quantities and stock availability for items
   const enrichedItems = await enrichBackupItemsWithLiveStock(items);
 
+  // Self-healing: If all items show 0 issued, check stock_movements for recorded extra backup issuances
+  const needsReconciliation = enrichedItems.length > 0 && enrichedItems.every((it) => (Number(it.quantity_issued) || 0) === 0);
+  if (needsReconciliation) {
+    try {
+      const chkNum = checklist?.checklist_number || decl.checklist_number;
+      const { data: movs } = await supabase
+        .from('stock_movements')
+        .select('item_name, quantity, reason_or_remarks, created_at')
+        .or(`checklist_id.eq.${checklistId},reason_or_remarks.ilike.%${chkNum || checklistId}%`)
+        .or(`movement_type.eq.EXTRA_BACKUP_ISSUED,reason_or_remarks.ilike.%Extra backup%`);
+
+      if (Array.isArray(movs) && movs.length > 0) {
+        let anyReconciled = false;
+        for (const it of enrichedItems) {
+          const matchingMovs = movs.filter((m) => {
+            const mName = (m.item_name || '').toLowerCase().trim();
+            const itName = (it.item_name || '').toLowerCase().trim();
+            return mName === itName || itName.includes(mName) || mName.includes(itName);
+          });
+          if (matchingMovs.length > 0) {
+            const totalIssuedInMovs = matchingMovs.reduce((sum, m) => sum + Math.abs(Number(m.quantity) || 0), 0);
+            if (totalIssuedInMovs > 0) {
+              const reqQty = Number(it.quantity) || 0;
+              it.quantity_issued = Math.min(reqQty, totalIssuedInMovs);
+              it.quantity_remaining = Math.max(0, reqQty - it.quantity_issued);
+              anyReconciled = true;
+
+              if (it.id) {
+                // Update only valid columns: quantity_issued, updated_at
+                supabase
+                  .from('pre_installation_backup_items')
+                  .update({ quantity_issued: it.quantity_issued, updated_at: new Date().toISOString() })
+                  .eq('id', it.id)
+                  .then(() => {})
+                  .catch(() => {});
+              }
+            }
+          }
+        }
+      }
+    } catch (reconcileErr) {
+      // Non-blocking
+    }
+  }
+
   // Compute overall issuance status
   let finalIssuanceStatus = decl.issuance_status;
   if (!finalIssuanceStatus || finalIssuanceStatus === 'DECLARED' || finalIssuanceStatus === 'Pending') {
@@ -969,19 +1014,34 @@ export async function reconcileBackupItems({ checklistId, user, items = [] }) {
   };
 }
 
-const inFlightBackupIssuances = new Set();
+export const inFlightBackupIssuances = new Set();
+export const completedBackupIssuances = new Map(); // key -> { result, timestamp }
+
+// Periodic cleanup of completed idempotency cache (keep 1 hour)
+const cleanupInterval = setInterval(() => {
+  const now = Date.now();
+  for (const [k, v] of completedBackupIssuances.entries()) {
+    if (now - (v.timestamp || 0) > 3600000) {
+      completedBackupIssuances.delete(k);
+    }
+  }
+}, 300000);
+if (cleanupInterval.unref) {
+  cleanupInterval.unref();
+}
 
 /**
  * Server-side atomic transaction for Store Manager to review and issue extra backup devices.
  * Supports full or partial issuance, checks live usable stock before deduction,
  * records distinct stock_movements with EXTRA_BACKUP_ISSUED, updates quantity_issued,
  * updates declaration issuance_status (Pending, Partially Issued, Issued), and maintains issuance history.
- * Prevents concurrent duplicate clicks and prevents negative inventory.
+ * Prevents concurrent duplicate clicks, enforces server-side idempotency, and prevents negative inventory.
  */
 export async function issueExtraBackupDevices({
   checklist_id,
   items = [],
   remarks = '',
+  idempotency_key = null,
   user,
 }) {
   if (!checklist_id) throw new Error('Checklist ID is required.');
@@ -993,11 +1053,23 @@ export async function issueExtraBackupDevices({
     }
   }
 
+  // 1. In-memory idempotency check (fast-path for duplicate button clicks or network retries)
+  const reqIdempotencyKey = idempotency_key ? String(idempotency_key).trim() : null;
+  if (reqIdempotencyKey && completedBackupIssuances.has(reqIdempotencyKey)) {
+    const cached = completedBackupIssuances.get(reqIdempotencyKey);
+    return cached.result;
+  }
+
+  // 2. In-flight concurrency lock to prevent simultaneous duplicate requests
   if (inFlightBackupIssuances.has(checklist_id)) {
-    throw new Error('Stock issuance for extra backup devices is already in progress for this checklist. Please wait.');
+    const conflictErr = new Error(`Stock issuance for extra backup devices is already in progress for checklist ${checklist_id}. Please wait.`);
+    conflictErr.status = 409;
+    throw conflictErr;
   }
 
   inFlightBackupIssuances.add(checklist_id);
+
+  let canonicalChecklistId = checklist_id;
 
   try {
     const declaration = await getBackupDeclaration(checklist_id);
@@ -1023,6 +1095,61 @@ export async function issueExtraBackupDevices({
 
     const techName = checklist?.service_engineer || declaration.technician_name || 'Assigned Technician';
     const chkNum = checklist?.checklist_number || declaration.checklist_number || checklist_id;
+    canonicalChecklistId = checklist?.id || checklist_id;
+
+    // 3. Database idempotency check: check if stock_movements already contains movements for this idempotency key or reference
+    if (reqIdempotencyKey) {
+      try {
+        const { data: existingMovs } = await supabase
+          .from('stock_movements')
+          .select('id, item_name, quantity, reason_or_remarks, reference_transaction_id, idempotency_key, created_at')
+          .or(`idempotency_key.eq.${reqIdempotencyKey},reference_transaction_id.eq.${reqIdempotencyKey}`);
+        if (Array.isArray(existingMovs) && existingMovs.length > 0) {
+          const replayResult = {
+            success: true,
+            already_issued: true,
+            idempotent_replay: true,
+            message: `Extra backup devices for checklist ${chkNum} were already issued (Transaction: ${reqIdempotencyKey}). Duplicate deduction prevented.`,
+            issuance_status: 'Issued',
+            issued_items: declItems.map((d) => ({
+              item_name: d.item_name,
+              quantity_issued: Number(d.quantity_issued) || Number(d.quantity),
+              unit: d.unit || 'Nos.',
+            })),
+          };
+          completedBackupIssuances.set(reqIdempotencyKey, { result: replayResult, timestamp: Date.now() });
+          return replayResult;
+        }
+      } catch (checkMovErr) {
+        // Non-blocking
+      }
+    }
+
+    // 4. Pre-check: If all declared items have already been fully issued
+    const allDeclaredAlreadyIssued = declItems.length > 0 && declItems.every(
+      (it) => (Number(it.quantity_issued) || 0) >= (Number(it.quantity) || 0)
+    );
+    if (allDeclaredAlreadyIssued) {
+      const alreadyResult = {
+        success: true,
+        already_issued: true,
+        message: `All declared extra backup items for checklist ${chkNum} have already been fully issued. Duplicate deduction prevented.`,
+        issuance_status: 'Issued',
+        issued_items: declItems.map((d) => ({
+          item_name: d.item_name,
+          quantity_issued: Number(d.quantity_issued) || Number(d.quantity),
+          unit: d.unit || 'Nos.',
+        })),
+      };
+      if (reqIdempotencyKey) {
+        completedBackupIssuances.set(reqIdempotencyKey, { result: alreadyResult, timestamp: Date.now() });
+      }
+      completedBackupIssuances.set(String(checklist_id), { result: alreadyResult, timestamp: Date.now() });
+      if (canonicalChecklistId && canonicalChecklistId !== checklist_id) {
+        completedBackupIssuances.set(String(canonicalChecklistId), { result: alreadyResult, timestamp: Date.now() });
+      }
+      return alreadyResult;
+    }
 
     // Determine items to issue
     const itemsToProcess = [];
@@ -1045,7 +1172,16 @@ export async function issueExtraBackupDevices({
 
         const remaining = Math.max(0, (Number(targetDeclItem.quantity) || 0) - (Number(targetDeclItem.quantity_issued) || 0));
         if (remaining <= 0) {
-          throw new Error(`All declared quantities for "${targetDeclItem.item_name}" have already been issued.`);
+          if (items.length === 1) {
+            return {
+              success: true,
+              already_issued: true,
+              message: `All declared quantities for "${targetDeclItem.item_name}" have already been issued. Duplicate deduction prevented.`,
+              issuance_status: declaration.issuance_status || 'Issued',
+              issued_items: [],
+            };
+          }
+          continue;
         }
         if (qtyToIssue > remaining) {
           throw new Error(
@@ -1079,12 +1215,17 @@ export async function issueExtraBackupDevices({
         (it) => (Number(it.quantity_issued) || 0) >= (Number(it.quantity) || 0)
       );
       if (allIssued) {
-        return {
+        const resObj = {
           success: true,
-          message: 'All declared extra backup items have already been fully issued.',
+          already_issued: true,
+          message: `All declared extra backup items for checklist ${chkNum} have already been fully issued. Duplicate deduction prevented.`,
           issuance_status: 'Issued',
           issued_items: [],
         };
+        if (reqIdempotencyKey) {
+          completedBackupIssuances.set(reqIdempotencyKey, { result: resObj, timestamp: Date.now() });
+        }
+        return resObj;
       }
       throw new Error('Please enter a positive quantity greater than 0 to issue.');
     }
@@ -1150,6 +1291,8 @@ export async function issueExtraBackupDevices({
 
     // Step 2: Atomic Deduction & Ledger Movement Recording
     const nowIso = new Date().toISOString();
+    const issuanceReferenceId = `EXT-ISS-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    const effectiveIdempotencyKey = reqIdempotencyKey || `MOV-EXT-${canonicalChecklistId}-${Date.now()}`;
     const issuedResults = [];
 
     for (const plan of plannedDeductions) {
@@ -1178,7 +1321,9 @@ export async function issueExtraBackupDevices({
           unit,
           balance_before: stockBefore,
           balance_after: stockAfter,
-          checklist_id,
+          checklist_id: canonicalChecklistId,
+          reference_transaction_id: issuanceReferenceId,
+          idempotency_key: effectiveIdempotencyKey,
           performed_by: user?.id && String(user.id).length === 36 ? user.id : null,
           performer_name: user?.name || user?.full_name || user?.email || 'Store Manager',
           performer_email: user?.email || null,
@@ -1208,7 +1353,9 @@ export async function issueExtraBackupDevices({
           unit,
           balance_before: stockBefore,
           balance_after: stockAfter,
-          checklist_id,
+          checklist_id: canonicalChecklistId,
+          reference_transaction_id: issuanceReferenceId,
+          idempotency_key: effectiveIdempotencyKey,
           performed_by: user?.id && String(user.id).length === 36 ? user.id : null,
           performer_name: user?.name || user?.full_name || user?.email || 'Store Manager',
           performer_email: user?.email || null,
@@ -1222,18 +1369,21 @@ export async function issueExtraBackupDevices({
       declItem.quantity_remaining = Math.max(0, (Number(declItem.quantity) || 0) - declItem.quantity_issued);
       declItem.updated_at = nowIso;
 
+      // CRITICAL FIX: Only update valid columns in pre_installation_backup_items (NO quantity_remaining!)
       if (declItem.id) {
         try {
-          await supabase
+          const { error: itemUpdateErr } = await supabase
             .from('pre_installation_backup_items')
             .update({
               quantity_issued: declItem.quantity_issued,
-              quantity_remaining: declItem.quantity_remaining,
               updated_at: nowIso,
             })
             .eq('id', declItem.id);
-        } catch (itemUpdateErr) {
-          console.warn('Could not update backup item in DB:', itemUpdateErr.message);
+          if (itemUpdateErr) {
+            console.warn('Could not update backup item in DB:', itemUpdateErr.message);
+          }
+        } catch (itemErr) {
+          console.warn('Could not update backup item in DB:', itemErr.message);
         }
       }
 
@@ -1257,6 +1407,8 @@ export async function issueExtraBackupDevices({
 
     // Maintain issuance history
     const historyEntry = {
+      action: 'EXTRA_BACKUP_ISSUED',
+      reference_id: issuanceReferenceId,
       issued_at: nowIso,
       issued_by: user?.id || null,
       issued_by_name: user?.name || user?.full_name || user?.email || 'Store Manager',
@@ -1270,25 +1422,31 @@ export async function issueExtraBackupDevices({
     issuanceHistory.push(historyEntry);
 
     // Update declaration in Supabase and memory
-    const updateDeclPayload = {
+    const fullDeclPayload = {
       issuance_status: finalIssuanceStatus,
       issued_by: user?.id && String(user.id).length === 36 ? user.id : null,
       issued_at: nowIso,
       issuance_history: issuanceHistory,
+      history: issuanceHistory,
       updated_at: nowIso,
     };
 
     try {
-      await supabase
+      const { error: dbDeclErr } = await supabase
         .from('pre_installation_backup_declarations')
-        .update({
-          issuance_status: finalIssuanceStatus,
-          issued_by: user?.id && String(user.id).length === 36 ? user.id : null,
-          issued_at: nowIso,
-          issuance_history: issuanceHistory,
-          updated_at: nowIso,
-        })
+        .update(fullDeclPayload)
         .eq('id', declaration.id);
+
+      if (dbDeclErr) {
+        // Fallback for schema before migration 055: update only history JSONB and updated_at
+        await supabase
+          .from('pre_installation_backup_declarations')
+          .update({
+            history: issuanceHistory,
+            updated_at: nowIso,
+          })
+          .eq('id', declaration.id);
+      }
     } catch (dbDeclErr) {
       console.warn('Could not update pre_installation_backup_declarations DB:', dbDeclErr.message);
     }
@@ -1301,14 +1459,17 @@ export async function issueExtraBackupDevices({
           extra_devices_issuance_status: finalIssuanceStatus,
           updated_at: nowIso,
         })
-        .eq('checklist_id', checklist_id);
+        .or(`checklist_id.eq.${canonicalChecklistId},id.eq.${canonicalChecklistId}`);
     } catch (storeReqErr) {
       console.warn('Could not update store_material_requirements timestamp:', storeReqErr.message);
     }
 
     // Update in-memory declaration
-    Object.assign(declaration, updateDeclPayload);
+    Object.assign(declaration, fullDeclPayload);
     inMemoryDeclarations.set(checklist_id, declaration);
+    if (canonicalChecklistId && canonicalChecklistId !== checklist_id) {
+      inMemoryDeclarations.set(canonicalChecklistId, declaration);
+    }
     saveBackupItemsStorage();
 
     // Audit log
@@ -1322,6 +1483,7 @@ export async function issueExtraBackupDevices({
       details: {
         checklist_id,
         checklist_number: chkNum,
+        reference_id: issuanceReferenceId,
         technician_name: techName,
         issued_items: issuedResults,
         issuance_status: finalIssuanceStatus,
@@ -1330,15 +1492,27 @@ export async function issueExtraBackupDevices({
     });
 
     const enrichedFinalItems = await enrichBackupItemsWithLiveStock(declItems);
-    return {
+    const finalResponse = {
       success: true,
       message: `Extra backup devices successfully issued (${finalIssuanceStatus}).`,
       issuance_status: finalIssuanceStatus,
       issued_items: issuedResults,
       items: enrichedFinalItems,
+      reference_id: issuanceReferenceId,
     };
+
+    if (reqIdempotencyKey) {
+      completedBackupIssuances.set(reqIdempotencyKey, { result: finalResponse, timestamp: Date.now() });
+    }
+    completedBackupIssuances.set(String(checklist_id), { result: finalResponse, timestamp: Date.now() });
+    if (canonicalChecklistId && canonicalChecklistId !== checklist_id) {
+      completedBackupIssuances.set(String(canonicalChecklistId), { result: finalResponse, timestamp: Date.now() });
+    }
+
+    return finalResponse;
   } finally {
     inFlightBackupIssuances.delete(checklist_id);
+    if (canonicalChecklistId) inFlightBackupIssuances.delete(canonicalChecklistId);
   }
 }
 
