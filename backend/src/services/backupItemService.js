@@ -1543,7 +1543,7 @@ export async function isPreInstallationSubmitted(checklistId, checklist = null) 
         .eq('id', checklistId)
         .maybeSingle();
 
-      if (dbChk?.carry_status === 'RECORDED' || dbChk?.installation_status === 'Completed') {
+      if (dbChk?.carry_status === 'RECORDED') {
         return true;
       }
     } catch (e) {}

@@ -788,11 +788,20 @@ export default function StoreInstallationRequirements({ token, onSelectChecklist
                         type="button"
                         onClick={() => setIssueModalChecklist({
                           id: req.checklist_id || req.id,
+                          checklist_id: req.checklist_id || req.id,
                           checklist_number: req.checklist_number,
-                          client_name: req.client_name,
+                          client_name: req.client_name || req.checklist?.client_name,
+                          client_mobile: req.client_mobile || req.checklist?.client_mobile,
+                          client_location: req.client_location || req.checklist?.client_location || req.checklist?.location,
+                          destination: req.client_location || req.checklist?.client_location || req.checklist?.location,
                           job_type: 'Installation',
+                          delivery_method: req.delivery_method || 'Technician Carries',
                           device_items: deviceItems,
                           device_configurations: req.device_configurations,
+                          devices_issuance_status: req.devices_issuance_status,
+                          material_issuance_status: req.material_issuance_status,
+                          stock_issuance_status: req.stock_issuance_status,
+                          is_issued: isIssued,
                           bom_snapshot: req.bom_snapshot,
                           material_items: materialItems,
                         })}
@@ -845,7 +854,7 @@ export default function StoreInstallationRequirements({ token, onSelectChecklist
                       <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">Customer &amp; Checklist Details</span>
                       <span className="font-bold text-gray-900 text-sm flex items-center gap-1.5 mt-0.5">
                         <User className="w-3.5 h-3.5 text-gray-400" />
-                        {req.client_name}
+                        {req.client_name || req.checklist?.client_name || req.customer_name || 'Not provided'}
                       </span>
                       {req.client_mobile && (
                         <a
@@ -858,7 +867,7 @@ export default function StoreInstallationRequirements({ token, onSelectChecklist
                       )}
                       <div className="text-gray-600 flex items-start gap-1 mt-1 text-[11px]">
                         <MapPin className="w-3 h-3 text-rose-500 shrink-0 mt-0.5" />
-                        <span>Destination: <strong>{req.client_location || 'Not provided'}</strong></span>
+                        <span>Destination: <strong>{req.client_location || req.checklist?.client_location || req.checklist?.location || req.destination || 'Not provided'}</strong></span>
                       </div>
                       {req.google_maps_location && (
                         <a
@@ -1025,7 +1034,7 @@ export default function StoreInstallationRequirements({ token, onSelectChecklist
                     <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">Client Information</span>
                     <span className="font-bold text-gray-900 text-sm flex items-center gap-1.5 mt-0.5">
                       <User className="w-3.5 h-3.5 text-gray-400" />
-                      {req.client_name}
+                      {req.client_name || req.checklist?.client_name || req.customer_name || 'Not provided'}
                     </span>
                     <a
                       href={`tel:${req.client_mobile}`}
@@ -1036,7 +1045,7 @@ export default function StoreInstallationRequirements({ token, onSelectChecklist
                     </a>
                     <div className="text-gray-600 flex items-start gap-1 mt-1 text-[11px]">
                       <MapPin className="w-3 h-3 text-rose-500 shrink-0 mt-0.5" />
-                      <span>{req.client_location || 'Not provided'}</span>
+                      <span>{req.client_location || req.checklist?.client_location || req.checklist?.location || req.destination || 'Not provided'}</span>
                     </div>
                     {req.google_maps_location && (
                       <a

@@ -45,7 +45,7 @@ export default function IssueMaterialsModal({ checklist, token, onClose, onSucce
   useEffect(() => {
     if (!token) return;
     setLoadingInv(true);
-    const chkId = checklist.id || checklist.checklist_id;
+    const chkId = checklist.checklist_id || checklist.id;
     Promise.all([
       fetchInventoryProducts(token).catch(() => []),
       fetchMaterialInventory(token).catch(() => []),
@@ -254,7 +254,7 @@ export default function IssueMaterialsModal({ checklist, token, onClose, onSucce
           }));
 
         await issueServiceJobStockApi(token, {
-          checklist_id: checklist.id || checklist.checklist_id,
+          checklist_id: checklist.checklist_id || checklist.id,
           items: payloadItems,
           remarks: remarks.trim() || `Authorized service items issuance for job ${checklist.checklist_number}`,
         });
@@ -285,11 +285,11 @@ export default function IssueMaterialsModal({ checklist, token, onClose, onSucce
 
       try {
         await issueFullJobStockApi(token, {
-          checklist_id: checklist.id || checklist.checklist_id,
+          checklist_id: checklist.checklist_id || checklist.id,
           issue_devices: true,
           issue_materials: false,
           issue_backup_items: false,
-          remarks: remarks.trim() || `Authorized courier stock issuance for job ${checklist.checklist_number} to recipient ${checklist.client_name || 'Customer'}`,
+          remarks: remarks.trim() || `Authorized courier stock issuance for job ${checklist.checklist_number} to recipient ${checklist.client_name || checklist.customer_name || 'Customer'}`,
         });
         setCourierIssuedSuccess(true);
         if (onSuccess) onSuccess();
@@ -328,7 +328,7 @@ export default function IssueMaterialsModal({ checklist, token, onClose, onSucce
 
     try {
       await issueFullJobStockApi(token, {
-        checklist_id: checklist.id || checklist.checklist_id,
+        checklist_id: checklist.checklist_id || checklist.id,
         issue_devices: willIssueDevices,
         issue_materials: willIssueMaterials,
         issue_backup_items: willIssueBackup,
@@ -369,7 +369,7 @@ export default function IssueMaterialsModal({ checklist, token, onClose, onSucce
                 )}
               </div>
               <p className="text-xs text-gray-500">
-                Job: <strong className="font-mono text-gray-800">{checklist.checklist_number}</strong> ({checklist.client_name}) • <span className={`font-semibold ${isCourierJob ? 'text-indigo-700' : isServiceJob ? 'text-purple-700' : 'text-blue-700'}`}>
+                Job: <strong className="font-mono text-gray-800">{checklist.checklist_number}</strong> ({checklist.client_name || checklist.customer_name || 'Valued Customer'}) • <span className={`font-semibold ${isCourierJob ? 'text-indigo-700' : isServiceJob ? 'text-purple-700' : 'text-blue-700'}`}>
                   {isCourierJob ? 'Product Couriered' : (checklist.job_type || checklist.installation_or_service || 'Installation')}
                 </span>
                 {isCourierJob ? (

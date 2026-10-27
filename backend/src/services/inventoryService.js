@@ -1095,7 +1095,7 @@ export async function issueDevicesForChecklist({
         status: 'ISSUED',
         updated_at: new Date().toISOString(),
       })
-      .eq('checklist_id', checklist_id);
+      .or(`checklist_id.eq.${checklist_id},id.eq.${checklist_id}`);
   } catch (dbDevErr) {
     console.warn('DB store_material_requirements update error for devices:', dbDevErr.message);
   }

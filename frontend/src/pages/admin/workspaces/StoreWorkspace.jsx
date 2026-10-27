@@ -186,15 +186,17 @@ export default function StoreWorkspace({ onSelectChecklist }) {
       const rawPending = reqData.requirements || [];
       const cleanPending = rawPending.filter((job) => {
         const isCourier = job.delivery_method === 'Product Couriered' || job.is_courier || job.job_type === 'Courier';
+        const isFullyIssued = job.stock_issuance_status === 'Completed' ||
+          job.is_issued === true ||
+          job.status === 'ISSUED';
+        if (isFullyIssued) return false;
         if (isCourier) {
-          const isIssued = job.stock_issuance_status === 'Completed' ||
-            job.is_issued === true ||
-            job.status === 'ISSUED' ||
+          const isCourierIssued =
             job.material_issuance_status === 'ISSUED' ||
             job.devices_issuance_status === 'ISSUED' ||
             job.courier_dispatch_status === 'ISSUED' ||
             Boolean(job.is_courier_dispatched);
-          return !isIssued;
+          return !isCourierIssued;
         }
         return job.material_issuance_status !== 'ISSUED' || job.devices_issuance_status !== 'ISSUED';
       });
@@ -1257,8 +1259,8 @@ export default function StoreWorkspace({ onSelectChecklist }) {
                     <span className="font-mono text-xs font-black text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
                       {job.checklist_number}
                     </span>
-                    <h3 className="text-sm font-bold text-gray-900 mt-1">{job.client_name}</h3>
-                    <p className="text-xs text-gray-500">{job.client_location || 'Location not specified'}</p>
+                    <h3 className="text-sm font-bold text-gray-900 mt-1">{job.client_name || job.customer_name || 'Not provided'}</h3>
+                    <p className="text-xs text-gray-500">{job.client_location || job.client_address || job.location || job.destination || 'Location not specified'}</p>
                   </div>
                   {job.has_shortage ? (
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 flex items-center gap-1">
