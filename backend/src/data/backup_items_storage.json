@@ -1,5 +1,127 @@
 {
-  "declarations": {},
+  "declarations": {
+    "2e6e12f3-dd85-441c-be76-b43563f46e1b": {
+      "id": "a37bc513-ad8b-49cb-b7cc-0d6a6c1fa57a",
+      "checklist_id": "2e6e12f3-dd85-441c-be76-b43563f46e1b",
+      "technician_id": null,
+      "technician_name": "Mathi",
+      "has_backup_items": true,
+      "no_items_reason": null,
+      "status": "DECLARED",
+      "declaration_timestamp": "2026-10-29T04:32:21.709+00:00",
+      "history": [
+        {
+          "action": "EXTRA_BACKUP_ISSUED",
+          "reference_id": "EXT-ISS-1793248351612-u9a8",
+          "issued_at": "2026-10-29T04:32:31.612Z",
+          "issued_by": "00000000-0000-0000-0000-000000000099",
+          "issued_by_name": "Store Manager",
+          "technician_recipient": "Mathi",
+          "issued_items": [
+            {
+              "item_name": "2 Channel Recording",
+              "quantity_issued": 3,
+              "total_issued": 3,
+              "quantity_remaining": 0,
+              "unit": "Nos."
+            }
+          ],
+          "remarks": "Approved full 3 loose backup cameras for site contingency",
+          "issuance_status": "Issued"
+        }
+      ],
+      "created_at": "2026-10-29T04:32:21.709+00:00",
+      "updated_at": "2026-10-29T04:32:31.612Z",
+      "checklist_number": "EE-INST-20261029-0001",
+      "customer_name": "Kumar Enterprises",
+      "sales_expected": true,
+      "issuance_status": "Issued",
+      "items": [
+        {
+          "id": "313ad52a-9b51-4c4b-aa3c-18a3205fa373",
+          "declaration_id": "a37bc513-ad8b-49cb-b7cc-0d6a6c1fa57a",
+          "checklist_id": "2e6e12f3-dd85-441c-be76-b43563f46e1b",
+          "item_id": "cd96f782-a5ad-4998-b135-9cbd417b08cf",
+          "item_name": "2 Channel Recording",
+          "item_sku": "EE-2CH-REC",
+          "quantity": 3,
+          "unit": "Nos.",
+          "quantity_issued": 3,
+          "quantity_used": 0,
+          "quantity_returned": 0,
+          "quantity_damaged": 0,
+          "quantity_missing": 0,
+          "discrepancy_reason": null,
+          "created_at": "2026-10-29T04:32:21.709+00:00",
+          "updated_at": "2026-10-29T04:32:31.612Z",
+          "category": "Installation Material",
+          "quantity_remaining": 0,
+          "available_stock": 96,
+          "shortage": 0
+        }
+      ],
+      "issuance_history": [
+        {
+          "action": "EXTRA_BACKUP_ISSUED",
+          "reference_id": "EXT-ISS-1793248351612-u9a8",
+          "issued_at": "2026-10-29T04:32:31.612Z",
+          "issued_by": "00000000-0000-0000-0000-000000000099",
+          "issued_by_name": "Store Manager",
+          "technician_recipient": "Mathi",
+          "issued_items": [
+            {
+              "item_name": "2 Channel Recording",
+              "quantity_issued": 3,
+              "total_issued": 3,
+              "quantity_remaining": 0,
+              "unit": "Nos."
+            }
+          ],
+          "remarks": "Approved full 3 loose backup cameras for site contingency",
+          "issuance_status": "Issued"
+        }
+      ],
+      "issued_by": "00000000-0000-0000-0000-000000000099",
+      "issued_at": "2026-10-29T04:32:31.612Z"
+    },
+    "9d34f437-de98-4814-8f72-89613a70124f": {
+      "id": "9c43c840-ebaa-40af-a275-fa0f6c588e5b",
+      "checklist_id": "9d34f437-de98-4814-8f72-89613a70124f",
+      "technician_id": null,
+      "technician_name": "ramesh.tech@safdrive.com",
+      "has_backup_items": true,
+      "no_items_reason": null,
+      "status": "DECLARED",
+      "declaration_timestamp": "2026-10-29T04:32:39.692+00:00",
+      "history": [],
+      "created_at": "2026-10-29T04:32:39.692+00:00",
+      "updated_at": "2026-10-29T04:32:39.692+00:00",
+      "issuance_status": "Pending",
+      "issuance_history": [],
+      "items": [
+        {
+          "id": "d9f7c4ed-f3cd-437a-b5d1-828242854f4a",
+          "declaration_id": "9c43c840-ebaa-40af-a275-fa0f6c588e5b",
+          "checklist_id": "9d34f437-de98-4814-8f72-89613a70124f",
+          "item_id": "887f4d7d-d9ad-4343-9e89-11d7c031bbb4",
+          "item_name": "2 Channel Recording",
+          "item_sku": null,
+          "quantity": 4,
+          "unit": "Nos.",
+          "quantity_issued": 0,
+          "quantity_used": 0,
+          "quantity_returned": 0,
+          "quantity_damaged": 0,
+          "quantity_missing": 0,
+          "discrepancy_reason": null,
+          "created_at": "2026-10-29T04:32:39.692+00:00",
+          "updated_at": "2026-10-29T04:32:39.692+00:00",
+          "category": "Installation Material"
+        }
+      ],
+      "sales_expected": false
+    }
+  },
   "verifiedReturns": [],
-  "updated_at": "2026-10-26T10:04:00.771Z"
+  "updated_at": "2026-10-29T04:32:40.249Z"
 }

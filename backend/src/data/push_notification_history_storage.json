@@ -1,4 +1,697 @@
 {
-  "history": [],
-  "updated_at": "2026-10-26T10:04:00.771Z"
+  "history": [
+    {
+      "id": "e49f2824-520c-4cfc-8c4c-8b0c4f3415fb",
+      "event_id": "checklist-created-eb4d833f-c7f4-4543-87b9-1b6c2a42963b",
+      "checklist_id": "eb4d833f-c7f4-4543-87b9-1b6c2a42963b",
+      "checklist_number": "EE-INST-20261027-0021",
+      "title": "Eagle Eye SafDrive — New Installation Checklist",
+      "body": "A new installation checklist has been created.\nJob #EE-INST-20261027-0021 • Tech: John Engineer • Loc: Downtown Park • Time: 06:27 pm",
+      "url": "/admin/installation-checklists/eb4d833f-c7f4-4543-87b9-1b6c2a42963b",
+      "recipients_attempted": 28,
+      "recipients_succeeded": 3,
+      "recipients_failed": 25,
+      "delivery_details": [
+        {
+          "userId": "00000000-0000-0000-0000-000000000001",
+          "userEmail": "sales@eagleeyesafdrive.com",
+          "status": "FAILED",
+          "error": "The subscription auth key should be at least 16 bytes long",
+          "statusCode": 0
+        },
+        {
+          "userId": "00000000-0000-0000-0000-000000000001",
+          "userEmail": "sales@eagleeyesafdrive.com",
+          "status": "FAILED",
+          "error": "The subscription auth key should be at least 16 bytes long",
+          "statusCode": 0
+        },
+        {
+          "userId": "b641c67b-2707-4fda-a251-3f2610ba063f",
+          "userEmail": "coordinator@example.com",
+          "status": "FAILED",
+          "error": "Public key is not valid for specified curve",
+          "statusCode": 0
+        },
+        {
+          "userId": "8242b3cd-ba5f-4149-bbc6-a3a30738485d",
+          "userEmail": "coordinator@example.com",
+          "status": "FAILED",
+          "error": "Public key is not valid for specified curve",
+          "statusCode": 0
+        },
+        {
+          "userId": "abaff860-05b2-44fa-9139-b14d92e3fa19",
+          "userEmail": "tech@gmail.com",
+          "status": "SUCCESS",
+          "statusCode": 201
+        },
+        {
+          "userId": "5598cef6-0095-4403-a664-98d0f7666987",
+          "userEmail": "hr@gmail.com",
+          "status": "SUCCESS",
+          "statusCode": 201
+        },
+        {
+          "userId": "00000000-0000-0000-0000-000000000001",
+          "userEmail": "sales@eagleeyesafdrive.com",
+          "status": "FAILED",
+          "error": "The subscription auth key should be at least 16 bytes long",
+          "statusCode": 0
+        },
+        {
+          "userId": "00000000-0000-0000-0000-000000000001",
+          "userEmail": "sales@eagleeyesafdrive.com",
+          "status": "FAILED",
+          "error": "The subscription auth key should be at least 16 bytes long",
+          "statusCode": 0
+        },
+        {
+          "userId": "00000000-0000-0000-0000-000000000001",
+          "userEmail": "sales@eagleeyesafdrive.com",
+          "status": "FAILED",
+          "error": "The subscription auth key should be at least 16 bytes long",
+          "statusCode": 0
+        },
+        {
+          "userId": "00000000-0000-0000-0000-000000000001",
+          "userEmail": "sales@eagleeyesafdrive.com",
+          "status": "FAILED",
+          "error": "The subscription auth key should be at least 16 bytes long",
+          "statusCode": 0
+        },
+        {
+          "userId": "80d6baf9-a881-4dec-9c33-fd50cc5495a5",
+          "userEmail": "team.test@eagleeye.com",
+          "status": "FAILED",
+          "error": "The subscription p256dh value should be 65 bytes long.",
+          "statusCode": 0
+        },
+        {
+          "userId": "4c8ad922-05c9-4058-9339-4abffd853d18",
+          "userEmail": "coordinator.fleet@eagleeye.com",
+          "status": "FAILED",
+          "error": "The subscription p256dh value should be 65 bytes long.",
+          "statusCode": 0
+        },
+        {
+          "userId": "4e4f4da2-81a0-40a3-9868-c4b063f9f0f8",
+          "userEmail": "team.test@eagleeye.com",
+          "status": "FAILED",
+          "error": "The subscription p256dh value should be 65 bytes long.",
+          "statusCode": 0
+        },
+        {
+          "userId": "87458072-d848-49a0-891b-6e346d3bae35",
+          "userEmail": "coordinator.fleet@eagleeye.com",
+          "status": "FAILED",
+          "error": "The subscription p256dh value should be 65 bytes long.",
+          "statusCode": 0
+        },
+        {
+          "userId": "2f0dd9da-91e0-434e-a40d-0c1d3879ad76",
+          "userEmail": "coordinator@example.com",
+          "status": "FAILED",
+          "error": "Public key is not valid for specified curve",
+          "statusCode": 0
+        },
+        {
+          "userId": "97e257ad-a951-4f5d-abc1-dd912014ba4a",
+          "userEmail": "team.test@eagleeye.com",
+          "status": "FAILED",
+          "error": "The subscription p256dh value should be 65 bytes long.",
+          "statusCode": 0
+        },
+        {
+          "userId": "8ea462cc-13c3-422c-a989-07f2dcf0979e",
+          "userEmail": "coordinator.fleet@eagleeye.com",
+          "status": "FAILED",
+          "error": "The subscription p256dh value should be 65 bytes long.",
+          "statusCode": 0
+        },
+        {
+          "userId": "5878c102-c012-473c-9a10-0aedfb201a71",
+          "userEmail": "team.test@eagleeye.com",
+          "status": "FAILED",
+          "error": "The subscription p256dh value should be 65 bytes long.",
+          "statusCode": 0
+        },
+        {
+          "userId": "0e445fda-73eb-41b7-aaca-81ba33ab6f83",
+          "userEmail": "coordinator.fleet@eagleeye.com",
+          "status": "FAILED",
+          "error": "The subscription p256dh value should be 65 bytes long.",
+          "statusCode": 0
+        },
+        {
+          "userId": "e82f6c5f-6d12-4299-b181-c6aa7c29c5a7",
+          "userEmail": "team.test@eagleeye.com",
+          "status": "FAILED",
+          "error": "The subscription p256dh value should be 65 bytes long.",
+          "statusCode": 0
+        },
+        {
+          "userId": "a5284a3d-2ad0-4570-b02c-9184aa015a0e",
+          "userEmail": "coordinator.fleet@eagleeye.com",
+          "status": "FAILED",
+          "error": "The subscription p256dh value should be 65 bytes long.",
+          "statusCode": 0
+        },
+        {
+          "userId": "00000000-0000-0000-0000-000000000001",
+          "userEmail": "sales@eagleeyesafdrive.com",
+          "status": "FAILED",
+          "error": "The subscription auth key should be at least 16 bytes long",
+          "statusCode": 0
+        },
+        {
+          "userId": "00000000-0000-0000-0000-000000000001",
+          "userEmail": "sales@eagleeyesafdrive.com",
+          "status": "FAILED",
+          "error": "The subscription auth key should be at least 16 bytes long",
+          "statusCode": 0
+        },
+        {
+          "userId": "81be8b2c-40f2-4505-8353-3d3256cd0751",
+          "userEmail": "team.test@eagleeye.com",
+          "status": "FAILED",
+          "error": "The subscription p256dh value should be 65 bytes long.",
+          "statusCode": 0
+        },
+        {
+          "userId": "85ceedc7-f0d3-4c50-b2f5-0b2b17a33e4e",
+          "userEmail": "coordinator.fleet@eagleeye.com",
+          "status": "FAILED",
+          "error": "The subscription p256dh value should be 65 bytes long.",
+          "statusCode": 0
+        },
+        {
+          "userId": "abaff860-05b2-44fa-9139-b14d92e3fa19",
+          "userEmail": "tech@gmail.com",
+          "status": "FAILED",
+          "error": "Received unexpected response code",
+          "statusCode": 410
+        },
+        {
+          "userId": "abaff860-05b2-44fa-9139-b14d92e3fa19",
+          "userEmail": "tech@gmail.com",
+          "status": "SUCCESS",
+          "statusCode": 201
+        },
+        {
+          "userId": "probe-tester",
+          "userEmail": "tester@eagleeye.com",
+          "status": "FAILED",
+          "error": "The subscription p256dh value should be 65 bytes long.",
+          "statusCode": 0
+        }
+      ],
+      "created_at": "2026-10-27T12:57:53.408Z",
+      "full_url": "https://eagleeyesafdrive.vercel.app/#/admin/installation-checklists/eb4d833f-c7f4-4543-87b9-1b6c2a42963b"
+    },
+    {
+      "id": "30729b67-14db-41a9-9d8d-50d2764a40c0",
+      "event_id": "post-install-push-eb4d833f-c7f4-4543-87b9-1b6c2a42963b",
+      "checklist_id": "eb4d833f-c7f4-4543-87b9-1b6c2a42963b",
+      "checklist_number": "EE-INST-20261027-0021",
+      "title": "Post-Installation Report Submitted",
+      "body": "Technician John Engineer has submitted the post-installation report for checklist EE-INST-20261027-0021. Please review the report and return-ticket details.",
+      "url": "/coordinator?view=eb4d833f-c7f4-4543-87b9-1b6c2a42963b&checklist=eb4d833f-c7f4-4543-87b9-1b6c2a42963b&tab=return&openReport=true",
+      "recipients_attempted": 9,
+      "recipients_succeeded": 0,
+      "recipients_failed": 9,
+      "delivery_details": [
+        {
+          "userId": "b641c67b-2707-4fda-a251-3f2610ba063f",
+          "userEmail": "coordinator@example.com",
+          "status": "FAILED",
+          "error": "Public key is not valid for specified curve",
+          "statusCode": 0
+        },
+        {
+          "userId": "8242b3cd-ba5f-4149-bbc6-a3a30738485d",
+          "userEmail": "coordinator@example.com",
+          "status": "FAILED",
+          "error": "Public key is not valid for specified curve",
+          "statusCode": 0
+        },
+        {
+          "userId": "4c8ad922-05c9-4058-9339-4abffd853d18",
+          "userEmail": "coordinator.fleet@eagleeye.com",
+          "status": "FAILED",
+          "error": "The subscription p256dh value should be 65 bytes long.",
+          "statusCode": 0
+        },
+        {
+          "userId": "87458072-d848-49a0-891b-6e346d3bae35",
+          "userEmail": "coordinator.fleet@eagleeye.com",
+          "status": "FAILED",
+          "error": "The subscription p256dh value should be 65 bytes long.",
+          "statusCode": 0
+        },
+        {
+          "userId": "2f0dd9da-91e0-434e-a40d-0c1d3879ad76",
+          "userEmail": "coordinator@example.com",
+          "status": "FAILED",
+          "error": "Public key is not valid for specified curve",
+          "statusCode": 0
+        },
+        {
+          "userId": "8ea462cc-13c3-422c-a989-07f2dcf0979e",
+          "userEmail": "coordinator.fleet@eagleeye.com",
+          "status": "FAILED",
+          "error": "The subscription p256dh value should be 65 bytes long.",
+          "statusCode": 0
+        },
+        {
+          "userId": "0e445fda-73eb-41b7-aaca-81ba33ab6f83",
+          "userEmail": "coordinator.fleet@eagleeye.com",
+          "status": "FAILED",
+          "error": "The subscription p256dh value should be 65 bytes long.",
+          "statusCode": 0
+        },
+        {
+          "userId": "a5284a3d-2ad0-4570-b02c-9184aa015a0e",
+          "userEmail": "coordinator.fleet@eagleeye.com",
+          "status": "FAILED",
+          "error": "The subscription p256dh value should be 65 bytes long.",
+          "statusCode": 0
+        },
+        {
+          "userId": "85ceedc7-f0d3-4c50-b2f5-0b2b17a33e4e",
+          "userEmail": "coordinator.fleet@eagleeye.com",
+          "status": "FAILED",
+          "error": "The subscription p256dh value should be 65 bytes long.",
+          "statusCode": 0
+        }
+      ],
+      "created_at": "2026-10-27T12:58:02.178Z",
+      "full_url": "https://eagleeyesafdrive.vercel.app/#/coordinator?view=eb4d833f-c7f4-4543-87b9-1b6c2a42963b&checklist=eb4d833f-c7f4-4543-87b9-1b6c2a42963b&tab=return&openReport=true"
+    },
+    {
+      "id": "6866f5d9-a18f-41db-bbab-d3d8073b1049",
+      "event_id": "checklist-created-2e6e12f3-dd85-441c-be76-b43563f46e1b",
+      "checklist_id": "2e6e12f3-dd85-441c-be76-b43563f46e1b",
+      "checklist_number": "EE-INST-20261029-0001",
+      "title": "Eagle Eye SafDrive — New Installation Checklist",
+      "body": "A new installation checklist has been created.\nJob #EE-INST-20261029-0001 • Loc: Coimbatore Hub • Time: 10:02 am",
+      "url": "/admin/installation-checklists/2e6e12f3-dd85-441c-be76-b43563f46e1b",
+      "recipients_attempted": 27,
+      "recipients_succeeded": 3,
+      "recipients_failed": 24,
+      "delivery_details": [
+        {
+          "userId": "00000000-0000-0000-0000-000000000001",
+          "userEmail": "sales@eagleeyesafdrive.com",
+          "status": "FAILED",
+          "error": "The subscription auth key should be at least 16 bytes long",
+          "statusCode": 0
+        },
+        {
+          "userId": "00000000-0000-0000-0000-000000000001",
+          "userEmail": "sales@eagleeyesafdrive.com",
+          "status": "FAILED",
+          "error": "The subscription auth key should be at least 16 bytes long",
+          "statusCode": 0
+        },
+        {
+          "userId": "b641c67b-2707-4fda-a251-3f2610ba063f",
+          "userEmail": "coordinator@example.com",
+          "status": "FAILED",
+          "error": "Public key is not valid for specified curve",
+          "statusCode": 0
+        },
+        {
+          "userId": "8242b3cd-ba5f-4149-bbc6-a3a30738485d",
+          "userEmail": "coordinator@example.com",
+          "status": "FAILED",
+          "error": "Public key is not valid for specified curve",
+          "statusCode": 0
+        },
+        {
+          "userId": "abaff860-05b2-44fa-9139-b14d92e3fa19",
+          "userEmail": "tech@gmail.com",
+          "status": "SUCCESS",
+          "statusCode": 201
+        },
+        {
+          "userId": "5598cef6-0095-4403-a664-98d0f7666987",
+          "userEmail": "hr@gmail.com",
+          "status": "SUCCESS",
+          "statusCode": 201
+        },
+        {
+          "userId": "00000000-0000-0000-0000-000000000001",
+          "userEmail": "sales@eagleeyesafdrive.com",
+          "status": "FAILED",
+          "error": "The subscription auth key should be at least 16 bytes long",
+          "statusCode": 0
+        },
+        {
+          "userId": "00000000-0000-0000-0000-000000000001",
+          "userEmail": "sales@eagleeyesafdrive.com",
+          "status": "FAILED",
+          "error": "The subscription auth key should be at least 16 bytes long",
+          "statusCode": 0
+        },
+        {
+          "userId": "00000000-0000-0000-0000-000000000001",
+          "userEmail": "sales@eagleeyesafdrive.com",
+          "status": "FAILED",
+          "error": "The subscription auth key should be at least 16 bytes long",
+          "statusCode": 0
+        },
+        {
+          "userId": "00000000-0000-0000-0000-000000000001",
+          "userEmail": "sales@eagleeyesafdrive.com",
+          "status": "FAILED",
+          "error": "The subscription auth key should be at least 16 bytes long",
+          "statusCode": 0
+        },
+        {
+          "userId": "80d6baf9-a881-4dec-9c33-fd50cc5495a5",
+          "userEmail": "team.test@eagleeye.com",
+          "status": "FAILED",
+          "error": "The subscription p256dh value should be 65 bytes long.",
+          "statusCode": 0
+        },
+        {
+          "userId": "4c8ad922-05c9-4058-9339-4abffd853d18",
+          "userEmail": "coordinator.fleet@eagleeye.com",
+          "status": "FAILED",
+          "error": "The subscription p256dh value should be 65 bytes long.",
+          "statusCode": 0
+        },
+        {
+          "userId": "4e4f4da2-81a0-40a3-9868-c4b063f9f0f8",
+          "userEmail": "team.test@eagleeye.com",
+          "status": "FAILED",
+          "error": "The subscription p256dh value should be 65 bytes long.",
+          "statusCode": 0
+        },
+        {
+          "userId": "87458072-d848-49a0-891b-6e346d3bae35",
+          "userEmail": "coordinator.fleet@eagleeye.com",
+          "status": "FAILED",
+          "error": "The subscription p256dh value should be 65 bytes long.",
+          "statusCode": 0
+        },
+        {
+          "userId": "2f0dd9da-91e0-434e-a40d-0c1d3879ad76",
+          "userEmail": "coordinator@example.com",
+          "status": "FAILED",
+          "error": "Public key is not valid for specified curve",
+          "statusCode": 0
+        },
+        {
+          "userId": "97e257ad-a951-4f5d-abc1-dd912014ba4a",
+          "userEmail": "team.test@eagleeye.com",
+          "status": "FAILED",
+          "error": "The subscription p256dh value should be 65 bytes long.",
+          "statusCode": 0
+        },
+        {
+          "userId": "8ea462cc-13c3-422c-a989-07f2dcf0979e",
+          "userEmail": "coordinator.fleet@eagleeye.com",
+          "status": "FAILED",
+          "error": "The subscription p256dh value should be 65 bytes long.",
+          "statusCode": 0
+        },
+        {
+          "userId": "5878c102-c012-473c-9a10-0aedfb201a71",
+          "userEmail": "team.test@eagleeye.com",
+          "status": "FAILED",
+          "error": "The subscription p256dh value should be 65 bytes long.",
+          "statusCode": 0
+        },
+        {
+          "userId": "0e445fda-73eb-41b7-aaca-81ba33ab6f83",
+          "userEmail": "coordinator.fleet@eagleeye.com",
+          "status": "FAILED",
+          "error": "The subscription p256dh value should be 65 bytes long.",
+          "statusCode": 0
+        },
+        {
+          "userId": "e82f6c5f-6d12-4299-b181-c6aa7c29c5a7",
+          "userEmail": "team.test@eagleeye.com",
+          "status": "FAILED",
+          "error": "The subscription p256dh value should be 65 bytes long.",
+          "statusCode": 0
+        },
+        {
+          "userId": "a5284a3d-2ad0-4570-b02c-9184aa015a0e",
+          "userEmail": "coordinator.fleet@eagleeye.com",
+          "status": "FAILED",
+          "error": "The subscription p256dh value should be 65 bytes long.",
+          "statusCode": 0
+        },
+        {
+          "userId": "00000000-0000-0000-0000-000000000001",
+          "userEmail": "sales@eagleeyesafdrive.com",
+          "status": "FAILED",
+          "error": "The subscription auth key should be at least 16 bytes long",
+          "statusCode": 0
+        },
+        {
+          "userId": "00000000-0000-0000-0000-000000000001",
+          "userEmail": "sales@eagleeyesafdrive.com",
+          "status": "FAILED",
+          "error": "The subscription auth key should be at least 16 bytes long",
+          "statusCode": 0
+        },
+        {
+          "userId": "81be8b2c-40f2-4505-8353-3d3256cd0751",
+          "userEmail": "team.test@eagleeye.com",
+          "status": "FAILED",
+          "error": "The subscription p256dh value should be 65 bytes long.",
+          "statusCode": 0
+        },
+        {
+          "userId": "85ceedc7-f0d3-4c50-b2f5-0b2b17a33e4e",
+          "userEmail": "coordinator.fleet@eagleeye.com",
+          "status": "FAILED",
+          "error": "The subscription p256dh value should be 65 bytes long.",
+          "statusCode": 0
+        },
+        {
+          "userId": "abaff860-05b2-44fa-9139-b14d92e3fa19",
+          "userEmail": "tech@gmail.com",
+          "status": "SUCCESS",
+          "statusCode": 201
+        },
+        {
+          "userId": "probe-tester",
+          "userEmail": "tester@eagleeye.com",
+          "status": "FAILED",
+          "error": "The subscription p256dh value should be 65 bytes long.",
+          "statusCode": 0
+        }
+      ],
+      "created_at": "2026-10-29T04:32:02.704Z",
+      "full_url": "https://eagleeyesafdrive.vercel.app/#/admin/installation-checklists/2e6e12f3-dd85-441c-be76-b43563f46e1b"
+    },
+    {
+      "id": "3cb5a3c6-1d8f-4e5d-9e3c-ff289111c25c",
+      "event_id": "checklist-created-9d34f437-de98-4814-8f72-89613a70124f",
+      "checklist_id": "9d34f437-de98-4814-8f72-89613a70124f",
+      "checklist_number": "EE-INST-20261029-0002",
+      "title": "Eagle Eye SafDrive — New Installation Checklist",
+      "body": "A new installation checklist has been created.\nJob #EE-INST-20261029-0002 • Loc: Coimbatore Hub • Time: 10:02 am",
+      "url": "/admin/installation-checklists/9d34f437-de98-4814-8f72-89613a70124f",
+      "recipients_attempted": 27,
+      "recipients_succeeded": 3,
+      "recipients_failed": 24,
+      "delivery_details": [
+        {
+          "userId": "00000000-0000-0000-0000-000000000001",
+          "userEmail": "sales@eagleeyesafdrive.com",
+          "status": "FAILED",
+          "error": "The subscription auth key should be at least 16 bytes long",
+          "statusCode": 0
+        },
+        {
+          "userId": "00000000-0000-0000-0000-000000000001",
+          "userEmail": "sales@eagleeyesafdrive.com",
+          "status": "FAILED",
+          "error": "The subscription auth key should be at least 16 bytes long",
+          "statusCode": 0
+        },
+        {
+          "userId": "b641c67b-2707-4fda-a251-3f2610ba063f",
+          "userEmail": "coordinator@example.com",
+          "status": "FAILED",
+          "error": "Public key is not valid for specified curve",
+          "statusCode": 0
+        },
+        {
+          "userId": "8242b3cd-ba5f-4149-bbc6-a3a30738485d",
+          "userEmail": "coordinator@example.com",
+          "status": "FAILED",
+          "error": "Public key is not valid for specified curve",
+          "statusCode": 0
+        },
+        {
+          "userId": "abaff860-05b2-44fa-9139-b14d92e3fa19",
+          "userEmail": "tech@gmail.com",
+          "status": "SUCCESS",
+          "statusCode": 201
+        },
+        {
+          "userId": "5598cef6-0095-4403-a664-98d0f7666987",
+          "userEmail": "hr@gmail.com",
+          "status": "SUCCESS",
+          "statusCode": 201
+        },
+        {
+          "userId": "00000000-0000-0000-0000-000000000001",
+          "userEmail": "sales@eagleeyesafdrive.com",
+          "status": "FAILED",
+          "error": "The subscription auth key should be at least 16 bytes long",
+          "statusCode": 0
+        },
+        {
+          "userId": "00000000-0000-0000-0000-000000000001",
+          "userEmail": "sales@eagleeyesafdrive.com",
+          "status": "FAILED",
+          "error": "The subscription auth key should be at least 16 bytes long",
+          "statusCode": 0
+        },
+        {
+          "userId": "00000000-0000-0000-0000-000000000001",
+          "userEmail": "sales@eagleeyesafdrive.com",
+          "status": "FAILED",
+          "error": "The subscription auth key should be at least 16 bytes long",
+          "statusCode": 0
+        },
+        {
+          "userId": "00000000-0000-0000-0000-000000000001",
+          "userEmail": "sales@eagleeyesafdrive.com",
+          "status": "FAILED",
+          "error": "The subscription auth key should be at least 16 bytes long",
+          "statusCode": 0
+        },
+        {
+          "userId": "80d6baf9-a881-4dec-9c33-fd50cc5495a5",
+          "userEmail": "team.test@eagleeye.com",
+          "status": "FAILED",
+          "error": "The subscription p256dh value should be 65 bytes long.",
+          "statusCode": 0
+        },
+        {
+          "userId": "4c8ad922-05c9-4058-9339-4abffd853d18",
+          "userEmail": "coordinator.fleet@eagleeye.com",
+          "status": "FAILED",
+          "error": "The subscription p256dh value should be 65 bytes long.",
+          "statusCode": 0
+        },
+        {
+          "userId": "4e4f4da2-81a0-40a3-9868-c4b063f9f0f8",
+          "userEmail": "team.test@eagleeye.com",
+          "status": "FAILED",
+          "error": "The subscription p256dh value should be 65 bytes long.",
+          "statusCode": 0
+        },
+        {
+          "userId": "87458072-d848-49a0-891b-6e346d3bae35",
+          "userEmail": "coordinator.fleet@eagleeye.com",
+          "status": "FAILED",
+          "error": "The subscription p256dh value should be 65 bytes long.",
+          "statusCode": 0
+        },
+        {
+          "userId": "2f0dd9da-91e0-434e-a40d-0c1d3879ad76",
+          "userEmail": "coordinator@example.com",
+          "status": "FAILED",
+          "error": "Public key is not valid for specified curve",
+          "statusCode": 0
+        },
+        {
+          "userId": "97e257ad-a951-4f5d-abc1-dd912014ba4a",
+          "userEmail": "team.test@eagleeye.com",
+          "status": "FAILED",
+          "error": "The subscription p256dh value should be 65 bytes long.",
+          "statusCode": 0
+        },
+        {
+          "userId": "8ea462cc-13c3-422c-a989-07f2dcf0979e",
+          "userEmail": "coordinator.fleet@eagleeye.com",
+          "status": "FAILED",
+          "error": "The subscription p256dh value should be 65 bytes long.",
+          "statusCode": 0
+        },
+        {
+          "userId": "5878c102-c012-473c-9a10-0aedfb201a71",
+          "userEmail": "team.test@eagleeye.com",
+          "status": "FAILED",
+          "error": "The subscription p256dh value should be 65 bytes long.",
+          "statusCode": 0
+        },
+        {
+          "userId": "0e445fda-73eb-41b7-aaca-81ba33ab6f83",
+          "userEmail": "coordinator.fleet@eagleeye.com",
+          "status": "FAILED",
+          "error": "The subscription p256dh value should be 65 bytes long.",
+          "statusCode": 0
+        },
+        {
+          "userId": "e82f6c5f-6d12-4299-b181-c6aa7c29c5a7",
+          "userEmail": "team.test@eagleeye.com",
+          "status": "FAILED",
+          "error": "The subscription p256dh value should be 65 bytes long.",
+          "statusCode": 0
+        },
+        {
+          "userId": "a5284a3d-2ad0-4570-b02c-9184aa015a0e",
+          "userEmail": "coordinator.fleet@eagleeye.com",
+          "status": "FAILED",
+          "error": "The subscription p256dh value should be 65 bytes long.",
+          "statusCode": 0
+        },
+        {
+          "userId": "00000000-0000-0000-0000-000000000001",
+          "userEmail": "sales@eagleeyesafdrive.com",
+          "status": "FAILED",
+          "error": "The subscription auth key should be at least 16 bytes long",
+          "statusCode": 0
+        },
+        {
+          "userId": "00000000-0000-0000-0000-000000000001",
+          "userEmail": "sales@eagleeyesafdrive.com",
+          "status": "FAILED",
+          "error": "The subscription auth key should be at least 16 bytes long",
+          "statusCode": 0
+        },
+        {
+          "userId": "81be8b2c-40f2-4505-8353-3d3256cd0751",
+          "userEmail": "team.test@eagleeye.com",
+          "status": "FAILED",
+          "error": "The subscription p256dh value should be 65 bytes long.",
+          "statusCode": 0
+        },
+        {
+          "userId": "85ceedc7-f0d3-4c50-b2f5-0b2b17a33e4e",
+          "userEmail": "coordinator.fleet@eagleeye.com",
+          "status": "FAILED",
+          "error": "The subscription p256dh value should be 65 bytes long.",
+          "statusCode": 0
+        },
+        {
+          "userId": "abaff860-05b2-44fa-9139-b14d92e3fa19",
+          "userEmail": "tech@gmail.com",
+          "status": "SUCCESS",
+          "statusCode": 201
+        },
+        {
+          "userId": "probe-tester",
+          "userEmail": "tester@eagleeye.com",
+          "status": "FAILED",
+          "error": "The subscription p256dh value should be 65 bytes long.",
+          "statusCode": 0
+        }
+      ],
+      "created_at": "2026-10-29T04:32:38.187Z",
+      "full_url": "https://eagleeyesafdrive.vercel.app/#/admin/installation-checklists/9d34f437-de98-4814-8f72-89613a70124f"
+    }
+  ],
+  "updated_at": "2026-10-29T04:32:38.187Z"
 }

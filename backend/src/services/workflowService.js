@@ -1252,12 +1252,109 @@ export async function submitInstallationCompletionReport(param1, param2) {
   const returnedMaterialItems = processedMaterialItems
     .filter((m) => !isScrewMaterial(m.material_name))
     .filter((m) => m.quantity_returned > 0);
-  if (returnedMaterialItems.length > 0) {
+
+  // Automatic BOM Return Calculation for Customer-Required Uninstalled Devices
+  let autoCalculatedBomReturns = [];
+  if (!isServiceJob) {
+    const uninstalledDevices = processedItems.filter((it) => (Number(it.quantity_to_return) || 0) > 0);
+    const installedDevices = processedItems.filter((it) => (Number(it.quantity_installed) || 0) > 0);
+
+    if (uninstalledDevices.length > 0) {
+      try {
+        const { calculateBomRequirements } = await import('./bomService.js');
+
+        // 1. Calculate BOM for uninstalled devices
+        const uninstalledConfigs = uninstalledDevices.map((d) => ({
+          device_type: d.device_type,
+          number_of_devices: Number(d.quantity_to_return),
+        }));
+        const uninstalledBom = await calculateBomRequirements(uninstalledConfigs);
+
+        // 2. Calculate BOM for installed devices (so their materials are NOT returned)
+        const installedConfigs = installedDevices.map((d) => ({
+          device_type: d.device_type,
+          number_of_devices: Number(d.quantity_installed),
+        }));
+        const installedBom = installedConfigs.length > 0
+          ? await calculateBomRequirements(installedConfigs)
+          : { items: [] };
+
+        const installedMatMap = new Map(
+          (installedBom.items || []).map((it) => [(it.material_name || '').toLowerCase().trim(), Number(it.total_required_quantity) || 0])
+        );
+
+        // 3. Find originally issued materials for this checklist
+        let origMaterials = checklist.bom_snapshot?.items || checklist.material_items || [];
+        if (!origMaterials || origMaterials.length === 0) {
+          const { getStoreMaterialRequirementById } = await import('./storeRequirementService.js');
+          const storeReq = await getStoreMaterialRequirementById(checklist_id).catch(() => null);
+          if (storeReq?.bom_snapshot?.items) origMaterials = storeReq.bom_snapshot.items;
+          else if (storeReq?.material_items) origMaterials = storeReq.material_items;
+        }
+
+        const origIssuedMap = new Map();
+        if (Array.isArray(origMaterials)) {
+          origMaterials.forEach((m) => {
+            const mName = (m.material_name || m.item_name || '').toLowerCase().trim();
+            const qty = Number(m.total_quantity !== undefined ? m.total_quantity : (m.required_quantity || m.quantity_issued || m.quantity)) || 0;
+            origIssuedMap.set(mName, (origIssuedMap.get(mName) || 0) + qty);
+          });
+        }
+
+        // 4. Calculate return quantity for each uninstalled BOM item (excluding screws)
+        for (const item of (uninstalledBom.items || [])) {
+          const mName = (item.material_name || '').toLowerCase().trim();
+          if (isScrewMaterial(mName)) continue;
+
+          const uninstalledQty = Number(item.total_required_quantity) || 0;
+          if (uninstalledQty <= 0) continue;
+
+          const origIssued = origIssuedMap.get(mName) || uninstalledQty;
+          const installedNeed = installedMatMap.get(mName) || 0;
+          const eligibleToReturn = Math.max(0, origIssued - installedNeed);
+          const finalReturnQty = Math.min(uninstalledQty, eligibleToReturn);
+
+          if (finalReturnQty > 0) {
+            autoCalculatedBomReturns.push({
+              material_id: item.material_id || null,
+              material_name: item.material_name,
+              unit: item.unit || 'Nos.',
+              quantity_issued: origIssued,
+              quantity_used: installedNeed,
+              quantity_returned: finalReturnQty,
+              declared_return_qty: finalReturnQty,
+              remarks: `Automatic BOM return: Attributable to uninstalled ${uninstalledDevices.map((d) => `${d.quantity_to_return} × ${d.device_type}`).join(', ')}`,
+            });
+          }
+        }
+      } catch (bomErr) {
+        console.warn('Error in automatic BOM material return calculation:', bomErr.message);
+      }
+    }
+  }
+
+  // Combine manual material returns and automatic BOM returns without duplicate records
+  const allMaterialReturnsToDeclare = [...returnedMaterialItems];
+  for (const autoRet of autoCalculatedBomReturns) {
+    const existingIdx = allMaterialReturnsToDeclare.findIndex(
+      (m) => (m.material_name || '').toLowerCase().trim() === (autoRet.material_name || '').toLowerCase().trim()
+    );
+    if (existingIdx === -1) {
+      allMaterialReturnsToDeclare.push(autoRet);
+    } else {
+      if ((allMaterialReturnsToDeclare[existingIdx].quantity_returned || 0) === 0) {
+        allMaterialReturnsToDeclare[existingIdx].quantity_returned = autoRet.quantity_returned;
+        allMaterialReturnsToDeclare[existingIdx].declared_return_qty = autoRet.quantity_returned;
+      }
+    }
+  }
+
+  if (allMaterialReturnsToDeclare.length > 0) {
     await declareMaterialReturns({
       checklist_id,
-      items: returnedMaterialItems,
+      items: allMaterialReturnsToDeclare,
       user,
-      remarks: remarks || 'Unused fitting materials returned from installation work',
+      remarks: remarks || 'Unused BOM materials attributable to uninstalled devices and site work',
     });
   }
 
@@ -1265,7 +1362,7 @@ export async function submitInstallationCompletionReport(param1, param2) {
   const finalInstStatus = 'Completed';
   const finalReconStatus = hasDiscrepancy
     ? 'DISCREPANCY_OPEN'
-    : (totalUnused > 0 || returnedMaterialItems.length > 0)
+    : (totalUnused > 0 || allMaterialReturnsToDeclare.length > 0)
     ? 'PENDING_STORE_VERIFICATION'
     : 'FULLY_RECONCILED';
 

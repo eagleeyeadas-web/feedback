@@ -1,4 +1,259 @@
 {
-  "notifications": [],
-  "updated_at": "2026-10-26T10:04:00.771Z"
+  "notifications": [
+    {
+      "id": "8435f887-14d4-451e-81f7-95d1f2227d3c",
+      "target_role": "STORE",
+      "target_user_id": null,
+      "title": "Pre-Installation Submitted: EE-INST-20261027-0021",
+      "message": "Technician technician@eagleeye.com submitted Pre-Installation Form for Simplified Test Client. Ready for material review.",
+      "type": "PRE_INSTALLATION_SUBMITTED",
+      "checklist_id": "eb4d833f-c7f4-4543-87b9-1b6c2a42963b",
+      "checklist_number": "EE-INST-20261027-0021",
+      "metadata": {
+        "idempotency_key": "pre-install-store-eb4d833f-c7f4-4543-87b9-1b6c2a42963b",
+        "checklist_id": "eb4d833f-c7f4-4543-87b9-1b6c2a42963b",
+        "checklist_number": "EE-INST-20261027-0021",
+        "technician_name": "technician@eagleeye.com"
+      },
+      "is_read": false,
+      "created_at": "2026-10-27T12:57:56.442Z"
+    },
+    {
+      "id": "f3ae9b27-5a94-481a-9e5b-0215f3f2ac28",
+      "target_role": "COORDINATOR",
+      "target_user_id": null,
+      "title": "Pre-Installation Submitted: EE-INST-20261027-0021",
+      "message": "Technician technician@eagleeye.com submitted Pre-Installation Form for Simplified Test Client. Ready for travel & room booking.",
+      "type": "PRE_INSTALLATION_SUBMITTED",
+      "checklist_id": "eb4d833f-c7f4-4543-87b9-1b6c2a42963b",
+      "checklist_number": "EE-INST-20261027-0021",
+      "metadata": {
+        "idempotency_key": "pre-install-coord-eb4d833f-c7f4-4543-87b9-1b6c2a42963b",
+        "checklist_id": "eb4d833f-c7f4-4543-87b9-1b6c2a42963b",
+        "checklist_number": "EE-INST-20261027-0021",
+        "technician_name": "technician@eagleeye.com"
+      },
+      "is_read": false,
+      "created_at": "2026-10-27T12:57:56.622Z"
+    },
+    {
+      "id": "1b8e12ed-385b-4a1d-9b2d-41a8298f788f",
+      "target_role": "HR",
+      "target_user_id": null,
+      "title": "Late Completion Recorded",
+      "message": "The Post-Installation Form was submitted after the scheduled end date. The original schedule and overdue history have been preserved. Review the record if follow-up is required. Checklist: EE-INST-20261027-0021, Customer: Simplified Test Client, Technician: technician@eagleeye.com, Scheduled: 2026-10-10, Completed: 27 Oct 2026, 6:28 pm, Submitted: 27 Oct 2026, 6:28 pm",
+      "type": "LATE_COMPLETION_ALERT",
+      "checklist_id": "eb4d833f-c7f4-4543-87b9-1b6c2a42963b",
+      "checklist_number": "EE-INST-20261027-0021",
+      "metadata": {
+        "alert_id": "dafd072a-2345-4cc9-b3cf-18d1c7eafa6e",
+        "category": "Late Completion Recorded",
+        "client_name": "Simplified Test Client",
+        "client_location": "Downtown Park",
+        "technician_name": "technician@eagleeye.com",
+        "scheduled_start_date": "2026-10-10",
+        "scheduled_end_date": "2026-10-10",
+        "actual_completion_at": "2026-10-27T12:58:00.403Z",
+        "post_installation_submitted_at": "2026-10-27T12:58:00.403Z",
+        "link": "/admin/workspaces/hr?tab=overdue&checklistId=eb4d833f-c7f4-4543-87b9-1b6c2a42963b"
+      },
+      "is_read": false,
+      "created_at": "2026-10-27T12:58:00.611Z"
+    },
+    {
+      "id": "c1e23a60-d0d7-4a9d-bc96-2174b03660ae",
+      "target_role": "COORDINATOR",
+      "target_user_id": null,
+      "title": "Post-Installation Report Submitted",
+      "message": "Technician John Engineer has submitted the post-installation report for checklist EE-INST-20261027-0021. Please review the report and return-ticket details.",
+      "type": "POST_INSTALLATION_REPORT_SUBMITTED",
+      "checklist_id": "eb4d833f-c7f4-4543-87b9-1b6c2a42963b",
+      "checklist_number": "EE-INST-20261027-0021",
+      "metadata": {
+        "task_type": "POST_INSTALLATION_REPORT",
+        "checklist_id": "eb4d833f-c7f4-4543-87b9-1b6c2a42963b",
+        "checklist_number": "EE-INST-20261027-0021",
+        "client_name": "Simplified Test Client",
+        "technician_name": "John Engineer",
+        "submitted_at": "2026-10-27T12:58:00.403Z",
+        "actual_completion_datetime": "2026-10-27T12:58:00.403Z",
+        "action_label": "Review Report",
+        "action_url": "/coordinator?tab=return&checklist=eb4d833f-c7f4-4543-87b9-1b6c2a42963b&openReport=true",
+        "idempotency_key": "post-install-report-eb4d833f-c7f4-4543-87b9-1b6c2a42963b"
+      },
+      "is_read": false,
+      "created_at": "2026-10-27T12:58:01.754Z"
+    },
+    {
+      "id": "9926fa12-0a8f-4a48-8379-01d4c8029128",
+      "target_role": "COORDINATOR",
+      "target_user_id": null,
+      "title": "Return ticket task created — awaiting technician booking",
+      "message": "Installation completed for checklist EE-INST-20261027-0021 (Simplified Test Client). Return-ticket booking task created and awaiting technician booking & verification. Completed: 2026-10-27T12:58:00.403Z",
+      "type": "RETURN_TICKET_AWAITING_BOOKING",
+      "checklist_id": "eb4d833f-c7f4-4543-87b9-1b6c2a42963b",
+      "checklist_number": "EE-INST-20261027-0021",
+      "metadata": {
+        "task_id": "RET-TASK-EE-INST-20261027-0021",
+        "checklist_id": "eb4d833f-c7f4-4543-87b9-1b6c2a42963b",
+        "checklist_number": "EE-INST-20261027-0021",
+        "client_name": "Simplified Test Client",
+        "location": "Downtown Park",
+        "technician_name": "John Engineer",
+        "actual_completion_datetime": "2026-10-27T12:58:00.403Z",
+        "report_submission_datetime": "2026-10-27T12:58:00.403Z",
+        "urgency": "Overdue",
+        "booking_link": "/coordinator?view=eb4d833f-c7f4-4543-87b9-1b6c2a42963b&action=return_ticket"
+      },
+      "is_read": false,
+      "created_at": "2026-10-27T12:58:04.905Z"
+    },
+    {
+      "id": "457804fe-2a37-48a1-86c6-2e55d4fc0a05",
+      "target_role": "TECHNICAL",
+      "target_user_id": null,
+      "title": "Return ticket booking required",
+      "message": "Installation completed for checklist EE-INST-20261027-0021 (Simplified Test Client). Please book your return ticket and submit details for coordinator verification.",
+      "type": "RETURN_TICKET_BOOKING_REQUIRED",
+      "checklist_id": "eb4d833f-c7f4-4543-87b9-1b6c2a42963b",
+      "checklist_number": "EE-INST-20261027-0021",
+      "metadata": {
+        "task_id": "RET-TASK-EE-INST-20261027-0021",
+        "checklist_id": "eb4d833f-c7f4-4543-87b9-1b6c2a42963b",
+        "checklist_number": "EE-INST-20261027-0021",
+        "client_name": "Simplified Test Client",
+        "location": "Downtown Park",
+        "actual_completion_datetime": "2026-10-27T12:58:00.403Z"
+      },
+      "is_read": false,
+      "created_at": "2026-10-27T12:58:05.101Z"
+    },
+    {
+      "id": "2b19074b-5474-4c44-bf23-0a05a3d73dd1",
+      "target_role": "HR",
+      "target_user_id": null,
+      "title": "Late Completion Recorded",
+      "message": "The Post-Installation Form was submitted after the scheduled end date. The original schedule and overdue history have been preserved. Review the record if follow-up is required. Checklist: EE-INST-20261027-0021, Customer: Simplified Test Client, Technician: technician@eagleeye.com, Scheduled: 2026-10-10, Completed: 27 Oct 2026, 6:28 pm, Submitted: 27 Oct 2026, 6:28 pm",
+      "type": "LATE_COMPLETION_ALERT",
+      "checklist_id": "eb4d833f-c7f4-4543-87b9-1b6c2a42963b",
+      "checklist_number": "EE-INST-20261027-0021",
+      "metadata": {
+        "alert_id": "13b1e10a-8f97-4878-a36e-46bbb86382e5",
+        "category": "Late Completion Recorded",
+        "client_name": "Simplified Test Client",
+        "client_location": "Downtown Park",
+        "technician_name": "technician@eagleeye.com",
+        "scheduled_start_date": "2026-10-10",
+        "scheduled_end_date": "2026-10-10",
+        "actual_completion_at": "2026-10-27T12:58:08.344Z",
+        "post_installation_submitted_at": "2026-10-27T12:58:08.344Z",
+        "link": "/admin/workspaces/hr?tab=overdue&checklistId=eb4d833f-c7f4-4543-87b9-1b6c2a42963b"
+      },
+      "is_read": false,
+      "created_at": "2026-10-27T12:58:08.537Z"
+    },
+    {
+      "id": "992fc66e-8e38-457c-9411-3e349492de2d",
+      "target_role": "HR",
+      "target_user_id": null,
+      "title": "Late Completion Recorded",
+      "message": "The Post-Installation Form was submitted after the scheduled end date. The original schedule and overdue history have been preserved. Review the record if follow-up is required. Checklist: EE-INST-20261027-0021, Customer: Simplified Test Client, Technician: technician@eagleeye.com, Scheduled: 2026-10-10, Completed: 27 Oct 2026, 6:28 pm, Submitted: 27 Oct 2026, 6:28 pm",
+      "type": "LATE_COMPLETION_ALERT",
+      "checklist_id": "eb4d833f-c7f4-4543-87b9-1b6c2a42963b",
+      "checklist_number": "EE-INST-20261027-0021",
+      "metadata": {
+        "alert_id": "f9407e14-5413-4396-ab1d-68a14ce4e804",
+        "category": "Late Completion Recorded",
+        "client_name": "Simplified Test Client",
+        "client_location": "Downtown Park",
+        "technician_name": "technician@eagleeye.com",
+        "scheduled_start_date": "2026-10-10",
+        "scheduled_end_date": "2026-10-10",
+        "actual_completion_at": "2026-10-27T12:58:12.241Z",
+        "post_installation_submitted_at": "2026-10-27T12:58:12.241Z",
+        "link": "/admin/workspaces/hr?tab=overdue&checklistId=eb4d833f-c7f4-4543-87b9-1b6c2a42963b"
+      },
+      "is_read": false,
+      "created_at": "2026-10-27T12:58:12.458Z"
+    },
+    {
+      "id": "02639cc4-dc03-4735-a147-34439465d7fc",
+      "target_role": "STORE",
+      "target_user_id": null,
+      "title": "Pre-Installation Submitted: EE-INST-20261029-0001",
+      "message": "Technician ramesh.tech@safdrive.com submitted Pre-Installation Form for Client. Ready for material review.",
+      "type": "PRE_INSTALLATION_SUBMITTED",
+      "checklist_id": "2e6e12f3-dd85-441c-be76-b43563f46e1b",
+      "checklist_number": "EE-INST-20261029-0001",
+      "metadata": {
+        "idempotency_key": "pre-install-store-2e6e12f3-dd85-441c-be76-b43563f46e1b",
+        "checklist_id": "2e6e12f3-dd85-441c-be76-b43563f46e1b",
+        "checklist_number": "EE-INST-20261029-0001",
+        "technician_name": "ramesh.tech@safdrive.com",
+        "has_backup_items": true,
+        "items_count": 1
+      },
+      "is_read": false,
+      "created_at": "2026-10-29T04:32:24.049Z"
+    },
+    {
+      "id": "c09eeefc-d099-4e28-83ff-067c0b333aae",
+      "target_role": "COORDINATOR",
+      "target_user_id": null,
+      "title": "Pre-Installation Submitted: EE-INST-20261029-0001",
+      "message": "Technician ramesh.tech@safdrive.com submitted Pre-Installation Form for Client. Ready for travel & room booking.",
+      "type": "PRE_INSTALLATION_SUBMITTED",
+      "checklist_id": "2e6e12f3-dd85-441c-be76-b43563f46e1b",
+      "checklist_number": "EE-INST-20261029-0001",
+      "metadata": {
+        "idempotency_key": "pre-install-coord-2e6e12f3-dd85-441c-be76-b43563f46e1b",
+        "checklist_id": "2e6e12f3-dd85-441c-be76-b43563f46e1b",
+        "checklist_number": "EE-INST-20261029-0001",
+        "technician_name": "ramesh.tech@safdrive.com",
+        "has_backup_items": true
+      },
+      "is_read": false,
+      "created_at": "2026-10-29T04:32:24.227Z"
+    },
+    {
+      "id": "c4b08781-ce28-401c-9ed9-de78fc648a83",
+      "target_role": "STORE",
+      "target_user_id": null,
+      "title": "Pre-Installation Submitted: EE-INST-20261029-0002",
+      "message": "Technician ramesh.tech@safdrive.com submitted Pre-Installation Form for Client. Ready for material review.",
+      "type": "PRE_INSTALLATION_SUBMITTED",
+      "checklist_id": "9d34f437-de98-4814-8f72-89613a70124f",
+      "checklist_number": "EE-INST-20261029-0002",
+      "metadata": {
+        "idempotency_key": "pre-install-store-9d34f437-de98-4814-8f72-89613a70124f",
+        "checklist_id": "9d34f437-de98-4814-8f72-89613a70124f",
+        "checklist_number": "EE-INST-20261029-0002",
+        "technician_name": "ramesh.tech@safdrive.com",
+        "has_backup_items": true,
+        "items_count": 1
+      },
+      "is_read": false,
+      "created_at": "2026-10-29T04:32:41.920Z"
+    },
+    {
+      "id": "2f34e382-c6f6-4965-b3b3-5f2cacdc3034",
+      "target_role": "COORDINATOR",
+      "target_user_id": null,
+      "title": "Pre-Installation Submitted: EE-INST-20261029-0002",
+      "message": "Technician ramesh.tech@safdrive.com submitted Pre-Installation Form for Client. Ready for travel & room booking.",
+      "type": "PRE_INSTALLATION_SUBMITTED",
+      "checklist_id": "9d34f437-de98-4814-8f72-89613a70124f",
+      "checklist_number": "EE-INST-20261029-0002",
+      "metadata": {
+        "idempotency_key": "pre-install-coord-9d34f437-de98-4814-8f72-89613a70124f",
+        "checklist_id": "9d34f437-de98-4814-8f72-89613a70124f",
+        "checklist_number": "EE-INST-20261029-0002",
+        "technician_name": "ramesh.tech@safdrive.com",
+        "has_backup_items": true
+      },
+      "is_read": false,
+      "created_at": "2026-10-29T04:32:42.106Z"
+    }
+  ],
+  "updated_at": "2026-10-29T04:32:42.312Z"
 }

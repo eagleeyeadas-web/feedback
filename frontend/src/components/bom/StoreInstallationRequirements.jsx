@@ -576,7 +576,7 @@ export default function StoreInstallationRequirements({ token, onSelectChecklist
               const reqQty = Number(d.required_quantity ?? d.quantity ?? d.number_of_devices) || 1;
               origItems.push({
                 name: d.device_type || d.item_name || 'Camera',
-                sku: d.sku || d.item_sku || 'MAT-CAM-4CH',
+                sku: d.sku || d.item_sku || '—',
                 required: reqQty,
                 issued: isIssued ? reqQty : 0,
                 status: isIssued ? 'Issued' : 'Pending',
@@ -588,7 +588,7 @@ export default function StoreInstallationRequirements({ token, onSelectChecklist
                 const reqQty = Number(m.required_quantity ?? m.quantity) || 1;
                 origItems.push({
                   name: m.material_name || m.item_name || 'Material',
-                  sku: m.sku || m.material_sku || 'MAT-CBL-15M',
+                  sku: m.sku || m.material_sku || '—',
                   required: reqQty,
                   issued: isIssued ? reqQty : 0,
                   status: isIssued ? 'Issued' : 'Pending',
@@ -600,7 +600,7 @@ export default function StoreInstallationRequirements({ token, onSelectChecklist
               const reqQty = Number(req.number_of_devices) || 1;
               origItems.push({
                 name: req.device_type || 'Camera',
-                sku: 'MAT-CAM-4CH',
+                sku: req.sku || '—',
                 required: reqQty,
                 issued: isIssued ? reqQty : 0,
                 status: isIssued ? 'Issued' : 'Pending',
@@ -616,7 +616,7 @@ export default function StoreInstallationRequirements({ token, onSelectChecklist
                 const isInstalled = (req.is_completion_submitted || req.installation_status === 'Completed' || (req.post_installation_details && req.post_installation_details.length > 0)) && issQ > 0;
                 extraItems.push({
                   name: it.item_name || it.device_type || 'Device',
-                  sku: it.item_sku || it.sku || 'MAT-CAM-4CH',
+                  sku: it.item_sku || it.sku || '—',
                   requested: reqQ,
                   issued: issQ,
                   status: isInstalled ? 'Installed' : (issQ >= reqQ && reqQ > 0 ? 'Issued' : 'Pending'),
@@ -627,7 +627,7 @@ export default function StoreInstallationRequirements({ token, onSelectChecklist
                 const reqQ = Number(it.extra_quantity || it.quantity) || 1;
                 extraItems.push({
                   name: it.device_type || 'Device',
-                  sku: it.sku || 'MAT-CAM-4CH',
+                  sku: it.sku || '—',
                   requested: reqQ,
                   issued: 0,
                   status: 'Pending',
@@ -787,18 +787,21 @@ export default function StoreInstallationRequirements({ token, onSelectChecklist
                     <div className="flex items-center gap-1.5 text-slate-700">
                       <Calendar className="w-3.5 h-3.5 text-slate-500 shrink-0" />
                       <span>
-                        <span className="text-slate-500">Original Planned: </span>
+                        <span className="text-slate-500">Planned Date: </span>
                         <span className="font-bold text-slate-900">
-                          {req.expected_arrival_date || '2026-10-27'} ({req.installation_duration || '1 Day'})
+                          {req.expected_arrival_date || req.installation_date || req.created_at
+                            ? formatDisplayDate(req.expected_arrival_date || req.installation_date || req.created_at)
+                            : 'Not Scheduled'}{' '}
+                          {req.installation_duration ? `(${req.installation_duration})` : ''}
                         </span>
                       </span>
                     </div>
                     <div className="flex items-center gap-1.5 text-slate-700">
                       <Clock className="w-3.5 h-3.5 text-slate-500 shrink-0" />
                       <span>
-                        <span className="text-slate-500">Expected Delivery: </span>
+                        <span className="text-slate-500">Planned Window: </span>
                         <span className="font-bold text-slate-900">
-                          {req.expected_arrival_time || '10:00 AM - 06:00 PM'}
+                          {req.expected_arrival_time || req.time_slot || 'Standard Hours'}
                         </span>
                       </span>
                     </div>
@@ -822,8 +825,12 @@ export default function StoreInstallationRequirements({ token, onSelectChecklist
                       <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
                       <span>
                         {isIssued
-                          ? 'Original stock issued. Technician requested extra devices and completed installation.'
-                          : 'Original stock awaiting Store Manager verification and dispatch.'}
+                          ? (extraItems.length > 0 && extraAllInstalled
+                              ? 'Original stock issued. Extra devices issued and installation completed.'
+                              : extraItems.length > 0 && hasExtraPending
+                              ? 'Original stock issued. Pending technician extra-device request authorization.'
+                              : 'Original stock issued successfully.')
+                          : 'Original stock awaiting Store Manager verification and issuance.'}
                       </span>
                     </div>
                   </div>
@@ -1156,11 +1163,11 @@ export default function StoreInstallationRequirements({ token, onSelectChecklist
                           </div>
                           <div>
                             <span className="font-mono text-[11px] text-slate-500 block">
-                              {formatDisplayDateTime(req.material_issued_at || req.created_at || '2026-10-26T10:30:00Z')}
+                              {isIssued ? formatDisplayDateTime(req.material_issued_at || req.created_at) : 'Pending Issuance'}
                             </span>
                             <span className="font-bold text-slate-900 text-xs block">Original Stock Issued</span>
                             <span className="text-[11px] text-slate-500 block">
-                              By: {req.material_issued_by || 'Store Manager'}
+                              {isIssued ? `By: ${req.material_issued_by || 'Store Manager'}` : 'Not issued yet'}
                             </span>
                           </div>
                         </div>
@@ -1178,11 +1185,15 @@ export default function StoreInstallationRequirements({ token, onSelectChecklist
                           </div>
                           <div>
                             <span className="font-mono text-[11px] text-slate-500 block">
-                              {formatDisplayDateTime(req.backup_declaration?.issued_at || '2026-10-27T09:15:00Z')}
+                              {req.backup_declaration?.issued_at
+                                ? formatDisplayDateTime(req.backup_declaration.issued_at)
+                                : (hasExtraPending ? 'Pending Authorization' : '—')}
                             </span>
                             <span className="font-bold text-slate-900 text-xs block">Extra Devices Issued</span>
                             <span className="text-[11px] text-slate-500 block">
-                              By: {req.backup_declaration?.issued_by || 'Store Manager'}
+                              {req.backup_declaration?.issued_at
+                                ? `By: ${req.backup_declaration?.issued_by || 'Store Manager'}`
+                                : (hasExtraPending ? 'Store Manager review needed' : 'No extra issued')}
                             </span>
                           </div>
                         </div>
@@ -1198,11 +1209,13 @@ export default function StoreInstallationRequirements({ token, onSelectChecklist
                           </div>
                           <div>
                             <span className="font-mono text-[11px] text-slate-500 block">
-                              {formatDisplayDateTime(req.completion_report?.installation_date || '2026-10-27T15:40:00Z')}
+                              {req.completion_report?.installation_date || req.installation_completed_at
+                                ? formatDisplayDateTime(req.completion_report?.installation_date || req.installation_completed_at)
+                                : (req.installation_status === 'Completed' ? 'Completed' : 'Pending')}
                             </span>
                             <span className="font-bold text-slate-900 text-xs block">Installation Completed</span>
                             <span className="text-[11px] text-slate-500 block">
-                              By: Technician ({req.service_engineer || 'Guna'})
+                              {hasTech ? `By: Technician (${req.service_engineer})` : 'Unassigned technician'}
                             </span>
                           </div>
                         </div>
@@ -1218,11 +1231,15 @@ export default function StoreInstallationRequirements({ token, onSelectChecklist
                           </div>
                           <div>
                             <span className="font-mono text-[11px] text-slate-500 block">
-                              {formatDisplayDateTime(req.completion_report?.submission_date || '2026-10-27T16:10:00Z')}
+                              {req.completion_report?.submission_date || req.post_installation_submitted_at
+                                ? formatDisplayDateTime(req.completion_report?.submission_date || req.post_installation_submitted_at)
+                                : 'Not Submitted'}
                             </span>
                             <span className="font-bold text-slate-900 text-xs block">Post-Installation Form Submitted</span>
                             <span className="text-[11px] text-slate-500 block">
-                              By: Technician ({req.service_engineer || 'Guna'})
+                              {postInstallList.length > 0 || req.is_completion_submitted
+                                ? `By: Technician (${req.service_engineer || 'Assigned Technician'})`
+                                : 'Pending technician submission'}
                             </span>
                           </div>
                         </div>

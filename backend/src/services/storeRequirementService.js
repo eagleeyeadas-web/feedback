@@ -1160,14 +1160,14 @@ export async function getStoreMaterialRequirements(params = {}) {
 
     const isTechDependent = isChecklistTechnicianDependent(rec);
     const hasPreInstallSubmitted = Boolean(
-      ['DECLARED', 'CORRECTED', 'VERIFIED'].includes(backupDecl?.status) ||
-      ['SUBMITTED', 'AUDITED'].includes(rec.carry_record?.status) ||
-      Boolean(rec.carry_record?.submitted_at || rec.carry_record?.submission_date)
+      (backupDecl?.status && ['DECLARED', 'CORRECTED', 'VERIFIED'].includes(backupDecl.status)) ||
+      (rec.carry_record?.status && ['SUBMITTED', 'AUDITED'].includes(rec.carry_record.status)) ||
+      Boolean(rec.carry_record?.submitted_at)
     );
     const preInstallStatus = hasPreInstallSubmitted ? 'Submitted' : 'Pending';
-    const preInstallTimestamp = backupDecl?.declaration_timestamp ||
-      rec.carry_record?.submission_date ||
-      (hasPreInstallSubmitted ? (rec.submission_date || null) : null);
+    const preInstallTimestamp = hasPreInstallSubmitted
+      ? (backupDecl?.declaration_timestamp || rec.carry_record?.submitted_at || null)
+      : null;
 
     const isFullyIssued = isCourier
       ? isCourierIssued
@@ -1401,13 +1401,14 @@ export async function getStoreMaterialRequirements(params = {}) {
   // - Checklists marked as Completed by Sales (e.g. Customer Self-Installation): separated to Completed Checklists page.
   let actionableRecords = enrichedRecords.filter((r) => {
     // If completed customer self-installation or non-stock completed, exclude from actionable queue (belongs in Completed Checklists)
-    const isSelfInstalledOrNonStockCompleted = r.installation_status === 'Completed' && (
+    const isSelfInstalledOrNonStockCompleted = (r.installation_status === 'Completed' || r.status === 'Completed') && (
       r.completion_type === 'CUSTOMER_INSTALLED' ||
       r.completion_reason === 'Customer Self-Installation' ||
-      r.completion_reason === 'Completed - No Stock Required' ||
-      r.delivery_method === 'Product Couriered'
+      r.completion_reason === 'Completed - No Stock Required'
     );
-    if (isSelfInstalledOrNonStockCompleted) {
+    const hasOutstandingWork = !r.is_issued && r.stock_issuance_status !== 'Completed';
+    const hasPendingExtraWork = Boolean(r.has_pending_extra || (r.extra_device_quantities?.extra_devices_requested > (r.extra_device_quantities?.extra_devices_issued || 0)));
+    if (isSelfInstalledOrNonStockCompleted && !hasOutstandingWork && !hasPendingExtraWork) {
       return false;
     }
 
@@ -1705,7 +1706,6 @@ export async function issueFullJobStock({
   checklist_id,
   issue_devices = true,
   issue_materials = true,
-  issue_backup_items = false,
   remarks = '',
   user,
 }) {
@@ -1725,10 +1725,9 @@ export async function issueFullJobStock({
   try {
     const shouldIssueDevices = Boolean(issue_devices);
     const shouldIssueMaterials = Boolean(issue_materials);
-    const shouldIssueBackup = Boolean(issue_backup_items);
 
-    if (!shouldIssueDevices && !shouldIssueMaterials && !shouldIssueBackup) {
-      throw new Error('Please select at least one component (Devices, Materials, or Backup Items) to issue.');
+    if (!shouldIssueDevices && !shouldIssueMaterials) {
+      throw new Error('Please select at least one component (Devices or Materials) to issue.');
     }
 
     const req = await getStoreMaterialRequirementById(checklist_id);
@@ -1844,37 +1843,23 @@ export async function issueFullJobStock({
       }
     }
 
-    // Resolve declared backup items
-    let backupItemsToIssue = [];
-    if (shouldIssueBackup) {
-      try {
-        const declaration = await getBackupDeclaration(canonicalChecklistId);
-        if (declaration?.has_backup_items && Array.isArray(declaration.items)) {
-          backupItemsToIssue = declaration.items;
-        }
-      } catch (bErr) {
-        // Ignore declaration fetch error
-      }
-    }
-
     const willIssueDevices = shouldIssueDevices && !devicesAlreadyIssued && deviceItemsToIssue.length > 0;
     const willIssueMaterials = shouldIssueMaterials && !materialsAlreadyIssued && materialItemsToIssue.length > 0;
-    const willIssueBackup = shouldIssueBackup && backupItemsToIssue.length > 0;
 
     // Check if everything requested was already completed
-    if (shouldIssueDevices && !willIssueDevices && !willIssueMaterials && !willIssueBackup && devicesAlreadyIssued && !shouldIssueMaterials) {
+    if (shouldIssueDevices && !willIssueDevices && !willIssueMaterials && devicesAlreadyIssued && !shouldIssueMaterials) {
       const conflictErr = new Error(`Camera devices have already been issued for checklist ${req.checklist_number}. Duplicate issuance is prevented.`);
       conflictErr.status = 409;
       conflictErr.code = 'ALREADY_ISSUED';
       throw conflictErr;
     }
-    if (shouldIssueMaterials && !willIssueMaterials && !willIssueDevices && !willIssueBackup && materialsAlreadyIssued && !shouldIssueDevices) {
+    if (shouldIssueMaterials && !willIssueMaterials && !willIssueDevices && materialsAlreadyIssued && !shouldIssueDevices) {
       const conflictErr = new Error(`Materials have already been issued for checklist ${req.checklist_number}. Duplicate issuance is prevented.`);
       conflictErr.status = 409;
       conflictErr.code = 'ALREADY_ISSUED';
       throw conflictErr;
     }
-    if (!willIssueDevices && !willIssueMaterials && !willIssueBackup) {
+    if (!willIssueDevices && !willIssueMaterials) {
       if (devicesAlreadyIssued || materialsAlreadyIssued) {
         const conflictErr = new Error(`All stock items have already been issued for checklist ${req.checklist_number}. Duplicate issuance is prevented.`);
         conflictErr.status = 409;
@@ -1941,37 +1926,6 @@ export async function issueFullJobStock({
       }
     }
 
-    // 3. Validate Declared Backup Items stock
-    if (willIssueBackup) {
-      const [allMats, allDevs] = await Promise.all([
-        getMaterialInventory().catch(() => []),
-        getInventoryProducts().catch(() => []),
-      ]);
-      const matMap = new Map(allMats.map((m) => [m.material_name.toLowerCase(), m]));
-      const devMap = new Map(allDevs.map((d) => [d.device_type.toLowerCase(), d]));
-
-      for (const it of backupItemsToIssue) {
-        const name = (it.item_name || '').trim();
-        const qty = Number(it.quantity) || 0;
-        if (qty <= 0) continue;
-        if (Number(it.quantity_issued) >= qty) continue;
-
-        const mat = matMap.get(name.toLowerCase());
-        const dev = devMap.get(name.toLowerCase());
-
-        if (mat) {
-          const cur = Number(mat.current_stock) || 0;
-          if (qty > cur) {
-            throw new Error(`Insufficient stock for backup material "${name}". In store: ${cur} ${mat.unit || 'Nos.'}, required: ${qty} ${mat.unit || 'Nos.'}.`);
-          }
-        } else if (dev) {
-          const cur = Number(dev.usable_stock) || 0;
-          if (qty > cur) {
-            throw new Error(`Insufficient stock for backup device "${name}". In store: ${cur} Nos., required: ${qty} Nos.`);
-          }
-        }
-      }
-    }
 
     // ============================================================
     // EXECUTE DEDUCTIONS (Only reaches here if ALL items are available)
@@ -2008,21 +1962,6 @@ export async function issueFullJobStock({
       results.materials = { status: 'ALREADY_ISSUED', message: 'Installation materials were already issued previously.' };
     }
 
-    // 3. Issue Declared Loose Backup Items
-    if (willIssueBackup) {
-      try {
-        const backupResults = await issueBackupItemsForChecklist({
-          checklist_id: canonicalChecklistId,
-          user,
-          remarks: remarks || `Loose backup items issued for job ${req.checklist_number}`,
-        });
-        if (backupResults?.issued_items?.length > 0) {
-          results.backup_items = backupResults;
-        }
-      } catch (bErr) {
-        console.warn('Backup items issuance notice during job stock issuance:', bErr.message);
-      }
-    }
 
     // 4. Fulfill device allocations so component reservations are completed and not double-deducted
     try {

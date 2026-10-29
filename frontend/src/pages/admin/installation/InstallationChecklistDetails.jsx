@@ -599,7 +599,7 @@ export default function InstallationChecklistDetails({ id: propId, onEdit, onBac
                 </div>
 
                 {/* Pre-Installation Loose Backup Items Table */}
-                {backupDeclaration?.items && backupDeclaration.items.length > 0 ? (
+                {backupDeclaration?.status && backupDeclaration.status !== 'NOT_RECORDED' && backupDeclaration?.items && backupDeclaration.items.length > 0 ? (
                   <div className="space-y-2">
                     <div className="flex items-center justify-between text-xs">
                       <span className="font-bold text-gray-700">Pre-Installation Declared Loose Items:</span>
@@ -632,7 +632,7 @@ export default function InstallationChecklistDetails({ id: propId, onEdit, onBac
                       </table>
                     </div>
                   </div>
-                ) : backupDeclaration?.has_backup_items === false ? (
+                ) : (backupDeclaration?.status && backupDeclaration?.status !== 'NOT_RECORDED' && backupDeclaration?.has_backup_items === false) ? (
                   <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-900">
                     <strong>Technician Confirmation:</strong> Confirmed no extra backup items were carried to the site.
                     {backupDeclaration.no_items_reason && (

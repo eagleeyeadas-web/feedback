@@ -22,6 +22,7 @@ import {
   Smartphone,
   ExternalLink,
   RefreshCw,
+  Sparkles,
 } from 'lucide-react';
 import {
   submitInstallationCompletionReport,
@@ -592,9 +593,38 @@ export default function InstallationCompletionModal({
     setRequiredDeviceItems((prev) =>
       prev.map((row) => {
         if (row.id !== id) return row;
+        const req = Number(row.required_quantity) || 0;
+        if (field === 'outcome') {
+          if (value === 'NOT_INSTALLED_DECLINED' || value === 'UNABLE_TO_INSTALL') {
+            return {
+              ...row,
+              outcome: value,
+              actual_installed_quantity: 0,
+              disposition: 'RETURN_TO_STORE',
+            };
+          } else {
+            return {
+              ...row,
+              outcome: 'INSTALLED',
+              actual_installed_quantity: req,
+              disposition: null,
+            };
+          }
+        }
         if (field === 'actual_installed_quantity') {
           const val = value === '' ? '' : Math.max(0, parseInt(value, 10) || 0);
-          return { ...row, actual_installed_quantity: val };
+          let outcome = row.outcome;
+          if (val === 0 && (!outcome || outcome === 'INSTALLED')) {
+            outcome = 'NOT_INSTALLED_DECLINED';
+          } else if (val >= req) {
+            outcome = 'INSTALLED';
+          }
+          return {
+            ...row,
+            actual_installed_quantity: val,
+            outcome,
+            disposition: val < req ? (row.disposition || 'RETURN_TO_STORE') : null,
+          };
         }
         return { ...row, [field]: value };
       })
@@ -910,6 +940,8 @@ export default function InstallationCompletionModal({
             quantity_to_return: unused,
             quantity_damaged: 0,
             quantity_missing: 0,
+            outcome: d.outcome || (inst >= req ? 'INSTALLED' : 'NOT_INSTALLED_DECLINED'),
+            disposition: d.disposition || (unused > 0 ? 'RETURN_TO_STORE' : null),
             discrepancy_reason: d.notes ? d.notes.trim() : null,
           };
         }),
@@ -1105,7 +1137,7 @@ export default function InstallationCompletionModal({
                           </div>
                         </div>
 
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
+                        <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5 pt-1">
                           <div>
                             <label className="block text-[10px] font-semibold text-gray-600 mb-0.5 uppercase tracking-wide">
                               {isServiceJob ? 'Quantity Issued to Technician' : 'Customer Required Quantity'}
@@ -1117,14 +1149,30 @@ export default function InstallationCompletionModal({
 
                           <div>
                             <label className="block text-[10px] font-semibold text-gray-600 mb-0.5 uppercase tracking-wide">
-                              {isServiceJob ? 'Quantity Used on Site' : 'Actual Installed Quantity'} <span className="text-rose-500">*</span>
+                              Installation Outcome <span className="text-rose-500">*</span>
+                            </label>
+                            <select
+                              disabled={readOnly}
+                              value={row.outcome || (inst >= req ? 'INSTALLED' : 'NOT_INSTALLED_DECLINED')}
+                              onChange={(e) => handleRequiredDeviceChange(row.id, 'outcome', e.target.value)}
+                              className="w-full text-xs p-1.5 border border-blue-300 rounded-lg font-bold text-gray-800 bg-white focus:ring-2 focus:ring-blue-500 outline-none disabled:bg-gray-100"
+                            >
+                              <option value="INSTALLED">Installed</option>
+                              <option value="NOT_INSTALLED_DECLINED">Not Installed — Customer Declined</option>
+                              <option value="UNABLE_TO_INSTALL">Unable to Install</option>
+                            </select>
+                          </div>
+
+                          <div>
+                            <label className="block text-[10px] font-semibold text-gray-600 mb-0.5 uppercase tracking-wide">
+                              {isServiceJob ? 'Quantity Used on Site' : 'Actually Installed'} <span className="text-rose-500">*</span>
                             </label>
                             <input
                               type="number"
                               min="0"
                               max={req}
                               step="1"
-                              disabled={readOnly}
+                              disabled={readOnly || row.outcome === 'NOT_INSTALLED_DECLINED' || row.outcome === 'UNABLE_TO_INSTALL'}
                               value={row.actual_installed_quantity}
                               onChange={(e) =>
                                 handleRequiredDeviceChange(row.id, 'actual_installed_quantity', e.target.value)
@@ -1136,27 +1184,39 @@ export default function InstallationCompletionModal({
 
                           <div>
                             <label className="block text-[10px] font-semibold text-gray-600 mb-0.5 uppercase tracking-wide">
-                              {isServiceJob ? 'Service Reconciliation' : 'Installation Reconciliation'}
+                              Disposition of Unused
                             </label>
                             <div className="w-full text-xs p-1.5 border border-gray-200 rounded-lg text-center font-semibold bg-gray-50 text-gray-700">
-                              {isFull ? (isServiceJob ? '100% Used on Site' : '100% Installed') : (isServiceJob ? `${inst} Used, ${req - inst} Returned` : `${inst} of ${req} Installed`)}
+                              {inst >= req ? 'N/A (Fully Installed)' : 'Return to Store'}
                             </div>
                           </div>
                         </div>
 
                         {inst < req && (
-                          <div className="pt-1">
-                            <label className="block text-[10px] font-semibold text-amber-800 mb-0.5 uppercase tracking-wide">
-                              {isServiceJob ? 'Unused Return Note' : 'Shortfall Reason / Uninstalled Note'} <span className="text-amber-600 font-normal">(Optional)</span>
-                            </label>
-                            <input
-                              type="text"
-                              disabled={readOnly}
-                              value={row.notes || ''}
-                              onChange={(e) => handleRequiredDeviceChange(row.id, 'notes', e.target.value)}
-                              placeholder={isServiceJob ? 'e.g. Existing camera was intact; returned 1 unused unit to store...' : 'e.g. 1 client vehicle was unavailable at site during installation...'}
-                              className="w-full text-xs px-2.5 py-1.5 border border-amber-300 rounded-lg bg-amber-50/30 text-gray-800 outline-none focus:ring-2 focus:ring-amber-500 disabled:bg-gray-100"
-                            />
+                          <div className="space-y-2 pt-1">
+                            <div>
+                              <label className="block text-[10px] font-semibold text-amber-800 mb-0.5 uppercase tracking-wide">
+                                {isServiceJob ? 'Unused Return Note' : 'Shortfall / Customer Decline Reason'} <span className="text-rose-500">*</span>
+                              </label>
+                              <input
+                                type="text"
+                                disabled={readOnly}
+                                value={row.notes || ''}
+                                onChange={(e) => handleRequiredDeviceChange(row.id, 'notes', e.target.value)}
+                                placeholder={isServiceJob ? 'e.g. Existing camera was intact; returned 1 unused unit to store...' : 'e.g. Customer cancelled 2 Channel Live installation; vehicle not ready at site...'}
+                                className="w-full text-xs px-2.5 py-1.5 border border-amber-300 rounded-lg bg-amber-50/30 text-gray-800 outline-none focus:ring-2 focus:ring-amber-500 disabled:bg-gray-100"
+                                required={inst < req}
+                              />
+                            </div>
+
+                            {!isServiceJob && (
+                              <div className="p-2.5 bg-blue-50/80 border border-blue-200 rounded-lg text-xs text-blue-900 flex items-start gap-2">
+                                <Info className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                                <span className="leading-relaxed">
+                                  <strong>Automatic BOM Material Returns:</strong> Because {req - inst} {row.unit} of {row.product_name} was not installed and marked for return, associated standard installation materials (insulation tape, cable ties, wire, etc.) will be automatically calculated using the configured BOM rules and scheduled for return to store. No manual material entry required.
+                                </span>
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
@@ -1343,11 +1403,11 @@ export default function InstallationCompletionModal({
               </div>
 
               {/* ============================================================
-                  SECTION 3: STANDARD FITTING MATERIALS USAGE (COLLAPSIBLE)
+                  SECTION 3: STANDARD FITTING MATERIALS (AUTOMATIC BOM RECONCILIATION)
                   ============================================================ */}
               {!isServiceJob && (
-              <div className="border border-gray-200 rounded-xl overflow-hidden bg-white shadow-2xs">
-                <div className="p-3 bg-slate-50 flex items-center justify-between border-b border-gray-200">
+              <div className="border border-blue-200/80 rounded-xl overflow-hidden bg-white shadow-2xs">
+                <div className="p-3 bg-gradient-to-r from-blue-50 to-indigo-50/50 flex items-center justify-between border-b border-blue-100">
                   <button
                     type="button"
                     onClick={() => setMaterialsCollapsed(!materialsCollapsed)}
@@ -1355,9 +1415,14 @@ export default function InstallationCompletionModal({
                   >
                     <Layers className="w-4 h-4 text-blue-600" />
                     <div>
-                      <span className="font-bold text-gray-900 text-xs block">
-                        Standard Fitting Materials Usage
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-gray-900 text-xs block">
+                          Standard Fitting Materials (Automated BOM)
+                        </span>
+                        <span className="px-1.5 py-0.5 text-[10px] font-semibold bg-blue-100 text-blue-800 rounded">
+                          Auto-Calculated Returns
+                        </span>
+                      </div>
                       <span className="text-[11px] text-gray-500">
                         Tape, cable ties, wire, and other installation materials from configured BOM ({standardMaterialItems.length} items)
                       </span>
@@ -1371,70 +1436,41 @@ export default function InstallationCompletionModal({
                 </div>
 
                 {!materialsCollapsed && (
-                  <div className="p-3.5 space-y-2.5 bg-slate-50/50">
+                  <div className="p-3.5 space-y-3 bg-slate-50/50">
+                    <div className="p-2.5 bg-blue-50/70 border border-blue-200/80 rounded-lg text-xs text-blue-900 flex items-start gap-2">
+                      <Sparkles className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                      <div>
+                        <span className="font-semibold">Automatic BOM Returns: </span>
+                        If any required device was marked uninstalled or declined in Section 1, the associated standard fitting materials are automatically calculated from the configured BOM rules and scheduled for return to the store upon report submission. You do not need to manually calculate or type each material quantity.
+                      </div>
+                    </div>
+
                     {standardMaterialItems.length === 0 ? (
                       <div className="p-4 bg-white border border-dashed border-gray-200 rounded-xl text-center text-gray-400 text-xs italic">
                         No standard fitting materials specified in BOM for this job.
                       </div>
                     ) : (
-                      standardMaterialItems.map((mat) => (
-                        <div
-                          key={mat.id}
-                          className="p-3 bg-white border border-gray-200 rounded-xl shadow-2xs space-y-2"
-                        >
-                          <div className="flex items-center justify-between">
-                            <span className="font-bold text-gray-900 text-xs">{mat.material_name}</span>
-                            <span className="text-[11px] font-mono font-semibold text-gray-600 bg-slate-100 px-2 py-0.5 rounded">
-                              Standard BOM: {mat.standard_quantity} {mat.unit}
-                            </span>
-                          </div>
-
-                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {standardMaterialItems.map((mat) => (
+                          <div
+                            key={mat.id}
+                            className="p-2.5 bg-white border border-gray-200 rounded-lg shadow-2xs flex items-center justify-between"
+                          >
                             <div>
-                              <label className="block text-[10px] font-semibold text-gray-600 mb-0.5 uppercase tracking-wide">
-                                Standard Used on Site
-                              </label>
-                              <input
-                                type="number"
-                                min="0"
-                                step="any"
-                                disabled={readOnly}
-                                value={mat.quantity_used}
-                                onChange={(e) =>
-                                  handleStandardMaterialChange(mat.id, 'quantity_used', e.target.value)
-                                }
-                                className="w-full text-xs p-1.5 border border-gray-300 rounded-lg text-center font-mono font-bold text-gray-800 bg-white focus:ring-2 focus:ring-blue-500 outline-none disabled:bg-gray-100"
-                              />
+                              <div className="font-semibold text-gray-900 text-xs">{mat.material_name}</div>
+                              <div className="text-[10px] text-gray-500">Standard BOM allocation</div>
                             </div>
-
-                            <div>
-                              <label className="block text-[10px] font-semibold text-gray-600 mb-0.5 uppercase tracking-wide">
-                                Standard Returned Unused
-                              </label>
-                              <input
-                                type="number"
-                                min="0"
-                                step="any"
-                                disabled={readOnly}
-                                value={mat.quantity_returned}
-                                onChange={(e) =>
-                                  handleStandardMaterialChange(mat.id, 'quantity_returned', e.target.value)
-                                }
-                                className="w-full text-xs p-1.5 border border-gray-300 rounded-lg text-center font-mono font-bold text-blue-700 bg-white focus:ring-2 focus:ring-blue-500 outline-none disabled:bg-gray-100"
-                              />
-                            </div>
-
-                            <div className="col-span-2 sm:col-span-1">
-                              <label className="block text-[10px] font-semibold text-gray-600 mb-0.5 uppercase tracking-wide">
-                                Unit
-                              </label>
-                              <div className="w-full text-xs p-1.5 border border-gray-200 rounded-lg text-center font-mono font-semibold bg-gray-50 text-gray-700">
-                                {mat.unit || 'Nos.'}
+                            <div className="text-right">
+                              <span className="text-xs font-mono font-bold text-gray-800 bg-slate-100 px-2 py-1 rounded border border-gray-200">
+                                {mat.standard_quantity} {mat.unit}
+                              </span>
+                              <div className="text-[9px] text-emerald-600 font-medium mt-0.5">
+                                Reconciled automatically
                               </div>
                             </div>
                           </div>
-                        </div>
-                      ))
+                        ))}
+                      </div>
                     )}
                   </div>
                 )}

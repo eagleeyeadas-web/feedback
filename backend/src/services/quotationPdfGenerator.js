@@ -540,21 +540,18 @@ export async function generateQuotationPDF(quotation, items = [], logoBase64 = n
 
   // ============================================================
   // TERMS & CONDITIONS (LEFT 70% / 133mm) AND GST SUMMARY (RIGHT 30% / 57mm)
+  // DYNAMIC CONTENT-AWARE LAYOUT ENGINE
   // ============================================================
-  const splitBoxH = 68; // Significantly enlarged height matching reference image
   const leftW = 133;
   const rightW = CONTENT_WIDTH - leftW; // 57mm
-
-  // Split Vertical Divider Line
-  doc.line(MARGIN_X + leftW, y, MARGIN_X + leftW, y + splitBoxH);
-
-  // --- TERMS & CONDITIONS (LEFT SIDE) ---
-  let termY = y + 5.5;
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(10);
-  doc.setTextColor(0, 0, 0);
-  doc.text('Terms & Conditions', MARGIN_X + 3, termY);
-  termY += 6.5;
+  const leftPadding = 3;
+  const rightPadding = 3;
+  const headingTopPad = 4.8;
+  const headingBottomMargin = 3.8;
+  const headingTotalH = headingTopPad + 3.2 + headingBottomMargin; // ~11.8mm
+  const boxBottomPad = 3.5;
+  const lineHeight = 3.6; // Line height for 8.2pt font
+  const termSpacing = 2.4; // Clean space between numbered clauses
 
   const exactDefaultTerms = [
     '100% payment in advance is required along with a valid Purchase Order (PO) to confirm the order.',
@@ -570,50 +567,146 @@ export async function generateQuotationPDF(quotation, items = [], logoBase64 = n
     ? quotation.terms_conditions
     : exactDefaultTerms;
 
-  rawTerms.forEach((rawTerm, idx) => {
-    if (termY < y + splitBoxH - 3) {
-      const cleanTerm = sanitizePdfText(rawTerm.replace(/^\d+\.\s*/, '').replace(/\*\*/g, ''));
-      const numPrefix = `${idx + 1}.  `;
-      
+  const validTerms = rawTerms
+    .map((t) => sanitizePdfText(String(t || '').trim()))
+    .filter((t) => t.length > 0);
+
+  // Pre-calculate line wrapping and exact rendered height for every term
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8.2);
+
+  const parsedTerms = validTerms.map((rawTerm, idx) => {
+    const cleanTerm = rawTerm.replace(/^\d{1,2}[\.\)\-]\s*/, '').replace(/\*\*/g, '').trim();
+    const numPrefix = `${idx + 1}.  `;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8.2);
+    const numWidth = doc.getTextWidth(numPrefix);
+    const textWidthMax = leftW - leftPadding - rightPadding - numWidth;
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8.2);
+    // Safe text width with safety buffer so bold prefixes don't clip
+    const textLines = doc.splitTextToSize(cleanTerm, textWidthMax - 1.2);
+    const termHeight = textLines.length * lineHeight + termSpacing;
+
+    return {
+      index: idx,
+      cleanTerm,
+      numPrefix,
+      numWidth,
+      textLines,
+      termHeight,
+    };
+  });
+
+  const totalTermsNeededH = headingTotalH + parsedTerms.reduce((sum, t) => sum + t.termHeight, 0) + boxBottomPad;
+
+  // Calculate available space on Page 1
+  const wordsText = numberToWordsIndian(quotation.net_amount);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8.5);
+  const wordsLines = doc.splitTextToSize(wordsText, CONTENT_WIDTH - 6);
+  const wordsBoxH = Math.max(13, 5.0 + wordsLines.length * 3.8 + 2.5);
+
+  const bankBoxH = 34;
+  const minSigH = 20;
+  const frameBottomY = pageMarginTop + outerFrameHeight; // 284mm
+  const bottomSectionsH = wordsBoxH + bankBoxH + minSigH;
+  const maxAvailableSplitBoxH = frameBottomY - y - bottomSectionsH;
+
+  // Minimum height for the GST summary
+  const minSplitBoxH = quotation.gst_applicable && quotation.gst_type === 'CGST_SGST' ? 52 : 45;
+
+  let page1Terms = [];
+  let continuationTerms = [];
+  let splitBoxH = minSplitBoxH;
+
+  if (totalTermsNeededH <= maxAvailableSplitBoxH) {
+    // All terms fit on Page 1!
+    page1Terms = parsedTerms;
+    splitBoxH = Math.max(minSplitBoxH, totalTermsNeededH);
+  } else {
+    // Partition terms: keep complete terms that fit on Page 1 without clipping
+    let accumulatedH = headingTotalH;
+    for (const item of parsedTerms) {
+      if (accumulatedH + item.termHeight + boxBottomPad <= maxAvailableSplitBoxH) {
+        page1Terms.push(item);
+        accumulatedH += item.termHeight;
+      } else {
+        continuationTerms.push(item);
+      }
+    }
+
+    if (page1Terms.length === 0) {
+      // Extremely tight page (e.g. many product items): move all terms to continuation
+      continuationTerms = parsedTerms;
+      splitBoxH = minSplitBoxH;
+    } else {
+      splitBoxH = Math.max(minSplitBoxH, accumulatedH + boxBottomPad);
+    }
+  }
+
+  // Split Vertical Divider Line
+  doc.line(MARGIN_X + leftW, y, MARGIN_X + leftW, y + splitBoxH);
+
+  // --- TERMS & CONDITIONS (LEFT SIDE) ---
+  let termY = y + headingTopPad;
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10);
+  doc.setTextColor(0, 0, 0);
+  doc.text('Terms & Conditions', MARGIN_X + leftPadding, termY);
+  termY += (3.2 + headingBottomMargin);
+
+  if (page1Terms.length === 0 && continuationTerms.length > 0) {
+    doc.setFont('helvetica', 'italic');
+    doc.setFontSize(8.2);
+    doc.setTextColor(80, 80, 80);
+    doc.text('Terms & Conditions continued on next page...', MARGIN_X + leftPadding, termY + 2);
+    doc.setTextColor(0, 0, 0);
+  } else {
+    page1Terms.forEach((item) => {
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(8.2);
-      doc.text(numPrefix, MARGIN_X + 3, termY);
-      
-      const numWidth = doc.getTextWidth(numPrefix);
-      const textWidthMax = leftW - 6 - numWidth;
-      
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(8.2);
-      const textLines = doc.splitTextToSize(cleanTerm, textWidthMax);
-      
-      const startsWithReplacementPolicy = textLines[0].startsWith('Replacement Policy:');
+      doc.text(item.numPrefix, MARGIN_X + leftPadding, termY);
+
+      const startsWithReplacementPolicy = item.textLines[0].startsWith('Replacement Policy:');
       if (startsWithReplacementPolicy) {
         doc.setFont('helvetica', 'bold');
-        doc.text('Replacement Policy:', MARGIN_X + 3 + numWidth, termY);
+        doc.text('Replacement Policy:', MARGIN_X + leftPadding + item.numWidth, termY);
         const rpWidth = doc.getTextWidth('Replacement Policy:');
         doc.setFont('helvetica', 'normal');
-        doc.text(textLines[0].substring('Replacement Policy:'.length), MARGIN_X + 3 + numWidth + rpWidth, termY);
+        doc.text(item.textLines[0].substring('Replacement Policy:'.length), MARGIN_X + leftPadding + item.numWidth + rpWidth, termY);
       } else {
-        doc.text(textLines[0], MARGIN_X + 3 + numWidth, termY);
+        doc.setFont('helvetica', 'normal');
+        doc.text(item.textLines[0], MARGIN_X + leftPadding + item.numWidth, termY);
       }
-      
-      if (textLines.length > 1) {
-        for (let l = 1; l < textLines.length; l++) {
-          termY += 3.8;
-          doc.text(textLines[l], MARGIN_X + 3 + numWidth, termY);
+
+      if (item.textLines.length > 1) {
+        for (let l = 1; l < item.textLines.length; l++) {
+          termY += lineHeight;
+          doc.text(item.textLines[l], MARGIN_X + leftPadding + item.numWidth, termY);
         }
       }
-      termY += 4.8; // Spacing between terms to comfortably fit 7 clauses within the box
+
+      termY += lineHeight + termSpacing;
+    });
+
+    if (continuationTerms.length > 0) {
+      doc.setFont('helvetica', 'italic');
+      doc.setFontSize(7.5);
+      doc.setTextColor(100, 100, 100);
+      doc.text('(Continued on next page...)', MARGIN_X + leftPadding, termY);
+      doc.setTextColor(0, 0, 0);
     }
-  });
+  }
 
   // --- GST & NET AMOUNT BREAKDOWN (RIGHT SIDE) ---
   const rx = MARGIN_X + leftW;
   const netRowH = 13;
-  const gstSectionH = splitBoxH - netRowH; // 55mm
+  const gstSectionH = splitBoxH - netRowH;
 
   if (quotation.gst_applicable && quotation.gst_type === 'CGST_SGST') {
-    const rowH = gstSectionH / 3; // ~18.3mm per row (CGST, SGST, blank/extra)
+    const rowH = gstSectionH / 3;
 
     // Row 1: CGST
     let ry1 = y;
@@ -639,7 +732,7 @@ export async function generateQuotationPDF(quotation, items = [], logoBase64 = n
     doc.line(rx, ry1 + rowH, MARGIN_X + CONTENT_WIDTH, ry1 + rowH);
   }
 
-  // Row 4: Net Amount Row at bottom of GST box (Light Blue Fill background)
+  // Row: Net Amount Row at bottom of GST box (Light Blue Fill background)
   const netBoxY = y + splitBoxH - netRowH;
   doc.line(rx, netBoxY, MARGIN_X + CONTENT_WIDTH, netBoxY);
 
@@ -654,19 +747,23 @@ export async function generateQuotationPDF(quotation, items = [], logoBase64 = n
   doc.text('Net Amount', rx + 4, netBoxY + netRowH / 2 + 1.5);
   doc.text(formatCurrency(quotation.net_amount), MARGIN_X + CONTENT_WIDTH - 3, netBoxY + netRowH / 2 + 1.5, { align: 'right' });
 
+  // Advance y by splitBoxH
   y += splitBoxH;
   doc.line(MARGIN_X, y, MARGIN_X + CONTENT_WIDTH, y);
 
   // ============================================================
   // NET AMOUNT IN WORDS
   // ============================================================
-  const wordsBoxH = 14;
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(9);
-  doc.text('Net Amount in words', MARGIN_X + 3, y + 5.0);
+  doc.text('Net Amount in words', MARGIN_X + 3, y + 4.8);
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8.5);
-  doc.text(numberToWordsIndian(quotation.net_amount), MARGIN_X + 3, y + 10.0);
+  let wy = y + 9.2;
+  wordsLines.forEach((wl) => {
+    doc.text(wl, MARGIN_X + 3, wy);
+    wy += 3.8;
+  });
 
   y += wordsBoxH;
   doc.line(MARGIN_X, y, MARGIN_X + CONTENT_WIDTH, y);
@@ -674,7 +771,6 @@ export async function generateQuotationPDF(quotation, items = [], logoBase64 = n
   // ============================================================
   // BANK DETAILS & QR CODE
   // ============================================================
-  const bankBoxH = 34;
   const bankW = 140;
   const qrW = CONTENT_WIDTH - bankW; // 50mm
 
@@ -714,23 +810,119 @@ export async function generateQuotationPDF(quotation, items = [], logoBase64 = n
   // ============================================================
   // AUTHORISED SIGNATORY AREA & FOOTER
   // ============================================================
-  const frameBottomY = pageMarginTop + outerFrameHeight; // 284mm
   const sigTopY = y;
   
   // Top right of signatory box
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(9);
-  doc.text('For Eagle Eye Safdrive Pvt Ltd', MARGIN_X + CONTENT_WIDTH - 4, sigTopY + 7, { align: 'right' });
+  doc.text('For Eagle Eye Safdrive Pvt Ltd', MARGIN_X + CONTENT_WIDTH - 4, sigTopY + 6.5, { align: 'right' });
 
   // Bottom right of signatory box
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
-  doc.text('This is a system-generated document. Manual signature is not required.', MARGIN_X + CONTENT_WIDTH - 4, frameBottomY - 7, { align: 'right' });
+  doc.text('This is a system-generated document. Manual signature is not required.', MARGIN_X + CONTENT_WIDTH - 4, frameBottomY - 5.5, { align: 'right' });
 
   // Computer Generated Disclaimer Outside Box
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
   doc.text('This is a Computer Generated Document', centerX, PAGE_HEIGHT - 6, { align: 'center' });
+
+  // ============================================================
+  // CONTINUATION PAGE: TERMS & CONDITIONS (IF OVERFLOW FROM PAGE 1)
+  // ============================================================
+  if (continuationTerms.length > 0) {
+    doc.addPage();
+    let cpY = pageMarginTop;
+
+    // Outer Frame for continuation page
+    doc.setDrawColor(...COLORS.borderColor);
+    doc.setLineWidth(0.4);
+    doc.rect(MARGIN_X, cpY, CONTENT_WIDTH, outerFrameHeight);
+
+    // Mini Brand Header on Continuation Page
+    if (effectiveLogo) {
+      try {
+        const imgProps = doc.getImageProperties(effectiveLogo);
+        const maxH = 14;
+        const maxW = 24;
+        let imgH = maxH;
+        let imgW = imgH * (imgProps.width / imgProps.height);
+        if (imgW > maxW) {
+          imgW = maxW;
+          imgH = imgW / (imgProps.width / imgProps.height);
+        }
+        const logoY = cpY + 2 + (maxH - imgH) / 2;
+        doc.addImage(effectiveLogo, 'PNG', MARGIN_X + 3, logoY, imgW, imgH);
+      } catch {
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(10);
+        doc.text('Eagle Eye', MARGIN_X + 2, cpY + 7);
+      }
+    }
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(12);
+    doc.setTextColor(0, 0, 0);
+    doc.text('Eagle Eye Safdrive Pvt Ltd', centerX, cpY + 5.5, { align: 'center' });
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.8);
+    doc.text('GST No: 33AAICE7626B1ZX    Tel: +91 63692 58461    Email: info@safdrive.live', centerX, cpY + 10.5, { align: 'center' });
+
+    cpY += 14.5;
+    doc.line(MARGIN_X, cpY, MARGIN_X + CONTENT_WIDTH, cpY);
+
+    // Banner
+    doc.setFillColor(...COLORS.headerBlue);
+    doc.rect(MARGIN_X, cpY, CONTENT_WIDTH, 6, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9.5);
+    doc.text(sanitizePdfText(`QUOTATION NO : ${quotation.quotation_number || 'CQS/00231'} Dt ${qDateStr} - TERMS & CONDITIONS (CONTINUED)`), centerX, cpY + 4.2, { align: 'center' });
+    doc.line(MARGIN_X, cpY + 6, MARGIN_X + CONTENT_WIDTH, cpY + 6);
+
+    cpY += 6;
+
+    // Render continuation terms across full width
+    let contTermY = cpY + 6;
+    const contTextWidth = CONTENT_WIDTH - 12;
+
+    continuationTerms.forEach((item) => {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8.2);
+      const cNumWidth = doc.getTextWidth(item.numPrefix);
+      doc.text(item.numPrefix, MARGIN_X + 4, contTermY);
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8.2);
+      const cLines = doc.splitTextToSize(item.cleanTerm, contTextWidth - cNumWidth);
+
+      const startsWithReplacementPolicy = cLines[0].startsWith('Replacement Policy:');
+      if (startsWithReplacementPolicy) {
+        doc.setFont('helvetica', 'bold');
+        doc.text('Replacement Policy:', MARGIN_X + 4 + cNumWidth, contTermY);
+        const rpWidth = doc.getTextWidth('Replacement Policy:');
+        doc.setFont('helvetica', 'normal');
+        doc.text(cLines[0].substring('Replacement Policy:'.length), MARGIN_X + 4 + cNumWidth + rpWidth, contTermY);
+      } else {
+        doc.text(cLines[0], MARGIN_X + 4 + cNumWidth, contTermY);
+      }
+
+      if (cLines.length > 1) {
+        for (let l = 1; l < cLines.length; l++) {
+          contTermY += lineHeight;
+          doc.text(cLines[l], MARGIN_X + 4 + cNumWidth, contTermY);
+        }
+      }
+
+      contTermY += lineHeight + termSpacing + 0.8;
+    });
+
+    // Disclaimer at bottom of continuation page
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.text('This is a system-generated document. Manual signature is not required.', MARGIN_X + CONTENT_WIDTH - 4, frameBottomY - 5.5, { align: 'right' });
+    doc.text('This is a Computer Generated Document', centerX, PAGE_HEIGHT - 6, { align: 'center' });
+  }
 
   // ============================================================
   // PAGE 2 – PRODUCT TECHNICAL SPECIFICATION (INCLUDED BY DEFAULT)

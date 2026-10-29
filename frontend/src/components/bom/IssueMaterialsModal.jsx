@@ -40,7 +40,6 @@ export default function IssueMaterialsModal({ checklist, token, onClose, onSucce
 
   const [issueDevices, setIssueDevices] = useState(!devicesAlreadyIssued);
   const [issueMaterials, setIssueMaterials] = useState(!isCourierJob && !materialsAlreadyIssued);
-  const [issueBackupItems, setIssueBackupItems] = useState(false);
 
   useEffect(() => {
     if (!token) return;
@@ -198,12 +197,10 @@ export default function IssueMaterialsModal({ checklist, token, onClose, onSucce
 
   const willIssueDevices = isCourierJob ? !devicesAlreadyIssued : (!devicesAlreadyIssued && issueDevices);
   const willIssueMaterials = isCourierJob ? false : (!materialsAlreadyIssued && issueMaterials);
-  const willIssueBackup = isCourierJob ? false : (declaredBackupItems.length > 0 && issueBackupItems);
 
   const hasDeviceDeficit = willIssueDevices && devDeficits.length > 0;
   const hasMaterialDeficit = willIssueMaterials && matDeficits.length > 0;
-  const hasBackupDeficit = willIssueBackup && backupDeficits.length > 0;
-  const hasDeficit = hasDeviceDeficit || hasMaterialDeficit || hasBackupDeficit;
+  const hasDeficit = hasDeviceDeficit || hasMaterialDeficit;
 
   // Total quantity selected to issue for Service job
   const totalServiceSelectedQty = serviceList.reduce((acc, it) => acc + (Number(serviceIssueQtys[it.id]) || 0), 0);
@@ -288,7 +285,6 @@ export default function IssueMaterialsModal({ checklist, token, onClose, onSucce
           checklist_id: checklist.checklist_id || checklist.id,
           issue_devices: true,
           issue_materials: false,
-          issue_backup_items: false,
           remarks: remarks.trim() || `Authorized courier stock issuance for job ${checklist.checklist_number} to recipient ${checklist.client_name || checklist.customer_name || 'Customer'}`,
         });
         setCourierIssuedSuccess(true);
@@ -309,11 +305,11 @@ export default function IssueMaterialsModal({ checklist, token, onClose, onSucce
     }
 
     // Installation Submission Flow
-    if (!willIssueDevices && !willIssueMaterials && !willIssueBackup) {
+    if (!willIssueDevices && !willIssueMaterials) {
       if (devicesAlreadyIssued && materialsAlreadyIssued) {
         setError('All stock components have already been issued for this job.');
       } else {
-        setError('Please select at least one pending component (Devices, Materials, or Backup Items) to issue.');
+        setError('Please select at least one pending component (Devices or Materials) to issue.');
       }
       return;
     }
@@ -331,7 +327,6 @@ export default function IssueMaterialsModal({ checklist, token, onClose, onSucce
         checklist_id: checklist.checklist_id || checklist.id,
         issue_devices: willIssueDevices,
         issue_materials: willIssueMaterials,
-        issue_backup_items: willIssueBackup,
         remarks: remarks.trim() || `Authorized stock issuance for job ${checklist.checklist_number}`,
       });
       onSuccess();
@@ -746,17 +741,6 @@ export default function IssueMaterialsModal({ checklist, token, onClose, onSucce
                   </span>
                 )}
               </label>
-              {declaredBackupItems.length > 0 && (
-                <label className="flex items-center gap-2 cursor-pointer bg-purple-100/70 text-purple-900 px-2 py-0.5 rounded-lg border border-purple-200">
-                  <input
-                    type="checkbox"
-                    checked={issueBackupItems}
-                    onChange={(e) => setIssueBackupItems(e.target.checked)}
-                    className="w-4 h-4 text-purple-600 rounded border-purple-300 focus:ring-purple-500"
-                  />
-                  <span className="font-bold">Extra Loose Backup Items ({declaredBackupItems.length})</span>
-                </label>
-              )}
             </div>
 
             {loadingInv ? (
@@ -868,58 +852,6 @@ export default function IssueMaterialsModal({ checklist, token, onClose, onSucce
                   </div>
                 )}
 
-                {/* 3. Extra Loose Backup Items Stock Review */}
-                {issueBackupItems && backupList.length > 0 && (
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between text-xs font-bold text-gray-700">
-                      <span className="flex items-center gap-1.5 text-purple-900">
-                        <Package className="w-4 h-4 text-purple-600" /> Declared Loose Backup Items to Issue
-                      </span>
-                      {hasBackupDeficit && (
-                        <span className="text-rose-600 text-[11px] font-bold">
-                          ⚠ {backupDeficits.length} Backup Item Shortage
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="border border-purple-200 rounded-xl overflow-hidden text-xs bg-purple-50/20">
-                      <table className="w-full text-left">
-                        <thead className="bg-purple-50 text-[10px] font-bold text-purple-900 uppercase border-b border-purple-200">
-                          <tr>
-                            <th className="py-2 px-3">Loose Product</th>
-                            <th className="py-2 px-3">SKU</th>
-                            <th className="py-2 px-3 text-center">Declared Qty</th>
-                            <th className="py-2 px-3 text-center">Unit</th>
-                            <th className="py-2 px-3 text-center">In Store</th>
-                            <th className="py-2 px-3 text-center">Status</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-purple-100">
-                          {backupList.map((b, i) => (
-                            <tr key={i} className={b.shortage > 0 ? 'bg-rose-50/60' : 'hover:bg-purple-50/40'}>
-                              <td className="py-2 px-3 font-semibold text-gray-900">{b.item_name}</td>
-                              <td className="py-2 px-3 font-mono text-[11px] text-gray-500">{b.sku}</td>
-                              <td className="py-2 px-3 text-center font-bold text-gray-900">{b.required}</td>
-                              <td className="py-2 px-3 text-center text-gray-600 font-medium">{b.unit}</td>
-                              <td className="py-2 px-3 text-center font-mono font-bold text-gray-800">{b.available}</td>
-                              <td className="py-2 px-3 text-center">
-                                {b.shortage > 0 ? (
-                                  <span className="text-[10px] font-bold text-rose-700 bg-rose-100 px-2 py-0.5 rounded-full">
-                                    Short by {b.shortage}
-                                  </span>
-                                ) : (
-                                  <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
-                                    Available
-                                  </span>
-                                )}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                )}
               </div>
             )}
           </>
